@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+/* 1. Nastavení globálního pozadí pro celou aplikaci */
+html, body, #root {
+  background-color: var(--bg-body, #ffffff);
+  color: var(--text-body, #111827);
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* 2. Registrace proměnných do Tailwindu v4 */
+@theme {
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-secondary: var(--bg-secondary);
+  --color-text-main: var(--text-body);
+  --color-border-main: var(--border-color);
+}
+
+/* 3. Globální vynucení režimu na šířku pro mobilní telefony (Tailwind v4 kompatibilní) */
+@utility force-landscape-mode {
+  @media (max-width: 1024px) and (orientation: portrait) {
+    width: 100vh !important;
+    height: 100vw !important;
+    overflow-x: hidden;
+    position: fixed;
+    top: 100%;
+    left: 0;
+    transform: rotate(-90deg);
+    transform-origin: top left;
+  }
+}
+
+/* Pojistka aplikovaná přímo na body element přes JS třídu */
+@media (max-width: 1024px) and (orientation: portrait) {
+  body.force-landscape {
+    width: 100vh !important;
+    height: 100vw !important;
+    overflow-x: hidden;
+    position: fixed;
+    top: 100%;
+    left: 0;
+    transform: rotate(-90deg);
+    transform-origin: top left;
+  }
+}
