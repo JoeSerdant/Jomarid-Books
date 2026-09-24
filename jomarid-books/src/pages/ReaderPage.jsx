@@ -43,8 +43,9 @@ export const ReaderPage = () => {
 
         const currentUsername = user.email ? user.email.split('@')[0] : '';
         const isAuthor = bookData.author === currentUsername;
-        
-        if (!isAuthor && (!userBookData || userBookData.status !== 'active')) {
+        const hasAccess = isAuthor || bookData.is_auto_assigned || userBookData?.status === 'active';
+
+        if (!hasAccess) {
           alert('K tomuto dílu nemáš aktivní licenci.');
           navigate('/app');
           return;
