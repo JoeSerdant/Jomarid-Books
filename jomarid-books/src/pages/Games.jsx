@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Coins, Loader2, X, Rocket, Swords, Building2 } from 'lucide-react';
+import { Coins, Loader2, X, Rocket, Swords, Building2, Target } from 'lucide-react';
 import { ROCKET_GAME_HTML } from '../gameContent/rocketGame';
 import { WARROOM_HTML } from '../gameContent/warroom';
 import { CITY_CLICKER_HTML } from '../gameContent/cityClicker';
+import { POLYGON_ARENA_HTML } from '../gameContent/polygonArena';
 
 const GAMES = [
   {
@@ -28,6 +29,13 @@ const GAMES = [
     tagline: 'Vybuduj si vlastní město klikáním - se čtyřmi zcela odlišnými vizuálními styly na výběr.',
     icon: Building2,
     html: CITY_CLICKER_HTML,
+  },
+  {
+    id: 'polygonarena',
+    title: 'Polygon aréna',
+    tagline: 'Rozstřílej tvary, poskládej si stavbu tanku a přežij mezi chytrými boty - klasika, týmy nebo cvičiště.',
+    icon: Target,
+    html: POLYGON_ARENA_HTML,
   },
   // Další hra se přidá jako další objekt v tomhle poli.
 ];
