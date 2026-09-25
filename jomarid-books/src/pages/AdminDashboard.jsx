@@ -9,6 +9,7 @@ export const AdminDashboard = () => {
   const [profiles, setProfiles] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [logs, setLogs] = useState([]);
+  const [comments, setComments] = useState([]);
   
   // --- Stavy rozhraní (UX) ---
   const [activeTab, setActiveTab] = useState('overview'); // overview | books | users | logs
@@ -29,6 +30,7 @@ export const AdminDashboard = () => {
   const [isAutoAssigned, setIsAutoAssigned] = useState(false); 
   const [priceCoins, setPriceCoins] = useState(150); 
   const [genresInput, setGenresInput] = useState('');
+  const [descriptionInput, setDescriptionInput] = useState('');
   const [editingBookId, setEditingBookId] = useState(null);
   
   // --- Správa konkrétního uživatele ---
@@ -59,7 +61,7 @@ export const AdminDashboard = () => {
       // 2. Načtení profilů
       const { data: p } = await supabase
         .from('profiles')
-        .select('id, email, role, created_at, fake_xp, coins')
+        .select('id, email, role, created_at, fake_xp, coins, unlocked_badges, featured_badge, streak_freezes, highest_goal_ever')
         .order('created_at', { ascending: false });
       
       // 3. Načtení logů
@@ -76,6 +78,13 @@ export const AdminDashboard = () => {
         .eq('status', 'requested');
 
       if (reqError) console.error("Chyba při načítání user_books:", reqError);
+
+      // 5. Posledních 50 komentářů napříč knihami - pro moderaci (viz sekce Komentáře).
+      const { data: c } = await supabase
+        .from('book_comments')
+        .select('id, content, author_name, book_id, created_at')
+        .order('created_at', { ascending: false })
+        .limit(50);
 
       // JS in-memory spojení dat pro spolehlivost bez DB JOINů
       const mapovaneZadosti = reqs?.map(req => {
@@ -115,10 +124,16 @@ export const AdminDashboard = () => {
         }
       }
 
+      const mapovaneKomentare = c?.map(cm => ({
+        ...cm,
+        bookTitle: b?.find(k => k.id === cm.book_id)?.title || `Kniha ID: ${cm.book_id?.substring(0, 6)}...`
+      })) || [];
+
       setBooks(booksWithLikes); 
       setProfiles(p || []); 
       setLogs(l || []);
       setPendingRequests(mapovaneZadosti);
+      setComments(mapovaneKomentare);
     } catch (err) {
       console.error("Chyba v refreshData:", err);
     } finally {
@@ -198,7 +213,8 @@ export const AdminDashboard = () => {
       fake_likes: parseInt(fakeLikes) || 0,
       is_auto_assigned: isAutoAssigned,
       price_coins: Math.max(0, parseInt(priceCoins, 10) || 0),
-      genres: genresInput.split(',').map(g => g.trim()).filter(Boolean)
+      genres: genresInput.split(',').map(g => g.trim()).filter(Boolean),
+      description: descriptionInput || null
     };
 
     if (editingBookId) {
@@ -210,7 +226,7 @@ export const AdminDashboard = () => {
         if (contentErr) alert('Kniha uložena, ale text se nepodařilo uložit: ' + contentErr.message);
         await safeLog('SUCCESS', `Upravena kniha: ${title} (Auto-přiřazení: ${isAutoAssigned ? 'ANO' : 'NE'}, Cena: ${payload.price_coins} mincí)`);
         setEditingBookId(null);
-        setTitle(''); setAuthor(''); setContent(''); setFakeLikes(0); setIsAutoAssigned(false); setPriceCoins(150); setGenresInput('');
+        setTitle(''); setAuthor(''); setContent(''); setFakeLikes(0); setIsAutoAssigned(false); setPriceCoins(150); setGenresInput(''); setDescriptionInput('');
         refreshData();
       } else {
         alert('Chyba při úpravě: ' + error.message);
@@ -224,7 +240,7 @@ export const AdminDashboard = () => {
           .insert([{ book_id: newBook.id, content }]);
         if (contentErr) alert('Kniha vytvořena, ale text se nepodařilo uložit: ' + contentErr.message);
         await safeLog('SUCCESS', `Uložená nová kniha: ${title} (Auto-přiřazení: ${isAutoAssigned ? 'ANO' : 'NE'}, Cena: ${payload.price_coins} mincí)`);
-        setTitle(''); setAuthor(''); setContent(''); setFakeLikes(0); setIsAutoAssigned(false); setPriceCoins(150); setGenresInput('');
+        setTitle(''); setAuthor(''); setContent(''); setFakeLikes(0); setIsAutoAssigned(false); setPriceCoins(150); setGenresInput(''); setDescriptionInput('');
         refreshData();
       } else {
         alert('Chyba při ukládání: ' + (error?.message || 'neznámá chyba'));
@@ -235,7 +251,7 @@ export const AdminDashboard = () => {
 
   const startEditBook = async (book) => {
     const [{ data, error }, { data: contentRow, error: contentErr }] = await Promise.all([
-      supabase.from('books').select('fake_likes, is_auto_assigned, price_coins, genres').eq('id', book.id).single(),
+      supabase.from('books').select('fake_likes, is_auto_assigned, price_coins, genres, description').eq('id', book.id).single(),
       supabase.from('book_contents').select('content').eq('book_id', book.id).maybeSingle()
     ]);
     if (!error && data && !contentErr) {
@@ -247,6 +263,7 @@ export const AdminDashboard = () => {
       setIsAutoAssigned(data.is_auto_assigned || false);
       setPriceCoins(data.price_coins ?? 150);
       setGenresInput(Array.isArray(data.genres) ? data.genres.join(', ') : '');
+      setDescriptionInput(data.description || '');
       setActiveTab('books'); 
     } else {
       alert('Nepodařilo se načíst kompletní text knihy k editaci.');
@@ -294,6 +311,35 @@ export const AdminDashboard = () => {
       alert('Připsání mincí selhalo: ' + (err.message || 'neznámá chyba'));
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleGrantStreakFreeze = async () => {
+    if (!activeUser) return;
+    setActionLoading(true);
+    try {
+      const newCount = (activeUser.streak_freezes || 0) + 1;
+      const { error } = await supabase.from('profiles').update({ streak_freezes: newCount }).eq('id', activeUser.id);
+      if (error) throw error;
+      await safeLog('SUCCESS', `Uživateli ${activeUser.email} přidán 1 Streak Freeze (nyní ${newCount}).`);
+      setActiveUser(prev => prev ? { ...prev, streak_freezes: newCount } : null);
+      refreshData();
+    } catch (err) {
+      alert('Přidání Streak Freeze selhalo: ' + (err.message || 'neznámá chyba'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId, preview) => {
+    if (!confirm(`Smazat komentář "${preview}"?`)) return;
+    try {
+      const { error } = await supabase.from('book_comments').delete().eq('id', commentId);
+      if (error) throw error;
+      setComments(prev => prev.filter(cm => cm.id !== commentId));
+      await safeLog('SUCCESS', `Smazán komentář (moderace): "${preview}"`);
+    } catch (err) {
+      alert('Smazání komentáře selhalo: ' + (err.message || 'neznámá chyba'));
     }
   };
 
@@ -590,6 +636,7 @@ export const AdminDashboard = () => {
 
       {/* 2. ZÁLOŽKA: SPRÁVA KNIH */}
       {activeTab === 'books' && (
+        <div className="space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-5">
             <Card>
@@ -650,6 +697,18 @@ export const AdminDashboard = () => {
                     onChange={e => setGenresInput(e.target.value)} 
                     style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
                     className="w-full p-3 border rounded-lg text-sm font-bold outline-none" 
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Popis (pro nákupní/detailní obrazovku)</label>
+                  <textarea
+                    placeholder="Krátký popis, co čtenáře čeká - zobrazí se v detailu knihy před koupí..."
+                    value={descriptionInput}
+                    onChange={e => setDescriptionInput(e.target.value)}
+                    rows={3}
+                    style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
+                    className="w-full p-3 border rounded-lg text-sm font-bold outline-none resize-none placeholder:opacity-40 placeholder:font-medium"
                   />
                 </div>
 
@@ -773,6 +832,36 @@ export const AdminDashboard = () => {
               </div>
             </Card>
           </div>
+        </div>
+
+        <Card className="p-0 overflow-hidden">
+          <div className="p-4 border-b font-black text-xs uppercase tracking-wider flex justify-between items-center" style={{ borderColor: 'var(--border-color)' }}>
+            <span>Moderace komentářů (posledních 50 napříč knihami)</span>
+            <span className="opacity-60">{comments.length} nalezeno</span>
+          </div>
+          <div className="p-2 max-h-80 overflow-y-auto space-y-1.5">
+            {comments.length === 0 ? (
+              <p className="text-xs font-bold text-center py-8 italic opacity-50">Zatím žádné komentáře.</p>
+            ) : (
+              comments.map(cm => (
+                <div key={cm.id} style={{ backgroundColor: 'var(--bg-secondary)' }} className="flex justify-between items-center p-3 rounded-xl text-xs font-bold gap-4">
+                  <span className="truncate flex-1">
+                    <span style={{ color: 'var(--bg-primary)' }} className="font-black block truncate">{cm.author_name} <span style={{ color: 'var(--text-muted)' }} className="font-medium opacity-70">na {cm.bookTitle}</span></span>
+                    <span style={{ color: 'var(--text-body)' }} className="opacity-90 font-medium">{cm.content}</span>
+                  </span>
+                  <button
+                    onClick={() => handleDeleteComment(cm.id, cm.content)}
+                    style={{ color: 'var(--text-muted)' }}
+                    className="bg-transparent border-none cursor-pointer hover:text-red-500 hover:scale-110 transition-all flex items-center shrink-0"
+                    title="Smazat komentář"
+                  >
+                    <Trash size={14}/>
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
         </div>
       )}
 
@@ -1002,6 +1091,28 @@ export const AdminDashboard = () => {
                         </button>
                       </div>
                       <span className="text-[9px] opacity-40 font-bold block">* Zůstatek {activeUser.coins ?? 0} 🪙. Záporné číslo strhne mince (nejníž na 0), loguje se to do coin_transactions.</span>
+                    </div>
+
+                    <div style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-color)' }} className="p-3 rounded-xl space-y-2 border border-solid">
+                      <label style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider opacity-80 flex items-center gap-1">
+                        <Award size={11} /> Herní postup (jen pro přehled)
+                      </label>
+                      <div className="grid grid-cols-2 gap-2 text-[11px] font-bold">
+                        <span style={{ color: 'var(--text-muted)' }}>Odznaky: <span style={{ color: 'var(--text-body)' }}>{(activeUser.unlocked_badges || []).length} / 100</span></span>
+                        <span style={{ color: 'var(--text-muted)' }}>Nejvyšší cíl: <span style={{ color: 'var(--text-body)' }}>{activeUser.highest_goal_ever ?? 5}</span></span>
+                        <span style={{ color: 'var(--text-muted)' }} className="col-span-2">Vlajkový odznak: <span style={{ color: 'var(--text-body)' }}>{activeUser.featured_badge || '—'}</span></span>
+                      </div>
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-[11px] font-bold" style={{ color: 'var(--text-muted)' }}>Streak Freeze: <span style={{ color: 'var(--text-body)' }}>{activeUser.streak_freezes ?? 0}</span></span>
+                        <button
+                          onClick={handleGrantStreakFreeze}
+                          disabled={actionLoading}
+                          style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
+                          className="px-3 py-1.5 font-black text-[10px] uppercase rounded-lg border border-solid cursor-pointer hover:opacity-80 transition-opacity active:scale-95 duration-100 disabled:opacity-40"
+                        >
+                          +1 Freeze
+                        </button>
+                      </div>
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-2">
