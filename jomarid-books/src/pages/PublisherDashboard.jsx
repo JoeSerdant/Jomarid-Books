@@ -11,6 +11,8 @@ export const PublisherDashboard = () => {
   const [bookContent, setBookContent] = useState(''); // 🔥 OPRAVENO: Přejmenováno z 'content' kvůli kolizi
   const [priceCoins, setPriceCoins] = useState(150);
   const [genresInput, setGenresInput] = useState('');
+  const [descriptionInput, setDescriptionInput] = useState('');
+  const [editingBookId, setEditingBookId] = useState(null);
   const [selectedBookId, setSelectedBookId] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
   const [loadingRequests, setLoadingRequests] = useState(false);
@@ -119,62 +121,124 @@ export const PublisherDashboard = () => {
     loadAllData();
   }, [loadAllData]);
 
-  const createBook = async (e) => {
+  const saveBook = async (e) => {
     e.preventDefault();
-    if (!title || !bookContent) return alert('Doplňte název a text knihy.'); // 🔥 OPRAVENO
+    if (!title || (!editingBookId && !bookContent)) return alert('Doplňte název a text knihy.');
 
     setIsSubmitting(true);
     const username = getUsername(user.email);
 
     try {
-      const { data: insertedBook, error: bookError } = await supabase
-        .from('books')
-        .insert([{ 
-          title, 
-          author: username,
-          fake_likes: 0,
-          price_coins: Math.max(0, parseInt(priceCoins, 10) || 0),
-          genres: genresInput.split(',').map(g => g.trim()).filter(Boolean)
-        }])
-        .select('id')
-        .single();
+      if (editingBookId) {
+        // ÚPRAVA existující knihy. RLS (books_update) i tak ověří, že jde
+        // fakticky o knihu tohoto nakladatele - filtr na author je tu navíc
+        // jen pro srozumitelnost, ne jako jediná pojistka.
+        const { error: bookError } = await supabase
+          .from('books')
+          .update({
+            title,
+            price_coins: Math.max(0, parseInt(priceCoins, 10) || 0),
+            genres: genresInput.split(',').map(g => g.trim()).filter(Boolean),
+            description: descriptionInput || null
+          })
+          .eq('id', editingBookId)
+          .eq('author', username);
 
-      if (bookError) throw bookError;
+        if (bookError) throw bookError;
 
-      // 'content' žije v samostatné tabulce book_contents (viz saveBook v AdminDashboardu
-      // pro vysvětlení proč), takže se text zapisuje sem jako druhý krok.
-      const { error: contentError } = await supabase
-        .from('book_contents')
-        .insert([{ book_id: insertedBook.id, content: bookContent }]);
-      if (contentError) throw contentError;
-
-      if (insertedBook?.id && user?.id) {
-        const { error: assignError } = await supabase
-          .from('user_books')
-          .insert([{ 
-            user_id: user.id, 
-            book_id: insertedBook.id,
-            status: 'active',
-            is_read: false
-          }]);
-        
-        if (assignError) {
-          console.warn("Kniha byla vytvořena, ale auto-assign selhal:", assignError.message);
+        if (bookContent) {
+          const { error: contentError } = await supabase
+            .from('book_contents')
+            .upsert({ book_id: editingBookId, content: bookContent });
+          if (contentError) throw contentError;
         }
+
+        setEditingBookId(null);
+        setTitle('');
+        setBookContent('');
+        setPriceCoins(150);
+        setGenresInput('');
+        setDescriptionInput('');
+        await fetchPublisherBooks(username);
+        alert('Kniha byla úspěšně upravena!');
+      } else {
+        const { data: insertedBook, error: bookError } = await supabase
+          .from('books')
+          .insert([{ 
+            title, 
+            author: username,
+            fake_likes: 0,
+            price_coins: Math.max(0, parseInt(priceCoins, 10) || 0),
+            genres: genresInput.split(',').map(g => g.trim()).filter(Boolean),
+            description: descriptionInput || null
+          }])
+          .select('id')
+          .single();
+
+        if (bookError) throw bookError;
+
+        // 'content' žije v samostatné tabulce book_contents (viz saveBook v AdminDashboardu
+        // pro vysvětlení proč), takže se text zapisuje sem jako druhý krok.
+        const { error: contentError } = await supabase
+          .from('book_contents')
+          .insert([{ book_id: insertedBook.id, content: bookContent }]);
+        if (contentError) throw contentError;
+
+        if (insertedBook?.id && user?.id) {
+          const { error: assignError } = await supabase
+            .from('user_books')
+            .insert([{ 
+              user_id: user.id, 
+              book_id: insertedBook.id,
+              status: 'active',
+              is_read: false
+            }]);
+          
+          if (assignError) {
+            console.warn("Kniha byla vytvořena, ale auto-assign selhal:", assignError.message);
+          }
+        }
+
+        setTitle(''); 
+        setBookContent('');
+        setPriceCoins(150);
+        setGenresInput('');
+        setDescriptionInput('');
+        await fetchPublisherBooks(username);
+        alert('Kniha byla úspěšně publikována a hned přiřazena do Vaší knihovny!');
       }
-
-      setTitle(''); 
-      setBookContent(''); // 🔥 OPRAVENO
-      setPriceCoins(150);
-      setGenresInput('');
-      await fetchPublisherBooks(username);
-      alert('Kniha byla úspěšně publikována a hned přiřazena do Vaší knihovny!');
-
     } catch (error) {
-      alert('Chyba při publikování: ' + error.message);
+      alert('Chyba při ukládání: ' + error.message);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const startEditBook = async (book) => {
+    const [{ data, error }, { data: contentRow, error: contentErr }] = await Promise.all([
+      supabase.from('books').select('price_coins, genres, description').eq('id', book.id).single(),
+      supabase.from('book_contents').select('content').eq('book_id', book.id).maybeSingle()
+    ]);
+    if (!error && data && !contentErr) {
+      setEditingBookId(book.id);
+      setTitle(book.title);
+      setBookContent(contentRow?.content || '');
+      setPriceCoins(data.price_coins ?? 150);
+      setGenresInput(Array.isArray(data.genres) ? data.genres.join(', ') : '');
+      setDescriptionInput(data.description || '');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      alert('Nepodařilo se načíst knihu k editaci.');
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditingBookId(null);
+    setTitle('');
+    setBookContent('');
+    setPriceCoins(150);
+    setGenresInput('');
+    setDescriptionInput('');
   };
 
   const assignBook = async () => {
@@ -323,12 +387,12 @@ export const PublisherDashboard = () => {
       {/* DVOUSLOUPCOVÝ EDITAČNÍ BLOK */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         
-        {/* FORMULÁŘ PRO NOVOU KNIHU */}
+        {/* FORMULÁŘ PRO NOVOU/UPRAVOVANOU KNIHU */}
         <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="p-6 shadow-md rounded-2xl border">
           <h3 className="font-black mb-4 text-base uppercase tracking-tight flex items-center gap-2">
-            <PlusCircle size={18} style={{ color: 'var(--bg-primary)' }} /> Vložit novou knihu do katalogu
+            <PlusCircle size={18} style={{ color: 'var(--bg-primary)' }} /> {editingBookId ? 'Upravit svazek' : 'Vložit novou knihu do katalogu'}
           </h3>
-          <form onSubmit={createBook} className="space-y-4">
+          <form onSubmit={saveBook} className="space-y-4">
             <input 
               type="text" 
               placeholder="Název knihy" 
@@ -360,9 +424,20 @@ export const PublisherDashboard = () => {
                 className="w-full p-3 border rounded-xl font-bold outline-none text-sm"
               />
             </div>
+            <div className="space-y-1">
+              <label style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Popis (pro nákupní/detailní obrazovku)</label>
+              <textarea
+                placeholder="Krátký popis, co čtenáře čeká - zobrazí se v detailu knihy před koupí..."
+                value={descriptionInput}
+                onChange={e => setDescriptionInput(e.target.value)}
+                rows={3}
+                style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
+                className="w-full p-3 border rounded-xl font-bold outline-none text-sm resize-none placeholder:opacity-40 placeholder:font-medium"
+              />
+            </div>
             {/* 🔥 OPRAVENO: Níže upraven state bind na bookContent */}
             <textarea 
-              placeholder="Sem vložte kompletní text knihy..." 
+              placeholder={editingBookId ? "Text knihy (ponechte beze změny, nebo přepište celý)..." : "Sem vložte kompletní text knihy..."} 
               value={bookContent} 
               style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
               className="w-full p-3.5 border rounded-xl font-bold outline-none resize-none text-sm placeholder:opacity-40 transition-all focus:border-[var(--bg-primary)]" 
@@ -370,14 +445,26 @@ export const PublisherDashboard = () => {
               onChange={e => setBookContent(e.target.value)} 
               required 
             />
-            <button 
-              type="submit" 
-              disabled={isSubmitting}
-              style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
-              className="w-full py-3.5 rounded-xl font-black uppercase text-xs tracking-wider border-none cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 shadow-md flex items-center justify-center gap-2"
-            >
-              {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <><BookOpen size={14}/> Publikovat svazek</>}
-            </button>
+            <div className="flex gap-2">
+              <button 
+                type="submit" 
+                disabled={isSubmitting}
+                style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+                className="flex-1 py-3.5 rounded-xl font-black uppercase text-xs tracking-wider border-none cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 shadow-md flex items-center justify-center gap-2"
+              >
+                {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : editingBookId ? <><Check size={14}/> Uložit změny</> : <><BookOpen size={14}/> Publikovat svazek</>}
+              </button>
+              {editingBookId && (
+                <button 
+                  type="button"
+                  onClick={cancelEdit}
+                  style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-muted)' }}
+                  className="px-5 py-3.5 rounded-xl font-black uppercase text-xs tracking-wider border cursor-pointer transition-all hover:opacity-80 active:scale-[0.99]"
+                >
+                  Zrušit
+                </button>
+              )}
+            </div>
           </form>
         </div>
         
@@ -440,13 +527,23 @@ export const PublisherDashboard = () => {
           <div style={{ borderColor: 'var(--border-color)' }} className="border rounded-xl divide-y max-h-72 overflow-y-auto shadow-sm">
             {myBooks.map(b => (
               <div key={b.id} style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }} className="flex justify-between items-center p-4 transition-colors hover:bg-black/5">
-                <div>
-                  <h4 className="font-black text-sm uppercase m-0 tracking-tight">{b.title}</h4>
+                <div className="min-w-0">
+                  <h4 className="font-black text-sm uppercase m-0 tracking-tight truncate">{b.title}</h4>
                   <p style={{ color: 'var(--text-muted)' }} className="text-[10px] uppercase opacity-50 font-black m-0 mt-0.5">ID svazku: {b.id}</p>
                 </div>
-                <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--bg-primary)', color: 'var(--bg-primary)' }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border shadow-sm font-black text-xs select-none">
-                  <Heart size={12} className="fill-current text-current" />
-                  <span>{b.likesCount}</span>
+                <div className="flex items-center gap-3 shrink-0">
+                  <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--bg-primary)', color: 'var(--bg-primary)' }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border shadow-sm font-black text-xs select-none">
+                    <Heart size={12} className="fill-current text-current" />
+                    <span>{b.likesCount}</span>
+                  </div>
+                  <button
+                    onClick={() => startEditBook(b)}
+                    style={{ color: 'var(--bg-primary)' }}
+                    className="bg-transparent border-none cursor-pointer hover:scale-110 transition-transform font-bold text-base"
+                    title="Upravit cenu, žánry, popis a text"
+                  >
+                    ✎
+                  </button>
                 </div>
               </div>
             ))}
