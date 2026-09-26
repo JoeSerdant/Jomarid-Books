@@ -222,7 +222,3 @@ export const GamePage = () => {
   }
   return <GameLauncher game={game} />;
 };
-
-// ==========================================
-// KOMPONENTA: UserLibrary
-// ==========================================
