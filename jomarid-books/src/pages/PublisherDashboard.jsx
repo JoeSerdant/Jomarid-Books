@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { BarChart3, BookOpen, Check, Clock, Coins, Heart, Loader2, Mail, PlusCircle, ShieldCheck, UserPlus, X } from 'lucide-react';
+import { BarChart3, BookOpen, Check, Coins, Heart, Loader2, PlusCircle, ShieldCheck, UserPlus } from 'lucide-react';
 
 export const PublisherDashboard = () => {
   const [myBooks, setMyBooks] = useState([]);
   const [readerProfiles, setReaderProfiles] = useState([]); 
-  const [pendingRequests, setPendingRequests] = useState([]); 
   const [title, setTitle] = useState('');
   const [bookContent, setBookContent] = useState(''); // 🔥 OPRAVENO: Přejmenováno z 'content' kvůli kolizi
   const [priceCoins, setPriceCoins] = useState(150);
@@ -15,7 +14,6 @@ export const PublisherDashboard = () => {
   const [editingBookId, setEditingBookId] = useState(null);
   const [selectedBookId, setSelectedBookId] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
-  const [loadingRequests, setLoadingRequests] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { user } = useAuth();
 
@@ -58,47 +56,6 @@ export const PublisherDashboard = () => {
     }
   }, []);
 
-  const fetchPendingRequests = useCallback(async (username) => {
-    setLoadingRequests(true);
-    try {
-      const { data: publisherBooks, error: booksError } = await supabase
-        .from('books')
-        .select('id')
-        .eq('author', username);
-
-      if (booksError) throw booksError;
-
-      const bookIds = publisherBooks?.map(b => b.id) || [];
-
-      if (bookIds.length === 0) {
-        setPendingRequests([]);
-        return;
-      }
-
-      const { data: requests, error: requestsError } = await supabase
-        .from('user_books')
-        .select(`
-          id,
-          user_id,
-          book_id,
-          status,
-          created_at,
-          profiles!user_id(email),
-          books(title)
-        `)
-        .eq('status', 'requested')
-        .in('book_id', bookIds);
-
-      if (requestsError) throw requestsError;
-      if (requests) setPendingRequests(requests);
-
-    } catch (err) {
-      console.error("Chyba při načítání žádostí:", err.message);
-    } finally {
-      setLoadingRequests(false);
-    }
-  }, []);
-
   const loadAllData = useCallback(async () => {
     if (!user) return;
     const username = getUsername(user.email);
@@ -106,7 +63,6 @@ export const PublisherDashboard = () => {
     try {
       await Promise.all([
         fetchPublisherBooks(username),
-        fetchPendingRequests(username),
         (async () => {
           const { data, error } = await supabase.from('profiles').select('id, email');
           if (!error) setReaderProfiles(data || []);
@@ -115,7 +71,7 @@ export const PublisherDashboard = () => {
     } catch (err) {
       console.error("Chyba při inicializaci dat dashboardu:", err.message);
     }
-  }, [user, getUsername, fetchPublisherBooks, fetchPendingRequests]);
+  }, [user, getUsername, fetchPublisherBooks]);
 
   useEffect(() => {
     loadAllData();
@@ -261,32 +217,6 @@ export const PublisherDashboard = () => {
     }
   };
 
-  const handleApproveRequest = async (requestId) => {
-    const { error } = await supabase
-      .from('user_books')
-      .update({ status: 'active' })
-      .eq('id', requestId);
-
-    if (!error) {
-      setPendingRequests(prev => prev.filter(r => r.id !== requestId));
-    } else {
-      alert('Žádost se nepodařilo schválit: ' + error.message);
-    }
-  };
-
-  const handleRejectRequest = async (requestId) => {
-    const { error } = await supabase
-      .from('user_books')
-      .delete()
-      .eq('id', requestId);
-
-    if (!error) {
-      setPendingRequests(prev => prev.filter(r => r.id !== requestId));
-    } else {
-      alert('Žádost se nepodařilo zamítnout: ' + error.message);
-    }
-  };
-
   return (
     <div style={{ color: 'var(--text-body)' }} className="max-w-5xl mx-auto py-12 px-4 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
@@ -303,7 +233,7 @@ export const PublisherDashboard = () => {
       </div>
 
       {/* MINI STATISTICKÝ PŘEHLED */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="p-4 flex items-center gap-4 shadow-sm border rounded-2xl">
           <div style={{ backgroundColor: 'var(--bg-secondary)' }} className="w-12 h-12 rounded-xl flex items-center justify-center text-current">
             <BookOpen size={20} className="opacity-80" />
@@ -323,67 +253,8 @@ export const PublisherDashboard = () => {
             <h3 className="text-xl font-black m-0">{getTotalLikes()} lajků</h3>
           </div>
         </div>
-
-        <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className={`p-4 flex items-center gap-4 shadow-sm border rounded-2xl transition-all ${pendingRequests.length > 0 ? 'border-amber-500/30' : ''}`}>
-          <div style={{ backgroundColor: pendingRequests.length > 0 ? 'rgba(245, 158, 11, 0.1)' : 'var(--bg-secondary)' }} className="w-12 h-12 rounded-xl flex items-center justify-center">
-            <Clock size={20} className={pendingRequests.length > 0 ? "text-amber-500 animate-pulse" : "opacity-80"} />
-          </div>
-          <div>
-            <p style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider m-0 opacity-60">Čekající žádosti</p>
-            <h3 className={`text-xl font-black m-0 ${pendingRequests.length > 0 ? 'text-amber-500' : ''}`}>{pendingRequests.length}</h3>
-          </div>
-        </div>
       </div>
       
-      {/* SEKCE 1: ČEKAJÍCÍ ŽÁDOSTI O LICENCE */}
-      <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="p-6 shadow-md rounded-2xl border">
-        <h3 style={{ color: 'var(--bg-primary)' }} className="font-black mb-4 text-base uppercase tracking-tight flex items-center gap-2">
-          <Clock size={18} className={pendingRequests.length > 0 ? "animate-spin duration-1000" : ""} /> Žádosti o schválení licencí k Vašim knihám
-        </h3>
-        
-        {loadingRequests ? (
-          <div className="flex items-center gap-2 text-xs font-bold uppercase opacity-60 py-6 justify-center">
-            <Loader2 className="animate-spin" size={16}/> Načítám žádosti čtenářů...
-          </div>
-        ) : pendingRequests.length === 0 ? (
-          <div style={{ backgroundColor: 'var(--bg-secondary)' }} className="text-center py-6 rounded-xl border border-dashed border-neutral-300/30">
-            <p className="text-xs font-black uppercase opacity-50 m-0 tracking-wide">Všechny licence jsou vyřízeny. Žádný čtenář nečeká.</p>
-          </div>
-        ) : (
-          <div style={{ borderColor: 'var(--border-color)' }} className="divide-y border rounded-xl overflow-hidden shadow-sm">
-            {pendingRequests.map(req => (
-              <div key={req.id} style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }} className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-4 gap-4 transition-colors hover:bg-black/5">
-                <div className="flex items-start gap-3">
-                  <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="w-9 h-9 rounded-lg border flex items-center justify-center opacity-70">
-                    <Mail size={16} />
-                  </div>
-                  <div>
-                    <h4 className="font-black text-sm uppercase m-0 tracking-tight">{req.books?.title}</h4>
-                    <p style={{ color: 'var(--text-muted)' }} className="text-xs font-medium m-0 mt-0.5">Čtenář: <span style={{ color: 'var(--text-body)' }} className="font-bold">{req.profiles?.email || 'Neznámý uživatel'}</span></p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 self-end sm:self-auto">
-                  <button 
-                    onClick={() => handleApproveRequest(req.id)}
-                    style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
-                    className="py-2 px-4 rounded-xl text-xs font-black uppercase tracking-wider border-none cursor-pointer hover:opacity-90 active:scale-95 transition-all flex items-center gap-1.5 shadow-sm"
-                  >
-                    <Check size={14} /> Schválit
-                  </button>
-                  <button 
-                    onClick={() => handleRejectRequest(req.id)}
-                    style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-muted)' }}
-                    className="py-2 px-3 rounded-xl text-xs font-black uppercase border cursor-pointer hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 active:scale-95 transition-all flex items-center justify-center"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
       {/* DVOUSLOUPCOVÝ EDITAČNÍ BLOK */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         
