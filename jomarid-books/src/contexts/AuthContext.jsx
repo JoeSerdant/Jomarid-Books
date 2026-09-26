@@ -80,7 +80,8 @@ export function AuthProvider({ children }) {
 export const ProtectedAdminRoute = ({ children }) => {
  const { user, role, loading } = useAuth();
  if (loading) return <div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin" /></div>;
- if (!user || role !== 'správce') return <Navigate to="/app" replace />;
+ if (!user) return <Navigate to="/login" replace />;
+ if (role !== 'správce') return <Navigate to="/app" replace />;
  return children;
 };
 
