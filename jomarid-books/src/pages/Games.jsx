@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Coins, Loader2, X, Rocket, Swords, Building2, Target, Crown } from 'lucide-react';
+import { Coins, Loader2, X, Rocket, Swords, Building2, Target, Crown, Lock } from 'lucide-react';
 import { ROCKET_GAME_HTML } from '../gameContent/rocketGame';
 import { WARROOM_HTML } from '../gameContent/warroom';
 import { CITY_CLICKER_HTML } from '../gameContent/cityClicker';
@@ -48,35 +48,108 @@ const GAMES = [
   // Další hra se přidá jako další objekt v tomhle poli.
 ];
 
+// Kolik milisekund musí být hra otevřená, než se hráči vůbec odemkne
+// tlačítko na vyzvednutí denní odměny. Nejde o přísný anti-cheat, jen
+// o to, aby prosté otevření a hned zavření hry samo o sobě nestačilo -
+// beze zbytku to reálně hraní nenahradí, ale zavírá tu nejočividnější
+// díru (nárok bez jediné vteřiny hraní).
+const MIN_PLAY_MS = 15000;
+
+// Přesně stejný tvar řetězce, jaký si server sám skládá uvnitř
+// claim_game_bonus() pro source_type - viz 'game_bonus:' || game_id || ':' || today.
+// Datum musí být UTC (server počítá (now() at time zone 'utc')::date), ne
+// místní čas prohlížeče - jinak by kontrola kolem půlnoci mohla ukázat
+// špatný den.
+function gameBonusSourceType(gameId) {
+  const todayUtc = new Date().toISOString().slice(0, 10);
+  return `game_bonus:${gameId}:${todayUtc}`;
+}
+
 export const GameLauncher = ({ game }) => {
   const { user } = useAuth();
   const [coins, setCoins] = useState(0);
   const [claiming, setClaiming] = useState(false);
   const [claimedToday, setClaimedToday] = useState(false);
   const [claimedAmount, setClaimedAmount] = useState(null);
+  const [checkingStatus, setCheckingStatus] = useState(true);
   const [showGame, setShowGame] = useState(false);
+  const [hasPlayedEnough, setHasPlayedEnough] = useState(false);
+  const gameOpenedAtRef = useRef(null);
+  const iframeRef = useRef(null);
 
   useEffect(() => {
     if (!user) return;
     supabase.from('profiles').select('coins').eq('id', user.id).maybeSingle()
-      .then(({ data }) => { if (data) setCoins(data.coins || 0); });
+      .then(({ data, error }) => {
+        if (error) throw error;
+        if (data) setCoins(data.coins || 0);
+      })
+      .catch((err) => console.error('Nepodařilo se načíst zůstatek mincí:', err.message));
   }, [user]);
+
+  // Zjistí SKUTEČNÝ stav rovnou ze serveru (přes stejný source_type klíč,
+  // co si používá claim_game_bonus interně), místo aby appka po refreshi
+  // vždycky naivně předpokládala "ještě nevyzvednuto". Bez tohohle si po
+  // obnovení stránky tlačítko myslelo, že nárok pořád čeká, i když ho
+  // uživatel už dávno vybral - RPC by druhé kliknutí sice správně odmítlo
+  // (žádná dvojitá odměna), ale tlačítko by do tý doby lhalo o stavu.
+  useEffect(() => {
+    if (!user || !game) return;
+    let cancelled = false;
+    setCheckingStatus(true);
+    supabase
+      .from('coin_transactions')
+      .select('amount')
+      .eq('user_id', user.id)
+      .eq('source_type', gameBonusSourceType(game.id))
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) throw error;
+        if (data) {
+          setClaimedToday(true);
+          setClaimedAmount(data.amount);
+        }
+      })
+      .catch((err) => console.error('Nepodařilo se ověřit stav dnešní odměny:', err.message))
+      .finally(() => { if (!cancelled) setCheckingStatus(false); });
+    return () => { cancelled = true; };
+  }, [user, game]);
+
+  const handleOpenGame = useCallback(() => {
+    gameOpenedAtRef.current = Date.now();
+    setShowGame(true);
+  }, []);
+
+  const handleCloseGame = useCallback(() => {
+    if (gameOpenedAtRef.current && Date.now() - gameOpenedAtRef.current >= MIN_PLAY_MS) {
+      setHasPlayedEnough(true);
+    }
+    gameOpenedAtRef.current = null;
+    setShowGame(false);
+  }, []);
 
   // Hry uvnitř iframu posílají postMessage místo skutečné navigace na "/app" -
   // díky tomu tlačítko "Zpět" ve hře nikdy nezpůsobí opravdový přechod na
   // serveru (a tedy ani riziko 404, kdyby hostingu chyběl SPA rewrite).
+  // event.source se navíc ověřuje proti konkrétnímu iframu týhle hry, aby
+  // zprávu nemohlo spustit nic jiného, co náhodou pošle stejně tvarovanou
+  // zprávu odjinud.
   useEffect(() => {
     const handleMessage = (event) => {
       if (event.data?.source === 'jomarid-game' && event.data?.type === 'close') {
-        setShowGame(false);
+        if (iframeRef.current && event.source !== iframeRef.current.contentWindow) return;
+        handleCloseGame();
       }
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, []);
+  }, [handleCloseGame]);
+
+  const canClaim = hasPlayedEnough && !checkingStatus && !claimedToday;
 
   const handleClaimBonus = async () => {
-    if (!user || claiming || claimedToday) return;
+    if (!user || claiming || !canClaim) return;
     setClaiming(true);
     try {
       const { data, error } = await supabase.rpc('claim_game_bonus', { game_id: game.id });
@@ -103,7 +176,7 @@ export const GameLauncher = ({ game }) => {
     return (
       <div style={{ position: 'fixed', inset: 0, zIndex: 999, backgroundColor: '#000' }}>
         <button
-          onClick={() => setShowGame(false)}
+          onClick={handleCloseGame}
           title="Zavřít hru"
           style={{ position: 'fixed', top: 'calc(10px + env(safe-area-inset-top,0px))', right: '10px', zIndex: 1000, backgroundColor: 'rgba(5,5,15,0.75)', color: '#fff', border: '1px solid rgba(255,255,255,0.15)' }}
           className="w-9 h-9 rounded-xl cursor-pointer flex items-center justify-center backdrop-blur-sm"
@@ -111,6 +184,7 @@ export const GameLauncher = ({ game }) => {
           <X size={18} />
         </button>
         <iframe
+          ref={iframeRef}
           title={game.title}
           srcDoc={game.html}
           style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
@@ -144,7 +218,7 @@ export const GameLauncher = ({ game }) => {
         </div>
 
         <button
-          onClick={() => setShowGame(true)}
+          onClick={handleOpenGame}
           style={{ backgroundColor: 'var(--bg-primary)', color: 'white' }}
           className="px-8 py-3.5 rounded-xl font-black uppercase tracking-wider text-sm border-none cursor-pointer shadow-lg hover:opacity-90 transition-all flex items-center gap-2"
         >
@@ -157,18 +231,30 @@ export const GameLauncher = ({ game }) => {
           </p>
           <button
             onClick={handleClaimBonus}
-            disabled={claiming || claimedToday}
-            style={{ backgroundColor: claimedToday ? 'var(--bg-secondary)' : 'rgba(245, 158, 11, 0.15)', color: claimedToday ? 'var(--text-muted)' : '#f59e0b' }}
+            disabled={claiming || checkingStatus || !canClaim}
+            style={{
+              backgroundColor: claimedToday ? 'var(--bg-secondary)' : canClaim ? 'rgba(245, 158, 11, 0.15)' : 'var(--bg-secondary)',
+              color: claimedToday ? 'var(--text-muted)' : canClaim ? '#f59e0b' : 'var(--text-muted)',
+            }}
             className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer border-none shadow-sm disabled:cursor-not-allowed flex items-center gap-1.5"
           >
-            {claiming ? (
+            {checkingStatus ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : claiming ? (
               <Loader2 size={14} className="animate-spin" />
             ) : claimedToday ? (
               <>Dnešní odměna vyzvednuta {claimedAmount ? `(+${claimedAmount})` : ''} <Coins size={12} /></>
+            ) : !hasPlayedEnough ? (
+              <>Nejdřív si zahraj <Lock size={12} /></>
             ) : (
               <>Vyzvednout dnešní odměnu za hraní <Coins size={12} /></>
             )}
           </button>
+          {!claimedToday && !checkingStatus && !hasPlayedEnough && (
+            <span style={{ color: 'var(--text-muted)' }} className="text-[10px] opacity-60">
+              Odměna se odemkne po chvilce hraní - zkus to po zavření hry znovu.
+            </span>
+          )}
           <span style={{ color: 'var(--text-muted)' }} className="text-[10px] opacity-60 flex items-center gap-1">
             <Coins size={11} /> Aktuální zůstatek: {coins} Jomarid Coins
           </span>
