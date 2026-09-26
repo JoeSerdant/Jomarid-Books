@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -16,6 +16,11 @@ export const ReaderPage = () => {
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [myRating, setMyRating] = useState(0);
   const [savingRating, setSavingRating] = useState(false);
+  // Jakmile je kniha jednou označená jako přečtená, další scrollování zpátky
+  // (např. dohledání dřívější kapitoly - běžné chování, ne cheat) ji nesmí
+  // "odznačit". Bez týhle pojistky by debounced ukládání níž při každém
+  // scrollu přepsalo is_read podle AKTUÁLNÍ pozice, i zpátky na false.
+  const hasBeenMarkedReadRef = useRef(false);
 
   useEffect(() => {
     localStorage.setItem('reader_font_size', fontSize);
@@ -36,10 +41,12 @@ export const ReaderPage = () => {
 
         const { data: userBookData } = await supabase
           .from('user_books')
-          .select('scroll_position, status')
+          .select('scroll_position, status, is_read')
           .eq('user_id', user.id)
           .eq('book_id', id)
           .maybeSingle();
+
+        hasBeenMarkedReadRef.current = !!userBookData?.is_read;
 
         const currentUsername = user.email ? user.email.split('@')[0] : '';
         const isAuthor = bookData.author === currentUsername;
@@ -93,7 +100,8 @@ export const ReaderPage = () => {
       if (docHeight <= 0) return;
 
       const progress = Math.min(100, Math.max(0, (scrollTop / docHeight) * 100));
-      const isReadNow = progress >= 95;
+      if (progress >= 95) hasBeenMarkedReadRef.current = true;
+      const isReadNow = hasBeenMarkedReadRef.current;
 
       timeoutId = setTimeout(async () => {
         try {
