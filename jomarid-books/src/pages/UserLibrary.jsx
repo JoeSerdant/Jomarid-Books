@@ -104,6 +104,18 @@ export const UserLibrary = () => {
       });
 
       setBooks(processedBooks);
+
+      // Pokud sem uživatel dorazil kvůli konkrétní knize (klik na homepage,
+      // ať už jako právě přihlášený, nebo už dřív přihlášený), otevřít mu
+      // rovnou její detail - ať nemusí knihu mezi všemi ostatními hledat znovu sám.
+      try {
+        const pendingBookId = sessionStorage.getItem('library_open_book_id');
+        if (pendingBookId) {
+          sessionStorage.removeItem('library_open_book_id');
+          const target = processedBooks.find(b => b.id === pendingBookId);
+          if (target) setDetailBook(target);
+        }
+      } catch (e) { /* storage unavailable, ignore */ }
     } catch (error) {
       console.error("Chyba při načítání knihovny:", error.message);
     } finally {
