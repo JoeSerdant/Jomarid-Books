@@ -8,7 +8,6 @@ import { BookOpen, Coins, Heart, Loader2, LogOut, ShieldOff, Sparkles, Star } fr
 export const UserLibrary = () => {
   const { user, logout } = useAuth();
   const [books, setBooks] = useState([]);
-  const [likedBookIds, setLikedBookIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submittingId, setSubmittingId] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all');
@@ -42,7 +41,12 @@ export const UserLibrary = () => {
 
       if (booksRes.error) throw booksRes.error;
 
-      if (likesRes.data) setLikedBookIds(likesRes.data.map(l => l.book_id));
+      // POZOR: setLikedBookIds by se tu NEPROJEVIL do stejného běhu funkce (setState
+      // se neaplikuje synchronně) - proto se pro isLiked níž používá tahle čerstvá
+      // lokální proměnná, ne stav. Dřív se čítalo ze stavu a "moje lajky" se po
+      // každém načtení knihovny mylně ukazovaly jako prázdné srdíčko, dokud
+      // uživatel sám na srdíčko neklikl.
+      const freshLikedIds = likesRes.data?.map(l => l.book_id) || [];
       if (profileRes.data) setCoins(profileRes.data.coins || 0);
 
       const currentUsername = getUsername(user.email);
@@ -61,7 +65,7 @@ export const UserLibrary = () => {
           title: singleBook.title,
           author: singleBook.author,
           likesCount: totalLikesCount,
-          isLiked: likedBookIds.includes(singleBook.id),
+          isLiked: freshLikedIds.includes(singleBook.id),
           avgRating: parseFloat(singleBook.avg_rating) || 0,
           ratingsCount: singleBook.ratings_count || 0,
           genres: Array.isArray(singleBook.genres) ? singleBook.genres : [],
