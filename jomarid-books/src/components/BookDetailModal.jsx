@@ -14,6 +14,7 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
 
   useEffect(() => {
     if (!book) return;
+    let cancelled = false;
     setLoadingComments(true);
     setNewComment('');
     setCommentError('');
@@ -23,9 +24,11 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
       .eq('book_id', book.id)
       .order('created_at', { ascending: false })
       .then(({ data }) => {
+        if (cancelled) return;
         setComments(data || []);
         setLoadingComments(false);
       });
+    return () => { cancelled = true; };
   }, [book?.id]);
 
   if (!book) return null;
@@ -102,8 +105,6 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
                 <BookOpen size={14} /> {book.isRead ? 'Číst znovu' : 'Číst'}
               </button>
             </Link>
-          ) : book.isPending ? (
-            <div style={{ backgroundColor: 'var(--bg-secondary)' }} className="py-3 text-center rounded-xl text-xs font-black uppercase opacity-50">V řízení</div>
           ) : (
             <button
               onClick={() => onBuy(book)}
