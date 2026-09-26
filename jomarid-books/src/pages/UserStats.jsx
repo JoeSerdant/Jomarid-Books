@@ -436,11 +436,29 @@ export const UserStats = () => {
     try {
       const { data, error } = await supabase.rpc('buy_streak_freeze');
       if (error) throw error;
-      setStats(prev => ({ ...prev, jomaridCoins: data?.new_balance ?? prev.jomaridCoins, streakFreezes: prev.streakFreezes + 1 }));
+      setStats(prev => ({
+        ...prev,
+        jomaridCoins: data?.new_balance ?? prev.jomaridCoins,
+        streakFreezes: data?.streak_freezes ?? prev.streakFreezes,
+      }));
     } catch (err) {
       const msg = err.message || '';
       if (msg.includes('insufficient_coins')) {
-        alert(`Nemáš dost Jomarid Coinů. Streak Freeze stojí 150, ty máš ${stats.jomaridCoins}.`);
+        // Zůstatek v místním stavu mohl mezitím zestárnout (např. utraceno
+        // jinde bez obnovení téhle stránky) - než ukážeme "kolik máš", radši
+        // se zeptáme serveru na skutečné aktuální číslo, ať hláška neukazuje
+        // hodnotu, která už neodpovídá realitě.
+        let realBalance = stats.jomaridCoins;
+        try {
+          const { data: freshProfile } = await supabase.from('profiles').select('coins').eq('id', user.id).maybeSingle();
+          if (freshProfile) {
+            realBalance = freshProfile.coins ?? realBalance;
+            setStats(prev => ({ ...prev, jomaridCoins: realBalance }));
+          }
+        } catch (refreshErr) {
+          console.error('Nepodařilo se ověřit aktuální zůstatek:', refreshErr);
+        }
+        alert(`Nemáš dost Jomarid Coinů. Streak Freeze stojí 150, ty máš ${realBalance}.`);
       } else {
         alert('Nákup se nezdařil: ' + msg);
       }
