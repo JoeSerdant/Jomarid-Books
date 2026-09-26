@@ -37,10 +37,21 @@ export function AuthProvider({ children }) {
          .single();
       
        if (!insertError) data = newProfile;
+       error = insertError;
      }
 
      setUser(sessionUser);
-     setRole(data?.role || 'uživatel');
+     if (error) {
+       // Profil se nepodařilo ani načíst, ani (u nového účtu) založit -
+       // nejde o "nový uživatel, správně uživatel" případ, tak se role
+       // nesmí potichu domýšlet. Radši čestně "neznámá" (null) - ochranné
+       // route guardy to už bezpečně berou jako "ne správce", ale příště
+       // se to zkusí znovu, místo aby to celou session tvrdilo špatnou roli.
+       console.error('Profil se nepodařilo synchronizovat:', error);
+       setRole(null);
+     } else {
+       setRole(data?.role || 'uživatel');
+     }
    } catch (catchedError) {
      console.error("Auth sync crash:", catchedError);
    } finally {
