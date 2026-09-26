@@ -140,7 +140,17 @@ export const UserLibrary = () => {
     } catch (err) {
       const msg = err.message || '';
       if (msg.includes('insufficient_coins')) {
-        alert(`Nemáš dost Jomarid Coinů. Tahle kniha stojí ${book.priceCoins}, ty máš ${coins}.`);
+        let realBalance = coins;
+        try {
+          const { data: freshProfile } = await supabase.from('profiles').select('coins').eq('id', user.id).maybeSingle();
+          if (freshProfile) {
+            realBalance = freshProfile.coins ?? realBalance;
+            setCoins(realBalance);
+          }
+        } catch (refreshErr) {
+          console.error('Nepodařilo se ověřit aktuální zůstatek:', refreshErr);
+        }
+        alert(`Nemáš dost Jomarid Coinů. Tahle kniha stojí ${book.priceCoins}, ty máš ${realBalance}.`);
       } else if (msg.includes('already_owned')) {
         alert('Tuhle knihu už vlastníš.');
         loadLibraryData();
