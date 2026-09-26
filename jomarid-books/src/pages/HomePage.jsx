@@ -132,6 +132,11 @@ export const HomePage = () => {
   // zkoušely připsat stejnou odměnu dvakrát.
   useEffect(() => {
     if (!user) { setPersonal(null); setPersonalLoading(false); return; }
+    // Čeká, až doběhnou veřejná nastavení (settings) - jinak by "doporučeno"
+    // níž mohlo náhodně proběhnout dřív, než se stihnou načíst adminem
+    // vybrané doporučené knihy, a ignorovat je čistě kvůli tomu, který
+    // ze dvou nezávislých fetchů doběhl první.
+    if (publicLoading) return;
     let cancelled = false;
     setPersonalLoading(true);
     (async () => {
@@ -140,7 +145,7 @@ export const HomePage = () => {
           supabase.from('profiles').select('fake_xp, bonus_xp, unlocked_badges, coins, highest_goal_ever, featured_badge, frozen_dates').eq('id', user.id).maybeSingle(),
           supabase.from('user_books').select('book_id, is_read, status, scroll_position, updated_at').eq('user_id', user.id),
           supabase.from('user_daily_activity').select('activity_date').eq('user_id', user.id).order('activity_date', { ascending: false }),
-          supabase.from('books').select('id, title, author, genres, description, price_coins, is_auto_assigned'),
+          supabase.from('books').select('id, title, author, genres, description, price_coins, is_auto_assigned, avg_rating'),
         ]);
         if (cancelled) return;
         if (profileRes.error) throw profileRes.error;
@@ -175,12 +180,6 @@ export const HomePage = () => {
         // --- XP/Level: stejný vzorec jako Statistiky, počítáno jen z dat,
         // která už reálně existují v DB (žádné nové odemykání tady).
         const totalRead = userBooks.filter(b => b.is_read).length;
-        const now = new Date();
-        const monthlyReadCount = userBooks.filter(b => {
-          if (!b.is_read || !b.updated_at) return false;
-          const d = new Date(b.updated_at);
-          return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-        }).length;
         const goalEver = parseInt(profile.highest_goal_ever, 10) || 5;
         const goalMultiplier = goalEver > 5 ? 1 + (goalEver - 5) * 0.02 : 1;
         const baseXpFromBooks = Math.round(totalRead * 100 * goalMultiplier);
@@ -209,7 +208,8 @@ export const HomePage = () => {
         ]);
         const notOwned = allBooks.filter(b => !ownedOrFreeIds.has(b.id));
         const featuredIds = new Set(settings.homepage_featured_books?.book_ids || []);
-        const recommended = notOwned.find(b => featuredIds.has(b.id)) || notOwned[0] || null;
+        const bestRatedFirst = [...notOwned].sort((a, b) => (parseFloat(b.avg_rating) || 0) - (parseFloat(a.avg_rating) || 0));
+        const recommended = bestRatedFirst.find(b => featuredIds.has(b.id)) || bestRatedFirst[0] || null;
 
         // --- Nejnovější odznak (pole se plní v pořadí odemčení, viz Statistiky).
         const latestBadgeId = unlockedBadgeIds[unlockedBadgeIds.length - 1];
@@ -235,7 +235,7 @@ export const HomePage = () => {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, publicLoading]);
 
   if (user) {
     return (
@@ -402,7 +402,10 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
                 key={book.id}
                 style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}
                 className="group relative h-48 rounded-xl p-5 border flex flex-col justify-between text-left shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden"
-                onClick={() => navigate('/login')}
+                onClick={() => {
+                  try { sessionStorage.setItem('library_open_book_id', book.id); } catch (e) { /* storage unavailable, ignore */ }
+                  navigate('/login');
+                }}
               >
                 <div className="flex justify-between items-start w-full gap-2">
                   <div className="flex flex-wrap gap-1">
@@ -842,7 +845,10 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
                 )}
               </div>
               <button
-                onClick={() => navigate('/app')}
+                onClick={() => {
+                  try { sessionStorage.setItem('library_open_book_id', recommended.id); } catch (e) { /* storage unavailable, ignore */ }
+                  navigate('/app');
+                }}
                 style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }}
                 className="mt-5 w-full py-3 rounded-xl font-bold text-sm border-none cursor-pointer hover:opacity-90 transition-all flex items-center justify-center gap-2"
               >
