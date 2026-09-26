@@ -1,18 +1,17 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { Button, Card } from '../components/ui';
-import { Award, Coins, Database, FileText, Filter, Heart, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle } from 'lucide-react';
+import { Award, Coins, Database, Filter, Heart, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle } from 'lucide-react';
 
 export const AdminDashboard = () => {
   // --- Základní stavy dat ---
   const [books, setBooks] = useState([]);
   const [profiles, setProfiles] = useState([]);
-  const [pendingRequests, setPendingRequests] = useState([]);
   const [logs, setLogs] = useState([]);
   const [comments, setComments] = useState([]);
   
   // --- Stavy rozhraní (UX) ---
-  const [activeTab, setActiveTab] = useState('overview'); // overview | books | users | logs
+  const [activeTab, setActiveTab] = useState('books'); // books | users | logs
   const [globalLoading, setGlobalLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   
@@ -71,36 +70,13 @@ export const AdminDashboard = () => {
         .order('created_at', { ascending: false })
         .limit(30);
       
-      // 4. Načtení čekajících žádostí o licenci
-      const { data: reqs, error: reqError } = await supabase
-        .from('user_books')
-        .select('id, user_id, book_id, created_at, status')
-        .eq('status', 'requested');
-
-      if (reqError) console.error("Chyba při načítání user_books:", reqError);
-
-      // 5. Posledních 50 komentářů napříč knihami - pro moderaci (viz sekce Komentáře).
+      // 4. Posledních 50 komentářů napříč knihami - pro moderaci (viz sekce Komentáře).
       const { data: c } = await supabase
         .from('book_comments')
         .select('id, content, author_name, book_id, created_at')
         .order('created_at', { ascending: false })
         .limit(50);
 
-      // JS in-memory spojení dat pro spolehlivost bez DB JOINů
-      const mapovaneZadosti = reqs?.map(req => {
-        const najdiProfil = p?.find(u => u.id === req.user_id);
-        const najdiKnihu = b?.find(k => k.id === req.book_id);
-
-        return {
-          id: req.id,
-          user_id: req.user_id,
-          book_id: req.book_id,
-          created_at: req.created_at,
-          profiles: { email: najdiProfil ? najdiProfil.email : `ID: ${req.user_id?.substring(0, 6)}...` },
-          books: { title: najdiKnihu ? najdiKnihu.title : `Kniha ID: ${req.book_id?.substring(0, 6)}...` }
-        };
-      }) || [];
-      
       const booksWithLikes = b?.map(book => {
         const realLikes = book.book_likes?.[0]?.count || 0;
         const fikes = book.fake_likes || 0;
@@ -132,7 +108,6 @@ export const AdminDashboard = () => {
       setBooks(booksWithLikes); 
       setProfiles(p || []); 
       setLogs(l || []);
-      setPendingRequests(mapovaneZadosti);
       setComments(mapovaneKomentare);
     } catch (err) {
       console.error("Chyba v refreshData:", err);
@@ -174,31 +149,6 @@ export const AdminDashboard = () => {
   }, [logs, filterLogType]);
 
   // --- Handlery akcí ---
-  const approveRequest = async (requestId, userEmail, bookTitle) => {
-    setActionLoading(true);
-    const { error } = await supabase.from('user_books').update({ status: 'active' }).eq('id', requestId);
-    if (!error) {
-      await safeLog('SUCCESS', `Schválena licence na knihu "${bookTitle}" pro ${userEmail}`);
-      refreshData();
-    } else {
-      alert('Chyba při schvalování: ' + error.message);
-    }
-    setActionLoading(false);
-  };
-
-  const rejectRequest = async (requestId, userEmail, bookTitle) => {
-    if (!confirm(`Opravdu chcete zamítnout žádost uživatele ${userEmail} o knihu "${bookTitle}"?`)) return;
-    setActionLoading(true);
-    const { error } = await supabase.from('user_books').delete().eq('id', requestId);
-    if (!error) {
-      await safeLog('WARN', `Zamítnuta žádost na knihu "${bookTitle}" od ${userEmail}`);
-      refreshData();
-    } else {
-      alert('Chyba při mazání žádosti: ' + error.message);
-    }
-    setActionLoading(false);
-  };
-
   const saveBook = async (e) => {
     e.preventDefault();
     if (!title) return alert('Doplňte název knihy.');
@@ -514,7 +464,7 @@ export const AdminDashboard = () => {
       </div>
 
       {/* STATISTICKÉ UKAZATELE */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="flex items-center gap-4 py-4 relative overflow-hidden">
           <div className="p-3 rounded-xl bg-blue-500/10 text-blue-500"><Database size={22}/></div>
           <div>
@@ -522,18 +472,11 @@ export const AdminDashboard = () => {
             <p className="text-xl font-black">{books.length} Knih v DB</p>
           </div>
         </Card>
-        <Card className="flex items-center gap-4 py-4">
+        <Card style={{ backgroundColor: 'var(--bg-secondary)' }} className="flex items-center gap-4 py-4">
           <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-500"><Users size={22}/></div>
           <div>
             <h4 style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider opacity-60">Komunita</h4>
             <p className="text-xl font-black">{profiles.length} Čtenářů</p>
-          </div>
-        </Card>
-        <Card style={{ backgroundColor: 'var(--bg-secondary)', borderColor: pendingRequests.length > 0 ? '#eab308' : 'var(--border-color)' }} className="flex items-center gap-4 py-4 border-2 transition-all">
-          <div className={`p-3 rounded-xl ${pendingRequests.length > 0 ? "bg-yellow-500/20 text-yellow-500" : "bg-gray-500/10 opacity-50"}`}><UserCheck size={22}/></div>
-          <div>
-            <h4 style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider opacity-60">Žádosti o licenci</h4>
-            <p className={`text-xl font-black ${pendingRequests.length > 0 ? "text-yellow-500 font-extrabold" : ""}`}>{pendingRequests.length} Ke schválení</p>
           </div>
         </Card>
         <Card className="flex items-center gap-4 py-4">
@@ -548,7 +491,6 @@ export const AdminDashboard = () => {
       {/* TAB NAVIGACE */}
       <div className="flex border-b font-black text-xs uppercase tracking-wider space-x-1" style={{ borderColor: 'var(--border-color)' }}>
         {[
-          { id: 'overview', label: 'Přehled & Žádosti', icon: <FileText size={14} /> },
           { id: 'books', label: 'Knihovna & Editace', icon: <Database size={14} /> },
           { id: 'users', label: 'Uživatelé & Licence', icon: <Users size={14} /> },
           { id: 'logs', label: 'Systémový Syslog', icon: <Terminal size={14} /> }
@@ -572,65 +514,6 @@ export const AdminDashboard = () => {
       {actionLoading && (
         <div className="w-full bg-yellow-500 text-black text-center text-xs font-black py-1 rounded animate-pulse uppercase tracking-widest">
           Probíhá zápis do databáze Supabase... Čekejte prosím.
-        </div>
-      )}
-
-      {/* 1. ZÁLOŽKA: PŘEHLED A ŽÁDOSTI */}
-      {activeTab === 'overview' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-8 space-y-6">
-            <Card className="p-0 overflow-hidden border-2" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
-              <div className="p-4 font-black text-xs uppercase tracking-wider flex justify-between items-center border-b" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-color)' }}>
-                <span className="flex items-center gap-2">📥 Čekající žádosti o autorizaci licencí</span>
-                <span className="bg-yellow-500 text-black font-black px-2 py-0.5 rounded text-[10px]">{pendingRequests.length}</span>
-              </div>
-              <div className="divide-y max-h-[450px] overflow-y-auto" style={{ borderColor: 'var(--border-color)' }}>
-                {pendingRequests.length === 0 ? (
-                  <p style={{ color: 'var(--text-muted)' }} className="text-center py-12 text-xs font-bold opacity-60 italic">
-                    Všechny žádosti byly vyřízeny. Systém je stabilní.
-                  </p>
-                ) : (
-                  pendingRequests.map(req => {
-                    const userEmail = req.profiles?.email || `Uživatel (ID: ${req.user_id?.substring(0, 5)}...)`;
-                    const bookTitle = req.books?.title || `Kniha (ID: ${req.book_id?.substring(0, 5)}...)`;
-                    return (
-                      <div key={req.id} className="p-4 flex items-center justify-between text-xs font-bold hover:bg-[var(--bg-primary)]/40 transition-colors gap-4" style={{ borderColor: 'var(--border-color)' }}>
-                        <div className="truncate flex-1">
-                          <p className="truncate text-sm font-black">{userEmail}</p>
-                          <p style={{ color: 'var(--bg-primary)' }} className="text-[11px] truncate mt-0.5">
-                            Vyžaduje přístup k titulu: <span className="font-black uppercase underline">{bookTitle}</span>
-                          </p>
-                        </div>
-                        <div className="flex gap-2 shrink-0">
-                          <Button variant="success" disabled={actionLoading} onClick={() => approveRequest(req.id, userEmail, bookTitle)} className="px-3 py-2 text-[10px] font-black uppercase rounded-lg">
-                            Schválit Přístup
-                          </Button>
-                          <Button variant="danger" disabled={actionLoading} onClick={() => rejectRequest(req.id, userEmail, bookTitle)} className="px-3 py-2 text-[10px] font-black uppercase rounded-lg">
-                            Zamítnout
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </Card>
-          </div>
-          
-          <div className="lg:col-span-4 space-y-4">
-            <Card style={{ backgroundColor: 'var(--bg-secondary)' }}>
-              <h3 className="text-xs font-black uppercase tracking-wider mb-2">Rychlý přehled stavu</h3>
-              <div className="text-xs space-y-2 font-bold opacity-80">
-                <div className="flex justify-between"><span>Verze UI Core:</span><span className="font-mono">4.12.0-stable</span></div>
-                <div className="flex justify-between"><span>Průměrný věk relací:</span><span>Reálný čas</span></div>
-                <div className="flex justify-between"><span>RLS bypass logování:</span><span className="text-emerald-500">Aktivní (safeLog)</span></div>
-              </div>
-            </Card>
-            <div className="text-[11px] font-mono p-3 rounded-xl bg-slate-950 text-slate-400 border border-slate-900 shadow-inner">
-              <span className="text-yellow-500 font-bold block mb-1">💡 Tip Admina:</span>
-              Kliknutím na tlačítko s ikonou štítu <Shield size={10} className="inline"/> u jakéhokoliv uživatele v záložce Uživatelé můžete okamžitě přepínat jeho oprávnění.
-            </div>
-          </div>
         </div>
       )}
 
