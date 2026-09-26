@@ -4,17 +4,18 @@ import { FaqItem } from '../components/FaqItem';
 import {
   Book, BookOpen, ChevronRight, Coins, Flame, Library, Phone,
   ShieldCheck, Sparkles, Zap, Footprints, Scroll,
-  Rocket, Swords, Building2, ArrowRight, RotateCcw, MessageCircle, Trophy
+  Rocket, Swords, Building2, Target, Crown, ArrowRight, RotateCcw, MessageCircle, Trophy,
+  Type, Bookmark, Star, Feather, Calendar, Gamepad2
 } from 'lucide-react';
 
-// Reálné odznaky (stejná data jako v aplikaci) - napříč pěti různými
-// kategoriemi ze sedmi existujících, pro pestrost ukázky.
+// Reálné odznaky (stejná data jako v aplikaci) napříč čtyřmi z pěti
+// skutečných kategorií (books/levels/monthly/special/streak), pro pestrost.
 const SAMPLE_BADGES = [
   { icon: Footprints, title: 'První Průzkumník', description: 'Přečti svou úplně první knihu v knihovně.', coins: 50, xp: 100, category: 'Knihy' },
   { icon: Flame, title: 'Týdenní Plamen', description: 'Čti sedm dní v kuse bez jediného výpadku.', coins: 150, xp: 300, category: 'Streak' },
   { icon: Scroll, title: 'Průzkumník Svazků', description: 'Dosáhni čtenářské úrovně 4.', coins: 80, xp: 120, category: 'Úroveň' },
-  { icon: Coins, title: 'Mincový Sběratel', description: 'Nashromáždi celkem 500 Jomarid Coinů.', coins: 150, xp: 300, category: 'Mince' },
-  { icon: Trophy, title: 'Mistr Odznaků', description: 'Odemkni 25 různých odznaků ze sbírky.', coins: 500, xp: 1000, category: 'Sbírka' },
+  { icon: Coins, title: 'Mincový Sběratel', description: 'Nashromáždi celkem 500 Jomarid Coinů.', coins: 150, xp: 300, category: 'Sběratelství' },
+  { icon: Trophy, title: 'Mistr Odznaků', description: 'Odemkni 25 různých odznaků ze sbírky.', coins: 500, xp: 1000, category: 'Sběratelství' },
 ];
 
 const GAMES_PREVIEW = [
@@ -33,6 +34,26 @@ const GAMES_PREVIEW = [
     tagline: 'Vybuduj si vlastní město klikáním.',
     detail: 'Čtyři zcela odlišné vizuální styly na výběr - stejné město, jiná nálada.'
   },
+  {
+    icon: Target, title: 'Polygon aréna',
+    tagline: 'Rozstřílej tvary a poskládej si vlastní stavbu tanku.',
+    detail: 'Klasika, týmový mód, nebo klidné cvičiště bez tlaku - na výběr hned v menu.'
+  },
+  {
+    icon: Crown, title: 'Chess League',
+    tagline: 'Šachy proti pěti botům rostoucí obtížnosti.',
+    detail: 'Vlastní XP, streaky a ligový postup - silnější soupeře si odemykáte postupně, výhrou za výhrou.'
+  },
+];
+
+// Každá položka tady je ověřené reálné číslo z appky (RPC konstanty a
+// konkrétní odznak), ne odhad - viz claim_daily_login_bonus, claim_game_bonus
+// a odznak "První Průzkumník" v badges.js.
+const COIN_SOURCES = [
+  { label: 'Denní přihlášení', coins: 15, icon: Calendar },
+  { label: 'Zahraná minihra dnes', coins: 20, icon: Gamepad2 },
+  { label: 'Odznak „První Průzkumník"', coins: 50, icon: Footprints },
+  { label: 'Splněný měsíční cíl', coins: 250, icon: Target },
 ];
 
 const XP_PER_LEVEL = 120;
@@ -45,6 +66,8 @@ export const HomePage = () => {
   const [justLeveled, setJustLeveled] = useState(false);
   const [activeBadge, setActiveBadge] = useState(0);
   const [activeGame, setActiveGame] = useState(0);
+  const [checkedSources, setCheckedSources] = useState(() => COIN_SOURCES.map(() => false));
+  const [demoFontSize, setDemoFontSize] = useState(18);
 
   const level = Math.floor(demoXp / XP_PER_LEVEL) + 1;
   const progressInLevel = demoXp % XP_PER_LEVEL;
@@ -62,6 +85,12 @@ export const HomePage = () => {
       return next;
     });
   };
+
+  const toggleSource = (idx) => {
+    setCheckedSources(prev => prev.map((v, i) => i === idx ? !v : v));
+  };
+
+  const coinTotal = COIN_SOURCES.reduce((sum, src, idx) => sum + (checkedSources[idx] ? src.coins : 0), 0);
 
   const featuredBooks = [
     { title: "Hobin Rood: DÍL 1: JAK OŽEBRAČIT PRVNÍ VESNICI", category: "Dobrodružná satira", author: "Jomarid" },
@@ -97,7 +126,7 @@ export const HomePage = () => {
 
             <p style={{ color: 'var(--text-muted)' }} className="text-base md:text-lg max-w-lg mb-9 leading-relaxed">
               Tři originální knižní řady, přes 100 sběratelských odznaků a vlastní herní měna,
-              kterou si vyděláte čtením - nebo si mezitím zahrajete jednu ze tří miniher.
+              kterou si vyděláte čtením - nebo si mezitím zahrajete jednu z pěti miniher.
             </p>
 
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
@@ -173,7 +202,7 @@ export const HomePage = () => {
       </section>
 
       {/* ============================================================
-          2. TITULY - pruh s tituly (beze změny konceptu, jen zjemněno)
+          2. TITULY - pruh s tituly
          ============================================================ */}
       <section className="max-w-6xl mx-auto px-4 pb-20">
         <h2 style={{ color: 'var(--text-muted)' }} className="text-sm font-semibold mb-6 opacity-70">Hlavní tituly</h2>
@@ -233,15 +262,77 @@ export const HomePage = () => {
       </section>
 
       {/* ============================================================
-          4. ODZNAKY - interaktivní vitrína, klikací
+          4. MINCE - interaktivní kalkulačka odměn
          ============================================================ */}
-      <section className="max-w-6xl mx-auto px-4 py-20">
+      <section className="max-w-5xl mx-auto px-4 py-20">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-start">
+          <div className="lg:col-span-2">
+            <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">Odkud se berou Jomarid Coins</h2>
+            <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed mb-4">
+              Zaškrtněte, co všechno byste dnes reálně stihli, a sledujte, kolik by vám to vyneslo.
+              Mincemi pak v knihovně přímo platíte za další tituly, nebo si za 150 koupíte
+              Streak Freeze - pojistku na jeden zmeškaný den bez ztráty série.
+            </p>
+          </div>
+
+          <div className="lg:col-span-3">
+            <div
+              style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}
+              className="border rounded-2xl p-6 shadow-sm"
+            >
+              <div className="space-y-2 mb-5">
+                {COIN_SOURCES.map((src, idx) => {
+                  const Icon = src.icon;
+                  const checked = checkedSources[idx];
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => toggleSource(idx)}
+                      style={{
+                        backgroundColor: checked ? 'var(--bg-badge)' : 'var(--bg-secondary)',
+                        borderColor: checked ? 'var(--bg-primary)' : 'var(--border-color)',
+                      }}
+                      className="w-full flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all duration-150 text-left"
+                    >
+                      <span className="flex items-center gap-3">
+                        <span
+                          style={{ backgroundColor: checked ? 'var(--bg-primary)' : 'var(--bg-body)', color: checked ? 'var(--text-primary)' : 'var(--text-muted)' }}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors"
+                        >
+                          <Icon size={15} />
+                        </span>
+                        <span style={{ color: 'var(--text-body)' }} className="text-xs font-bold">{src.label}</span>
+                      </span>
+                      <span style={{ color: checked ? 'var(--text-badge)' : 'var(--text-muted)' }} className="text-xs font-bold shrink-0">
+                        +{src.coins}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{ borderColor: 'var(--border-color)' }} className="border-t pt-4 flex items-center justify-between">
+                <span style={{ color: 'var(--text-muted)' }} className="text-xs font-semibold uppercase tracking-wide">Dnešní součet</span>
+                <span className="font-heading text-3xl font-extrabold tabular-nums flex items-center gap-2" style={{ color: 'var(--bg-primary)' }}>
+                  <Coins size={22} /> {coinTotal}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ============================================================
+          5. ODZNAKY - interaktivní vitrína, klikací
+         ============================================================ */}
+      <section style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border-y py-20">
+        <div className="max-w-6xl mx-auto px-4">
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-start">
 
           <div className="lg:col-span-2">
             <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">100 odznaků čeká na odemknutí</h2>
             <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed mb-6">
-              Rozdělené do sedmi kategorií - od prvního přečtení přes streaky až po sběratelství
+              Rozdělené do pěti kategorií - od prvního přečtení přes streaky až po sběratelství
               samo o sobě. Klikněte na kterýkoliv z pěti níže a podívejte se, co obnáší.
             </p>
             <div className="flex flex-wrap gap-2">
@@ -267,7 +358,7 @@ export const HomePage = () => {
 
           <div className="lg:col-span-3">
             <div
-              style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}
+              style={{ backgroundColor: 'var(--bg-body)', borderColor: 'var(--border-color)' }}
               className="border rounded-2xl p-8 shadow-sm min-h-[220px] flex flex-col justify-center"
             >
               <div className="flex items-start gap-5">
@@ -298,58 +389,129 @@ export const HomePage = () => {
             </div>
           </div>
         </div>
+        </div>
       </section>
 
       {/* ============================================================
-          5. HRY - přepínací náhled tří skutečných her
+          6. HRY - přepínací náhled pěti skutečných her
+         ============================================================ */}
+      <section className="max-w-5xl mx-auto px-4 py-20">
+        <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">Pět miniher, jedna herní měna</h2>
+        <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed max-w-lg mb-10">
+          Odskočte si od čtení, kdykoliv budete chtít. Za zahrání si navíc jednou denně připíšete
+          bonusové Jomarid Coins - stejné mince, za které kupujete knihy.
+        </p>
+
+        <div className="flex flex-wrap gap-2 mb-6">
+          {GAMES_PREVIEW.map((game, idx) => {
+            const Icon = game.icon;
+            const isActive = idx === activeGame;
+            return (
+              <button
+                key={idx}
+                onClick={() => setActiveGame(idx)}
+                style={{
+                  backgroundColor: isActive ? 'var(--bg-primary)' : 'var(--bg-secondary)',
+                  color: isActive ? 'var(--text-primary)' : 'var(--text-body)',
+                  borderColor: 'var(--border-color)',
+                }}
+                className="px-4 py-2.5 rounded-xl border-none cursor-pointer text-xs font-bold flex items-center gap-2 transition-all duration-200"
+              >
+                <Icon size={14} /> {game.title}
+              </button>
+            );
+          })}
+        </div>
+
+        <div
+          style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}
+          className="border rounded-2xl p-8 flex items-start gap-5"
+        >
+          <div style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' }} className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0">
+            <ActiveGameIcon size={26} />
+          </div>
+          <div>
+            <h3 className="font-heading font-bold text-lg mb-1">{activeGameData.title}</h3>
+            <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed mb-2">{activeGameData.tagline}</p>
+            <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed opacity-75">{activeGameData.detail}</p>
+          </div>
+        </div>
+      </section>
+
+      {/* ============================================================
+          7. ČTECÍ ZÁŽITEK - živá ukázka velikosti písma + zbytek
          ============================================================ */}
       <section style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border-y py-20">
         <div className="max-w-5xl mx-auto px-4">
-          <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">Tři minihry, jedna herní měna</h2>
+          <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">Čtečka, která se přizpůsobí vám</h2>
           <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed max-w-lg mb-10">
-            Odskočte si od čtení, kdykoliv budete chtít. Za zahrání si navíc jednou denně připíšete
-            bonusové Jomarid Coins - stejné mince, za které kupujete knihy.
+            Posuňte jezdec a vyzkoušejte si, jak si sami nastavíte velikost písma přímo při čtení.
           </p>
 
-          <div className="flex flex-wrap gap-2 mb-6">
-            {GAMES_PREVIEW.map((game, idx) => {
-              const Icon = game.icon;
-              const isActive = idx === activeGame;
-              return (
-                <button
-                  key={idx}
-                  onClick={() => setActiveGame(idx)}
-                  style={{
-                    backgroundColor: isActive ? 'var(--bg-primary)' : 'var(--bg-secondary)',
-                    color: isActive ? 'var(--text-primary)' : 'var(--text-body)',
-                    borderColor: 'var(--border-color)',
-                  }}
-                  className="px-4 py-2.5 rounded-xl border-none cursor-pointer text-xs font-bold flex items-center gap-2 transition-all duration-200"
-                >
-                  <Icon size={14} /> {game.title}
-                </button>
-              );
-            })}
-          </div>
-
-          <div
-            style={{ backgroundColor: 'var(--bg-body)', borderColor: 'var(--border-color)' }}
-            className="border rounded-2xl p-8 flex items-start gap-5"
-          >
-            <div style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' }} className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0">
-              <ActiveGameIcon size={26} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div
+              style={{ backgroundColor: 'var(--bg-body)', borderColor: 'var(--border-color)' }}
+              className="border rounded-2xl p-6"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <span style={{ color: 'var(--text-muted)' }} className="text-[11px] font-bold uppercase tracking-wide flex items-center gap-1.5">
+                  <Type size={13} /> Velikost písma
+                </span>
+                <span style={{ color: 'var(--bg-primary)' }} className="text-xs font-bold tabular-nums">{demoFontSize}px</span>
+              </div>
+              <input
+                type="range"
+                min={14}
+                max={28}
+                value={demoFontSize}
+                onChange={(e) => setDemoFontSize(Number(e.target.value))}
+                className="w-full mb-5 cursor-pointer accent-current"
+                style={{ accentColor: 'var(--bg-primary)' }}
+              />
+              <p
+                style={{ fontSize: `${demoFontSize}px`, color: 'var(--text-body)' }}
+                className="font-serif leading-relaxed transition-all duration-100"
+              >
+                „A tak se Hobin Rood vydal do první vesnice, netuše, že z ní za týden nezbude jediná mince…"
+              </p>
             </div>
-            <div>
-              <h3 className="font-heading font-bold text-lg mb-1">{activeGameData.title}</h3>
-              <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed mb-2">{activeGameData.tagline}</p>
-              <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed opacity-75">{activeGameData.detail}</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex gap-3">
+                <Bookmark size={18} style={{ color: 'var(--bg-primary)' }} className="shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-heading font-bold text-sm mb-1">Pojmenované záložky</h3>
+                  <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">Uložte si víc míst v jedné knize, ne jen tam, kde jste přestali.</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <BookOpen size={18} style={{ color: 'var(--bg-primary)' }} className="shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-heading font-bold text-sm mb-1">Pozice napříč zařízeními</h3>
+                  <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">Odložíte na počítači, otevřete na mobilu přesně na stejném místě.</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <Star size={18} style={{ color: 'var(--bg-primary)' }} className="shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-heading font-bold text-sm mb-1">Hvězdičkové hodnocení</h3>
+                  <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">Ohodnoťte knihu po přečtení, ať vidíte i to, co si myslí ostatní.</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <MessageCircle size={18} style={{ color: 'var(--bg-primary)' }} className="shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-heading font-bold text-sm mb-1">Krátké komentáře</h3>
+                  <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">Jedna stručná věta u knihy - vaše, nebo od ostatních čtenářů.</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
       {/* ============================================================
-          6. PROČ ČÍST TADY - kompaktní, ne identické karty
+          8. PROČ ČÍST TADY
          ============================================================ */}
       <section className="max-w-5xl mx-auto px-4 py-20">
         <h2 className="font-heading text-2xl md:text-3xl font-bold mb-12">Proč číst tady</h2>
@@ -373,15 +535,6 @@ export const HomePage = () => {
             </div>
           </div>
           <div className="flex gap-4">
-            <MessageCircle size={20} style={{ color: 'var(--bg-primary)' }} className="shrink-0 mt-0.5" />
-            <div>
-              <h3 className="font-heading font-bold text-sm mb-1.5">Hodnocení a komentáře</h3>
-              <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">
-                Než knihu koupíte, podíváte se na hvězdičkové hodnocení i krátké komentáře ostatních čtenářů.
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-4">
             <Sparkles size={20} style={{ color: 'var(--bg-primary)' }} className="shrink-0 mt-0.5" />
             <div>
               <h3 className="font-heading font-bold text-sm mb-1.5">Rozhraní bez reklam</h3>
@@ -390,11 +543,51 @@ export const HomePage = () => {
               </p>
             </div>
           </div>
+          <div className="flex gap-4">
+            <Flame size={20} style={{ color: 'var(--bg-primary)' }} className="shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-heading font-bold text-sm mb-1.5">Streak, co se dá zachránit</h3>
+              <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">
+                Zmeškaný den nemusí znamenat konec série - Streak Freeze ji na jeden den ochrání.
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
       {/* ============================================================
-          7. FAQ
+          9. STAŇTE SE NAKLADATELEM
+         ============================================================ */}
+      <section style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border-y py-20">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="flex flex-col md:flex-row items-start md:items-center gap-8">
+            <div
+              style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' }}
+              className="w-16 h-16 rounded-2xl flex items-center justify-center shrink-0"
+            >
+              <Feather size={28} />
+            </div>
+            <div className="flex-1">
+              <h2 className="font-heading text-xl md:text-2xl font-bold mb-2">Máte vlastní příběh?</h2>
+              <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed mb-4 max-w-2xl">
+                Jomarid Books má i nakladatelský panel pro autory - vlastní katalog vydaných titulů,
+                schvalování čtenářských žádostí a přehled reakcí na vaši práci. Přístup k roli
+                nakladatele přiděluje tým Jomarid Books ručně, tak nám napište.
+              </p>
+              <a
+                href="mailto:wwsigmamango@gmail.com"
+                style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs no-underline hover:brightness-105 transition-all"
+              >
+                Napsat ohledně publikování <ArrowRight size={14} />
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ============================================================
+          10. FAQ
          ============================================================ */}
       <section className="max-w-2xl mx-auto px-4 py-20">
         <h2 className="font-heading text-2xl md:text-3xl font-bold mb-8 text-center">Časté otázky</h2>
@@ -409,7 +602,11 @@ export const HomePage = () => {
           />
           <FaqItem
             question="Co jsou ty minihry a musím je hrát?"
-            answer="Vůbec ne - jsou to tři volitelné hry v samostatné sekci appky, čistě pro zábavu mimo čtení. Když si zahrajete, dostanete jednou denně bonusové Jomarid Coins navrch."
+            answer="Vůbec ne - je to pět volitelných her v samostatné sekci appky, čistě pro zábavu mimo čtení. Když si zahrajete, dostanete jednou denně bonusové Jomarid Coins navrch."
+          />
+          <FaqItem
+            question="Jak funguje Streak Freeze?"
+            answer="Koupíte si ho v sekci Statistiky za 150 Jomarid Coins. Jakmile ho vlastníte, jeden zmeškaný den se automaticky počítá jako pokrytý a vaše série se nepřeruší."
           />
           <FaqItem
             question="Musím něco stahovat nebo instalovat?"
@@ -420,6 +617,10 @@ export const HomePage = () => {
             answer="Ano. Vaše přesná pozice v otevřené knize se ukládá do cloudu, takže můžete plynule navázat na mobilu přesně tam, kde jste skončili na počítači."
           />
           <FaqItem
+            question="Jak se stanu nakladatelem a publikuji vlastní knihu?"
+            answer="Roli nakladatele přiděluje ručně tým Jomarid Books. Napište na kontaktní e-mail v patičce stránky a domluvíme se na dalším postupu."
+          />
+          <FaqItem
             question="Kolik stojí založení účtu?"
             answer="Založení profilu a přístup do základního rozhraní čítárny je úplně zdarma."
           />
@@ -427,7 +628,7 @@ export const HomePage = () => {
       </section>
 
       {/* ============================================================
-          8. ZÁVĚREČNÁ CTA
+          11. ZÁVĚREČNÁ CTA
          ============================================================ */}
       <section className="max-w-5xl mx-auto px-4 pb-20">
         <div
@@ -450,7 +651,7 @@ export const HomePage = () => {
       </section>
 
       {/* ============================================================
-          9. PATIČKA
+          12. PATIČKA
          ============================================================ */}
       <footer style={{ borderColor: 'var(--border-color)' }} className="max-w-6xl mx-auto px-4 pt-8 pb-12 border-t flex flex-col sm:flex-row items-center justify-between text-xs gap-4">
         <div style={{ color: 'var(--text-muted)' }} className="flex flex-col sm:flex-row items-center gap-1 sm:gap-3 opacity-70">
