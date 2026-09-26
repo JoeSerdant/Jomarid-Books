@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { BOOK_BADGES } from '../constants/badges';
+import { BadgesSection } from '../components/BadgesSection';
 import { Award, Calendar, CheckCircle, ChevronRight, Coins, Flame, Loader2, Lock, Shield, ShieldCheck, ShieldOff, Sparkles, TrendingUp, Trophy, Users } from 'lucide-react';
 
 // ==========================================
@@ -231,8 +232,16 @@ export const UserStats = () => {
       yesterday.setDate(yesterday.getDate() - 1);
       const yesterdayStr = yesterday.toLocaleDateString('sv');
 
-      if (isCovered(todayStr) || isCovered(yesterdayStr)) {
-        let checkDate = isCovered(todayStr) ? new Date() : yesterday;
+      // Dnešek NESMÍ spotřebovat novou pojistku - den ještě neskončil, uživatel
+      // ho může pokrýt přirozeně (přečtením), takže se na "dnes" ptáme jen na
+      // přirozenou aktivitu nebo dřív už uloženou zmrazenou volbu, nikdy ne na
+      // čerstvě spotřebovanou. Bez týhle výjimky by pouhá návštěva Statistik
+      // před prvním přečtením dneška nevratně spotřebovala zaplacenou pojistku
+      // na den, který ještě vůbec neskončil.
+      const isTodayNaturallyCovered = activeDates.includes(todayStr) || existingFrozenDates.includes(todayStr);
+
+      if (isTodayNaturallyCovered || isCovered(yesterdayStr)) {
+        let checkDate = isTodayNaturallyCovered ? new Date() : yesterday;
         while (true) {
           const checkDateStr = checkDate.toLocaleDateString('sv');
           if (isCovered(checkDateStr)) {
@@ -377,7 +386,7 @@ export const UserStats = () => {
       });
 
       // 6. LEADERBOARDS
-      const { data: allProfiles } = await supabase.from('profiles').select('id, email, fake_xp, bonus_xp, unlocked_badges, featured_badge').eq('show_in_leaderboard', true);
+      const { data: allProfiles } = await supabase.from('profiles').select('id, email, fake_xp, bonus_xp, unlocked_badges, featured_badge, highest_goal_ever').eq('show_in_leaderboard', true);
       if (allProfiles && allProfiles.length > 0) {
         const [allBooksRes, allActsRes] = await Promise.all([
           supabase.from('user_books').select('user_id, updated_at').eq('is_read', true),
@@ -412,7 +421,21 @@ export const UserStats = () => {
             return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
           }).length;
 
-          const uXpTotal = (uBooks.length * 100) + (parseInt(p.fake_xp, 10) || 0) + (parseInt(p.bonus_xp, 10) || 0) + calculateXpMultiplier(uStreak);
+          // Stejný vzorec jako pro přihlášeného uživatele výš (goalMultiplier +
+          // XP z odznáčků) - jinak by žebříček podle XP/úrovně systematicky
+          // podhodnocoval každého se sbírkou odznáčků nebo zvýšeným
+          // highest_goal_ever, protože by to prostě nepočítal vůbec.
+          const uGoalMultiplier = (parseInt(p.highest_goal_ever, 10) || 5) > 5
+            ? 1 + (((parseInt(p.highest_goal_ever, 10) || 5) - 5) * 0.02)
+            : 1;
+          const uBadgeBonusXp = Array.isArray(p.unlocked_badges)
+            ? p.unlocked_badges.reduce((sum, id) => {
+                const badgeDef = BOOK_BADGES.find(bd => bd.id === id);
+                return sum + (badgeDef?.rewardXp || 0);
+              }, 0)
+            : 0;
+
+          const uXpTotal = Math.round(uBooks.length * 100 * uGoalMultiplier) + (parseInt(p.fake_xp, 10) || 0) + (parseInt(p.bonus_xp, 10) || 0) + calculateXpMultiplier(uStreak) + uBadgeBonusXp;
           const { level: uLvl } = calculateLevelAndProgress(uXpTotal);
 
           return {
@@ -768,45 +791,8 @@ export const UserStats = () => {
         </div>
       </div>
 
-      {/* ODZNÁČKY (GRID) */}
-      <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 shadow-sm mb-8">
-        <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider mb-6 text-left flex items-center gap-1.5">
-          <Award size={16} style={{ color: 'var(--bg-primary)' }} /> Sběratelské Odznáčky Knihovny
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {BOOK_BADGES.map((badge) => {
-            const isUnlocked = stats.unlockedBadges.includes(badge.id);
-            const BadgeIcon = badge.icon;
-            return (
-              <div key={badge.id} style={{ backgroundColor: isUnlocked ? 'var(--bg-badge)' : 'rgba(0, 0, 0, 0.04)', borderColor: isUnlocked ? 'var(--border-color)' : 'transparent', opacity: isUnlocked ? 1 : 0.4 }} className={`p-4 rounded-xl border flex items-center gap-4 transition-all duration-300 shadow-inner ${isUnlocked ? 'scale-100' : 'scale-95'}`}>
-                <div style={{ backgroundColor: isUnlocked ? 'var(--bg-primary)' : 'rgba(255,255,255,0.05)', color: isUnlocked ? 'var(--text-primary)' : 'var(--text-muted)' }} className="w-12 h-12 rounded-full flex items-center justify-center shadow-md shrink-0 transition-transform duration-500">
-                  <BadgeIcon size={22} className={isUnlocked ? "animate-pulse" : ""} />
-                </div>
-                <div className="text-left flex flex-col">
-                  <div className="flex items-center gap-2">
-                    <span style={{ color: isUnlocked ? 'var(--text-badge)' : 'var(--text-muted)' }} className="font-black text-sm tracking-wide uppercase">{badge.title}</span>
-                    {isUnlocked && (
-                      <div className="flex items-center gap-1">
-                        {badge.rewardCoins > 0 && (
-                          <span className="text-[10px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5">
-                            +{badge.rewardCoins} <Coins size={10} />
-                          </span>
-                        )}
-                        {badge.rewardXp > 0 && (
-                          <span className="text-[10px] bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5">
-                            +{badge.rewardXp} XP
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <span style={{ color: 'var(--text-body)' }} className="text-xs opacity-70 mt-0.5">{badge.description}</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {/* ODZNÁČKY */}
+      <BadgesSection stats={stats} />
 
       {/* TLAČÍTKO ZPĚT */}
       <div className="flex justify-end">
