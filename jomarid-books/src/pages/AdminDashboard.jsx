@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { Button, Card } from '../components/ui';
-import { Award, Coins, Database, Filter, Heart, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle } from 'lucide-react';
+import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle } from 'lucide-react';
 
 export const AdminDashboard = () => {
   // --- Základní stavy dat ---
@@ -38,6 +38,18 @@ export const AdminDashboard = () => {
   const [userFakeXpInput, setUserFakeXpInput] = useState(0);
   const [coinGrantInput, setCoinGrantInput] = useState('');
   const [coinGrantReason, setCoinGrantReason] = useState('');
+
+  // --- Nastavení domovské stránky ---
+  const [hpHeadline, setHpHeadline] = useState('');
+  const [hpSubtitle, setHpSubtitle] = useState('');
+  const [hpFeaturedBookIds, setHpFeaturedBookIds] = useState([]);
+  const [hpFontQuote, setHpFontQuote] = useState('');
+  const [hpFontAttribution, setHpFontAttribution] = useState('');
+  const [hpWhyRead, setHpWhyRead] = useState([
+    { title: '', description: '' }, { title: '', description: '' },
+    { title: '', description: '' }, { title: '', description: '' },
+  ]);
+  const [savingHomepage, setSavingHomepage] = useState(false);
 
   // Bezpečný zápis do systémových logů
   const safeLog = async (logType, message) => {
@@ -76,6 +88,26 @@ export const AdminDashboard = () => {
         .select('id, content, author_name, book_id, created_at')
         .order('created_at', { ascending: false })
         .limit(50);
+
+      // 5. Nastavení domovské stránky
+      const { data: settings } = await supabase.from('site_settings').select('key, value');
+      const settingsMap = {};
+      (settings || []).forEach(row => { settingsMap[row.key] = row.value; });
+
+      const hero = settingsMap.homepage_hero || {};
+      setHpHeadline(hero.headline || '');
+      setHpSubtitle(hero.subtitle || '');
+
+      setHpFeaturedBookIds(settingsMap.homepage_featured_books?.book_ids || []);
+
+      const fontDemo = settingsMap.homepage_font_demo || {};
+      setHpFontQuote(fontDemo.quote || '');
+      setHpFontAttribution(fontDemo.attribution || '');
+
+      const whyReadItems = settingsMap.homepage_why_read?.items;
+      if (Array.isArray(whyReadItems) && whyReadItems.length === 4) {
+        setHpWhyRead(whyReadItems);
+      }
 
       const booksWithLikes = b?.map(book => {
         const realLikes = book.book_likes?.[0]?.count || 0;
@@ -278,6 +310,36 @@ export const AdminDashboard = () => {
       alert('Přidání Streak Freeze selhalo: ' + (err.message || 'neznámá chyba'));
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const toggleFeaturedBook = (bookId) => {
+    setHpFeaturedBookIds(prev =>
+      prev.includes(bookId) ? prev.filter(id => id !== bookId) : [...prev, bookId]
+    );
+  };
+
+  const updateWhyReadItem = (idx, field, value) => {
+    setHpWhyRead(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+  };
+
+  const saveHomepageSettings = async () => {
+    setSavingHomepage(true);
+    try {
+      const rows = [
+        { key: 'homepage_hero', value: { headline: hpHeadline, subtitle: hpSubtitle } },
+        { key: 'homepage_featured_books', value: { book_ids: hpFeaturedBookIds } },
+        { key: 'homepage_font_demo', value: { quote: hpFontQuote, attribution: hpFontAttribution } },
+        { key: 'homepage_why_read', value: { items: hpWhyRead } },
+      ];
+      const { error } = await supabase.from('site_settings').upsert(rows, { onConflict: 'key' });
+      if (error) throw error;
+      await safeLog('SUCCESS', 'Aktualizován obsah domovské stránky.');
+      alert('Domovská stránka uložena.');
+    } catch (err) {
+      alert('Uložení domovské stránky selhalo: ' + (err.message || 'neznámá chyba'));
+    } finally {
+      setSavingHomepage(false);
     }
   };
 
@@ -492,6 +554,7 @@ export const AdminDashboard = () => {
       <div className="flex border-b font-black text-xs uppercase tracking-wider space-x-1" style={{ borderColor: 'var(--border-color)' }}>
         {[
           { id: 'books', label: 'Knihovna & Editace', icon: <Database size={14} /> },
+          { id: 'homepage', label: 'Domovská stránka', icon: <Layout size={14} /> },
           { id: 'users', label: 'Uživatelé & Licence', icon: <Users size={14} /> },
           { id: 'logs', label: 'Systémový Syslog', icon: <Terminal size={14} /> }
         ].map(tab => (
@@ -745,6 +808,132 @@ export const AdminDashboard = () => {
             )}
           </div>
         </Card>
+        </div>
+      )}
+
+      {/* 2b. ZÁLOŽKA: DOMOVSKÁ STRÁNKA */}
+      {activeTab === 'homepage' && (
+        <div className="space-y-6">
+          <Card>
+            <h3 className="text-sm font-black uppercase tracking-wider mb-4 flex items-center gap-2">
+              <Layout size={16} /> Hlavní nadpis a podtext
+            </h3>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Nadpis (hero)</label>
+                <input
+                  type="text"
+                  value={hpHeadline}
+                  onChange={e => setHpHeadline(e.target.value)}
+                  style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
+                  className="w-full p-3 border rounded-lg text-sm font-bold outline-none"
+                />
+              </div>
+              <div className="space-y-1">
+                <label style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Podtext</label>
+                <textarea
+                  value={hpSubtitle}
+                  onChange={e => setHpSubtitle(e.target.value)}
+                  rows={3}
+                  style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
+                  className="w-full p-3 border rounded-lg text-sm font-bold outline-none resize-none"
+                />
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <h3 className="text-sm font-black uppercase tracking-wider mb-4 flex items-center gap-2">
+              <Sparkles size={16} /> Doporučené tituly na domovské stránce
+            </h3>
+            <p style={{ color: 'var(--text-muted)' }} className="text-xs mb-4 opacity-70">
+              Zaškrtni, které knihy se mají zobrazit v sekci "Hlavní tituly". Nezáleží na pořadí zaškrtnutí.
+            </p>
+            <div style={{ borderColor: 'var(--border-color)' }} className="border rounded-xl divide-y max-h-64 overflow-y-auto">
+              {books.length === 0 ? (
+                <p className="text-xs font-bold text-center py-6 opacity-50">Zatím žádné knihy v katalogu.</p>
+              ) : (
+                books.map(b => (
+                  <label key={b.id} style={{ borderColor: 'var(--border-color)' }} className="flex items-center gap-3 p-3 cursor-pointer hover:bg-[var(--bg-secondary)] transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={hpFeaturedBookIds.includes(b.id)}
+                      onChange={() => toggleFeaturedBook(b.id)}
+                      className="w-4 h-4 cursor-pointer shrink-0"
+                    />
+                    <span className="text-xs font-bold truncate">{b.title}</span>
+                    <span style={{ color: 'var(--text-muted)' }} className="text-[10px] opacity-60 shrink-0 ml-auto">{b.author}</span>
+                  </label>
+                ))
+              )}
+            </div>
+            <p style={{ color: 'var(--text-muted)' }} className="text-[10px] mt-2 opacity-60">{hpFeaturedBookIds.length} vybráno</p>
+          </Card>
+
+          <Card>
+            <h3 className="text-sm font-black uppercase tracking-wider mb-4 flex items-center gap-2">
+              <Award size={16} /> Ukázka pro demo velikosti písma
+            </h3>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Ukázkový text</label>
+                <textarea
+                  value={hpFontQuote}
+                  onChange={e => setHpFontQuote(e.target.value)}
+                  rows={3}
+                  style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
+                  className="w-full p-3 border rounded-lg text-sm font-bold outline-none resize-none"
+                />
+              </div>
+              <div className="space-y-1">
+                <label style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Odkud je ukázka (zobrazí se pod textem)</label>
+                <input
+                  type="text"
+                  value={hpFontAttribution}
+                  onChange={e => setHpFontAttribution(e.target.value)}
+                  style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
+                  className="w-full p-3 border rounded-lg text-sm font-bold outline-none"
+                />
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <h3 className="text-sm font-black uppercase tracking-wider mb-4 flex items-center gap-2">
+              <ShieldAlert size={16} /> Proč číst tady (4 důvody)
+            </h3>
+            <div className="space-y-4">
+              {hpWhyRead.map((item, idx) => (
+                <div key={idx} style={{ borderColor: 'var(--border-color)' }} className="border rounded-xl p-3 space-y-2">
+                  <input
+                    type="text"
+                    placeholder={`Důvod ${idx + 1} - titulek`}
+                    value={item.title}
+                    onChange={e => updateWhyReadItem(idx, 'title', e.target.value)}
+                    style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
+                    className="w-full p-2.5 border rounded-lg text-xs font-bold outline-none"
+                  />
+                  <textarea
+                    placeholder="Popis"
+                    value={item.description}
+                    onChange={e => updateWhyReadItem(idx, 'description', e.target.value)}
+                    rows={2}
+                    style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
+                    className="w-full p-2.5 border rounded-lg text-xs font-medium outline-none resize-none"
+                  />
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <button
+            onClick={saveHomepageSettings}
+            disabled={savingHomepage}
+            style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+            className="w-full py-3.5 rounded-xl font-black uppercase text-xs tracking-wider border-none cursor-pointer hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {savingHomepage ? 'Ukládám...' : 'Uložit domovskou stránku'}
+          </button>
         </div>
       )}
 
