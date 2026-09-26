@@ -233,9 +233,3 @@ export const Navbar = ({ onOpenSearch, onOpenSettings }) => {
     </nav>
   );
 };
-
-// Cela raketova mini-hra (CSS+JS+HTML), kterou si uzivatel udelal sam - vlozena
-// jako string a spoustena v izolovanem iframu (srcDoc), aby jeji vlastni CSS reset
-// (* { margin:0; padding:0; user-select:none; ... }) a stovky document.getElementById
-// volani vubec nemohly zasahovat do zbytku React aplikace (a naopak). Zadny samostatny
-// soubor ani public/ slozka uz neni potreba - zije to celé primo tady v App.jsx.
