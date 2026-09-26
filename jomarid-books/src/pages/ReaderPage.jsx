@@ -348,13 +348,18 @@ export const ReaderPage = () => {
     autoScrollRafRef.current = requestAnimationFrame(step);
 
     const pauseOnManualInput = () => setAutoScroll(false);
+    const pauseOnManualKey = (e) => {
+      if (['Space', 'ArrowDown', 'ArrowUp', 'PageDown', 'PageUp'].includes(e.code)) pauseOnManualInput();
+    };
     window.addEventListener('wheel', pauseOnManualInput, { passive: true });
     window.addEventListener('touchstart', pauseOnManualInput, { passive: true });
+    window.addEventListener('keydown', pauseOnManualKey);
 
     return () => {
       if (autoScrollRafRef.current) cancelAnimationFrame(autoScrollRafRef.current);
       window.removeEventListener('wheel', pauseOnManualInput);
       window.removeEventListener('touchstart', pauseOnManualInput);
+      window.removeEventListener('keydown', pauseOnManualKey);
     };
   }, [autoScroll, autoScrollSpeed]);
 
@@ -398,7 +403,7 @@ export const ReaderPage = () => {
       )}
 
       <div
-        style={{ maxWidth: focusMode ? textWidth.maxWidth : '42rem' }}
+        style={{ maxWidth: textWidth.maxWidth }}
         className="mx-auto px-4 py-16 space-y-6 animate-in fade-in duration-300"
       >
         {!focusMode && (
