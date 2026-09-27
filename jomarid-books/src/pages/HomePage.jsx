@@ -73,11 +73,6 @@ const WHY_READ_ICONS = [Zap, ShieldCheck, Sparkles, Flame];
 function todayUtcStr() {
   return new Date().toISOString().slice(0, 10);
 }
-function daysAgoUtcStr(n) {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - n);
-  return d.toISOString().slice(0, 10);
-}
 
 // ============================================================================
 // HLAVNÍ KOMPONENTA - načte veřejná nastavení (pro kohokoliv) a osobní data
@@ -141,11 +136,12 @@ export const HomePage = () => {
     setPersonalLoading(true);
     (async () => {
       try {
-        const [profileRes, userBooksRes, activityRes, allBooksRes] = await Promise.all([
-          supabase.from('profiles').select('fake_xp, bonus_xp, unlocked_badges, coins, highest_goal_ever, featured_badge, frozen_dates').eq('id', user.id).maybeSingle(),
+        const [profileRes, userBooksRes, activityRes, allBooksRes, streakRes] = await Promise.all([
+          supabase.from('profiles').select('fake_xp, bonus_xp, unlocked_badges, coins, highest_goal_ever, featured_badge, current_streak').eq('id', user.id).maybeSingle(),
           supabase.from('user_books').select('book_id, is_read, status, scroll_position, updated_at').eq('user_id', user.id),
           supabase.from('user_daily_activity').select('activity_date').eq('user_id', user.id).order('activity_date', { ascending: false }),
           supabase.from('books').select('id, title, author, genres, description, price_coins, is_auto_assigned, avg_rating'),
+          supabase.rpc('resolve_streak'),
         ]);
         if (cancelled) return;
         if (profileRes.error) throw profileRes.error;
@@ -156,26 +152,19 @@ export const HomePage = () => {
         const profile = profileRes.data || {};
         const userBooks = userBooksRes.data || [];
         const activityDates = (activityRes.data || []).map(a => a.activity_date);
-        const existingFrozenDates = profile.frozen_dates || [];
         const allBooks = allBooksRes.data || [];
 
-        // --- Streak: JEN ČTENÍ, nikdy nekonzumuje novou pojistku (to je
-        // výhradně práce Statistik) - dnešek se počítá jako pokrytý jen
-        // přirozenou aktivitou nebo už dřív existující zmrazenou volbou.
-        const isCoveredReadOnly = (d) => activityDates.includes(d) || existingFrozenDates.includes(d);
+        // --- Streak: JEN ČTENÍ - resolve_streak() (volané tady, ze Statistik i z
+        // Knihovny) je jediné místo, které streak skutečně vyhodnocuje a
+        // spotřebovává pojistky. Homepage jen přečte už vyřešenou hodnotu (dá
+        // přednost čerstvému výsledku RPC před samostatně načteným profilem,
+        // kdyby mezi nimi došlo k souběhu) a pro zobrazení připočte dnešek, pokud
+        // se dnes už četlo (ale nikdy ho sama trvale nezapisuje).
+        if (streakRes?.error) console.error('Nepodařilo se vyhodnotit streak:', streakRes.error);
+        const resolvedStreak = streakRes?.data?.streak ?? (parseInt(profile.current_streak, 10) || 0);
         const today = todayUtcStr();
-        const yesterday = daysAgoUtcStr(1);
-        let streak = 0;
-        if (isCoveredReadOnly(today) || isCoveredReadOnly(yesterday)) {
-          let cursor = isCoveredReadOnly(today) ? new Date() : new Date(Date.now() - 86400000);
-          for (let i = 0; i < 3650; i++) {
-            const dStr = cursor.toISOString().slice(0, 10);
-            if (!isCoveredReadOnly(dStr)) break;
-            streak++;
-            cursor.setUTCDate(cursor.getUTCDate() - 1);
-          }
-        }
         const readToday = activityDates.includes(today);
+        const streak = resolvedStreak + (readToday ? 1 : 0);
 
         // --- XP/Level: stejný vzorec jako Statistiky, počítáno jen z dat,
         // která už reálně existují v DB (žádné nové odemykání tady).
