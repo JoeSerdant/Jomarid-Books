@@ -8,7 +8,7 @@ export const SearchModal = ({ isOpen, onClose }) => {
   const [query, setQuery] = useState('');
   const [userBooks, setUserBooks] = useState([]);
   const [loading, setLoading] = useState(false);
-  const { user, role } = useAuth();
+  const { user } = useAuth();
 
   useEffect(() => {
     if (isOpen && user) {
@@ -16,12 +16,11 @@ export const SearchModal = ({ isOpen, onClose }) => {
       
       // Bezpečné načtení dat bez nespolehlivých DB joinů
       Promise.all([
-        supabase.from('books').select('id, title, author, author_display, is_auto_assigned'),
+        supabase.from('books').select('id, title, author, author_display, author_id, is_auto_assigned'),
         supabase.from('user_books').select('book_id, status').eq('user_id', user.id)
       ]).then(([booksRes, userBooksRes]) => {
         const allBooks = booksRes.data || [];
         const myUserBooks = userBooksRes.data || [];
-        const currentUsername = user.email ? user.email.split('@')[0] : '';
 
         // Stejná definice přístupu jako v UserLibrary/ReaderPage: vlastník,
         // automaticky přiřazená kniha, nebo aktivní licence - dřív se tu
@@ -29,7 +28,7 @@ export const SearchModal = ({ isOpen, onClose }) => {
         // všechny) knihy se ve vyhledávání vůbec neobjevily.
         const activeBooks = allBooks.filter(book => {
           const userBookEntry = myUserBooks.find(ub => ub.book_id === book.id);
-          const isOwner = book.author === currentUsername && (role === 'nakladatel' || role === 'správce');
+          const isOwner = book.author_id === user.id;
           return isOwner || book.is_auto_assigned || userBookEntry?.status === 'active';
         });
 
@@ -42,7 +41,7 @@ export const SearchModal = ({ isOpen, onClose }) => {
     } else { 
       setQuery(''); 
     }
-  }, [isOpen, user, role]);
+  }, [isOpen, user]);
 
   if (!isOpen) return null;
 
