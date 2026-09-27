@@ -676,7 +676,7 @@ export const ReaderPage = () => {
               ← Zpět do knihovny
             </Link>
             <h1 style={{ color: readingText }} className="text-xl sm:text-3xl font-black uppercase tracking-tight m-0 truncate">{book.title}</h1>
-            <p className="text-xs uppercase font-bold mt-1 opacity-60 m-0" style={{ color: 'var(--text-muted)' }}>Autor: {book.author}</p>
+            <p className="text-xs uppercase font-bold mt-1 opacity-60 m-0" style={{ color: 'var(--text-muted)' }}>Autor: {book.author_display || book.author}</p>
             <p style={{ color: 'var(--text-muted)' }} className="text-[11px] mt-2 opacity-70 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
               <span className="flex items-center gap-1"><Clock size={11} /> zbývá ~{remainingMinutes} min</span>
               <span>Strana {currentPage} / {totalPages}</span>
