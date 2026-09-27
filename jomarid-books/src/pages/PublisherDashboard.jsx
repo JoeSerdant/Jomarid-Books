@@ -168,6 +168,11 @@ export const PublisherDashboard = () => {
             author: username,
             author_display: penName || null,
             fake_likes: 0,
+            // Výslovně nastaveno na false, nespoléhá se na výchozí hodnotu
+            // sloupce v DB - přesně tohle chybělo a byla to skutečná příčina
+            // bugu: nový svazek bez tohohle pole zdědil, cokoliv je defaultem
+            // sloupce is_auto_assigned, místo aby byl vždy záměrně "ne".
+            is_auto_assigned: false,
             price_coins: Math.max(0, parseInt(priceCoins, 10) || 0),
             genres: genresInput.split(',').map(g => g.trim()).filter(Boolean),
             description: descriptionInput || null
