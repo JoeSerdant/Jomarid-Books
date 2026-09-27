@@ -178,6 +178,7 @@ export const ReaderPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
 
   const hasBeenMarkedReadRef = useRef(false);
+  const hadExistingRowRef = useRef(false);
   const autoAdvanceRef = useRef(null);
   const toolbarRef = useRef(null);
   const containerRef = useRef(null);
@@ -214,6 +215,7 @@ export const ReaderPage = () => {
           .maybeSingle();
 
         hasBeenMarkedReadRef.current = !!userBookData?.is_read;
+        hadExistingRowRef.current = !!userBookData;
 
         const currentUsername = user.email ? user.email.split('@')[0] : '';
         const isAuthor = bookData.author === currentUsername;
@@ -330,15 +332,28 @@ export const ReaderPage = () => {
     clearTimeout(pendingSaveRef.current);
     pendingSaveRef.current = setTimeout(async () => {
       try {
+        const payload = {
+          user_id: user.id,
+          book_id: id,
+          scroll_position: percent,
+          is_read: isReadNow,
+          updated_at: new Date().toISOString()
+        };
+        // 'status' se posílá VÝSLOVNĚ jen při úplně prvním uložení pro tuhle
+        // dvojici uživatel+kniha (kdy žádný řádek ještě neexistoval - tedy
+        // tenhle upsert bude INSERT, ne UPDATE). Přístup už byl ověřen výš
+        // (hasAccess), takže 'active' je tu správně. Při KAŽDÉM DALŠÍM uložení
+        // (řádek už existuje) se 'status' vůbec neposílá - jinak by tenhle
+        // upsert mohl tiše "obživit" i řádek, kterému mezitím admin práva
+        // odebral (např. je pořád otevřená čtečka v jiné záložce) tím, že by
+        // mu status při každém scrollu znovu přepsal zpátky na 'active'.
+        if (!hadExistingRowRef.current) {
+          payload.status = 'active';
+        }
         await supabase
           .from('user_books')
-          .upsert({
-            user_id: user.id,
-            book_id: id,
-            scroll_position: percent,
-            is_read: isReadNow,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'user_id,book_id' });
+          .upsert(payload, { onConflict: 'user_id,book_id' });
+        hadExistingRowRef.current = true;
       } catch (err) {
         console.error('Chyba synchronizace pozice:', err);
       }
