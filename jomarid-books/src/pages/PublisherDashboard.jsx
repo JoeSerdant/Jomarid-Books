@@ -31,7 +31,7 @@ export const PublisherDashboard = () => {
     return myBooks.reduce((sum, b) => sum + (b.likesCount || 0), 0);
   };
 
-  const fetchPublisherBooks = useCallback(async (username) => {
+  const fetchPublisherBooks = useCallback(async (userId) => {
     try {
       const { data, error } = await supabase
         .from('books')
@@ -43,7 +43,7 @@ export const PublisherDashboard = () => {
           fake_likes,
           book_likes(count)
         `)
-        .eq('author', username);
+        .eq('author_id', userId);
 
       if (error) throw error;
 
@@ -63,11 +63,10 @@ export const PublisherDashboard = () => {
 
   const loadAllData = useCallback(async () => {
     if (!user) return;
-    const username = getUsername(user.email);
 
     try {
       await Promise.all([
-        fetchPublisherBooks(username),
+        fetchPublisherBooks(user.id),
         (async () => {
           const { data, error } = await supabase.from('profiles').select('id, email');
           if (!error) setReaderProfiles(data || []);
@@ -80,7 +79,7 @@ export const PublisherDashboard = () => {
     } catch (err) {
       console.error("Chyba při inicializaci dat dashboardu:", err.message);
     }
-  }, [user, getUsername, fetchPublisherBooks]);
+  }, [user, fetchPublisherBooks]);
 
   useEffect(() => {
     loadAllData();
@@ -96,7 +95,7 @@ export const PublisherDashboard = () => {
       setPenNameInput(data?.pen_name || '');
       // Krycí jméno se hned promítne do VŠECH už vydaných knih (viz set_pen_name
       // na serveru), takže je potřeba načíst seznam knih znovu, ne jen profil.
-      await fetchPublisherBooks(getUsername(user.email));
+      await fetchPublisherBooks(user.id);
     } catch (err) {
       setPenNameError(err.message || 'Uložení selhalo.');
     } finally {
@@ -112,7 +111,7 @@ export const PublisherDashboard = () => {
       if (error) throw error;
       setPenName('');
       setPenNameInput('');
-      await fetchPublisherBooks(getUsername(user.email));
+      await fetchPublisherBooks(user.id);
     } catch (err) {
       setPenNameError(err.message || 'Zrušení selhalo.');
     } finally {
@@ -141,7 +140,7 @@ export const PublisherDashboard = () => {
             description: descriptionInput || null
           })
           .eq('id', editingBookId)
-          .eq('author', username);
+          .eq('author_id', user.id);
 
         if (bookError) throw bookError;
 
@@ -158,7 +157,7 @@ export const PublisherDashboard = () => {
         setPriceCoins(150);
         setGenresInput('');
         setDescriptionInput('');
-        await fetchPublisherBooks(username);
+        await fetchPublisherBooks(user.id);
         alert('Kniha byla úspěšně upravena!');
       } else {
         const { data: insertedBook, error: bookError } = await supabase
@@ -166,6 +165,7 @@ export const PublisherDashboard = () => {
           .insert([{ 
             title, 
             author: username,
+            author_id: user.id,
             author_display: penName || null,
             fake_likes: 0,
             // Výslovně nastaveno na false, nespoléhá se na výchozí hodnotu
@@ -209,7 +209,7 @@ export const PublisherDashboard = () => {
         setPriceCoins(150);
         setGenresInput('');
         setDescriptionInput('');
-        await fetchPublisherBooks(username);
+        await fetchPublisherBooks(user.id);
         alert('Kniha byla úspěšně publikována a hned přiřazena do Vaší knihovny!');
       }
     } catch (error) {
