@@ -18,7 +18,7 @@ const SORT_OPTIONS = [
 ];
 
 export const UserLibrary = () => {
-  const { user, logout, role, loading: authLoading } = useAuth();
+  const { user, logout } = useAuth();
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submittingId, setSubmittingId] = useState(null);
@@ -30,10 +30,8 @@ export const UserLibrary = () => {
   const [sortBy, setSortBy] = useState('smart');
   const [detailBook, setDetailBook] = useState(null);
 
-  const getUsername = useCallback((email) => email ? email.split('@')[0] : '', []);
-
   const loadLibraryData = useCallback(async () => {
-    if (!user || authLoading) return;
+    if (!user) return;
     setLoading(true);
     try {
       // Přihlašovací bonus se uděluje atomicky přes RPC (nejvýš jednou za kalendářní den).
@@ -71,13 +69,11 @@ export const UserLibrary = () => {
       const freshLikedIds = likesRes.data?.map(l => l.book_id) || [];
       if (profileRes.data) setCoins(profileRes.data.coins || 0);
 
-      const currentUsername = getUsername(user.email);
-
       const processedBooks = (booksRes.data || []).map(singleBook => {
         const userBookEntry = userBooksRes.data?.find(ub => ub.book_id === singleBook.id);
         const totalLikesCount = (allLikesRes.data?.filter(l => l.book_id === singleBook.id).length || 0) + (singleBook.fake_likes || 0);
 
-        const isOwner = singleBook.author === currentUsername && (role === 'nakladatel' || role === 'správce');
+        const isOwner = singleBook.author_id === user.id;
         // Knihy označené jako "Automatická kniha" jsou zdarma pro všechny bez nutnosti nákupu.
         const hasAccess = isOwner || singleBook.is_auto_assigned || userBookEntry?.status === 'active';
 
@@ -130,7 +126,7 @@ export const UserLibrary = () => {
     } finally {
       setLoading(false);
     }
-  }, [user, role, authLoading, getUsername]);
+  }, [user]);
 
   useEffect(() => { loadLibraryData(); }, [loadLibraryData]);
 
