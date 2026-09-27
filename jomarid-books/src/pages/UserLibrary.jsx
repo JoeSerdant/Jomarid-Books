@@ -84,7 +84,7 @@ export const UserLibrary = () => {
         return {
           id: singleBook.id,
           title: singleBook.title,
-          author: singleBook.author,
+          author: singleBook.author_display || singleBook.author,
           likesCount: totalLikesCount,
           isLiked: freshLikedIds.includes(singleBook.id),
           avgRating: parseFloat(singleBook.avg_rating) || 0,
