@@ -74,9 +74,11 @@ export const UserStats = () => {
     lifetimeCoins: 0,
     streakFreezes: 0,
     frozenDates: [],
-    highestGoalEver: 5,
+    highestGoalEver: 25,
     featuredBadge: null,
-    goalLocked: false
+    goalLocked: false,
+    goalLockedCompletely: false,
+    goalProgress: 0
   });
 
   const [leaderboards, setLeaderboards] = useState({
@@ -106,7 +108,7 @@ export const UserStats = () => {
       // posledního vyřešení - klient už žádnou historii sám neprochází).
       const [profileRes, booksRes, activityRes, streakRes] = await Promise.all([
         supabase.from('profiles').select('fake_xp, bonus_xp, show_in_leaderboard, unlocked_badges, monthly_goal, last_goal_change_date, coins, lifetime_coins_earned, streak_freezes, frozen_dates, current_streak, highest_goal_ever, featured_badge').eq('id', user.id).maybeSingle(),
-        supabase.from('user_books').select('updated_at, is_read').eq('user_id', user.id).eq('is_read', true),
+        supabase.from('user_books').select('updated_at, first_completed_at, is_read').eq('user_id', user.id).eq('is_read', true),
         supabase.from('user_daily_activity').select('activity_date').eq('user_id', user.id).order('activity_date', { ascending: false }),
         supabase.rpc('resolve_streak')
       ]);
@@ -115,11 +117,15 @@ export const UserStats = () => {
       const userBooks = booksRes.data || [];
       const activityData = activityRes.data || [];
 
-      // 1. ZÁKLADNÍ METRIKY
+      // 1. ZÁKLADNÍ METRIKY - měsíční postup i trend čtou first_completed_at
+      // (kdy byla kniha SKUTEČNĚ poprvé dočtena), ne updated_at (to se
+      // přepisuje při každé synchronizaci pozice, včetně OPAKOVANÉHO čtení
+      // už jednou dočtené knihy - to by jinak uměle nafouklo měsíční postup
+      // i graf trendu, aniž bys přečetl jedinou NOVOU knihu).
       const totalRead = userBooks.length;
       const monthlyRead = userBooks.filter(ub => {
-        if (!ub.updated_at) return false;
-        const d = new Date(ub.updated_at);
+        if (!ub.first_completed_at) return false;
+        const d = new Date(ub.first_completed_at);
         return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
       }).length;
 
@@ -130,24 +136,25 @@ export const UserStats = () => {
       for (let i = 5; i >= 0; i--) {
         const d = new Date(currentYear, currentMonth - i, 1);
         const count = userBooks.filter(ub => {
-          if (!ub.updated_at) return false;
-          const ubd = new Date(ub.updated_at);
+          if (!ub.first_completed_at) return false;
+          const ubd = new Date(ub.first_completed_at);
           return ubd.getFullYear() === d.getFullYear() && ubd.getMonth() === d.getMonth();
         }).length;
         readingTrend.push({ label: monthNamesShort[d.getMonth()], count });
       }
 
-      // 2. MĚSÍČNÍ CÍL A ZAMYKÁNÍ SMĚRU ZMĚNY
-      // Cíl lze v appce teď KDYKOLIV zvýšit (knihy na webu jsou krátké, 5 se dá
-      // přečíst rychle) - "zamčené" je jen SNÍŽENÍ v rámci stejného kalendářního
-      // měsíce (brání snížit si cíl těsně před koncem kvůli snadnému splnění
-      // goal_* odznáčků). Server (trigger) vynucuje totéž, tohle je jen pro UI.
+      // 2. MĚSÍČNÍ CÍL A ZAMYKÁNÍ ZMĚNY
+      // Cíl lze v appce zvýšit KDYKOLIV, dokud jsi v tomhle měsíci nedosáhl
+      // aspoň poloviny současného cíle - pak už se cíl nedá změnit vůbec
+      // (ani nahoru, ani dolů) až do dalšího měsíce. Server (trigger)
+      // vynucuje totéž, tohle je jen pro UI (zobrazit zámek dřív, než se
+      // o změnu vůbec pokusíš).
       const currentGoal = profileData.monthly_goal || parseInt(localStorage.getItem(`monthly_goal_${user.id}`), 10) || 25;
-      const highestGoalEver = Math.max(parseInt(profileData.highest_goal_ever, 10) || 5, currentGoal);
+      const highestGoalEver = Math.max(parseInt(profileData.highest_goal_ever, 10) || 25, currentGoal);
       const lastGoalChange = profileData.last_goal_change_date ? new Date(profileData.last_goal_change_date) : null;
       const isChangedThisMonth = lastGoalChange && lastGoalChange.getFullYear() === currentYear && lastGoalChange.getMonth() === currentMonth;
-      const isGoalLocked = isChangedThisMonth; // omezuje jen možnost SNÍŽIT, viz UI níže
-
+      const isLockedByProgress = profileData.monthly_goal != null && monthlyRead >= Math.ceil(profileData.monthly_goal / 2);
+      const isGoalLocked = isChangedThisMonth || isLockedByProgress;
       // 3. STREAK - vyřešeno na serveru (resolve_streak(), zavoláno výš). Klient
       // už žádnou historii sám neprochází ani nespotřebovává pojistky - jen
       // přečte, co server už natrvalo rozhodl, a pro ZOBRAZENÍ připočte dnešek
@@ -191,7 +198,7 @@ export const UserStats = () => {
       // jednou dosažený vyšší cíl už XP tempo nikdy nesníží, i když si cíl
       // později zase snížíš. Práh začíná už nad 5 (ne nad 25 jako dřív), protože
       // knihy na webu jsou krátké a 5 je snadné - vyšší cíl má hned znát.
-      const goalMultiplier = highestGoalEver > 5 ? 1 + ((highestGoalEver - 5) * 0.02) : 1;
+      const goalMultiplier = highestGoalEver > 25 ? 1 + ((highestGoalEver - 25) * 0.02) : 1;
       const baseXpFromBooks = Math.round((totalRead * 100) * goalMultiplier);
       const streakXpBonus = calculateXpMultiplier(streak);
       const fakeXpFromDB = parseInt(profileData.fake_xp, 10) || 0;
@@ -273,7 +280,7 @@ export const UserStats = () => {
         streak, monthlyRead, monthlyGoal: currentGoal, totalRead, weeklyActivity: weeklyActivityGenerated, readingTrend,
         xp: xpInCurrentLevel, level, levelName: visuals.name, levelBadgeClass: visuals.badge, levelBoxClass: visuals.box,
         xpNeededForNext, daysRemainingInMonth, currentMonthName, showInLeaderboard: profileData.show_in_leaderboard ?? true,
-        unlockedBadges: savedUnlockedBadges, jomaridCoins: calculatedCoins, lifetimeCoins: calculatedLifetimeCoins, goalLocked: isGoalLocked,
+        unlockedBadges: savedUnlockedBadges, jomaridCoins: calculatedCoins, lifetimeCoins: calculatedLifetimeCoins, goalLocked: isGoalLocked, goalLockedCompletely: isLockedByProgress, goalProgress: monthlyRead,
         streakFreezes: displayStreakFreezes, frozenDates: displayFrozenDates, highestGoalEver, featuredBadge: profileData.featured_badge || null
       });
 
@@ -317,8 +324,8 @@ export const UserStats = () => {
           // XP z odznáčků) - jinak by žebříček podle XP/úrovně systematicky
           // podhodnocoval každého se sbírkou odznáčků nebo zvýšeným
           // highest_goal_ever, protože by to prostě nepočítal vůbec.
-          const uGoalMultiplier = (parseInt(p.highest_goal_ever, 10) || 5) > 5
-            ? 1 + (((parseInt(p.highest_goal_ever, 10) || 5) - 5) * 0.02)
+          const uGoalMultiplier = (parseInt(p.highest_goal_ever, 10) || 25) > 25
+            ? 1 + (((parseInt(p.highest_goal_ever, 10) || 25) - 25) * 0.02)
             : 1;
           const uBadgeBonusXp = Array.isArray(p.unlocked_badges)
             ? p.unlocked_badges.reduce((sum, id) => {
@@ -419,8 +426,13 @@ export const UserStats = () => {
     setGoalError('');
     if (isNaN(goalNum) || goalNum < 1) return setGoalError('Zadej platné číslo.');
     if (goalNum > 500) return setGoalError('Nejvýš 500 knih.');
-    // Zvýšit lze vždy. Snížit jen pokud tenhle měsíc ještě nebyl cíl měněný -
-    // server (trigger) totéž vynucuje nezávisle na téhle kontrole.
+    // Jakmile je dosaženo aspoň poloviny současného cíle v tomhle měsíci, cíl
+    // už nejde změnit vůbec (ani nahoru, ani dolů) - server (trigger) totéž
+    // vynucuje nezávisle na téhle kontrole, tohle je jen rychlejší zpětná vazba.
+    if (stats.goalLockedCompletely) {
+      return setGoalError(`Cíl už nejde změnit - dosáhl jsi ${stats.goalProgress} z ${stats.monthlyGoal} (aspoň polovina). Zkus to zas příští měsíc.`);
+    }
+    // Jinak lze zvýšit vždy. Snížit jen pokud tenhle měsíc ještě nebyl cíl měněný.
     if (goalNum < stats.monthlyGoal && stats.goalLocked) {
       return setGoalError('Tento měsíc lze cíl už jen zvýšit, ne snížit.');
     }
@@ -554,24 +566,30 @@ export const UserStats = () => {
             {isEditingGoal ? (
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2 w-full">
-                  <input type="number" min={stats.goalLocked ? stats.monthlyGoal : 1} max="500" value={newGoalInput} onChange={(e) => setNewGoalInput(e.target.value)} style={{ backgroundColor: 'var(--bg-body)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }} className="w-16 px-2 py-1 border rounded-md outline-none text-sm font-bold text-center" />
-                  <button style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} onClick={handleSaveGoal} className="px-2 py-1 rounded font-black uppercase text-[10px] cursor-pointer border-none shadow-sm">Uložit</button>
+                  <input type="number" min={stats.goalLocked ? stats.monthlyGoal : 1} max="500" disabled={stats.goalLockedCompletely} value={newGoalInput} onChange={(e) => setNewGoalInput(e.target.value)} style={{ backgroundColor: 'var(--bg-body)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }} className="w-16 px-2 py-1 border rounded-md outline-none text-sm font-bold text-center disabled:opacity-50" />
+                  <button disabled={stats.goalLockedCompletely} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} onClick={handleSaveGoal} className="px-2 py-1 rounded font-black uppercase text-[10px] cursor-pointer border-none shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">Uložit</button>
                   <button style={{ color: 'var(--text-muted)' }} onClick={() => { setIsEditingGoal(false); setGoalError(''); }} className="px-1 py-1 font-bold cursor-pointer bg-transparent border-none">Zrušit</button>
                 </div>
                 <span style={{ color: 'var(--text-muted)' }} className="text-[10px] opacity-70">
-                  {(() => {
+                  {stats.goalLockedCompletely ? (
+                    `Cíl už nejde měnit - dosáhl jsi ${stats.goalProgress} z ${stats.monthlyGoal} (aspoň polovina). Zas příští měsíc.`
+                  ) : (() => {
                     const n = parseInt(newGoalInput, 10);
-                    const preview = !isNaN(n) && n > 5 ? Math.round((1 + (Math.max(n, stats.highestGoalEver) - 5) * 0.02) * 100) : 100;
-                    return `Vyšší cíl = víc XP za knihu natrvalo (teď ${preview}% tempa). Snížit jde jen příští měsíc.`;
+                    const preview = !isNaN(n) && n > 25 ? Math.round((1 + (Math.max(n, stats.highestGoalEver) - 25) * 0.02) * 100) : 100;
+                    return `Vyšší cíl = víc XP za knihu natrvalo (teď ${preview}% tempa). Nejde snížit, ani měnit po dosažení poloviny.`;
                   })()}
                 </span>
                 {goalError && <span className="text-red-500 text-[10px]">{goalError}</span>}
               </div>
             ) : (
               <div className="flex items-center justify-between">
-                <span style={{ color: 'var(--text-muted)' }} className="opacity-70 flex items-center gap-1">Měsíční cíl: {stats.goalLocked && <Lock size={12} className="text-amber-500" title="Tento měsíc lze cíl už jen zvýšit" />}</span>
-                <button onClick={() => { setIsEditingGoal(true); setNewGoalInput(stats.monthlyGoal.toString()); }} style={{ color: 'var(--text-badge)' }} className="font-black uppercase tracking-wider p-0 bg-transparent border-none cursor-pointer text-[10px]">
-                  {stats.goalLocked ? 'Zvýšit Cíl' : 'Změnit Cíl'}
+                <span style={{ color: 'var(--text-muted)' }} className="opacity-70 flex items-center gap-1">
+                  Měsíční cíl:
+                  {stats.goalLockedCompletely && <Lock size={12} className="text-red-500" title={`Uzamčeno - dosaženo ${stats.goalProgress} z ${stats.monthlyGoal}`} />}
+                  {stats.goalLocked && !stats.goalLockedCompletely && <Lock size={12} className="text-amber-500" title="Tento měsíc lze cíl už jen zvýšit" />}
+                </span>
+                <button onClick={() => { setIsEditingGoal(true); setNewGoalInput(stats.monthlyGoal.toString()); }} style={{ color: stats.goalLockedCompletely ? 'var(--text-muted)' : 'var(--text-badge)' }} className="font-black uppercase tracking-wider p-0 bg-transparent border-none cursor-pointer text-[10px]">
+                  {stats.goalLockedCompletely ? 'Uzamčeno' : stats.goalLocked ? 'Zvýšit Cíl' : 'Změnit Cíl'}
                 </button>
               </div>
             )}
