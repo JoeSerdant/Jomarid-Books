@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { BarChart3, BookOpen, Check, Coins, Heart, Loader2, PlusCircle, ShieldCheck, UserPlus } from 'lucide-react';
+import { BarChart3, BookOpen, Check, Coins, Heart, Loader2, PlusCircle, ShieldCheck, UserPlus, Feather } from 'lucide-react';
 
 export const PublisherDashboard = () => {
   const [myBooks, setMyBooks] = useState([]);
@@ -15,6 +15,10 @@ export const PublisherDashboard = () => {
   const [selectedBookId, setSelectedBookId] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [penName, setPenName] = useState('');
+  const [penNameInput, setPenNameInput] = useState('');
+  const [savingPenName, setSavingPenName] = useState(false);
+  const [penNameError, setPenNameError] = useState('');
   const { user } = useAuth();
 
   // Pomocná funkce pro získání username z e-mailu
@@ -35,6 +39,7 @@ export const PublisherDashboard = () => {
           id, 
           title, 
           author, 
+          author_display,
           fake_likes,
           book_likes(count)
         `)
@@ -46,7 +51,7 @@ export const PublisherDashboard = () => {
         const booksWithLikes = data.map(book => ({
           id: book.id,
           title: book.title,
-          author: book.author,
+          author: book.author_display || book.author,
           likesCount: (book.book_likes?.[0]?.count || 0) + (book.fake_likes || 0) 
         }));
         setMyBooks(booksWithLikes);
@@ -66,6 +71,10 @@ export const PublisherDashboard = () => {
         (async () => {
           const { data, error } = await supabase.from('profiles').select('id, email');
           if (!error) setReaderProfiles(data || []);
+        })(),
+        (async () => {
+          const { data, error } = await supabase.from('profiles').select('pen_name').eq('id', user.id).maybeSingle();
+          if (!error && data) { setPenName(data.pen_name || ''); setPenNameInput(data.pen_name || ''); }
         })()
       ]);
     } catch (err) {
@@ -76,6 +85,40 @@ export const PublisherDashboard = () => {
   useEffect(() => {
     loadAllData();
   }, [loadAllData]);
+
+  const handleSavePenName = async () => {
+    setPenNameError('');
+    setSavingPenName(true);
+    try {
+      const { data, error } = await supabase.rpc('set_pen_name', { new_pen_name: penNameInput });
+      if (error) throw error;
+      setPenName(data?.pen_name || '');
+      setPenNameInput(data?.pen_name || '');
+      // Krycí jméno se hned promítne do VŠECH už vydaných knih (viz set_pen_name
+      // na serveru), takže je potřeba načíst seznam knih znovu, ne jen profil.
+      await fetchPublisherBooks(getUsername(user.email));
+    } catch (err) {
+      setPenNameError(err.message || 'Uložení selhalo.');
+    } finally {
+      setSavingPenName(false);
+    }
+  };
+
+  const handleClearPenName = async () => {
+    setPenNameError('');
+    setSavingPenName(true);
+    try {
+      const { error } = await supabase.rpc('set_pen_name', { new_pen_name: null });
+      if (error) throw error;
+      setPenName('');
+      setPenNameInput('');
+      await fetchPublisherBooks(getUsername(user.email));
+    } catch (err) {
+      setPenNameError(err.message || 'Zrušení selhalo.');
+    } finally {
+      setSavingPenName(false);
+    }
+  };
 
   const saveBook = async (e) => {
     e.preventDefault();
@@ -123,6 +166,7 @@ export const PublisherDashboard = () => {
           .insert([{ 
             title, 
             author: username,
+            author_display: penName || null,
             fake_likes: 0,
             price_coins: Math.max(0, parseInt(priceCoins, 10) || 0),
             genres: genresInput.split(',').map(g => g.trim()).filter(Boolean),
@@ -228,8 +272,49 @@ export const PublisherDashboard = () => {
         </div>
         <span style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }} className="text-xs px-4 py-2 border rounded-xl font-bold uppercase flex items-center gap-2 shadow-sm">
           <ShieldCheck size={14} style={{ color: 'var(--bg-primary)' }} />
-          <span>Vydavatel: {getUsername(user?.email)}</span>
+          <span>Vydavatel: {penName || getUsername(user?.email)}</span>
         </span>
+      </div>
+
+      {/* KRYCÍ JMÉNO */}
+      <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="p-6 shadow-sm rounded-2xl border">
+        <h3 className="font-black mb-1.5 text-sm uppercase tracking-tight flex items-center gap-2">
+          <Feather size={16} style={{ color: 'var(--bg-primary)' }} /> Krycí jméno
+        </h3>
+        <p style={{ color: 'var(--text-muted)' }} className="text-xs mb-4 opacity-70">
+          Místo účtu {getUsername(user?.email)} se u vašich knih čtenářům může zobrazovat jméno podle vlastního výběru.
+          Změna se rovnou promítne na všechny už vydané knihy, ne jen na nové.
+        </p>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+          <input
+            type="text"
+            placeholder={`Např. ${getUsername(user?.email)}`}
+            value={penNameInput}
+            onChange={(e) => setPenNameInput(e.target.value)}
+            maxLength={50}
+            style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
+            className="w-full sm:w-64 p-3 border rounded-xl font-bold outline-none text-sm placeholder:opacity-40"
+          />
+          <button
+            onClick={handleSavePenName}
+            disabled={savingPenName || penNameInput === penName}
+            style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+            className="px-5 py-3 rounded-xl font-black uppercase text-xs border-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+          >
+            {savingPenName ? 'Ukládám...' : 'Uložit'}
+          </button>
+          {penName && (
+            <button
+              onClick={handleClearPenName}
+              disabled={savingPenName}
+              style={{ color: 'var(--text-muted)' }}
+              className="text-xs font-bold underline bg-transparent border-none cursor-pointer shrink-0 disabled:opacity-50"
+            >
+              Zrušit krycí jméno
+            </button>
+          )}
+        </div>
+        {penNameError && <p className="text-red-500 text-xs font-bold mt-2">{penNameError}</p>}
       </div>
 
       {/* MINI STATISTICKÝ PŘEHLED */}
