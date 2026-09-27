@@ -169,8 +169,8 @@ export const HomePage = () => {
         // --- XP/Level: stejný vzorec jako Statistiky, počítáno jen z dat,
         // která už reálně existují v DB (žádné nové odemykání tady).
         const totalRead = userBooks.filter(b => b.is_read).length;
-        const goalEver = parseInt(profile.highest_goal_ever, 10) || 5;
-        const goalMultiplier = goalEver > 5 ? 1 + (goalEver - 5) * 0.02 : 1;
+        const goalEver = parseInt(profile.highest_goal_ever, 10) || 25;
+        const goalMultiplier = goalEver > 25 ? 1 + (goalEver - 25) * 0.02 : 1;
         const baseXpFromBooks = Math.round(totalRead * 100 * goalMultiplier);
         const streakXpBonus = calculateXpMultiplier(streak);
         const unlockedBadgeIds = profile.unlocked_badges || [];
