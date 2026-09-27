@@ -1,15 +1,14 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import {
   BookMarked, Loader2, Star, X, Settings2, List, Minimize2, Maximize2,
-  Play, Pause, Clock, ChevronRight,
+  Play, Pause, Clock, ChevronRight, ChevronLeft, Highlighter, Trash2,
 } from 'lucide-react';
 
 // ============================================================================
-// Volby čtecího nastavení - všechno lokální (per zařízení), stejně jako
-// dosavadní velikost písma, ukládá se do localStorage, ne do DB.
+// Čtecí nastavení - beze změny oproti dřívější verzi, pořád localStorage.
 // ============================================================================
 const FONT_FAMILIES = {
   serif:    { label: 'Serifové',    className: 'font-serif' },
@@ -22,18 +21,19 @@ const LINE_HEIGHTS = {
   airy:    { label: 'Vzdušné',   value: 2.2 },
 };
 const TEXT_WIDTHS = {
-  narrow: { label: 'Úzký',    maxWidth: '38rem' },
-  medium: { label: 'Střední', maxWidth: '48rem' },
-  wide:   { label: 'Široký',  maxWidth: '60rem' },
+  narrow: { label: 'Úzký',    maxWidth: 560 },
+  medium: { label: 'Střední', maxWidth: 720 },
+  wide:   { label: 'Široký',  maxWidth: 900 },
 };
-// Průměrná čtecí rychlost pro odhad zbývajícího času - obecný odhad, ne
-// měřeno na konkrétním uživateli.
 const AVG_WORDS_PER_MINUTE = 200;
 
-// Rozpozná nadpisy kapitol na VLASTNÍM řádku (ne uprostřed věty) - běžné
-// české konvence. Když kniha žádnou takovou strukturu nemá, vrátí se
-// prázdné pole a appka to bere jako zcela platný stav (žádná chyba) -
-// tlačítko na obsah se pak jen nezobrazí.
+const HIGHLIGHT_COLORS = {
+  amber:   { label: 'Žlutá',   bg: 'rgba(245, 158, 11, 0.35)' },
+  green:   { label: 'Zelená',  bg: 'rgba(16, 185, 129, 0.35)' },
+  blue:    { label: 'Modrá',   bg: 'rgba(59, 130, 246, 0.35)' },
+  pink:    { label: 'Růžová',  bg: 'rgba(236, 72, 153, 0.35)' },
+};
+
 const CHAPTER_LINE_REGEX = /^(kapitola|část|díl|prolog|epilog)(\s+[ivxlcdm]+|\s+\d+)?\s*[:.\-–]?\s*(.{0,50})?$/i;
 
 function detectChapters(content) {
@@ -51,6 +51,45 @@ function detectChapters(content) {
   return chapters;
 }
 
+// Rozdělí text na střídavá "obyčejný text" / "zvýrazněný text" (mark) pole,
+// podle absolutních pozic v PŮVODNÍM textu. Nezávislé na tom, jak se text
+// zrovna stránkuje - zvýraznění je vždy vázané na ZÁKLADNÍ obsah, ne na
+// vizuální rozložení. Přesahující zvýraznění (kdyby k tomu nějak došlo) se
+// ořežou tak, aby nikdy nevznikla duplicita ani mezera v rekonstruovaném textu.
+function splitContentWithHighlights(content, highlights) {
+  if (!highlights || highlights.length === 0) return [{ type: 'text', text: content, key: 't-0' }];
+  const sorted = [...highlights].sort((a, b) => a.start_offset - b.start_offset);
+  const segments = [];
+  let cursor = 0;
+  sorted.forEach((h, idx) => {
+    const start = Math.max(h.start_offset, cursor);
+    if (start >= h.end_offset) return;
+    if (start > cursor) {
+      segments.push({ type: 'text', text: content.slice(cursor, start), key: `t-${idx}` });
+    }
+    segments.push({ type: 'highlight', text: content.slice(start, h.end_offset), id: h.id, color: h.color, note: h.note, key: `h-${h.id}` });
+    cursor = h.end_offset;
+  });
+  if (cursor < content.length) {
+    segments.push({ type: 'text', text: content.slice(cursor), key: 't-last' });
+  }
+  return segments;
+}
+
+// Spočítá absolutní pozici v PŮVODNÍM textu z DOM uzlu + offsetu uvnitř něj -
+// funguje bez ohledu na to, kolik <mark> prvků mezi tím leží (projde všechny
+// textové uzly ve struktuře a sečte jejich délky před cílovým uzlem).
+function computeAbsoluteOffset(root, targetNode, targetOffset) {
+  let total = 0;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node === targetNode) return total + targetOffset;
+    total += node.textContent.length;
+  }
+  return total;
+}
+
 export const ReaderPage = () => {
   const { id } = useParams();
   const { user } = useAuth();
@@ -60,40 +99,47 @@ export const ReaderPage = () => {
   const [initialScroll, setInitialScroll] = useState(0);
   const [liveProgress, setLiveProgress] = useState(0);
 
-  // --- Čtecí nastavení (localStorage) ---
   const [fontSize, setFontSize] = useState(() => parseInt(localStorage.getItem('reader_font_size'), 10) || 18);
   const [fontFamilyKey, setFontFamilyKey] = useState(() => localStorage.getItem('reader_font_family') || 'serif');
   const [lineHeightKey, setLineHeightKey] = useState(() => localStorage.getItem('reader_line_height') || 'normal');
   const [textWidthKey, setTextWidthKey] = useState(() => localStorage.getItem('reader_text_width') || 'medium');
   const [paperMode, setPaperMode] = useState(() => localStorage.getItem('reader_paper_mode') === '1');
 
-  // --- Panely a režimy ---
   const [showSettings, setShowSettings] = useState(false);
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showToc, setShowToc] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
-  const [autoScroll, setAutoScroll] = useState(false);
-  const [autoScrollSpeed, setAutoScrollSpeed] = useState(() => parseInt(localStorage.getItem('reader_autoscroll_speed'), 10) || 40);
+  const [autoAdvance, setAutoAdvance] = useState(false);
+  const [autoAdvanceSeconds, setAutoAdvanceSeconds] = useState(() => parseInt(localStorage.getItem('reader_autoadvance_secs'), 10) || 25);
 
   const [bookmarks, setBookmarks] = useState([]);
   const [myRating, setMyRating] = useState(0);
   const [savingRating, setSavingRating] = useState(false);
 
-  // Jakmile je kniha jednou označená jako přečtená, další scrollování zpátky
-  // (např. dohledání dřívější kapitoly - běžné chování, ne cheat) ji nesmí
-  // "odznačit". Bez týhle pojistky by debounced ukládání níž při každém
-  // scrollu přepsalo is_read podle AKTUÁLNÍ pozice, i zpátky na false.
-  const hasBeenMarkedReadRef = useRef(false);
-  const autoScrollRafRef = useRef(null);
-  const toolbarRef = useRef(null);
+  const [highlights, setHighlights] = useState([]);
+  const [pendingSelection, setPendingSelection] = useState(null); // { start, end, x, y }
+  const [activeHighlight, setActiveHighlight] = useState(null); // highlight being viewed/edited
+  const [noteDraft, setNoteDraft] = useState('');
 
-  // --- Perzistence čtecího nastavení ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [pageWidth, setPageWidth] = useState(0);
+
+  const hasBeenMarkedReadRef = useRef(false);
+  const autoAdvanceRef = useRef(null);
+  const toolbarRef = useRef(null);
+  const containerRef = useRef(null);
+  const contentRef = useRef(null);
+  const touchStartRef = useRef(null);
+  const suppressTapRef = useRef(false);
+  const pendingSaveRef = useRef(null);
+
   useEffect(() => { localStorage.setItem('reader_font_size', fontSize); }, [fontSize]);
   useEffect(() => { localStorage.setItem('reader_font_family', fontFamilyKey); }, [fontFamilyKey]);
   useEffect(() => { localStorage.setItem('reader_line_height', lineHeightKey); }, [lineHeightKey]);
   useEffect(() => { localStorage.setItem('reader_text_width', textWidthKey); }, [textWidthKey]);
   useEffect(() => { localStorage.setItem('reader_paper_mode', paperMode ? '1' : '0'); }, [paperMode]);
-  useEffect(() => { localStorage.setItem('reader_autoscroll_speed', autoScrollSpeed); }, [autoScrollSpeed]);
+  useEffect(() => { localStorage.setItem('reader_autoadvance_secs', autoAdvanceSeconds); }, [autoAdvanceSeconds]);
 
   useEffect(() => {
     const fetchBookData = async () => {
@@ -127,18 +173,17 @@ export const ReaderPage = () => {
           return;
         }
 
-        // Samotný text knihy je v samostatné tabulce book_contents, kterou RLS
-        // pustí jen vlastníkům/autorovi/adminovi - takže tenhle dotaz je ta
-        // skutečná vynucovací hranice, kontrola výše je jen hezčí UX hláška.
-        const [{ data: contentRow }, { data: bookmarksData }, { data: ratingData }] = await Promise.all([
+        const [{ data: contentRow }, { data: bookmarksData }, { data: ratingData }, { data: highlightsData }] = await Promise.all([
           supabase.from('book_contents').select('content').eq('book_id', id).maybeSingle(),
           supabase.from('book_bookmarks').select('id, label, scroll_position, created_at').eq('user_id', user.id).eq('book_id', id).order('created_at', { ascending: false }),
-          supabase.from('book_ratings').select('rating').eq('user_id', user.id).eq('book_id', id).maybeSingle()
+          supabase.from('book_ratings').select('rating').eq('user_id', user.id).eq('book_id', id).maybeSingle(),
+          supabase.from('book_highlights').select('id, start_offset, end_offset, color, note').eq('user_id', user.id).eq('book_id', id).order('start_offset', { ascending: true }),
         ]);
 
         setBook({ ...bookData, content: contentRow?.content || '' });
         setBookmarks(bookmarksData || []);
         setMyRating(ratingData?.rating || 0);
+        setHighlights(highlightsData || []);
 
         if (userBookData?.scroll_position) {
           setInitialScroll(userBookData.scroll_position);
@@ -154,10 +199,8 @@ export const ReaderPage = () => {
     fetchBookData();
   }, [id, user, navigate]);
 
-  // --- Kapitoly - počítáno jen jednou po načtení textu, ne na každém renderu ---
   const chapters = useMemo(() => detectChapters(book?.content), [book?.content]);
 
-  // --- Počet slov a odhad zbývajícího času ---
   const wordCount = useMemo(() => {
     if (!book?.content) return 0;
     const trimmed = book.content.trim();
@@ -170,75 +213,124 @@ export const ReaderPage = () => {
     return Math.max(1, Math.round(remainingWords / AVG_WORDS_PER_MINUTE));
   }, [wordCount, liveProgress]);
 
-  useEffect(() => {
-    if (loading || !book || !user) return;
+  const contentSegments = useMemo(
+    () => book?.content ? splitContentWithHighlights(book.content, highlights) : [],
+    [book?.content, highlights]
+  );
 
-    if (initialScroll > 0) {
-      const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
-      window.scrollTo(0, (totalHeight * initialScroll) / 100);
-    }
-
-    let timeoutId;
-    const handleScroll = () => {
-      const scrollTop = window.scrollY || document.documentElement.scrollTop;
-      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
-      if (docHeight <= 0) return;
-
-      const progress = Math.min(100, Math.max(0, (scrollTop / docHeight) * 100));
-      setLiveProgress(progress);
-      if (progress >= 95) hasBeenMarkedReadRef.current = true;
-      const isReadNow = hasBeenMarkedReadRef.current;
-
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(async () => {
-        try {
-          await supabase
-            .from('user_books')
-            .upsert({
-              user_id: user.id,
-              book_id: id,
-              scroll_position: progress,
-              is_read: isReadNow,
-              updated_at: new Date().toISOString()
-            }, { onConflict: 'user_id,book_id' });
-        } catch (err) {
-          console.error('Chyba synchronizace pozice:', err);
-        }
-      }, 1000);
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      clearTimeout(timeoutId);
-    };
-  }, [loading, book, user, id, initialScroll]);
-
-  // --- Klik mimo celý čtecí panel (tlačítka i otevřené panely dohromady)
-  // zavře jakýkoliv otevřený panel - jinak by zůstal viset nad textem, dokud
-  // by uživatel netrefil přesně to samé tlačítko. Kontroluje se proti CELÉMU
-  // panelu (tlačítka + panely společně), ne jen samotnému panelu - jinak by
-  // klik na přepínací tlačítko sám sebe vyhodnotil jako "mimo" a panel by se
-  // po zavření vteřinu nato hned zase otevřel (mousedown běží před click).
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (toolbarRef.current && !toolbarRef.current.contains(e.target)) {
-        setShowSettings(false);
-        setShowToc(false);
-        setShowBookmarks(false);
-      }
-    };
-    if (showSettings || showToc || showBookmarks) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [showSettings, showToc, showBookmarks]);
-
-  const currentScrollPercent = useCallback(() => {
-    const scrollTop = window.scrollY || document.documentElement.scrollTop;
-    const docHeight = document.documentElement.scrollHeight - window.innerHeight;
-    return docHeight > 0 ? Math.min(100, Math.max(0, (scrollTop / docHeight) * 100)) : 0;
+  // --- Stránkování: text se rozloží do CSS sloupců, kde jeden sloupec =
+  // přesně šířka kontejneru = jedna "stránka". Prohlížeč sám spočítá, kam
+  // text zalomit - žádné ruční počítání znaků na stránku, takže to funguje
+  // automaticky přesně stejně po změně velikosti písma, rodiny písma,
+  // řádkování i šířky sloupce, bez jakéhokoliv zvláštního kódu navíc.
+  const remeasure = useCallback(() => {
+    const container = containerRef.current;
+    const content = contentRef.current;
+    if (!container || !content) return;
+    const w = container.clientWidth;
+    if (w <= 0) return;
+    setPageWidth(w);
+    const total = Math.max(1, Math.round(content.scrollWidth / w));
+    setTotalPages(total);
+    const page = Math.min(total, Math.max(1, Math.round(container.scrollLeft / w) + 1));
+    setCurrentPage(page);
   }, []);
+
+  useLayoutEffect(() => {
+    if (loading || !book) return;
+    remeasure();
+    const ro = new ResizeObserver(() => remeasure());
+    if (containerRef.current) ro.observe(containerRef.current);
+    window.addEventListener('resize', remeasure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', remeasure);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, book, fontSize, fontFamilyKey, lineHeightKey, textWidthKey, focusMode]);
+
+  // Po přeměření (např. po změně velikosti písma) se snažíme zůstat na
+  // ZHRUBA stejném místě v textu (podle procenta), ne nutně na stejné
+  // stránce - přesně tak, jak se chovají i skutečné čtečky.
+  const lastPercentRef = useRef(0);
+  useEffect(() => { lastPercentRef.current = liveProgress; }, [liveProgress]);
+  useEffect(() => {
+    if (!containerRef.current || pageWidth <= 0) return;
+    const maxScroll = Math.max(0, (containerRef.current.scrollWidth || 0) - pageWidth);
+    containerRef.current.scrollLeft = (lastPercentRef.current / 100) * maxScroll;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageWidth, totalPages]);
+
+  const getCurrentPercent = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return 0;
+    const maxScroll = container.scrollWidth - container.clientWidth;
+    return maxScroll > 0 ? Math.min(100, Math.max(0, (container.scrollLeft / maxScroll) * 100)) : 0;
+  }, []);
+
+  const persistPosition = useCallback((percent, isReadNow) => {
+    if (!user || !id) return;
+    clearTimeout(pendingSaveRef.current);
+    pendingSaveRef.current = setTimeout(async () => {
+      try {
+        await supabase
+          .from('user_books')
+          .upsert({
+            user_id: user.id,
+            book_id: id,
+            scroll_position: percent,
+            is_read: isReadNow,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'user_id,book_id' });
+      } catch (err) {
+        console.error('Chyba synchronizace pozice:', err);
+      }
+    }, 1000);
+  }, [user, id]);
+
+  const handleContainerScroll = useCallback(() => {
+    const container = containerRef.current;
+    if (!container || pageWidth <= 0) return;
+    const percent = getCurrentPercent();
+    setLiveProgress(percent);
+    if (percent >= 95) hasBeenMarkedReadRef.current = true;
+    setCurrentPage(Math.min(totalPages, Math.max(1, Math.round(container.scrollLeft / pageWidth) + 1)));
+    persistPosition(percent, hasBeenMarkedReadRef.current);
+  }, [pageWidth, totalPages, getCurrentPercent, persistPosition]);
+
+  // Počáteční pozice (z uložené hodnoty) se nastaví, jakmile je poprvé známá
+  // šířka stránky - dřív by scrollLeft neměl vůči čemu být spočítaný.
+  const didSetInitialRef = useRef(false);
+  useEffect(() => {
+    if (didSetInitialRef.current || pageWidth <= 0 || !containerRef.current) return;
+    if (initialScroll > 0) {
+      const maxScroll = containerRef.current.scrollWidth - pageWidth;
+      containerRef.current.scrollLeft = (initialScroll / 100) * maxScroll;
+      remeasure();
+    }
+    didSetInitialRef.current = true;
+  }, [pageWidth, initialScroll, remeasure]);
+
+  const goToPercent = useCallback((percent) => {
+    const container = containerRef.current;
+    if (!container) return;
+    const maxScroll = container.scrollWidth - container.clientWidth;
+    container.scrollLeft = (percent / 100) * maxScroll;
+    handleContainerScroll();
+  }, [handleContainerScroll]);
+
+  const goToPage = useCallback((pageNum) => {
+    const container = containerRef.current;
+    if (!container || pageWidth <= 0) return;
+    const clamped = Math.min(totalPages, Math.max(1, pageNum));
+    container.scrollLeft = (clamped - 1) * pageWidth;
+    handleContainerScroll();
+  }, [pageWidth, totalPages, handleContainerScroll]);
+
+  const nextPage = useCallback(() => goToPage(currentPage + 1), [goToPage, currentPage]);
+  const prevPage = useCallback(() => goToPage(currentPage - 1), [goToPage, currentPage]);
+
+  const currentScrollPercent = useCallback(() => getCurrentPercent(), [getCurrentPercent]);
 
   const handleAddBookmark = useCallback(async () => {
     if (!user) return;
@@ -258,20 +350,15 @@ export const ReaderPage = () => {
     }
   }, [user, id, currentScrollPercent]);
 
-  const jumpToPercent = useCallback((percent) => {
-    const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
-    window.scrollTo({ top: (totalHeight * percent) / 100, behavior: 'smooth' });
-  }, []);
-
   const jumpToBookmark = (bm) => {
-    jumpToPercent(bm.scroll_position);
+    goToPercent(bm.scroll_position);
     setShowBookmarks(false);
   };
 
   const jumpToChapter = (chapter) => {
     if (!book?.content) return;
     const percent = (chapter.charOffset / book.content.length) * 100;
-    jumpToPercent(percent);
+    goToPercent(percent);
     setShowToc(false);
   };
 
@@ -300,21 +387,88 @@ export const ReaderPage = () => {
     }
   };
 
-  // --- Klávesové zkratky: mezerník/šipky pro stránkování, B pro záložku,
-  // F pro fokus režim, Esc pro jeho opuštění. Vypnuto, když se zrovna píše
-  // do libovolného vstupního pole (např. by jinak "b" v textu záložky
-  // spustilo další záložku).
+  // --- Zvýrazňování: klasický výběr textu (tažením myší, nebo podržením a
+  // tažením prstem) - stejné gesto, jaké lidé znají odjinud, a záměrně JINÉ
+  // gesto než prosté ťuknutí (to listuje stránkami, viz níže), takže se
+  // spolu nikdy neperou.
+  useEffect(() => {
+    const handleSelection = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+      const range = sel.getRangeAt(0);
+      const content = contentRef.current;
+      if (!content || !content.contains(range.commonAncestorContainer)) return;
+
+      const start = computeAbsoluteOffset(content, range.startContainer, range.startOffset);
+      const end = computeAbsoluteOffset(content, range.endContainer, range.endOffset);
+      if (end <= start) return;
+
+      // Nedovolí zvýraznění přes existující - jednodušší a bezpečnější, než
+      // se pokoušet je automaticky slučovat či prořezávat.
+      const overlaps = highlights.some(h => start < h.end_offset && end > h.start_offset);
+      if (overlaps) return;
+
+      const rect = range.getBoundingClientRect();
+      suppressTapRef.current = true;
+      setPendingSelection({ start, end, x: rect.left + rect.width / 2, y: rect.top });
+    };
+    document.addEventListener('selectionchange', handleSelection);
+    return () => document.removeEventListener('selectionchange', handleSelection);
+  }, [highlights]);
+
+  const saveHighlight = async (color) => {
+    if (!pendingSelection || !user) return;
+    try {
+      const { data, error } = await supabase
+        .from('book_highlights')
+        .insert([{ user_id: user.id, book_id: id, start_offset: pendingSelection.start, end_offset: pendingSelection.end, color }])
+        .select('id, start_offset, end_offset, color, note')
+        .single();
+      if (error) throw error;
+      setHighlights(prev => [...prev, data].sort((a, b) => a.start_offset - b.start_offset));
+      setPendingSelection(null);
+      window.getSelection()?.removeAllRanges();
+    } catch (err) {
+      alert('Zvýraznění se nepodařilo uložit: ' + err.message);
+    }
+  };
+
+  const saveNote = async () => {
+    if (!activeHighlight) return;
+    try {
+      const trimmed = noteDraft.trim().slice(0, 500);
+      const { error } = await supabase.from('book_highlights').update({ note: trimmed || null }).eq('id', activeHighlight.id);
+      if (error) throw error;
+      setHighlights(prev => prev.map(h => h.id === activeHighlight.id ? { ...h, note: trimmed || null } : h));
+      setActiveHighlight(null);
+    } catch (err) {
+      alert('Poznámku se nepodařilo uložit: ' + err.message);
+    }
+  };
+
+  const deleteHighlight = async (highlightId) => {
+    try {
+      await supabase.from('book_highlights').delete().eq('id', highlightId);
+      setHighlights(prev => prev.filter(h => h.id !== highlightId));
+      setActiveHighlight(null);
+    } catch (err) {
+      console.error('Zvýraznění se nepodařilo smazat:', err);
+    }
+  };
+
+  // --- Klávesové zkratky: mezerník/šipky teď listují STRÁNKAMI (ne plynulým
+  // posunem), B pro záložku, F pro fokus, Esc pro jeho opuštění.
   useEffect(() => {
     const handleKeyDown = (e) => {
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON') return;
 
-      if (e.code === 'Space' || e.code === 'ArrowDown' || e.code === 'PageDown') {
+      if (e.code === 'Space' || e.code === 'ArrowRight' || e.code === 'PageDown') {
         e.preventDefault();
-        window.scrollBy({ top: window.innerHeight * 0.8, behavior: 'smooth' });
-      } else if (e.code === 'ArrowUp' || e.code === 'PageUp') {
+        nextPage();
+      } else if (e.code === 'ArrowLeft' || e.code === 'PageUp') {
         e.preventDefault();
-        window.scrollBy({ top: -window.innerHeight * 0.8, behavior: 'smooth' });
+        prevPage();
       } else if (e.key === 'b' || e.key === 'B') {
         handleAddBookmark();
       } else if (e.key === 'f' || e.key === 'F') {
@@ -325,43 +479,91 @@ export const ReaderPage = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [focusMode, handleAddBookmark]);
+  }, [focusMode, handleAddBookmark, nextPage, prevPage]);
 
-  // --- Automatické plynulé posouvání. Jakékoliv ruční zapojení (kolečko myši,
-  // dotyk, šipky) ho samo pozastaví - ať uživatel nikdy nebojuje s appkou
-  // o to, kdo právě posouvá stránku.
+  // --- Automatické listování stránek. Jakýkoliv ruční zásah (dotyk, kolečko,
+  // šipka) ho sám pozastaví.
   useEffect(() => {
-    if (!autoScroll) return;
+    if (!autoAdvance) return;
+    autoAdvanceRef.current = setInterval(() => {
+      setCurrentPage(p => {
+        if (p >= totalPages) { setAutoAdvance(false); return p; }
+        goToPage(p + 1);
+        return p + 1;
+      });
+    }, autoAdvanceSeconds * 1000);
 
-    let lastTime = performance.now();
-    const step = (now) => {
-      const dt = (now - lastTime) / 1000;
-      lastTime = now;
-      window.scrollBy(0, autoScrollSpeed * dt);
-      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
-      if (window.scrollY >= docHeight - 4) {
-        setAutoScroll(false);
-        return;
-      }
-      autoScrollRafRef.current = requestAnimationFrame(step);
-    };
-    autoScrollRafRef.current = requestAnimationFrame(step);
-
-    const pauseOnManualInput = () => setAutoScroll(false);
-    const pauseOnManualKey = (e) => {
-      if (['Space', 'ArrowDown', 'ArrowUp', 'PageDown', 'PageUp'].includes(e.code)) pauseOnManualInput();
-    };
-    window.addEventListener('wheel', pauseOnManualInput, { passive: true });
-    window.addEventListener('touchstart', pauseOnManualInput, { passive: true });
-    window.addEventListener('keydown', pauseOnManualKey);
+    const pause = () => setAutoAdvance(false);
+    window.addEventListener('wheel', pause, { passive: true });
+    window.addEventListener('touchstart', pause, { passive: true });
+    window.addEventListener('keydown', pause);
 
     return () => {
-      if (autoScrollRafRef.current) cancelAnimationFrame(autoScrollRafRef.current);
-      window.removeEventListener('wheel', pauseOnManualInput);
-      window.removeEventListener('touchstart', pauseOnManualInput);
-      window.removeEventListener('keydown', pauseOnManualKey);
+      clearInterval(autoAdvanceRef.current);
+      window.removeEventListener('wheel', pause);
+      window.removeEventListener('touchstart', pause);
+      window.removeEventListener('keydown', pause);
     };
-  }, [autoScroll, autoScrollSpeed]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoAdvance, autoAdvanceSeconds, totalPages]);
+
+  // --- Ťuknutí pro listování (levá třetina = zpět, pravá třetina = vpřed,
+  // střed = přepnout fokus) + přejetí prstem. Odlišeno od výběru textu tím,
+  // že se počítá, jestli po dotyku vůbec něco vybraného zůstalo, a jestli se
+  // prst posunul jen málo (ťuknutí) nebo hodně vodorovně (přejetí).
+  const handleTouchStart = (e) => {
+    const t = e.touches[0];
+    touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now() };
+  };
+
+  const handleTouchEnd = (e) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start) return;
+    if (window.getSelection()?.toString()) return; // právě dokončený výběr textu, ne gesto pro stránkování
+
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    const adx = Math.abs(dx), ady = Math.abs(dy);
+
+    if (adx < 10 && ady < 10) {
+      handleTapNavigation(t.clientX);
+    } else if (adx > 50 && adx > ady * 1.5) {
+      if (dx < 0) nextPage(); else prevPage();
+    }
+  };
+
+  const handleTapNavigation = (clientX) => {
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const relativeX = (clientX - rect.left) / rect.width;
+    if (relativeX < 0.3) prevPage();
+    else if (relativeX > 0.7) nextPage();
+    else setFocusMode(v => !v);
+  };
+
+  const handleContainerClick = (e) => {
+    if (suppressTapRef.current) { suppressTapRef.current = false; return; }
+    if (window.getSelection()?.toString()) return;
+    handleTapNavigation(e.clientX);
+  };
+
+  // --- Klik mimo panel (vzhled/obsah/záložky) ho zavře.
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (toolbarRef.current && !toolbarRef.current.contains(e.target)) {
+        setShowSettings(false);
+        setShowToc(false);
+        setShowBookmarks(false);
+      }
+    };
+    if (showSettings || showToc || showBookmarks) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showSettings, showToc, showBookmarks]);
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh]">
@@ -382,12 +584,12 @@ export const ReaderPage = () => {
   const textWidth = TEXT_WIDTHS[textWidthKey] || TEXT_WIDTHS.medium;
   const readingBg = paperMode ? '#f4ecd8' : 'var(--bg-body)';
   const readingText = paperMode ? '#3b2f1e' : 'var(--text-body)';
+  const columnGap = 40;
 
   return (
-    <div style={{ backgroundColor: readingBg, minHeight: '100vh' }} className="transition-colors duration-200">
+    <div style={{ backgroundColor: readingBg, height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }} className="transition-colors duration-200">
 
-      {/* Tenký pruh živého postupu čtení - vždy vidět, i ve fokus režimu */}
-      <div style={{ backgroundColor: 'var(--border-color)' }} className="fixed top-0 left-0 right-0 h-1 z-40">
+      <div style={{ backgroundColor: 'var(--border-color)' }} className="shrink-0 h-1 z-40">
         <div style={{ backgroundColor: 'var(--bg-primary)', width: `${liveProgress}%` }} className="h-full transition-all duration-150" />
       </div>
 
@@ -402,214 +604,308 @@ export const ReaderPage = () => {
         </button>
       )}
 
-      <div
-        style={{ maxWidth: textWidth.maxWidth }}
-        className="mx-auto px-4 py-16 space-y-6 animate-in fade-in duration-300"
-      >
-        {!focusMode && (
-          <>
-            <div className="border-b pb-6 text-center" style={{ borderColor: 'var(--border-color)' }}>
-              <Link to="/app" className="text-[10px] font-black uppercase tracking-wider no-underline opacity-50 hover:opacity-100 transition-all flex items-center justify-center gap-1 mb-4" style={{ color: readingText }}>
-                ← Zpět do knihovny
-              </Link>
-              <h1 style={{ color: readingText }} className="text-3xl font-black uppercase tracking-tight m-0">{book.title}</h1>
-              <p className="text-xs uppercase font-bold mt-1 opacity-60 m-0" style={{ color: 'var(--text-muted)' }}>Autor: {book.author}</p>
-              <p style={{ color: 'var(--text-muted)' }} className="text-[11px] mt-2 opacity-70 flex items-center justify-center gap-1.5">
-                <Clock size={11} /> {Math.round(liveProgress)} % přečteno · zbývá přibližně {remainingMinutes} min
-              </p>
-            </div>
+      {!focusMode && (
+        <div className="shrink-0 px-4 pt-4 pb-2 max-w-[100vw]">
+          <div className="border-b pb-4 text-center max-w-2xl mx-auto" style={{ borderColor: 'var(--border-color)' }}>
+            <Link to="/app" className="text-[10px] font-black uppercase tracking-wider no-underline opacity-50 hover:opacity-100 transition-all inline-flex items-center gap-1 mb-3" style={{ color: readingText }}>
+              ← Zpět do knihovny
+            </Link>
+            <h1 style={{ color: readingText }} className="text-xl sm:text-3xl font-black uppercase tracking-tight m-0 truncate">{book.title}</h1>
+            <p className="text-xs uppercase font-bold mt-1 opacity-60 m-0" style={{ color: 'var(--text-muted)' }}>Autor: {book.author}</p>
+            <p style={{ color: 'var(--text-muted)' }} className="text-[11px] mt-2 opacity-70 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+              <span className="flex items-center gap-1"><Clock size={11} /> zbývá ~{remainingMinutes} min</span>
+              <span>Strana {currentPage} / {totalPages}</span>
+            </p>
+          </div>
 
-            {/* ČTECÍ PANEL */}
-            <div ref={toolbarRef} className="flex items-center justify-between gap-2 relative flex-wrap">
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  onClick={() => setShowSettings(v => !v)}
-                  style={{ borderColor: 'var(--border-color)', backgroundColor: showSettings ? 'var(--bg-primary)' : 'var(--bg-card)', color: showSettings ? 'white' : 'var(--text-body)' }}
-                  className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
-                >
-                  <Settings2 size={12} /> Vzhled
-                </button>
+          <div ref={toolbarRef} className="flex items-center justify-center gap-2 relative flex-wrap mt-3 max-w-2xl mx-auto">
+            <button
+              onClick={() => setShowSettings(v => !v)}
+              style={{ borderColor: 'var(--border-color)', backgroundColor: showSettings ? 'var(--bg-primary)' : 'var(--bg-card)', color: showSettings ? 'white' : 'var(--text-body)' }}
+              className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
+            >
+              <Settings2 size={12} /> Vzhled
+            </button>
 
-                {chapters.length > 0 && (
-                  <button
-                    onClick={() => setShowToc(v => !v)}
-                    style={{ borderColor: 'var(--border-color)', backgroundColor: showToc ? 'var(--bg-primary)' : 'var(--bg-card)', color: showToc ? 'white' : 'var(--text-body)' }}
-                    className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
-                  >
-                    <List size={12} /> Obsah ({chapters.length})
+            {chapters.length > 0 && (
+              <button
+                onClick={() => setShowToc(v => !v)}
+                style={{ borderColor: 'var(--border-color)', backgroundColor: showToc ? 'var(--bg-primary)' : 'var(--bg-card)', color: showToc ? 'white' : 'var(--text-body)' }}
+                className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
+              >
+                <List size={12} /> Obsah
+              </button>
+            )}
+
+            <button
+              onClick={() => setAutoAdvance(v => !v)}
+              style={{ borderColor: 'var(--border-color)', backgroundColor: autoAdvance ? 'var(--bg-primary)' : 'var(--bg-card)', color: autoAdvance ? 'white' : 'var(--text-body)' }}
+              className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
+              title="Automatické listování"
+            >
+              {autoAdvance ? <Pause size={12} /> : <Play size={12} />} Auto
+            </button>
+
+            <button
+              onClick={() => setFocusMode(true)}
+              style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)', color: 'var(--text-body)' }}
+              className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
+              title="Fokus režim (F)"
+            >
+              <Maximize2 size={12} /> Fokus
+            </button>
+
+            <button
+              onClick={handleAddBookmark}
+              style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)', color: 'var(--text-body)' }}
+              className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
+              title="Uložit místo (B)"
+            >
+              <BookMarked size={12} /> Místo
+            </button>
+            <button
+              onClick={() => setShowBookmarks(v => !v)}
+              style={{ borderColor: 'var(--border-color)', backgroundColor: showBookmarks ? 'var(--bg-primary)' : 'var(--bg-card)', color: showBookmarks ? 'white' : 'var(--text-body)' }}
+              className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
+            >
+              Záložky {bookmarks.length > 0 && `(${bookmarks.length})`}
+            </button>
+
+            {showSettings && (
+              <div style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }} className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-80 max-w-[92vw] border rounded-xl shadow-lg z-20 p-4 space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider">Velikost písma</span>
+                    <span style={{ color: 'var(--text-body)' }} className="text-[10px] font-bold">{fontSize}px</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setFontSize(f => Math.max(14, f - 1))} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="w-8 h-8 shrink-0 rounded-lg border-none cursor-pointer font-black text-xs">A-</button>
+                    <input type="range" min={14} max={28} value={fontSize} onChange={e => setFontSize(Number(e.target.value))} className="flex-1 min-w-0" style={{ accentColor: 'var(--bg-primary)' }} />
+                    <button onClick={() => setFontSize(f => Math.min(28, f + 1))} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="w-8 h-8 shrink-0 rounded-lg border-none cursor-pointer font-black text-sm">A+</button>
+                  </div>
+                </div>
+
+                <div>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block mb-2">Písmo</span>
+                  <div className="flex gap-1.5">
+                    {Object.entries(FONT_FAMILIES).map(([key, val]) => (
+                      <button key={key} onClick={() => setFontFamilyKey(key)} style={{ backgroundColor: fontFamilyKey === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: fontFamilyKey === key ? 'white' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[10px] font-bold">
+                        {val.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block mb-2">Řádkování</span>
+                  <div className="flex gap-1.5">
+                    {Object.entries(LINE_HEIGHTS).map(([key, val]) => (
+                      <button key={key} onClick={() => setLineHeightKey(key)} style={{ backgroundColor: lineHeightKey === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: lineHeightKey === key ? 'white' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[10px] font-bold">
+                        {val.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block mb-2">Šířka stránky</span>
+                  <div className="flex gap-1.5">
+                    {Object.entries(TEXT_WIDTHS).map(([key, val]) => (
+                      <button key={key} onClick={() => setTextWidthKey(key)} style={{ backgroundColor: textWidthKey === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: textWidthKey === key ? 'white' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[10px] font-bold">
+                        {val.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider">Papírový režim</span>
+                  <button onClick={() => setPaperMode(v => !v)} style={{ backgroundColor: paperMode ? '#8b6f3e' : 'var(--bg-secondary)', color: paperMode ? 'white' : 'var(--text-body)' }} className="px-3 py-1.5 rounded-lg border-none cursor-pointer text-[10px] font-bold">
+                    {paperMode ? 'Zapnuto' : 'Vypnuto'}
                   </button>
-                )}
+                </div>
 
-                <button
-                  onClick={() => setAutoScroll(v => !v)}
-                  style={{ borderColor: 'var(--border-color)', backgroundColor: autoScroll ? 'var(--bg-primary)' : 'var(--bg-card)', color: autoScroll ? 'white' : 'var(--text-body)' }}
-                  className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
-                  title="Automatické plynulé posouvání"
-                >
-                  {autoScroll ? <Pause size={12} /> : <Play size={12} />} Auto
-                </button>
-
-                <button
-                  onClick={() => setFocusMode(true)}
-                  style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)', color: 'var(--text-body)' }}
-                  className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
-                  title="Fokus režim (F)"
-                >
-                  <Maximize2 size={12} /> Fokus
-                </button>
+                <div>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block mb-2">Rychlost auto-listování (s/stránku)</span>
+                  <input type="range" min={8} max={60} value={autoAdvanceSeconds} onChange={e => setAutoAdvanceSeconds(Number(e.target.value))} className="w-full" style={{ accentColor: 'var(--bg-primary)' }} />
+                </div>
               </div>
+            )}
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleAddBookmark}
-                  style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)', color: 'var(--text-body)' }}
-                  className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
-                  title="Uložit místo (B)"
-                >
-                  <BookMarked size={12} /> Uložit místo
-                </button>
-                <button
-                  onClick={() => setShowBookmarks(v => !v)}
-                  style={{ borderColor: 'var(--border-color)', backgroundColor: showBookmarks ? 'var(--bg-primary)' : 'var(--bg-card)', color: showBookmarks ? 'white' : 'var(--text-body)' }}
-                  className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
-                >
-                  Záložky {bookmarks.length > 0 && `(${bookmarks.length})`}
-                </button>
+            {showToc && chapters.length > 0 && (
+              <div style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }} className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 max-w-[92vw] border rounded-xl shadow-lg z-20 p-2 max-h-72 overflow-y-auto">
+                {chapters.map((ch) => (
+                  <button
+                    key={ch.id}
+                    onClick={() => jumpToChapter(ch)}
+                    className="w-full text-left flex items-center justify-between gap-2 p-2.5 rounded-lg hover:bg-[var(--bg-secondary)] cursor-pointer bg-transparent border-none"
+                    style={{ color: 'var(--text-body)' }}
+                  >
+                    <span className="text-xs font-bold truncate">{ch.title}</span>
+                    <ChevronRight size={12} style={{ color: 'var(--text-muted)' }} className="shrink-0 opacity-50" />
+                  </button>
+                ))}
               </div>
+            )}
 
-              {/* PANEL: NASTAVENÍ VZHLEDU */}
-              {showSettings && (
-                <div style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }} className="absolute top-full left-0 mt-2 w-80 max-w-[90vw] border rounded-xl shadow-lg z-20 p-4 space-y-4">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider">Velikost písma</span>
-                      <span style={{ color: 'var(--text-body)' }} className="text-[10px] font-bold">{fontSize}px</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => setFontSize(f => Math.max(14, f - 1))} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="w-8 h-8 rounded-lg border-none cursor-pointer font-black text-xs">A-</button>
-                      <input type="range" min={14} max={28} value={fontSize} onChange={e => setFontSize(Number(e.target.value))} className="flex-1" style={{ accentColor: 'var(--bg-primary)' }} />
-                      <button onClick={() => setFontSize(f => Math.min(28, f + 1))} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="w-8 h-8 rounded-lg border-none cursor-pointer font-black text-sm">A+</button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block mb-2">Písmo</span>
-                    <div className="flex gap-1.5">
-                      {Object.entries(FONT_FAMILIES).map(([key, val]) => (
-                        <button key={key} onClick={() => setFontFamilyKey(key)} style={{ backgroundColor: fontFamilyKey === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: fontFamilyKey === key ? 'white' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[10px] font-bold">
-                          {val.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block mb-2">Řádkování</span>
-                    <div className="flex gap-1.5">
-                      {Object.entries(LINE_HEIGHTS).map(([key, val]) => (
-                        <button key={key} onClick={() => setLineHeightKey(key)} style={{ backgroundColor: lineHeightKey === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: lineHeightKey === key ? 'white' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[10px] font-bold">
-                          {val.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block mb-2">Šířka textu</span>
-                    <div className="flex gap-1.5">
-                      {Object.entries(TEXT_WIDTHS).map(([key, val]) => (
-                        <button key={key} onClick={() => setTextWidthKey(key)} style={{ backgroundColor: textWidthKey === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: textWidthKey === key ? 'white' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[10px] font-bold">
-                          {val.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider">Papírový režim</span>
-                    <button onClick={() => setPaperMode(v => !v)} style={{ backgroundColor: paperMode ? '#8b6f3e' : 'var(--bg-secondary)', color: paperMode ? 'white' : 'var(--text-body)' }} className="px-3 py-1.5 rounded-lg border-none cursor-pointer text-[10px] font-bold">
-                      {paperMode ? 'Zapnuto' : 'Vypnuto'}
+            {showBookmarks && (
+              <div style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }} className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 max-w-[92vw] border rounded-xl shadow-lg z-20 p-2 max-h-64 overflow-y-auto">
+                {bookmarks.length === 0 ? (
+                  <p style={{ color: 'var(--text-muted)' }} className="text-[11px] text-center py-3 opacity-60">Zatím žádné záložky.</p>
+                ) : bookmarks.map(bm => (
+                  <div key={bm.id} className="flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-[var(--bg-secondary)]">
+                    <button onClick={() => jumpToBookmark(bm)} className="flex-1 text-left bg-transparent border-none cursor-pointer p-0 min-w-0" style={{ color: 'var(--text-body)' }}>
+                      <span className="text-xs font-bold block truncate">{bm.label}</span>
+                      <span style={{ color: 'var(--text-muted)' }} className="text-[10px] opacity-60">{Math.round(bm.scroll_position)} % knihy</span>
+                    </button>
+                    <button onClick={() => deleteBookmark(bm.id)} className="bg-transparent border-none cursor-pointer p-1 text-red-400 opacity-60 hover:opacity-100 shrink-0">
+                      <X size={12} />
                     </button>
                   </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider">Rychlost auto-posouvání</span>
-                      {autoScroll && <span style={{ color: 'var(--bg-primary)' }} className="text-[10px] font-bold">● aktivní</span>}
-                    </div>
-                    <input type="range" min={15} max={120} value={autoScrollSpeed} onChange={e => setAutoScrollSpeed(Number(e.target.value))} className="w-full" style={{ accentColor: 'var(--bg-primary)' }} />
-                  </div>
-                </div>
-              )}
-
-              {/* PANEL: OBSAH (KAPITOLY) */}
-              {showToc && chapters.length > 0 && (
-                <div style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }} className="absolute top-full left-0 mt-2 w-72 max-w-[90vw] border rounded-xl shadow-lg z-20 p-2 max-h-72 overflow-y-auto">
-                  {chapters.map((ch) => (
-                    <button
-                      key={ch.id}
-                      onClick={() => jumpToChapter(ch)}
-                      className="w-full text-left flex items-center justify-between gap-2 p-2.5 rounded-lg hover:bg-[var(--bg-secondary)] cursor-pointer bg-transparent border-none"
-                      style={{ color: 'var(--text-body)' }}
-                    >
-                      <span className="text-xs font-bold truncate">{ch.title}</span>
-                      <ChevronRight size={12} style={{ color: 'var(--text-muted)' }} className="shrink-0 opacity-50" />
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* PANEL: ZÁLOŽKY */}
-              {showBookmarks && (
-                <div style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }} className="absolute top-full right-0 mt-2 w-64 border rounded-xl shadow-lg z-20 p-2 max-h-64 overflow-y-auto">
-                  {bookmarks.length === 0 ? (
-                    <p style={{ color: 'var(--text-muted)' }} className="text-[11px] text-center py-3 opacity-60">Zatím žádné záložky.</p>
-                  ) : bookmarks.map(bm => (
-                    <div key={bm.id} className="flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-[var(--bg-secondary)]">
-                      <button onClick={() => jumpToBookmark(bm)} className="flex-1 text-left bg-transparent border-none cursor-pointer p-0" style={{ color: 'var(--text-body)' }}>
-                        <span className="text-xs font-bold block truncate">{bm.label}</span>
-                        <span style={{ color: 'var(--text-muted)' }} className="text-[10px] opacity-60">{Math.round(bm.scroll_position)} % knihy</span>
-                      </button>
-                      <button onClick={() => deleteBookmark(bm.id)} className="bg-transparent border-none cursor-pointer p-1 text-red-400 opacity-60 hover:opacity-100">
-                        <X size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </>
-        )}
-
+      {/* --- STRÁNKOVANÝ TEXT: overflow je záměrně "hidden", pozici řídíme
+          výhradně sami (ťuknutí, přejetí, šipky, tlačítka) - žádné napůl
+          posunuté stránky od nepřesného posouvání kolečkem či touchpadem. --- */}
+      <div
+        ref={containerRef}
+        onClick={handleContainerClick}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        style={{ flex: 1, overflow: 'hidden', position: 'relative', touchAction: 'pan-y' }}
+      >
         <div
-          className={`prose prose-neutral dark:prose-invert max-w-none tracking-wide space-y-6 ${fontFamily.className}`}
-          style={{ color: readingText, whiteSpace: 'pre-wrap', fontSize: `${fontSize}px`, lineHeight: lineHeight.value }}
+          ref={contentRef}
+          className={`select-text ${fontFamily.className}`}
+          style={{
+            height: '100%',
+            padding: '8px 24px',
+            maxWidth: textWidth.maxWidth,
+            margin: '0 auto',
+            color: readingText,
+            fontSize: `${fontSize}px`,
+            lineHeight: lineHeight.value,
+            columnWidth: pageWidth > 0 ? `${Math.max(1, pageWidth - 48)}px` : '100%',
+            columnGap: `${columnGap}px`,
+            columnFill: 'auto',
+            whiteSpace: 'pre-wrap',
+          }}
         >
-          {book.content || "Tato kniha zatím nemá nahraný žádný textový obsah."}
+          {contentSegments.length > 0 ? contentSegments.map(seg => (
+            seg.type === 'highlight' ? (
+              <mark
+                key={seg.key}
+                style={{ backgroundColor: HIGHLIGHT_COLORS[seg.color]?.bg || HIGHLIGHT_COLORS.amber.bg, color: 'inherit', borderRadius: '2px', cursor: 'pointer' }}
+                onClick={(e) => { e.stopPropagation(); setActiveHighlight(highlights.find(h => h.id === seg.id)); setNoteDraft(seg.note || ''); }}
+              >
+                {seg.text}
+              </mark>
+            ) : (
+              <span key={seg.key}>{seg.text}</span>
+            )
+          )) : "Tato kniha zatím nemá nahraný žádný textový obsah."}
         </div>
 
-        {!focusMode && (
-          <div style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }} className="border rounded-2xl p-5 flex flex-col items-center gap-2">
-            <p style={{ color: 'var(--text-muted)' }} className="text-[11px] font-black uppercase tracking-wider m-0 opacity-70">Jak by ses ohodnotil tuhle knihu?</p>
+        {/* Šipky pro klávesnicové/myšové listování na širších obrazovkách - na
+            mobilu se listuje ťuknutím do krajů, tohle jsou navíc, ne náhrada. */}
+        <button
+          onClick={(e) => { e.stopPropagation(); prevPage(); }}
+          disabled={currentPage <= 1}
+          className="hidden sm:flex absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full border-none items-center justify-center cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed"
+          style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-body)', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); nextPage(); }}
+          disabled={currentPage >= totalPages}
+          className="hidden sm:flex absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full border-none items-center justify-center cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed"
+          style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-body)', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
+        >
+          <ChevronRight size={18} />
+        </button>
+
+        {/* Popup po výběru textu - vybrat barvu zvýraznění. */}
+        {pendingSelection && (
+          <div
+            style={{
+              position: 'fixed', left: pendingSelection.x, top: Math.max(8, pendingSelection.y - 56),
+              transform: 'translateX(-50%)', backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)',
+              zIndex: 50,
+            }}
+            className="border rounded-xl shadow-lg p-2 flex items-center gap-1.5"
+          >
+            {Object.entries(HIGHLIGHT_COLORS).map(([key, val]) => (
+              <button
+                key={key}
+                onClick={() => saveHighlight(key)}
+                title={val.label}
+                style={{ backgroundColor: val.bg.replace('0.35', '0.9') }}
+                className="w-7 h-7 rounded-full border-none cursor-pointer"
+              />
+            ))}
+            <button onClick={() => { setPendingSelection(null); window.getSelection()?.removeAllRanges(); }} className="w-7 h-7 rounded-full border-none cursor-pointer flex items-center justify-center" style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }}>
+              <X size={13} />
+            </button>
+          </div>
+        )}
+
+        {/* Panel pro zobrazenou zvýrazněnou pasáž - přidat/upravit poznámku, smazat. */}
+        {activeHighlight && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setActiveHighlight(null)}>
+            <div onClick={e => e.stopPropagation()} style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl shadow-xl w-full sm:w-96 max-w-full p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <Highlighter size={15} style={{ color: 'var(--bg-primary)' }} />
+                <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider">Zvýrazněná pasáž</span>
+              </div>
+              <p style={{ color: 'var(--text-body)', backgroundColor: HIGHLIGHT_COLORS[activeHighlight.color]?.bg }} className="text-sm p-2 rounded-lg italic max-h-32 overflow-y-auto">
+                „{book.content.slice(activeHighlight.start_offset, activeHighlight.end_offset)}"
+              </p>
+              <textarea
+                value={noteDraft}
+                onChange={e => setNoteDraft(e.target.value.slice(0, 500))}
+                placeholder="Osobní poznámka k téhle pasáži (jen pro tebe)..."
+                rows={3}
+                style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
+                className="w-full p-2.5 border rounded-lg text-xs font-medium outline-none resize-none"
+              />
+              <div className="flex items-center gap-2">
+                <button onClick={() => deleteHighlight(activeHighlight.id)} className="px-3 py-2 rounded-lg border-none cursor-pointer text-[10px] font-black uppercase flex items-center gap-1.5 text-red-500" style={{ backgroundColor: 'rgba(239,68,68,0.1)' }}>
+                  <Trash2 size={12} /> Smazat
+                </button>
+                <button onClick={() => setActiveHighlight(null)} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="flex-1 py-2 rounded-lg border-none cursor-pointer text-[10px] font-black uppercase">Zrušit</button>
+                <button onClick={saveNote} style={{ backgroundColor: 'var(--bg-primary)', color: 'white' }} className="flex-1 py-2 rounded-lg border-none cursor-pointer text-[10px] font-black uppercase">Uložit</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {!focusMode && (
+        <div className="shrink-0 px-4 py-3 max-w-2xl mx-auto w-full">
+          <div style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }} className="border rounded-xl p-3 flex items-center justify-center gap-3 flex-wrap">
+            <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider opacity-70">Ohodnotit knihu:</span>
             <div className="flex gap-1">
               {[1, 2, 3, 4, 5].map(n => (
-                <button key={n} onClick={() => handleRate(n)} disabled={savingRating} className="bg-transparent border-none cursor-pointer p-1 disabled:cursor-not-allowed">
-                  <Star size={24} className={n <= myRating ? "fill-amber-400 text-amber-400" : "text-amber-400 opacity-30"} />
+                <button key={n} onClick={() => handleRate(n)} disabled={savingRating} className="bg-transparent border-none cursor-pointer p-0.5 disabled:cursor-not-allowed">
+                  <Star size={18} className={n <= myRating ? "fill-amber-400 text-amber-400" : "text-amber-400 opacity-30"} />
                 </button>
               ))}
             </div>
             {book.ratings_count > 0 && (
-              <span style={{ color: 'var(--text-muted)' }} className="text-[10px] opacity-60">Průměr {parseFloat(book.avg_rating || 0).toFixed(1)} ⭐ ({book.ratings_count} hodnocení)</span>
+              <span style={{ color: 'var(--text-muted)' }} className="text-[10px] opacity-60">({parseFloat(book.avg_rating || 0).toFixed(1)} ⭐, {book.ratings_count})</span>
             )}
           </div>
-        )}
-
-        {!focusMode && (
-          <p style={{ color: 'var(--text-muted)' }} className="text-center text-[10px] opacity-40">
-            Zkratky: mezerník/šipky pro stránkování · B pro záložku · F pro fokus režim
+          <p style={{ color: 'var(--text-muted)' }} className="text-center text-[10px] opacity-40 mt-2">
+            Ťukni do krajů pro listování · vyber text pro zvýraznění · mezerník/šipky · B záložka · F fokus
           </p>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };
