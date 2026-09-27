@@ -106,7 +106,7 @@ export const HomePage = () => {
         if (bookIds.length > 0) {
           const { data: fb, error: fbErr } = await supabase
             .from('books')
-            .select('id, title, author, genres, description, avg_rating')
+            .select('id, title, author, author_display, genres, description, avg_rating')
             .in('id', bookIds);
           if (fbErr) throw fbErr;
           if (!cancelled) setFeaturedBooks(fb || []);
@@ -140,7 +140,7 @@ export const HomePage = () => {
           supabase.from('profiles').select('fake_xp, bonus_xp, unlocked_badges, coins, highest_goal_ever, featured_badge, current_streak').eq('id', user.id).maybeSingle(),
           supabase.from('user_books').select('book_id, is_read, status, scroll_position, updated_at').eq('user_id', user.id),
           supabase.from('user_daily_activity').select('activity_date').eq('user_id', user.id).order('activity_date', { ascending: false }),
-          supabase.from('books').select('id, title, author, genres, description, price_coins, is_auto_assigned, avg_rating'),
+          supabase.from('books').select('id, title, author, author_display, genres, description, price_coins, is_auto_assigned, avg_rating'),
           supabase.rpc('resolve_streak'),
         ]);
         if (cancelled) return;
@@ -407,7 +407,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
                   <Book size={14} style={{ color: 'var(--text-muted)' }} className="opacity-50 group-hover:opacity-100 group-hover:rotate-12 transition-all duration-300 shrink-0" />
                 </div>
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-semibold opacity-70 block mb-1">{book.author}</span>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-semibold opacity-70 block mb-1">{book.author_display || book.author}</span>
                   <h4 className="font-heading font-bold text-sm leading-tight mb-1.5 line-clamp-2">{book.title}</h4>
                   {book.description && (
                     <p style={{ color: 'var(--text-muted)' }} className="text-[11px] leading-snug line-clamp-2 opacity-75 mb-2">{book.description}</p>
@@ -799,7 +799,7 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
               <div>
                 <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-bold uppercase tracking-wide opacity-60 block mb-2">Pokračovat ve čtení</span>
                 <h3 className="font-heading font-bold text-lg mb-1">{continueBook.title}</h3>
-                <p style={{ color: 'var(--text-muted)' }} className="text-xs mb-4">{continueBook.author}</p>
+                <p style={{ color: 'var(--text-muted)' }} className="text-xs mb-4">{continueBook.author_display || continueBook.author}</p>
                 <div style={{ backgroundColor: 'var(--bg-secondary)' }} className="w-full h-2 rounded-full overflow-hidden mb-2">
                   <div style={{ backgroundColor: 'var(--bg-primary)', width: `${continueProgress}%` }} className="h-full rounded-full" />
                 </div>
@@ -828,7 +828,7 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
               <div>
                 <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-bold uppercase tracking-wide opacity-60 block mb-2">Doporučeno pro vás</span>
                 <h3 className="font-heading font-bold text-lg mb-1">{recommended.title}</h3>
-                <p style={{ color: 'var(--text-muted)' }} className="text-xs mb-3">{recommended.author}</p>
+                <p style={{ color: 'var(--text-muted)' }} className="text-xs mb-3">{recommended.author_display || recommended.author}</p>
                 {recommended.description && (
                   <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed opacity-80 line-clamp-3">{recommended.description}</p>
                 )}
