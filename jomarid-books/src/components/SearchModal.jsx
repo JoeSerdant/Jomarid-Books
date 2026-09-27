@@ -16,7 +16,7 @@ export const SearchModal = ({ isOpen, onClose }) => {
       
       // Bezpečné načtení dat bez nespolehlivých DB joinů
       Promise.all([
-        supabase.from('books').select('id, title, author, is_auto_assigned'),
+        supabase.from('books').select('id, title, author, author_display, is_auto_assigned'),
         supabase.from('user_books').select('book_id, status').eq('user_id', user.id)
       ]).then(([booksRes, userBooksRes]) => {
         const allBooks = booksRes.data || [];
@@ -49,7 +49,8 @@ export const SearchModal = ({ isOpen, onClose }) => {
   // Filtrování výsledků podle zadaného textu v inputu
   const filtered = userBooks.filter(b => 
     b?.title?.toLowerCase().includes(query.toLowerCase()) || 
-    b?.author?.toLowerCase().includes(query.toLowerCase())
+    b?.author?.toLowerCase().includes(query.toLowerCase()) ||
+    b?.author_display?.toLowerCase().includes(query.toLowerCase())
   );
 
   return (
@@ -89,7 +90,7 @@ export const SearchModal = ({ isOpen, onClose }) => {
               >
                 <div>
                   <h4 className="font-bold text-sm text-slate-900">{book.title}</h4>
-                  <p className="text-xs uppercase font-semibold opacity-50 mt-0.5">{book.author}</p>
+                  <p className="text-xs uppercase font-semibold opacity-50 mt-0.5">{book.author_display || book.author}</p>
                 </div>
                 <ChevronRight size={16} className="opacity-50 text-emerald-600" />
               </Link>
