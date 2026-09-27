@@ -1,47 +1,72 @@
 @import "tailwindcss";
 
-/* 1. Nastavení globálního pozadí pro celou aplikaci */
+
+
+/* 1. Nastavení globálního pozadí pro celou aplikaci. min-height používá
+
+   nejdřív vh (pro starší prohlížeče), pak ho přebije dvh tam, kde je
+
+   podporované - čisté 100vh na mobilu nepočítá s tím, že se lištа
+
+   prohlížeče při scrollování schovává a zase objevuje, což způsobuje
+
+   nepříjemné poskakování/špatné rozměry právě na telefonech. */
+
 html, body, #root {
+
   background-color: var(--bg-body, #ffffff);
+
   color: var(--text-body, #111827);
+
   min-height: 100vh;
+
+  min-height: 100dvh;
+
   margin: 0;
+
   padding: 0;
+
+  overflow-x: hidden;
+
   transition: background-color 0.3s ease, color 0.3s ease;
+
 }
+
+
 
 /* 2. Registrace proměnných do Tailwindu v4 */
+
 @theme {
+
   --color-bg-primary: var(--bg-primary);
+
   --color-bg-secondary: var(--bg-secondary);
+
   --color-text-main: var(--text-body);
+
   --color-border-main: var(--border-color);
+
 }
 
-/* 3. Globální vynucení režimu na šířku pro mobilní telefony (Tailwind v4 kompatibilní) */
-@utility force-landscape-mode {
-  @media (max-width: 1024px) and (orientation: portrait) {
-    width: 100vh !important;
-    height: 100vw !important;
-    overflow-x: hidden;
-    position: fixed;
-    top: 100%;
-    left: 0;
-    transform: rotate(-90deg);
-    transform-origin: top left;
-  }
+
+
+/* Skryje posuvník, ale necháváme prvek reálně scrollovatelný - použito tam,
+
+   kde by viditelný posuvník jen kazil vzhled (např. odkazy v horní liště na
+
+   úzkém displeji), ne jako náhrada za to, že by se obsah vešel celý. */
+
+.scrollbar-hide::-webkit-scrollbar {
+
+  display: none;
+
 }
 
-/* Pojistka aplikovaná přímo na body element přes JS třídu */
-@media (max-width: 1024px) and (orientation: portrait) {
-  body.force-landscape {
-    width: 100vh !important;
-    height: 100vw !important;
-    overflow-x: hidden;
-    position: fixed;
-    top: 100%;
-    left: 0;
-    transform: rotate(-90deg);
-    transform-origin: top left;
-  }
+.scrollbar-hide {
+
+  scrollbar-width: none;
+
+  -ms-overflow-style: none;
+
 }
+
