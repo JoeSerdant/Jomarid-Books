@@ -67,12 +67,12 @@ export const AdminDashboard = () => {
       // 1. Načtení knih
       const { data: b } = await supabase
         .from('books')
-        .select('id, title, author, fake_likes, is_auto_assigned, price_coins, book_likes(count)');
+        .select('id, title, author, author_display, fake_likes, is_auto_assigned, price_coins, book_likes(count)');
         
       // 2. Načtení profilů
       const { data: p } = await supabase
         .from('profiles')
-        .select('id, email, role, created_at, fake_xp, coins, unlocked_badges, featured_badge, streak_freezes, highest_goal_ever')
+        .select('id, email, role, created_at, fake_xp, coins, unlocked_badges, featured_badge, streak_freezes, highest_goal_ever, pen_name')
         .order('created_at', { ascending: false });
       
       // 3. Načtení logů
@@ -116,6 +116,7 @@ export const AdminDashboard = () => {
           id: book.id,
           title: book.title,
           author: book.author,
+          authorDisplay: book.author_display || book.author,
           fake_likes: fikes,
           is_auto_assigned: book.is_auto_assigned || false,
           price_coins: book.price_coins ?? 150,
@@ -163,7 +164,8 @@ export const AdminDashboard = () => {
   const filteredBooks = useMemo(() => {
     return books.filter(b => 
       b.title.toLowerCase().includes(searchBook.toLowerCase()) || 
-      b.author.toLowerCase().includes(searchBook.toLowerCase())
+      b.author.toLowerCase().includes(searchBook.toLowerCase()) ||
+      (b.authorDisplay && b.authorDisplay.toLowerCase().includes(searchBook.toLowerCase()))
     );
   }, [books, searchBook]);
 
@@ -189,9 +191,16 @@ export const AdminDashboard = () => {
     // POZOR: 'content' už NENÍ sloupec v 'books' - text knihy žije v samostatné
     // tabulce 'book_contents', která má vlastní (přísnější) RLS. 'books' zůstává
     // volně čitelná pro procházení knihovny/nákup, ale bez samotného textu.
+    // Kdyby autor uz ma nastavene kryci jmeno (viz Nakladatelský panel),
+    // rovnou se pouzije i tady - jinak by kniha po preprirazeni admin em
+    // ukazovala skutecne uzivatelske jmeno, dokud by ji nakladatel sam
+    // znovu neulozil.
+    const targetUsername = (author || '').trim();
+    const matchingProfile = profiles.find(p => p.email && p.email.split('@')[0] === targetUsername);
     const payload = { 
       title, 
       author: author || 'Neznámý', 
+      author_display: matchingProfile?.pen_name || null,
       fake_likes: parseInt(fakeLikes) || 0,
       is_auto_assigned: isAutoAssigned,
       price_coins: Math.max(0, parseInt(priceCoins, 10) || 0),
@@ -740,7 +749,7 @@ export const AdminDashboard = () => {
                             </span>
                           )}
                         </span>
-                        <span style={{ color: 'var(--text-muted)' }} className="opacity-70 font-medium">Autor: {b.author}</span>
+                        <span style={{ color: 'var(--text-muted)' }} className="opacity-70 font-medium">Autor: {b.authorDisplay}</span>
                       </span>
                       
                       <div style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--bg-secondary)' }} className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] shrink-0 font-black shadow-sm">
@@ -862,7 +871,7 @@ export const AdminDashboard = () => {
                       className="w-4 h-4 cursor-pointer shrink-0"
                     />
                     <span className="text-xs font-bold truncate">{b.title}</span>
-                    <span style={{ color: 'var(--text-muted)' }} className="text-[10px] opacity-60 shrink-0 ml-auto">{b.author}</span>
+                    <span style={{ color: 'var(--text-muted)' }} className="text-[10px] opacity-60 shrink-0 ml-auto">{b.authorDisplay}</span>
                   </label>
                 ))
               )}
@@ -1066,7 +1075,7 @@ export const AdminDashboard = () => {
                     </option>
                     {filteredBooks.map(b => (
                       <option key={b.id} value={b.id} style={{ background: 'var(--bg-secondary)' }}>
-                        {b.title} ({b.author})
+                        {b.title} ({b.authorDisplay})
                       </option>
                     ))}
                   </select>
