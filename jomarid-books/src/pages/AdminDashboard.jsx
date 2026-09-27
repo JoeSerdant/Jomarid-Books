@@ -50,6 +50,7 @@ export const AdminDashboard = () => {
     { title: '', description: '' }, { title: '', description: '' },
   ]);
   const [savingHomepage, setSavingHomepage] = useState(false);
+  const [resolveAuthorSelections, setResolveAuthorSelections] = useState({});
 
   // Bezpečný zápis do systémových logů
   const safeLog = async (logType, message) => {
@@ -67,7 +68,7 @@ export const AdminDashboard = () => {
       // 1. Načtení knih
       const { data: b } = await supabase
         .from('books')
-        .select('id, title, author, author_display, fake_likes, is_auto_assigned, price_coins, book_likes(count)');
+        .select('id, title, author, author_display, author_id, fake_likes, is_auto_assigned, price_coins, book_likes(count)');
         
       // 2. Načtení profilů
       const { data: p } = await supabase
@@ -117,6 +118,7 @@ export const AdminDashboard = () => {
           title: book.title,
           author: book.author,
           authorDisplay: book.author_display || book.author,
+          authorId: book.author_id || null,
           fake_likes: fikes,
           is_auto_assigned: book.is_auto_assigned || false,
           price_coins: book.price_coins ?? 150,
@@ -183,6 +185,31 @@ export const AdminDashboard = () => {
   }, [logs, filterLogType]);
 
   // --- Handlery akcí ---
+  const handleResolveAuthorId = async (bookId) => {
+    const selectedProfileId = resolveAuthorSelections[bookId];
+    if (!selectedProfileId) return;
+    const selectedProfile = profiles.find(p => p.id === selectedProfileId);
+    setActionLoading(true);
+    try {
+      const { error } = await supabase
+        .from('books')
+        .update({ author_id: selectedProfileId, author_display: selectedProfile?.pen_name || null })
+        .eq('id', bookId);
+      if (error) throw error;
+      await safeLog('SUCCESS', `Kniha ID ${bookId} ručně propojena s účtem ${selectedProfile?.email || selectedProfileId}.`);
+      setResolveAuthorSelections(prev => {
+        const next = { ...prev };
+        delete next[bookId];
+        return next;
+      });
+      refreshData();
+    } catch (err) {
+      alert('Přiřazení účtu selhalo: ' + (err.message || 'neznámá chyba'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const saveBook = async (e) => {
     e.preventDefault();
     if (!title) return alert('Doplňte název knihy.');
@@ -194,13 +221,27 @@ export const AdminDashboard = () => {
     // Kdyby autor uz ma nastavene kryci jmeno (viz Nakladatelský panel),
     // rovnou se pouzije i tady - jinak by kniha po preprirazeni admin em
     // ukazovala skutecne uzivatelske jmeno, dokud by ji nakladatel sam
-    // znovu neulozil.
+    // znovu neulozil. author_id se hleda stejne opatrne jako jednorazovy
+    // dopocet v migraci: jednoznacna shoda se rovnou pouzije, pri kolizi
+    // (vic uctu se stejnou predponou e-mailu) se da prednost nakladatel/
+    // správce roli, a kdyby bylo nejednoznacno i mezi nimi, radsi se nic
+    // nehada a author_id zustane prazdne, nez aby se kniha omylem prirad
+    // ila spatnemu uctu.
     const targetUsername = (author || '').trim();
-    const matchingProfile = profiles.find(p => p.email && p.email.split('@')[0] === targetUsername);
+    const matchingProfiles = profiles.filter(p => p.email && p.email.split('@')[0] === targetUsername);
+    let resolvedProfile = null;
+    if (matchingProfiles.length === 1) {
+      resolvedProfile = matchingProfiles[0];
+    } else if (matchingProfiles.length > 1) {
+      const preferred = matchingProfiles.filter(p => p.role === 'nakladatel' || p.role === 'správce');
+      if (preferred.length === 1) resolvedProfile = preferred[0];
+      // jinak nejednoznacne i mezi preferovanymi rolemi - author_id zustane null
+    }
     const payload = { 
       title, 
       author: author || 'Neznámý', 
-      author_display: matchingProfile?.pen_name || null,
+      author_id: resolvedProfile?.id || null,
+      author_display: resolvedProfile?.pen_name || null,
       fake_likes: parseInt(fakeLikes) || 0,
       is_auto_assigned: isAutoAssigned,
       price_coins: Math.max(0, parseInt(priceCoins, 10) || 0),
@@ -592,6 +633,42 @@ export const AdminDashboard = () => {
       {/* 2. ZÁLOŽKA: SPRÁVA KNIH */}
       {activeTab === 'books' && (
         <div className="space-y-6">
+        {books.some(b => !b.authorId && !b.is_auto_assigned) && (
+          <Card>
+            <h3 className="text-sm font-black uppercase tracking-wider mb-1 flex items-center gap-2 text-red-500">
+              <ShieldAlert size={16} /> Knihy bez propojeného účtu
+            </h3>
+            <p style={{ color: 'var(--text-muted)' }} className="text-xs mb-4 opacity-70">
+              U těchto knih se nepodařilo jednoznačně dohledat, kterému účtu patří (typicky když víc účtů sdílí stejnou předponu e-mailu) - vlastnická kontrola bez toho nefunguje správně. Vyber ručně správný účet.
+            </p>
+            <div className="space-y-2">
+              {books.filter(b => !b.authorId && !b.is_auto_assigned).map(b => (
+                <div key={b.id} style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }} className="border rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                  <span className="text-xs font-bold flex-1 min-w-0 truncate">{b.title} <span style={{ color: 'var(--text-muted)' }} className="opacity-60 font-medium">({b.author})</span></span>
+                  <select
+                    value={resolveAuthorSelections[b.id] || ''}
+                    onChange={e => setResolveAuthorSelections(prev => ({ ...prev, [b.id]: e.target.value }))}
+                    style={{ backgroundColor: 'var(--bg-body)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
+                    className="p-2 border rounded-lg text-xs font-bold outline-none cursor-pointer w-full sm:w-64"
+                  >
+                    <option value="">-- Vyber správný účet --</option>
+                    {profiles.map(p => (
+                      <option key={p.id} value={p.id}>{p.email} ({p.role})</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => handleResolveAuthorId(b.id)}
+                    disabled={!resolveAuthorSelections[b.id]}
+                    style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+                    className="px-4 py-2 rounded-lg font-black uppercase text-[10px] border-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                  >
+                    Přiřadit
+                  </button>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-5">
             <Card>
