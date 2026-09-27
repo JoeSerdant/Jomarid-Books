@@ -109,11 +109,11 @@ export const Navbar = ({ onOpenSearch, onOpenSettings }) => {
 
           {/* ODKAZY */}
           {user && (
-            <div className="flex items-center gap-1 sm:gap-2">
+            <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto scrollbar-hide">
               <Link 
                 to="/app" 
                 style={{ color: 'var(--text-body)' }}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all"
+                className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all"
               >
                 <Library size={14} className="opacity-70" />
                 <span className="hidden md:inline">Knihovna</span>
@@ -122,7 +122,7 @@ export const Navbar = ({ onOpenSearch, onOpenSettings }) => {
               <Link 
                 to="/stats" 
                 style={{ color: 'var(--text-body)' }}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all"
+                className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all"
               >
                 <BarChart3 size={14} className="opacity-70" />
                 <span className="hidden md:inline">Statistiky</span>
@@ -131,7 +131,7 @@ export const Navbar = ({ onOpenSearch, onOpenSettings }) => {
               <Link 
                 to="/games" 
                 style={{ color: 'var(--text-body)' }}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all text-purple-600 dark:text-purple-400"
+                className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all text-purple-600 dark:text-purple-400"
               >
                 <Gamepad2 size={14} className="opacity-80 animate-pulse" />
                 <span className="hidden md:inline">Hry</span>
@@ -141,7 +141,7 @@ export const Navbar = ({ onOpenSearch, onOpenSettings }) => {
                 <Link 
                   to="/publisher" 
                   style={{ color: 'var(--text-body)' }}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all text-emerald-600 dark:text-emerald-400"
+                  className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all text-emerald-600 dark:text-emerald-400"
                 >
                   <Compass size={14} className="opacity-80" />
                   <span className="hidden md:inline">Studio</span>
@@ -152,7 +152,7 @@ export const Navbar = ({ onOpenSearch, onOpenSettings }) => {
                 <Link 
                   to="/admin" 
                   style={{ color: 'var(--text-body)' }}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all text-amber-600 dark:text-amber-400"
+                  className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all text-amber-600 dark:text-amber-400"
                 >
                   <Shield size={14} className="opacity-80" />
                   <span className="hidden md:inline">Admin</span>
