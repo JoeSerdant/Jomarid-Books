@@ -8,7 +8,7 @@ export const SearchModal = ({ isOpen, onClose }) => {
   const [query, setQuery] = useState('');
   const [userBooks, setUserBooks] = useState([]);
   const [loading, setLoading] = useState(false);
-  const { user } = useAuth();
+  const { user, role } = useAuth();
 
   useEffect(() => {
     if (isOpen && user) {
@@ -29,7 +29,7 @@ export const SearchModal = ({ isOpen, onClose }) => {
         // všechny) knihy se ve vyhledávání vůbec neobjevily.
         const activeBooks = allBooks.filter(book => {
           const userBookEntry = myUserBooks.find(ub => ub.book_id === book.id);
-          const isOwner = book.author === currentUsername;
+          const isOwner = book.author === currentUsername && (role === 'nakladatel' || role === 'správce');
           return isOwner || book.is_auto_assigned || userBookEntry?.status === 'active';
         });
 
@@ -42,7 +42,7 @@ export const SearchModal = ({ isOpen, onClose }) => {
     } else { 
       setQuery(''); 
     }
-  }, [isOpen, user]);
+  }, [isOpen, user, role]);
 
   if (!isOpen) return null;
 
