@@ -187,6 +187,7 @@ export const GameLauncher = ({ game }) => {
           ref={iframeRef}
           title={game.title}
           srcDoc={game.html}
+          allow="clipboard-write"
           style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
         />
       </div>
