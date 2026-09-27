@@ -46,6 +46,15 @@ export const UserLibrary = () => {
         console.error('Přihlašovací bonus se nepodařilo přiznat:', bonusErr);
       }
 
+      // Vyřešení streaku (dožene jakékoliv celé uplynulé dny od posledního
+      // vyřešení) - proaktivně i tady, ne jen při návštěvě Statistik, ať se
+      // to nenatahuje na dobu, kdy si toho uživatel zrovna všimne.
+      try {
+        await supabase.rpc('resolve_streak');
+      } catch (streakErr) {
+        console.error('Nepodařilo se vyhodnotit streak:', streakErr);
+      }
+
       const [booksRes, userBooksRes, likesRes, allLikesRes, profileRes] = await Promise.all([
         supabase.from('books').select('*'),
         supabase.from('user_books').select('book_id, is_read, status, updated_at, scroll_position').eq('user_id', user.id),
