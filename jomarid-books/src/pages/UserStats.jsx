@@ -101,11 +101,14 @@ export const UserStats = () => {
       const monthNames = ["Leden", "Únor", "Březen", "Duben", "Květen", "Červen", "Červenec", "Srpen", "Září", "Říjen", "Listopad", "Prosinec"];
       const currentMonthName = monthNames[currentMonth];
 
-      // Paralelní stažení profilu, knih a denní aktivity
-      const [profileRes, booksRes, activityRes] = await Promise.all([
-        supabase.from('profiles').select('fake_xp, bonus_xp, show_in_leaderboard, unlocked_badges, monthly_goal, last_goal_change_date, coins, lifetime_coins_earned, streak_freezes, frozen_dates, highest_goal_ever, featured_badge').eq('id', user.id).maybeSingle(),
+      // Paralelní stažení profilu, knih, denní aktivity a vyřešení streaku
+      // (resolve_streak() sám dožene libovolné množství uplynulých dní od
+      // posledního vyřešení - klient už žádnou historii sám neprochází).
+      const [profileRes, booksRes, activityRes, streakRes] = await Promise.all([
+        supabase.from('profiles').select('fake_xp, bonus_xp, show_in_leaderboard, unlocked_badges, monthly_goal, last_goal_change_date, coins, lifetime_coins_earned, streak_freezes, frozen_dates, current_streak, highest_goal_ever, featured_badge').eq('id', user.id).maybeSingle(),
         supabase.from('user_books').select('updated_at, is_read').eq('user_id', user.id).eq('is_read', true),
-        supabase.from('user_daily_activity').select('activity_date').eq('user_id', user.id).order('activity_date', { ascending: false })
+        supabase.from('user_daily_activity').select('activity_date').eq('user_id', user.id).order('activity_date', { ascending: false }),
+        supabase.rpc('resolve_streak')
       ]);
 
       const profileData = profileRes.data || {};
@@ -145,86 +148,30 @@ export const UserStats = () => {
       const isChangedThisMonth = lastGoalChange && lastGoalChange.getFullYear() === currentYear && lastGoalChange.getMonth() === currentMonth;
       const isGoalLocked = isChangedThisMonth; // omezuje jen možnost SNÍŽIT, viz UI níže
 
-      // 3. VÝPOČET STREAKU (s podporou Streak Freeze - zmeškaný den se počítá dál,
-      // pokud ho appka může "zamrazit" pojistkou, kterou si uživatel koupil)
-      let streak = 0;
+      // 3. STREAK - vyřešeno na serveru (resolve_streak(), zavoláno výš). Klient
+      // už žádnou historii sám neprochází ani nespotřebovává pojistky - jen
+      // přečte, co server už natrvalo rozhodl, a pro ZOBRAZENÍ připočte dnešek
+      // (pokud se dnes už četlo), aniž by ho trvale zapisoval - to se stane samo
+      // při příštím resolve_streak(), až dnešek jednou skutečně celý uplyne.
+      const streakResult = streakRes?.data;
+      if (streakRes?.error) console.error('Nepodařilo se vyhodnotit streak:', streakRes.error);
+      const resolvedStreak = streakResult?.streak ?? (parseInt(profileData.current_streak, 10) || 0);
+      let displayStreakFreezes = streakResult?.streak_freezes ?? (parseInt(profileData.streak_freezes, 10) || 0);
+      let displayFrozenDates = streakResult?.frozen_dates || (Array.isArray(profileData.frozen_dates) ? profileData.frozen_dates : []);
+
       const activeDates = activityData.map(a => a.activity_date);
-      const existingFrozenDates = Array.isArray(profileData.frozen_dates) ? profileData.frozen_dates : [];
-      let availableFreezes = parseInt(profileData.streak_freezes, 10) || 0;
-      const newlyFrozenDates = [];
-      const resolvedThisPass = new Map();
-
-      // Memoizované - stejné datum se v jednom průchodu nikdy nevyhodnotí (a
-      // tedy nespotřebuje pojistku) dvakrát, i když se na něj appka zeptá vícekrát.
-      const isCovered = (dateStr) => {
-        if (resolvedThisPass.has(dateStr)) return resolvedThisPass.get(dateStr);
-        let covered;
-        if (activeDates.includes(dateStr) || existingFrozenDates.includes(dateStr)) {
-          covered = true;
-        } else if (availableFreezes > 0) {
-          availableFreezes--;
-          newlyFrozenDates.push(dateStr);
-          covered = true;
-        } else {
-          covered = false;
-        }
-        resolvedThisPass.set(dateStr, covered);
-        return covered;
-      };
-
       const todayStr = new Date().toLocaleDateString('sv');
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toLocaleDateString('sv');
+      const readToday = activeDates.includes(todayStr);
+      let streak = resolvedStreak + (readToday ? 1 : 0);
 
-      // Dnešek NESMÍ spotřebovat novou pojistku - den ještě neskončil, uživatel
-      // ho může pokrýt přirozeně (přečtením), takže se na "dnes" ptáme jen na
-      // přirozenou aktivitu nebo dřív už uloženou zmrazenou volbu, nikdy ne na
-      // čerstvě spotřebovanou. Bez týhle výjimky by pouhá návštěva Statistik
-      // před prvním přečtením dneška nevratně spotřebovala zaplacenou pojistku
-      // na den, který ještě vůbec neskončil.
-      const isTodayNaturallyCovered = activeDates.includes(todayStr) || existingFrozenDates.includes(todayStr);
-
-      if (isTodayNaturallyCovered || isCovered(yesterdayStr)) {
-        let checkDate = isTodayNaturallyCovered ? new Date() : yesterday;
-        while (true) {
-          const checkDateStr = checkDate.toLocaleDateString('sv');
-          if (isCovered(checkDateStr)) {
-            streak++;
-            checkDate.setDate(checkDate.getDate() - 1);
-          } else {
-            break;
-          }
-        }
-      }
-
-      // Nově "utracené" pojistky (jen navrh klienta) se serverově ověří a
-      // teprve pak trvale zapíšou - RPC je zdroj pravdy, ne tenhle výpočet.
-      let displayStreakFreezes = availableFreezes + newlyFrozenDates.length;
-      let displayFrozenDates = existingFrozenDates;
-      if (newlyFrozenDates.length > 0) {
-        try {
-          const { data: freezeResult, error: freezeError } = await supabase.rpc('consume_streak_freezes', {
-            freeze_dates: newlyFrozenDates
-          });
-          if (freezeError) throw freezeError;
-          if (freezeResult) {
-            displayStreakFreezes = freezeResult.streak_freezes ?? displayStreakFreezes;
-            displayFrozenDates = freezeResult.frozen_dates || displayFrozenDates;
-          }
-        } catch (freezeErr) {
-          console.error('Nepodařilo se zapsat spotřebu Streak Freeze:', freezeErr);
-        }
-      }
-
-      // Týdenní aktivita
+      // Týdenní aktivita - čte přímo z už vyřešeného stavu, žádná nová simulace.
       const czechDays = ["Ne", "Po", "Út", "St", "Čt", "Pá", "So"];
       const weeklyActivityGenerated = [];
       for (let i = 6; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
         const dateStr = d.toLocaleDateString('sv');
-        const isFrozen = !activeDates.includes(dateStr) && (existingFrozenDates.includes(dateStr) || newlyFrozenDates.includes(dateStr));
+        const isFrozen = !activeDates.includes(dateStr) && displayFrozenDates.includes(dateStr);
         weeklyActivityGenerated.push({
           dayLabel: czechDays[d.getDay()],
           isActive: activeDates.includes(dateStr) || isFrozen,
