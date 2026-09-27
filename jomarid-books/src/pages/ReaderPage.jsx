@@ -21,9 +21,9 @@ const LINE_HEIGHTS = {
   airy:    { label: 'Vzdušné',   value: 2.2 },
 };
 const TEXT_WIDTHS = {
-  narrow: { label: 'Úzký',    maxWidth: 560 },
-  medium: { label: 'Střední', maxWidth: 720 },
-  wide:   { label: 'Široký',  maxWidth: 900 },
+  narrow: { label: 'Úzký',    ratio: 0.62 },
+  medium: { label: 'Střední', ratio: 0.72 },
+  wide:   { label: 'Široký',  ratio: 0.82 },
 };
 const AVG_WORDS_PER_MINUTE = 200;
 
@@ -584,7 +584,6 @@ export const ReaderPage = () => {
   const textWidth = TEXT_WIDTHS[textWidthKey] || TEXT_WIDTHS.medium;
   const readingBg = paperMode ? '#f4ecd8' : 'var(--bg-body)';
   const readingText = paperMode ? '#3b2f1e' : 'var(--text-body)';
-  const columnGap = 40;
 
   return (
     <div style={{ backgroundColor: readingBg, height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }} className="transition-colors duration-200">
@@ -769,93 +768,107 @@ export const ReaderPage = () => {
         </div>
       )}
 
-      {/* --- STRÁNKOVANÝ TEXT: overflow je záměrně "hidden", pozici řídíme
-          výhradně sami (ťuknutí, přejetí, šipky, tlačítka) - žádné napůl
-          posunuté stránky od nepřesného posouvání kolečkem či touchpadem. --- */}
-      <div
-        ref={containerRef}
-        onClick={handleContainerClick}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        style={{ flex: 1, overflow: 'hidden', position: 'relative', touchAction: 'pan-y' }}
-      >
+      {/* --- STRÁNKA: pevný poměr stran (jako video s "contain") uvnitř
+          dostupného prostoru - jediný zdroj pravdy pro šířku stránky, žádná
+          samostatná maxWidth/vycentrování vrstva navrch, která by se s
+          sloupcovým rozvržením textu mohla rozejít (přesně tohle byla
+          příčina "vykukujících" sousedních stránek předtím). --- */}
+      <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden px-2 sm:px-4 py-2">
         <div
-          ref={contentRef}
-          className={`select-text ${fontFamily.className}`}
+          ref={containerRef}
+          onClick={handleContainerClick}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
           style={{
+            aspectRatio: textWidth.ratio,
             height: '100%',
-            padding: '8px 24px',
-            maxWidth: textWidth.maxWidth,
-            margin: '0 auto',
-            color: readingText,
-            fontSize: `${fontSize}px`,
-            lineHeight: lineHeight.value,
-            columnWidth: pageWidth > 0 ? `${Math.max(1, pageWidth - 48)}px` : '100%',
-            columnGap: `${columnGap}px`,
-            columnFill: 'auto',
-            whiteSpace: 'pre-wrap',
+            maxWidth: '100%',
+            maxHeight: '100%',
+            overflow: 'hidden',
+            position: 'relative',
+            touchAction: 'pan-y',
+            backgroundColor: paperMode ? 'rgba(0,0,0,0.03)' : 'var(--bg-card)',
+            borderRadius: '18px',
+            boxShadow: '0 6px 28px rgba(0,0,0,0.16)',
           }}
         >
-          {contentSegments.length > 0 ? contentSegments.map(seg => (
-            seg.type === 'highlight' ? (
-              <mark
-                key={seg.key}
-                style={{ backgroundColor: HIGHLIGHT_COLORS[seg.color]?.bg || HIGHLIGHT_COLORS.amber.bg, color: 'inherit', borderRadius: '2px', cursor: 'pointer' }}
-                onClick={(e) => { e.stopPropagation(); setActiveHighlight(highlights.find(h => h.id === seg.id)); setNoteDraft(seg.note || ''); }}
-              >
-                {seg.text}
-              </mark>
-            ) : (
-              <span key={seg.key}>{seg.text}</span>
-            )
-          )) : "Tato kniha zatím nemá nahraný žádný textový obsah."}
-        </div>
-
-        {/* Šipky pro klávesnicové/myšové listování na širších obrazovkách - na
-            mobilu se listuje ťuknutím do krajů, tohle jsou navíc, ne náhrada. */}
-        <button
-          onClick={(e) => { e.stopPropagation(); prevPage(); }}
-          disabled={currentPage <= 1}
-          className="hidden sm:flex absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full border-none items-center justify-center cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed"
-          style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-body)', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
-        >
-          <ChevronLeft size={18} />
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); nextPage(); }}
-          disabled={currentPage >= totalPages}
-          className="hidden sm:flex absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full border-none items-center justify-center cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed"
-          style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-body)', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
-        >
-          <ChevronRight size={18} />
-        </button>
-
-        {/* Popup po výběru textu - vybrat barvu zvýraznění. */}
-        {pendingSelection && (
           <div
+            ref={contentRef}
+            className={`select-text ${fontFamily.className}`}
             style={{
-              position: 'fixed', left: pendingSelection.x, top: Math.max(8, pendingSelection.y - 56),
-              transform: 'translateX(-50%)', backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)',
-              zIndex: 50,
+              width: '100%',
+              height: '100%',
+              padding: '28px 24px',
+              boxSizing: 'border-box',
+              color: readingText,
+              fontSize: `${fontSize}px`,
+              lineHeight: lineHeight.value,
+              columnWidth: pageWidth > 0 ? `${Math.max(1, pageWidth - 48)}px` : '100%',
+              columnGap: '0px',
+              columnFill: 'auto',
+              whiteSpace: 'pre-wrap',
             }}
-            className="border rounded-xl shadow-lg p-2 flex items-center gap-1.5"
           >
-            {Object.entries(HIGHLIGHT_COLORS).map(([key, val]) => (
-              <button
-                key={key}
-                onClick={() => saveHighlight(key)}
-                title={val.label}
-                style={{ backgroundColor: val.bg.replace('0.35', '0.9') }}
-                className="w-7 h-7 rounded-full border-none cursor-pointer"
-              />
-            ))}
-            <button onClick={() => { setPendingSelection(null); window.getSelection()?.removeAllRanges(); }} className="w-7 h-7 rounded-full border-none cursor-pointer flex items-center justify-center" style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }}>
-              <X size={13} />
-            </button>
+            {contentSegments.length > 0 ? contentSegments.map(seg => (
+              seg.type === 'highlight' ? (
+                <mark
+                  key={seg.key}
+                  style={{ backgroundColor: HIGHLIGHT_COLORS[seg.color]?.bg || HIGHLIGHT_COLORS.amber.bg, color: 'inherit', borderRadius: '2px', cursor: 'pointer' }}
+                  onClick={(e) => { e.stopPropagation(); setActiveHighlight(highlights.find(h => h.id === seg.id)); setNoteDraft(seg.note || ''); }}
+                >
+                  {seg.text}
+                </mark>
+              ) : (
+                <span key={seg.key}>{seg.text}</span>
+              )
+            )) : "Tato kniha zatím nemá nahraný žádný textový obsah."}
           </div>
-        )}
 
-        {/* Panel pro zobrazenou zvýrazněnou pasáž - přidat/upravit poznámku, smazat. */}
+          {/* Šipky pro myš na širších obrazovkách - na mobilu se listuje
+              ťuknutím do krajů stránky, tohle je navíc, ne náhrada. */}
+          <button
+            onClick={(e) => { e.stopPropagation(); prevPage(); }}
+            disabled={currentPage <= 1}
+            className="hidden sm:flex absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full border-none items-center justify-center cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed"
+            style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); nextPage(); }}
+            disabled={currentPage >= totalPages}
+            className="hidden sm:flex absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full border-none items-center justify-center cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed"
+            style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
+          >
+            <ChevronRight size={18} />
+          </button>
+
+          {/* Popup po výběru textu - vybrat barvu zvýraznění. */}
+          {pendingSelection && (
+            <div
+              style={{
+                position: 'fixed', left: pendingSelection.x, top: Math.max(8, pendingSelection.y - 56),
+                transform: 'translateX(-50%)', backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)',
+                zIndex: 50,
+              }}
+              className="border rounded-xl shadow-lg p-2 flex items-center gap-1.5"
+            >
+              {Object.entries(HIGHLIGHT_COLORS).map(([key, val]) => (
+                <button
+                  key={key}
+                  onClick={() => saveHighlight(key)}
+                  title={val.label}
+                  style={{ backgroundColor: val.bg.replace('0.35', '0.9') }}
+                  className="w-7 h-7 rounded-full border-none cursor-pointer"
+                />
+              ))}
+              <button onClick={() => { setPendingSelection(null); window.getSelection()?.removeAllRanges(); }} className="w-7 h-7 rounded-full border-none cursor-pointer flex items-center justify-center" style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }}>
+                <X size={13} />
+              </button>
+            </div>
+          )}
+
+          {/* Panel pro zobrazenou zvýrazněnou pasáž - přidat/upravit poznámku, smazat. */}
         {activeHighlight && (
           <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setActiveHighlight(null)}>
             <div onClick={e => e.stopPropagation()} style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl shadow-xl w-full sm:w-96 max-w-full p-5 space-y-3">
@@ -885,9 +898,35 @@ export const ReaderPage = () => {
           </div>
         )}
       </div>
+      </div>
+
+      {/* --- Spodní lišta se šipkami a číslem stránky - hlavní ovládání
+          listování, proto viditelná VŽDY, i ve fokus režimu (na rozdíl od
+          horní lišty s nastavením/obsahem/záložkami). --- */}
+      <div className="shrink-0 flex items-center justify-center gap-5 py-3">
+        <button
+          onClick={prevPage}
+          disabled={currentPage <= 1}
+          style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
+          className="w-10 h-10 rounded-full border flex items-center justify-center cursor-pointer disabled:opacity-25 disabled:cursor-not-allowed shadow-sm"
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <span style={{ color: readingText }} className="text-xs font-black tabular-nums min-w-[64px] text-center">
+          {currentPage} / {totalPages}
+        </span>
+        <button
+          onClick={nextPage}
+          disabled={currentPage >= totalPages}
+          style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
+          className="w-10 h-10 rounded-full border flex items-center justify-center cursor-pointer disabled:opacity-25 disabled:cursor-not-allowed shadow-sm"
+        >
+          <ChevronRight size={18} />
+        </button>
+      </div>
 
       {!focusMode && (
-        <div className="shrink-0 px-4 py-3 max-w-2xl mx-auto w-full">
+        <div className="shrink-0 px-4 pb-3 max-w-2xl mx-auto w-full">
           <div style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }} className="border rounded-xl p-3 flex items-center justify-center gap-3 flex-wrap">
             <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider opacity-70">Ohodnotit knihu:</span>
             <div className="flex gap-1">
