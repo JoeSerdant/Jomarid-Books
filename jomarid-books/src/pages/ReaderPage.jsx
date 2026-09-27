@@ -146,7 +146,7 @@ function computeAbsoluteOffset(root, targetNode, targetOffset) {
 
 export const ReaderPage = () => {
   const { id } = useParams();
-  const { user } = useAuth();
+  const { user, role, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [book, setBook] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -196,7 +196,7 @@ export const ReaderPage = () => {
 
   useEffect(() => {
     const fetchBookData = async () => {
-      if (!user || !id) return;
+      if (!user || !id || authLoading) return;
       setLoading(true);
       try {
         const { data: bookData, error: bookErr } = await supabase
@@ -218,7 +218,7 @@ export const ReaderPage = () => {
         hadExistingRowRef.current = !!userBookData;
 
         const currentUsername = user.email ? user.email.split('@')[0] : '';
-        const isAuthor = bookData.author === currentUsername;
+        const isAuthor = bookData.author === currentUsername && (role === 'nakladatel' || role === 'správce');
         const hasAccess = isAuthor || bookData.is_auto_assigned || userBookData?.status === 'active';
 
         if (!hasAccess) {
@@ -251,7 +251,7 @@ export const ReaderPage = () => {
     };
 
     fetchBookData();
-  }, [id, user, navigate]);
+  }, [id, user, role, authLoading, navigate]);
 
   const chapters = useMemo(() => detectChapters(book?.content), [book?.content]);
 
