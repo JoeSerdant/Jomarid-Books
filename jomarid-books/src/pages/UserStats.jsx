@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { BOOK_BADGES } from '../constants/badges';
-import { calculateXpMultiplier, calculateLevelAndProgress, getLevelVisuals } from '../constants/leveling';
+import { calculateXpMultiplier, calculateLevelAndProgress, getLevelVisuals, calculateGoalMultiplier } from '../constants/leveling';
 import { BadgesSection } from '../components/BadgesSection';
 import { Award, Calendar, CheckCircle, ChevronRight, Coins, Flame, Loader2, Lock, Shield, ShieldCheck, ShieldOff, Sparkles, TrendingUp, Trophy, Users } from 'lucide-react';
 
@@ -74,7 +74,7 @@ export const UserStats = () => {
     lifetimeCoins: 0,
     streakFreezes: 0,
     frozenDates: [],
-    highestGoalEver: 25,
+    highestGoalCompleted: 25,
     featuredBadge: null,
     goalLocked: false,
     goalLockedCompletely: false,
@@ -107,7 +107,7 @@ export const UserStats = () => {
       // (resolve_streak() sám dožene libovolné množství uplynulých dní od
       // posledního vyřešení - klient už žádnou historii sám neprochází).
       const [profileRes, booksRes, activityRes, streakRes] = await Promise.all([
-        supabase.from('profiles').select('fake_xp, bonus_xp, show_in_leaderboard, unlocked_badges, monthly_goal, last_goal_change_date, coins, lifetime_coins_earned, streak_freezes, frozen_dates, current_streak, highest_goal_ever, featured_badge').eq('id', user.id).maybeSingle(),
+        supabase.from('profiles').select('fake_xp, bonus_xp, show_in_leaderboard, unlocked_badges, monthly_goal, last_goal_change_date, coins, lifetime_coins_earned, streak_freezes, frozen_dates, current_streak, highest_goal_completed, featured_badge').eq('id', user.id).maybeSingle(),
         supabase.from('user_books').select('updated_at, first_completed_at, is_read').eq('user_id', user.id).eq('is_read', true),
         supabase.from('user_daily_activity').select('activity_date').eq('user_id', user.id).order('activity_date', { ascending: false }),
         supabase.rpc('resolve_streak')
@@ -150,7 +150,8 @@ export const UserStats = () => {
       // vynucuje totéž, tohle je jen pro UI (zobrazit zámek dřív, než se
       // o změnu vůbec pokusíš).
       const currentGoal = profileData.monthly_goal || parseInt(localStorage.getItem(`monthly_goal_${user.id}`), 10) || 25;
-      const highestGoalEver = Math.max(parseInt(profileData.highest_goal_ever, 10) || 25, currentGoal);
+      // Nejvyšší cíl, který jsi SKUTEČNĚ SPLNIL - ne nejvyšší, který sis nastavil.
+      const highestGoalCompleted = parseInt(profileData.highest_goal_completed, 10) || 25;
       const lastGoalChange = profileData.last_goal_change_date ? new Date(profileData.last_goal_change_date) : null;
       const isChangedThisMonth = lastGoalChange && lastGoalChange.getFullYear() === currentYear && lastGoalChange.getMonth() === currentMonth;
       const isLockedByProgress = profileData.monthly_goal != null && monthlyRead >= Math.ceil(profileData.monthly_goal / 2);
@@ -194,11 +195,11 @@ export const UserStats = () => {
 
       // XP/level BEZ odznáčkového bonusu - potřeba dopředu, aby šlo vyhodnotit
       // odznáčky z kategorie "levels" (dřív se level do evalContextu vůbec nedostal).
-      // Bonus se počítá z NEJVYŠŠÍHO cíle, jaký jsi kdy měl (highestGoalEver) -
-      // jednou dosažený vyšší cíl už XP tempo nikdy nesníží, i když si cíl
-      // později zase snížíš. Práh začíná už nad 5 (ne nad 25 jako dřív), protože
-      // knihy na webu jsou krátké a 5 je snadné - vyšší cíl má hned znát.
-      const goalMultiplier = highestGoalEver > 25 ? 1 + ((highestGoalEver - 25) * 0.02) : 1;
+      // Bonus se počítá z NEJVYŠŠÍHO SPLNĚNÉHO cíle (highestGoalCompleted), ne z
+      // nastaveného - jinak by stačilo si dát cíl 500 a nikdy ho neplnit. Hodnotu
+      // zvedá jen server, ve chvíli, kdy dočteš knihu a v měsíci dosáhneš cíle;
+      // jednou získaný bonus se pak už nesnižuje. Vzorec je ve sdíleném leveling.js.
+      const goalMultiplier = calculateGoalMultiplier(highestGoalCompleted);
       const baseXpFromBooks = Math.round((totalRead * 100) * goalMultiplier);
       const streakXpBonus = calculateXpMultiplier(streak);
       const fakeXpFromDB = parseInt(profileData.fake_xp, 10) || 0;
@@ -281,11 +282,11 @@ export const UserStats = () => {
         xp: xpInCurrentLevel, level, levelName: visuals.name, levelBadgeClass: visuals.badge, levelBoxClass: visuals.box,
         xpNeededForNext, daysRemainingInMonth, currentMonthName, showInLeaderboard: profileData.show_in_leaderboard ?? true,
         unlockedBadges: savedUnlockedBadges, jomaridCoins: calculatedCoins, lifetimeCoins: calculatedLifetimeCoins, goalLocked: isGoalLocked, goalLockedCompletely: isLockedByProgress, goalProgress: monthlyRead,
-        streakFreezes: displayStreakFreezes, frozenDates: displayFrozenDates, highestGoalEver, featuredBadge: profileData.featured_badge || null
+        streakFreezes: displayStreakFreezes, frozenDates: displayFrozenDates, highestGoalCompleted, featuredBadge: profileData.featured_badge || null
       });
 
       // 6. LEADERBOARDS
-      const { data: allProfiles } = await supabase.from('profiles').select('id, email, fake_xp, bonus_xp, unlocked_badges, featured_badge, highest_goal_ever').eq('show_in_leaderboard', true);
+      const { data: allProfiles } = await supabase.from('profiles').select('id, email, fake_xp, bonus_xp, unlocked_badges, featured_badge, highest_goal_completed').eq('show_in_leaderboard', true);
       if (allProfiles && allProfiles.length > 0) {
         const [allBooksRes, allActsRes] = await Promise.all([
           supabase.from('user_books').select('user_id, updated_at').eq('is_read', true),
@@ -323,10 +324,8 @@ export const UserStats = () => {
           // Stejný vzorec jako pro přihlášeného uživatele výš (goalMultiplier +
           // XP z odznáčků) - jinak by žebříček podle XP/úrovně systematicky
           // podhodnocoval každého se sbírkou odznáčků nebo zvýšeným
-          // highest_goal_ever, protože by to prostě nepočítal vůbec.
-          const uGoalMultiplier = (parseInt(p.highest_goal_ever, 10) || 25) > 25
-            ? 1 + (((parseInt(p.highest_goal_ever, 10) || 25) - 25) * 0.02)
-            : 1;
+          // splněným cílem, protože by to prostě nepočítal vůbec.
+          const uGoalMultiplier = calculateGoalMultiplier(p.highest_goal_completed);
           const uBadgeBonusXp = Array.isArray(p.unlocked_badges)
             ? p.unlocked_badges.reduce((sum, id) => {
                 const badgeDef = BOOK_BADGES.find(bd => bd.id === id);
@@ -575,8 +574,12 @@ export const UserStats = () => {
                     `Cíl už nejde měnit - dosáhl jsi ${stats.goalProgress} z ${stats.monthlyGoal} (aspoň polovina). Zas příští měsíc.`
                   ) : (() => {
                     const n = parseInt(newGoalInput, 10);
-                    const preview = !isNaN(n) && n > 25 ? Math.round((1 + (Math.max(n, stats.highestGoalEver) - 25) * 0.02) * 100) : 100;
-                    return `Vyšší cíl = víc XP za knihu natrvalo (teď ${preview}% tempa). Nejde snížit, ani měnit po dosažení poloviny.`;
+                    const cur = Math.round(calculateGoalMultiplier(stats.highestGoalCompleted) * 100);
+                    if (!isNaN(n) && n > stats.highestGoalCompleted) {
+                      const after = Math.round(calculateGoalMultiplier(n) * 100);
+                      return `Bonus XP dostaneš až SPLNĚNÍM cíle: přečteš-li ${n} knih za měsíc, budeš mít natrvalo ${after}% tempa (teď ${cur}%). Za nesplněný cíl nic. Po dosažení poloviny nejde měnit.`;
+                    }
+                    return `Teď máš ${cur}% XP tempa (nejvyšší splněný cíl: ${stats.highestGoalCompleted}). Po dosažení poloviny cíle už nejde měnit.`;
                   })()}
                 </span>
                 {goalError && <span className="text-red-500 text-[10px]">{goalError}</span>}
