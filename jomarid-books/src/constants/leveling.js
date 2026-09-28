@@ -55,3 +55,13 @@ export const getLevelVisuals = (lvl) => {
     box: "bg-[var(--bg-primary)] text-[var(--text-primary)]"
   };
 };
+
+// Násobek XP za knihu podle NEJVYŠŠÍHO SPLNĚNÉHO měsíčního cíle (ne nastaveného -
+// nastavit si jde cokoliv, např. 500, bez jediné přečtené knihy). Základ 25 je
+// zároveň výchozí cíl, takže bonus začíná až nad ním: každá kniha nad 25
+// splněných v jednom měsíci = +2 % XP za knihu natrvalo. Server hodnotu zvedá
+// jen při skutečném splnění (viz award_goal_completion v migraci).
+export const calculateGoalMultiplier = (highestGoalCompleted) => {
+  const g = parseInt(highestGoalCompleted, 10) || 25;
+  return g > 25 ? 1 + (g - 25) * 0.02 : 1;
+};
