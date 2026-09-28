@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { BOOK_BADGES } from '../constants/badges';
-import { calculateXpMultiplier, calculateLevelAndProgress, getLevelVisuals } from '../constants/leveling';
+import { calculateXpMultiplier, calculateLevelAndProgress, getLevelVisuals, calculateGoalMultiplier } from '../constants/leveling';
 import { FaqItem } from '../components/FaqItem';
 import {
   Book, BookOpen, ChevronRight, Coins, Flame, Library, Phone,
@@ -137,7 +137,7 @@ export const HomePage = () => {
     (async () => {
       try {
         const [profileRes, userBooksRes, activityRes, allBooksRes, streakRes] = await Promise.all([
-          supabase.from('profiles').select('fake_xp, bonus_xp, unlocked_badges, coins, highest_goal_ever, featured_badge, current_streak').eq('id', user.id).maybeSingle(),
+          supabase.from('profiles').select('fake_xp, bonus_xp, unlocked_badges, coins, highest_goal_completed, featured_badge, current_streak').eq('id', user.id).maybeSingle(),
           supabase.from('user_books').select('book_id, is_read, status, scroll_position, updated_at').eq('user_id', user.id),
           supabase.from('user_daily_activity').select('activity_date').eq('user_id', user.id).order('activity_date', { ascending: false }),
           supabase.from('books').select('id, title, author, author_display, genres, description, price_coins, is_auto_assigned, avg_rating'),
@@ -169,8 +169,7 @@ export const HomePage = () => {
         // --- XP/Level: stejný vzorec jako Statistiky, počítáno jen z dat,
         // která už reálně existují v DB (žádné nové odemykání tady).
         const totalRead = userBooks.filter(b => b.is_read).length;
-        const goalEver = parseInt(profile.highest_goal_ever, 10) || 25;
-        const goalMultiplier = goalEver > 25 ? 1 + (goalEver - 25) * 0.02 : 1;
+        const goalMultiplier = calculateGoalMultiplier(profile.highest_goal_completed);
         const baseXpFromBooks = Math.round(totalRead * 100 * goalMultiplier);
         const streakXpBonus = calculateXpMultiplier(streak);
         const unlockedBadgeIds = profile.unlocked_badges || [];
