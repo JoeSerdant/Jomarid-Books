@@ -73,7 +73,7 @@ export const AdminDashboard = () => {
       // 2. Načtení profilů
       const { data: p } = await supabase
         .from('profiles')
-        .select('id, email, role, created_at, fake_xp, coins, unlocked_badges, featured_badge, streak_freezes, highest_goal_ever, pen_name')
+        .select('id, email, role, created_at, fake_xp, coins, unlocked_badges, featured_badge, streak_freezes, highest_goal_completed, pen_name')
         .order('created_at', { ascending: false });
       
       // 3. Načtení logů
@@ -1257,7 +1257,7 @@ export const AdminDashboard = () => {
                       </label>
                       <div className="grid grid-cols-2 gap-2 text-[11px] font-bold">
                         <span style={{ color: 'var(--text-muted)' }}>Odznaky: <span style={{ color: 'var(--text-body)' }}>{(activeUser.unlocked_badges || []).length} / 100</span></span>
-                        <span style={{ color: 'var(--text-muted)' }}>Nejvyšší cíl: <span style={{ color: 'var(--text-body)' }}>{activeUser.highest_goal_ever ?? 5}</span></span>
+                        <span style={{ color: 'var(--text-muted)' }}>Nejvyšší splněný cíl: <span style={{ color: 'var(--text-body)' }}>{activeUser.highest_goal_completed ?? 25}</span></span>
                         <span style={{ color: 'var(--text-muted)' }} className="col-span-2">Vlajkový odznak: <span style={{ color: 'var(--text-body)' }}>{activeUser.featured_badge || '—'}</span></span>
                       </div>
                       <div className="flex items-center justify-between pt-1">
