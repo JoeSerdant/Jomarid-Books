@@ -10,6 +10,7 @@ import {
   ShieldCheck, Sparkles, Zap, Footprints, Scroll,
   Rocket, Swords, Building2, Target, Crown, ArrowRight, Feather, Calendar, Gamepad2,
   Type, Bookmark, Star, MessageCircle, Trophy, Loader2, TrendingUp, BarChart3,
+  FlaskConical, AlertTriangle,
 } from 'lucide-react';
 
 // ============================================================================
@@ -274,16 +275,15 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
   return (
     <div style={{ color: 'var(--text-body)' }} className="font-sans">
 
-      {/* --- BETA UPOZORNĚNÍ (Nepřihlášená verze - Nahoře) --- */}
-      <div style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' }} className="w-full py-2 flex justify-center items-center gap-2 text-[11px] font-bold uppercase tracking-widest">
-        <Sparkles size={12} /> Aplikace je momentálně v beta verzi (Open Testing)
+      <div className="max-w-6xl mx-auto px-4 pt-6">
+        <BetaBanner />
       </div>
 
       {/* ============================================================
           1. HERO - nadpis vlevo, hledání podle žánru napravo (SKUTEČNĚ
           filtruje reálné doporučené knihy níž, není to jen pro parádu)
          ============================================================ */}
-      <section className="max-w-6xl mx-auto px-4 pt-20 pb-16">
+      <section className="max-w-6xl mx-auto px-4 pt-10 pb-16">
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-center">
 
           <div className="lg:col-span-3">
@@ -711,6 +711,11 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
         </div>
       </section>
 
+
+      <div className="max-w-6xl mx-auto px-4 pb-2">
+        <DevDisclaimer />
+      </div>
+
       <Footer />
     </div>
   );
@@ -919,17 +924,40 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
         </div>
       </section>
 
-      {/* --- BETA UPOZORNĚNÍ (Přihlášená verze - Dole) --- */}
-      <div className="max-w-5xl mx-auto px-4 py-6 flex justify-center">
-        <div style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' }} className="px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 opacity-70">
-          <Sparkles size={12} /> Aplikace je momentálně v beta verzi (Open Testing)
-        </div>
+
+      <div className="max-w-6xl mx-auto px-4 pb-2 space-y-3">
+        <BetaBanner />
+        <DevDisclaimer />
       </div>
 
       <Footer />
     </div>
   );
 };
+
+// ============================================================================
+// DOČASNÉ UPOZORNĚNÍ - appka je v otevřeném beta testování. Zvlášť od
+// odškrtávacího upozornění na možné problémy níž, aby šlo každé v budoucnu
+// snadno odebrat samostatně (beta štítek zmizí jako první, jakmile appka
+// vyjde z bety; upozornění na nestabilitu může zůstat o něco déle).
+// ============================================================================
+const BetaBanner = () => (
+  <div style={{ backgroundColor: 'var(--bg-badge)', borderColor: 'var(--border-color)' }} className="border rounded-xl px-4 py-3 flex items-center gap-2.5 text-xs">
+    <FlaskConical size={15} style={{ color: 'var(--text-badge)' }} className="shrink-0" />
+    <p style={{ color: 'var(--text-badge)' }} className="m-0 font-semibold">
+      Jomarid Books je v otevřeném beta testování - appka se pořád aktivně vyvíjí.
+    </p>
+  </div>
+);
+
+const DevDisclaimer = () => (
+  <div style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }} className="border rounded-xl px-4 py-3 flex items-center gap-2.5 text-xs">
+    <AlertTriangle size={15} style={{ color: 'var(--text-muted)' }} className="shrink-0 opacity-70" />
+    <p style={{ color: 'var(--text-muted)' }} className="m-0 opacity-80">
+      Během vývoje se může stát, že při přestavbě appky dojde ke ztrátě dat, a některé věci se mohou dočasně rozbít nebo fungovat jinak, než mají.
+    </p>
+  </div>
+);
 
 const Footer = () => (
   <footer style={{ borderColor: 'var(--border-color)' }} className="max-w-6xl mx-auto px-4 pt-8 pb-12 border-t flex flex-col sm:flex-row items-center justify-between text-xs gap-4">
