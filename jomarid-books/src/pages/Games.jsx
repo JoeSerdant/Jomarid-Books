@@ -135,16 +135,37 @@ export const GameLauncher = ({ game }) => {
   // event.source se navíc ověřuje proti konkrétnímu iframu týhle hry, aby
   // zprávu nemohlo spustit nic jiného, co náhodou pošle stejně tvarovanou
   // zprávu odjinud.
+  //
+  // 'coin' je ŽÁDOST o odměnu za herní událost (zlaté kliknutí, sklad zásob,
+  // krystal, výhra v šachách...) - hra sama Jomarid Coins NIKDY neuděluje,
+  // jen POŽÁDÁ; o skutečné částce (a denním stropu) rozhoduje výhradně server
+  // přes award_game_coins(). Výsledek se pošle zpátky do hry jako
+  // 'coin-result', aby mohla zobrazit skutečně připsanou částku (ne tu, o
+  // kterou jen požádala).
   useEffect(() => {
     const handleMessage = (event) => {
-      if (event.data?.source === 'jomarid-game' && event.data?.type === 'close') {
-        if (iframeRef.current && event.source !== iframeRef.current.contentWindow) return;
+      if (event.data?.source !== 'jomarid-game') return;
+      if (iframeRef.current && event.source !== iframeRef.current.contentWindow) return;
+
+      if (event.data?.type === 'close') {
         handleCloseGame();
+      } else if (event.data?.type === 'coin' && user) {
+        const amount = Math.floor(Number(event.data.amount));
+        if (!Number.isFinite(amount) || amount < 1) return;
+        supabase.rpc('award_game_coins', { p_game_id: game.id, p_amount: amount, p_reason: String(event.data.reason || 'event').slice(0, 30) })
+          .then(({ data, error }) => {
+            if (error) { console.error('Chyba při udílení herní odměny:', error.message); return; }
+            if (data?.granted) setCoins(data.balance ?? 0);
+            try {
+              event.source?.postMessage({ source: 'jomarid-host', type: 'coin-result', granted: data?.granted || 0, capped: !!data?.capped }, '*');
+            } catch (e) {}
+          })
+          .catch((err) => console.error('Chyba při udílení herní odměny:', err.message));
       }
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [handleCloseGame]);
+  }, [handleCloseGame, user, game.id]);
 
   const canClaim = hasPlayedEnough && !checkingStatus && !claimedToday;
 
