@@ -274,6 +274,11 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
   return (
     <div style={{ color: 'var(--text-body)' }} className="font-sans">
 
+      {/* --- BETA UPOZORNĚNÍ (Nepřihlášená verze - Nahoře) --- */}
+      <div style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' }} className="w-full py-2 flex justify-center items-center gap-2 text-[11px] font-bold uppercase tracking-widest">
+        <Sparkles size={12} /> Aplikace je momentálně v beta verzi (Open Testing)
+      </div>
+
       {/* ============================================================
           1. HERO - nadpis vlevo, hledání podle žánru napravo (SKUTEČNĚ
           filtruje reálné doporučené knihy níž, není to jen pro parádu)
@@ -913,6 +918,13 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
           </div>
         </div>
       </section>
+
+      {/* --- BETA UPOZORNĚNÍ (Přihlášená verze - Dole) --- */}
+      <div className="max-w-5xl mx-auto px-4 py-6 flex justify-center">
+        <div style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' }} className="px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 opacity-70">
+          <Sparkles size={12} /> Aplikace je momentálně v beta verzi (Open Testing)
+        </div>
+      </div>
 
       <Footer />
     </div>
