@@ -61,33 +61,122 @@ export const TEXT_WIDTHS = {
   wide:   { label: 'Široký',  ratio: 0.82 },
 };
 
-export const READER_STORAGE = {
-  fontSize: 'reader_font_size',
-  fontFamily: 'reader_font_family',
-  lineHeight: 'reader_line_height',
-  textWidth: 'reader_text_width',
-  paper: 'reader_paper_mode',
-  autoAdvance: 'reader_autoadvance_secs',
+export const ALIGNMENTS = { left: { label: 'Vlevo' }, justify: { label: 'Do bloku' } };
+export const LETTER_SPACINGS = { normal: { label: 'Běžné', value: '0' }, wide: { label: 'Širší', value: '0.02em' }, wider: { label: 'Nejširší', value: '0.04em' } };
+export const PAGE_MARGINS = { narrow: { label: 'Úzké', x: 14, y: 20 }, normal: { label: 'Střední', x: 24, y: 28 }, wide: { label: 'Široké', x: 38, y: 36 } };
+export const PAGE_BREAKS = {
+  word: { label: 'Přesně', hint: 'Stránka je plná až dolů, věta se může rozdělit.' },
+  sentence: { label: 'Po větách', hint: 'Stránka skončí koncem věty, pokud je blízko (dole může zůstat malá mezera).' },
+  paragraph: { label: 'Po odstavcích', hint: 'Stránka se snaží skončit koncem odstavce, jinak věty.' },
 };
-export const READER_DEFAULTS = { fontSize: 18, fontFamily: 'serif', lineHeight: 'normal', textWidth: 'medium', paper: false, autoAdvance: 25 };
+export const PAGE_ANIMATIONS = { none: { label: 'Žádná' }, fade: { label: 'Prolnutí' }, slide: { label: 'Posun' } };
+export const MOTION_OPTIONS = { system: { label: 'Podle zařízení' }, reduce: { label: 'Omezit' }, full: { label: 'Plné' } };
 export const FONT_SIZE_RANGE = { min: 14, max: 28 };
 export const AUTO_ADVANCE_RANGE = { min: 8, max: 60 };
+export const WPM_RANGE = { min: 120, max: 400 };
+export const NIGHT_RANGE = { min: 0, max: 60 };
+
+// Klíče v localStorage. Čtečka i Nastavení čtou a zapisují TYTÉŽ klíče, takže změna z jednoho místa se hned projeví i v druhém.
+export const READER_STORAGE = {
+  fontSize: 'reader_font_size', fontFamily: 'reader_font_family', lineHeight: 'reader_line_height', textWidth: 'reader_text_width',
+  paper: 'reader_paper_mode', autoAdvance: 'reader_autoadvance_secs',
+  align: 'reader_align', hyphens: 'reader_hyphens', letterSpacing: 'reader_letter_spacing', margin: 'reader_margin', pageBreak: 'reader_page_break',
+  pageAnim: 'reader_page_anim', tapZones: 'reader_tap_zones', swipe: 'reader_swipe', wakeLock: 'reader_wake_lock',
+  showMeta: 'reader_show_meta', showProgress: 'reader_show_progress', wpm: 'reader_wpm', nightFilter: 'reader_night_filter', startFocus: 'reader_start_focus',
+};
+export const READER_DEFAULTS = {
+  fontSize: 18, fontFamily: 'serif', lineHeight: 'normal', textWidth: 'medium', paper: false, autoAdvance: 25,
+  align: 'left', hyphens: false, letterSpacing: 'normal', margin: 'normal', pageBreak: 'sentence',
+  pageAnim: 'fade', tapZones: true, swipe: true, wakeLock: true,
+  showMeta: true, showProgress: true, wpm: 200, nightFilter: 0, startFocus: false,
+};
+const BOOLEAN_PREFS = ['paper', 'hyphens', 'tapZones', 'swipe', 'wakeLock', 'showMeta', 'showProgress', 'startFocus'];
 
 const pick = (map, key, fallback) => (key && map[key] ? key : fallback);
+const clamp = (v, range) => Math.min(range.max, Math.max(range.min, v));
 
 export const loadReaderPrefs = () => {
-  const num = (k, d) => parseInt(localStorage.getItem(k), 10) || d;
+  const get = (k) => { try { return localStorage.getItem(READER_STORAGE[k]); } catch { return null; } };
+  const num = (k, d) => { const v = parseInt(get(k), 10); return Number.isFinite(v) ? v : d; };
+  const bool = (k) => { const v = get(k); return v === null ? READER_DEFAULTS[k] : v === '1'; };
+  const D = READER_DEFAULTS;
   return {
-    fontSize: Math.min(FONT_SIZE_RANGE.max, Math.max(FONT_SIZE_RANGE.min, num(READER_STORAGE.fontSize, READER_DEFAULTS.fontSize))),
-    fontFamily: pick(FONT_FAMILIES, localStorage.getItem(READER_STORAGE.fontFamily), READER_DEFAULTS.fontFamily),
-    lineHeight: pick(LINE_HEIGHTS, localStorage.getItem(READER_STORAGE.lineHeight), READER_DEFAULTS.lineHeight),
-    textWidth: pick(TEXT_WIDTHS, localStorage.getItem(READER_STORAGE.textWidth), READER_DEFAULTS.textWidth),
-    paper: localStorage.getItem(READER_STORAGE.paper) === '1',
-    autoAdvance: Math.min(AUTO_ADVANCE_RANGE.max, Math.max(AUTO_ADVANCE_RANGE.min, num(READER_STORAGE.autoAdvance, READER_DEFAULTS.autoAdvance))),
+    fontSize: clamp(num('fontSize', D.fontSize) || D.fontSize, FONT_SIZE_RANGE),
+    fontFamily: pick(FONT_FAMILIES, get('fontFamily'), D.fontFamily),
+    lineHeight: pick(LINE_HEIGHTS, get('lineHeight'), D.lineHeight),
+    textWidth: pick(TEXT_WIDTHS, get('textWidth'), D.textWidth),
+    paper: bool('paper'),
+    autoAdvance: clamp(num('autoAdvance', D.autoAdvance) || D.autoAdvance, AUTO_ADVANCE_RANGE),
+    align: pick(ALIGNMENTS, get('align'), D.align),
+    hyphens: bool('hyphens'),
+    letterSpacing: pick(LETTER_SPACINGS, get('letterSpacing'), D.letterSpacing),
+    margin: pick(PAGE_MARGINS, get('margin'), D.margin),
+    pageBreak: pick(PAGE_BREAKS, get('pageBreak'), D.pageBreak),
+    pageAnim: pick(PAGE_ANIMATIONS, get('pageAnim'), D.pageAnim),
+    tapZones: bool('tapZones'), swipe: bool('swipe'), wakeLock: bool('wakeLock'),
+    showMeta: bool('showMeta'), showProgress: bool('showProgress'),
+    wpm: clamp(num('wpm', D.wpm), WPM_RANGE),
+    nightFilter: clamp(num('nightFilter', D.nightFilter), NIGHT_RANGE),
+    startFocus: bool('startFocus'),
   };
 };
 
+const notifyReaderPrefs = () => { try { window.dispatchEvent(new Event('jomarid-reader-prefs')); } catch { /* mimo prohlížeč */ } };
+
 export const saveReaderPref = (name, value) => {
-  const stored = name === 'paper' ? (value ? '1' : '0') : String(value);
-  localStorage.setItem(READER_STORAGE[name], stored);
+  if (!READER_STORAGE[name]) return;
+  const stored = BOOLEAN_PREFS.includes(name) ? (value ? '1' : '0') : String(value);
+  try { localStorage.setItem(READER_STORAGE[name], stored); } catch { /* úložiště nemusí být dostupné */ }
+  notifyReaderPrefs();
+};
+
+export const resetReaderPrefs = () => {
+  Object.values(READER_STORAGE).forEach(k => { try { localStorage.removeItem(k); } catch { /* nevadí */ } });
+  notifyReaderPrefs();
+};
+
+// Jedno místo, které z voleb udělá CSS textu. Stejné použije viditelná stránka, skrytý měřicí uzel
+// pro stránkování (MUSÍ mít totéž, jinak by se stránky zalamovaly jinak, než se vykreslí) i náhled v Nastavení.
+export const readerTypography = (prefs) => {
+  const fam = FONT_FAMILIES[prefs.fontFamily] || FONT_FAMILIES.serif;
+  const lh = LINE_HEIGHTS[prefs.lineHeight] || LINE_HEIGHTS.normal;
+  const margin = PAGE_MARGINS[prefs.margin] || PAGE_MARGINS.normal;
+  const hy = prefs.hyphens ? 'auto' : 'manual';
+  return {
+    className: fam.className,
+    lang: 'cs', // dělení slov a zalamování podle češtiny
+    padX: margin.x,
+    padY: margin.y,
+    breakMode: PAGE_BREAKS[prefs.pageBreak] ? prefs.pageBreak : 'sentence',
+    style: {
+      fontSize: `${prefs.fontSize}px`,
+      lineHeight: lh.value,
+      letterSpacing: (LETTER_SPACINGS[prefs.letterSpacing] || LETTER_SPACINGS.normal).value,
+      textAlign: prefs.align === 'justify' ? 'justify' : 'left',
+      hyphens: hy,
+      WebkitHyphens: hy,
+      whiteSpace: 'pre-wrap',
+      wordBreak: 'normal',
+      overflowWrap: 'normal',
+    },
+  };
+};
+
+// --- Pohyb a animace v celé appce (nastavuje se v Nastavení -> Vzhled) ---
+export const MOTION_KEY = 'jomarid-motion';
+export const loadMotionPref = () => { try { const v = localStorage.getItem(MOTION_KEY); return MOTION_OPTIONS[v] ? v : 'system'; } catch { return 'system'; } };
+export const applyMotionPref = () => {
+  const pref = loadMotionPref();
+  const system = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false;
+  const reduce = pref === 'reduce' || (pref === 'system' && system);
+  document.documentElement.dataset.reduceMotion = reduce ? '1' : '0';
+  return reduce;
+};
+export const saveMotionPref = (value) => { try { localStorage.setItem(MOTION_KEY, value); } catch { /* nevadí */ } applyMotionPref(); };
+export const initMotionPref = () => {
+  applyMotionPref();
+  const mq = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  const handler = () => applyMotionPref();
+  if (mq && mq.addEventListener) mq.addEventListener('change', handler);
+  return () => { if (mq && mq.removeEventListener) mq.removeEventListener('change', handler); };
 };
