@@ -1,7 +1,615 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Button, Card } from '../components/ui';
-import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle, LayoutDashboard, UserCog, Loader2, CheckCircle2, X, ChevronLeft, ChevronRight, Ban, KeyRound, Trash2, ShieldCheck } from 'lucide-react';
+
+// ============================================================================
+// Admin: Přehled a správa účtů (pomocné prvky, záložka Přehled, záložka Účty)
+// ============================================================================
+const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('cs-CZ') : '-');
+const formatDateTime = (iso) => (iso ? new Date(iso).toLocaleString('cs-CZ', { dateStyle: 'short', timeStyle: 'short' }) : '-');
+const formatNumber = (n) => Number(n || 0).toLocaleString('cs-CZ');
+
+const relativeTime = (iso) => {
+  if (!iso) return 'nikdy';
+  const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (minutes < 1) return 'před chvílí';
+  if (minutes < 60) return `před ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `před ${hours} h`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'včera';
+  if (days < 30) return `před ${days} dny`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `před ${months} měs.`;
+  return `před ${Math.floor(months / 12)} r.`;
+};
+
+const ROLE_LABELS = { 'uživatel': 'Čtenář', nakladatel: 'Nakladatel', 'správce': 'Správce' };
+
+// Zdroje mincí se ve coin_transactions poznají podle prefixu před dvojtečkou.
+const SOURCE_LABELS = {
+  badge: 'Odznaky',
+  game_event: 'Události ve hrách',
+  game_bonus: 'Denní bonus za hru',
+  daily_login: 'Denní přihlášení',
+  admin_grant: 'Přidělil admin',
+  book_purchase: 'Nákupy knih',
+  streak_freeze_purchase: 'Streak Freeze',
+};
+const sourceLabel = (sourceType) => {
+  const key = String(sourceType || '').split(':')[0];
+  return SOURCE_LABELS[key] || key || 'Jiné';
+};
+
+const ADMIN_ERRORS = {
+  forbidden: 'K téhle akci nemáš oprávnění.',
+  cannot_target_self: 'Tohle nejde provést na vlastním účtu.',
+  cannot_target_admin: 'Účet správce nejde blokovat ani mazat - nejdřív mu změň roli.',
+  has_published_books: 'Účet má vydané knihy - nejdřív je smaž nebo předej jinému autorovi.',
+  user_not_found: 'Účet už neexistuje (mohl být mezitím smazán).',
+  profile_not_found: 'Účet nemá profil - založí se při jeho příštím přihlášení.',
+  invalid_role: 'Neplatná role.',
+};
+const mapAdminError = (err) => {
+  const msg = String(err?.message || '');
+  const code = Object.keys(ADMIN_ERRORS).find(c => msg.includes(c));
+  return code ? ADMIN_ERRORS[code] : 'Akce se nepovedla: ' + (msg || 'neznámá chyba');
+};
+
+const StatCard = ({ label, value, hint }) => (
+  <div style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }} className="border rounded-xl p-4 min-w-0">
+    <p style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider m-0 opacity-80">{label}</p>
+    <p className="text-2xl font-black m-0 mt-1 tabular-nums">{value}</p>
+    {hint && <p style={{ color: 'var(--text-muted)' }} className="text-[11px] m-0 mt-1 opacity-80">{hint}</p>}
+  </div>
+);
+
+const PILL_TONES = {
+  muted: { backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' },
+  danger: { backgroundColor: 'rgba(239,68,68,0.15)', color: '#ef4444' },
+  warn: { backgroundColor: 'rgba(245,158,11,0.16)', color: '#d97706' },
+  ok: { backgroundColor: 'rgba(16,185,129,0.15)', color: '#10b981' },
+  accent: { backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' },
+};
+const Pill = ({ tone = 'muted', children }) => (
+  <span style={PILL_TONES[tone]} className="inline-block text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full whitespace-nowrap">{children}</span>
+);
+
+const InlineMessage = ({ type = 'info', children }) => {
+  const style = type === 'error' ? PILL_TONES.danger : type === 'success' ? PILL_TONES.ok : PILL_TONES.muted;
+  return <p role={type === 'error' ? 'alert' : 'status'} style={style} className="text-xs font-bold rounded-lg px-3 py-2 m-0 leading-relaxed">{children}</p>;
+};
+
+// Potvrzení, které nejde odkliknout bez čtení: tlačítko se odemkne až po opsání
+// očekávaného textu (název knihy, e-mail účtu...). Používá se u nevratných akcí.
+export const TypedConfirm = ({ open, title, description, expected, confirmLabel = 'Potvrdit', busy = false, error = '', onConfirm, onCancel }) => {
+  const [typed, setTyped] = useState('');
+  useEffect(() => { if (open) setTyped(''); }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === 'Escape') onCancel(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onCancel]);
+  if (!open) return null;
+  const matches = typed.trim().toLowerCase() === String(expected || '').trim().toLowerCase() && typed.trim() !== '';
+  return (
+    <div className="fixed inset-0 z-[130] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onCancel}>
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-label={title}
+        style={{ backgroundColor: 'var(--bg-card)', borderColor: 'rgba(239,68,68,0.5)', color: 'var(--text-body)' }}
+        className="border-2 rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-3"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-sm font-black uppercase tracking-wider m-0 text-red-500">{title}</h3>
+        <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">{description}</p>
+        <label className="block">
+          <span className="text-[10px] font-black uppercase tracking-wider block mb-1 opacity-80">Pro potvrzení napiš: <span className="normal-case tracking-normal select-all">{expected}</span></span>
+          <input
+            type="text"
+            autoFocus
+            autoComplete="off"
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
+            className="w-full p-2.5 border rounded-lg text-sm font-semibold outline-none"
+          />
+        </label>
+        {error && <InlineMessage type="error">{error}</InlineMessage>}
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" onClick={onCancel} disabled={busy} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="px-4 py-2 rounded-lg border-none cursor-pointer text-[11px] font-black uppercase tracking-wider disabled:opacity-50">Zrušit</button>
+          <button type="button" onClick={onConfirm} disabled={!matches || busy} style={{ backgroundColor: '#dc2626', color: '#fff' }} className="px-4 py-2 rounded-lg border-none cursor-pointer text-[11px] font-black uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-2">
+            {busy && <Loader2 size={13} className="animate-spin" />}{confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const MiniBars = ({ title, points, valueKey, color }) => {
+  const values = points.map(p => Number(p[valueKey]) || 0);
+  const max = Math.max(1, ...values);
+  const total = values.reduce((a, b) => a + b, 0);
+  return (
+    <div style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }} className="border rounded-xl p-3">
+      <div className="flex items-baseline justify-between mb-2">
+        <p className="text-[10px] font-black uppercase tracking-wider m-0 opacity-80">{title}</p>
+        <p className="text-sm font-black m-0 tabular-nums">{formatNumber(total)}</p>
+      </div>
+      <div className="flex items-end gap-[3px] h-16" role="img" aria-label={`${title}: ${total} za posledních 14 dní`}>
+        {points.map((p, i) => (
+          <div
+            key={p.day}
+            title={`${new Date(p.day).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric' })}: ${formatNumber(values[i])}`}
+            style={{ height: `${Math.max(values[i] > 0 ? 8 : 2, (values[i] / max) * 100)}%`, backgroundColor: color, opacity: values[i] > 0 ? 1 : 0.25 }}
+            className="flex-1 rounded-sm"
+          />
+        ))}
+      </div>
+      <p style={{ color: 'var(--text-muted)' }} className="text-[10px] m-0 mt-1 opacity-70">posledních 14 dní</p>
+    </div>
+  );
+};
+
+const Chip = ({ onClick, tone = 'warn', children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    style={tone === 'danger' ? { backgroundColor: 'rgba(239,68,68,0.15)', color: '#ef4444' } : { backgroundColor: 'rgba(245,158,11,0.16)', color: '#d97706' }}
+    className="border-none rounded-full px-3 py-1.5 text-xs font-black cursor-pointer hover:opacity-80"
+  >
+    {children}
+  </button>
+);
+
+export const OverviewTab = ({ onOpenAccounts, onOpenBooks }) => {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    const { data: result, error: rpcError } = await supabase.rpc('admin_overview');
+    if (rpcError) setError(mapAdminError(rpcError));
+    else setData(result);
+    setLoading(false);
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  if (!data && loading) return <div className="py-16 flex justify-center"><Loader2 className="animate-spin opacity-50" /></div>;
+  if (!data) {
+    return (
+      <div className="space-y-3">
+        <InlineMessage type="error">{error || 'Přehled se nepodařilo načíst.'}</InlineMessage>
+        <button type="button" onClick={load} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="px-4 py-2 rounded-lg border-none cursor-pointer text-xs font-black uppercase">Zkusit znovu</button>
+      </div>
+    );
+  }
+
+  const { users, books, reading, coins, daily } = data;
+  const sources = coins.sources || [];
+  const earned30 = sources.reduce((s, r) => s + Number(r.earned_30d), 0);
+  const spent30 = sources.reduce((s, r) => s + Number(r.spent_30d), 0);
+  const issues = [
+    users.no_profile > 0 && { key: 'np', label: `${users.no_profile} účtů bez profilu`, onClick: () => onOpenAccounts({ role: 'bez_profilu' }) },
+    users.banned > 0 && { key: 'ban', label: `${users.banned} zablokovaných`, onClick: () => onOpenAccounts({ status: 'banned' }) },
+    users.unconfirmed > 0 && { key: 'unc', label: `${users.unconfirmed} nepotvrzených e-mailů`, onClick: () => onOpenAccounts({ status: 'unconfirmed' }) },
+    books.missing_author > 0 && { key: 'ma', label: `${books.missing_author} knih bez propojeného autora`, onClick: onOpenBooks },
+  ].filter(Boolean);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 opacity-80">Stav k {formatDateTime(data.generated_at)}</p>
+        <button type="button" onClick={load} disabled={loading} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }} className="border rounded-lg px-3 py-1.5 cursor-pointer text-xs font-black uppercase inline-flex items-center gap-1.5 disabled:opacity-50">
+          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Obnovit
+        </button>
+      </div>
+      {error && <InlineMessage type="error">{error}</InlineMessage>}
+
+      <div className="flex items-center gap-2 flex-wrap" data-testid="issues">
+        {issues.length === 0
+          ? <span style={{ color: '#10b981' }} className="text-xs font-black inline-flex items-center gap-1.5"><CheckCircle2 size={14} /> Žádné nalezené problémy</span>
+          : issues.map(i => <Chip key={i.key} onClick={i.onClick}>{i.label}</Chip>)}
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard label="Účty" value={formatNumber(users.total)} hint={`+${users.new_7d} za 7 dní · +${users.new_30d} za 30 dní`} />
+        <StatCard label="Aktivní" value={formatNumber(users.active_7d)} hint={`za 7 dní · ${users.active_30d} za 30 dní`} />
+        <StatCard label="Dočtené knihy" value={formatNumber(reading.finished_total)} hint={`${reading.finished_7d} za 7 dní · ${reading.finished_30d} za 30 dní`} />
+        <StatCard label="Mince v oběhu" value={formatNumber(coins.in_circulation)} hint={`průměr ${formatNumber(coins.avg_per_profile)} na profil`} />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <MiniBars title="Nové účty" points={daily} valueKey="new_users" color="#6366f1" />
+        <MiniBars title="Dočtené knihy" points={daily} valueKey="finished" color="#10b981" />
+        <MiniBars title="Získané mince" points={daily} valueKey="coins_earned" color="#f59e0b" />
+      </div>
+
+      <Card>
+        <h3 className="text-sm font-black uppercase tracking-wider mb-1">Ekonomika mincí podle zdroje</h3>
+        <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 mb-3 opacity-80">
+          Za posledních 30 dní přibylo {formatNumber(earned30)} a ubylo {formatNumber(spent30)} mincí (čistě {earned30 - spent30 >= 0 ? '+' : ''}{formatNumber(earned30 - spent30)}).
+        </p>
+        {sources.length === 0 ? (
+          <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 opacity-70">Zatím žádné transakce.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse min-w-[520px]">
+              <thead>
+                <tr style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }} className="text-left border-b">
+                  <th className="py-2 pr-3 font-black uppercase text-[10px]">Zdroj</th>
+                  <th className="py-2 px-2 font-black uppercase text-[10px] text-right">Získáno 30 d</th>
+                  <th className="py-2 px-2 font-black uppercase text-[10px] text-right">Utraceno 30 d</th>
+                  <th className="py-2 px-2 font-black uppercase text-[10px] text-right">Získáno celkem</th>
+                  <th className="py-2 px-2 font-black uppercase text-[10px] text-right">Utraceno celkem</th>
+                  <th className="py-2 pl-2 font-black uppercase text-[10px] text-right">Počet</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sources.map(s => (
+                  <tr key={s.source} style={{ borderColor: 'var(--border-color)' }} className="border-b last:border-b-0">
+                    <td className="py-2 pr-3 font-bold">{sourceLabel(s.source)}</td>
+                    <td className="py-2 px-2 text-right tabular-nums">{formatNumber(s.earned_30d)}</td>
+                    <td className="py-2 px-2 text-right tabular-nums">{formatNumber(s.spent_30d)}</td>
+                    <td className="py-2 px-2 text-right tabular-nums">{formatNumber(s.earned_total)}</td>
+                    <td className="py-2 px-2 text-right tabular-nums">{formatNumber(s.spent_total)}</td>
+                    <td className="py-2 pl-2 text-right tabular-nums">{formatNumber(s.n)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <h3 className="text-sm font-black uppercase tracking-wider mb-3">Nejčtenější knihy</h3>
+          {reading.top_books.length === 0 ? <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 opacity-70">Zatím nikdo nic nedočetl.</p> : (
+            <ol className="m-0 pl-5 space-y-1.5 text-sm">
+              {reading.top_books.map(b => <li key={b.id}><span className="font-bold">{b.title}</span> <span style={{ color: 'var(--text-muted)' }} className="text-xs">· {b.reads}×</span></li>)}
+            </ol>
+          )}
+          <p style={{ color: 'var(--text-muted)' }} className="text-[11px] m-0 mt-3 opacity-70">Knih v katalogu: {books.total} ({books.paid} placených, {books.auto_assigned} zdarma pro všechny)</p>
+        </Card>
+        <Card>
+          <h3 className="text-sm font-black uppercase tracking-wider mb-3">Nejvíc mincí</h3>
+          <ol className="m-0 pl-5 space-y-1.5 text-sm">
+            {coins.top_holders.map((h, i) => <li key={`${h.email}-${i}`} className="break-all"><span className="font-bold">{h.email}</span> <span style={{ color: 'var(--text-muted)' }} className="text-xs">· {formatNumber(h.coins)}</span></li>)}
+          </ol>
+          <p style={{ color: 'var(--text-muted)' }} className="text-[11px] m-0 mt-3 opacity-70">Hodnoty mimo běžný řád (např. testovací účty) tu snadno poznáš.</p>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+const PAGE_SIZE = 20;
+const ROLE_FILTERS = [['all', 'Všechny role'], ['uživatel', 'Čtenáři'], ['nakladatel', 'Nakladatelé'], ['správce', 'Správci'], ['bez_profilu', 'Bez profilu']];
+const STATUS_FILTERS = [['all', 'Jakýkoliv stav'], ['banned', 'Zablokovaní'], ['unconfirmed', 'Nepotvrzený e-mail'], ['inactive30', 'Neaktivní 30 dní']];
+const SORTS = [['created_desc', 'Nejnovější'], ['created_asc', 'Nejstarší'], ['last_login_desc', 'Naposledy přihlášení'], ['coins_desc', 'Nejvíc mincí'], ['email_asc', 'E-mail A-Z']];
+
+const selectStyle = { backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' };
+const selectClass = 'p-2.5 border rounded-lg text-xs font-bold outline-none cursor-pointer';
+
+const SmallButton = ({ tone = 'ghost', busy = false, disabled, children, ...props }) => {
+  const style = tone === 'danger' ? { backgroundColor: '#dc2626', color: '#fff' } : tone === 'primary' ? { backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' } : { backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' };
+  return (
+    <button {...props} disabled={disabled || busy} style={style} className="px-3 py-2 rounded-lg border-none cursor-pointer text-[11px] font-black uppercase tracking-wider inline-flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
+      {busy && <Loader2 size={12} className="animate-spin" />}{children}
+    </button>
+  );
+};
+
+const AccountDetail = ({ userId, currentUserId, onClose, onChanged }) => {
+  const [detail, setDetail] = useState(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [roleDraft, setRoleDraft] = useState('');
+  const [confirmBan, setConfirmBan] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
+  const load = useCallback(async () => {
+    const { data, error: rpcError } = await supabase.rpc('admin_user_detail', { p_user_id: userId });
+    if (rpcError) { setError(mapAdminError(rpcError)); return; }
+    setError('');
+    setDetail(data);
+    setRoleDraft(data?.profile?.role || '');
+  }, [userId]);
+  useEffect(() => { setDetail(null); setMsg(null); setConfirmBan(false); load(); }, [load]);
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape' && !deleteOpen) onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, deleteOpen]);
+
+  const run = async (call, okText) => {
+    setBusy(true);
+    setMsg(null);
+    const { error: rpcError } = await call();
+    setBusy(false);
+    if (rpcError) { setMsg({ type: 'error', text: mapAdminError(rpcError) }); return false; }
+    setMsg({ type: 'success', text: okText });
+    await load();
+    onChanged?.();
+    return true;
+  };
+
+  const doDelete = async () => {
+    setDeleteError('');
+    setBusy(true);
+    const { error: rpcError } = await supabase.rpc('admin_delete_user', { p_user_id: userId });
+    setBusy(false);
+    if (rpcError) return setDeleteError(mapAdminError(rpcError));
+    setDeleteOpen(false);
+    onChanged?.();
+    onClose();
+  };
+
+  const sendReset = async () => {
+    setBusy(true);
+    setMsg(null);
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(detail.account.email, { redirectTo: `${window.location.origin}/reset-password` });
+    setBusy(false);
+    setMsg(resetError ? { type: 'error', text: 'Odkaz se nepodařilo odeslat: ' + resetError.message } : { type: 'success', text: `Odkaz pro obnovu hesla odeslán na ${detail.account.email}.` });
+  };
+
+  const account = detail?.account;
+  const profile = detail?.profile;
+  const stats = detail?.stats;
+  const isSelf = userId === currentUserId;
+  const isAdminTarget = profile?.role === 'správce';
+  const hasBooks = (stats?.published_books || 0) > 0;
+  const isBanned = !!account?.is_banned;
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex justify-end" onClick={onClose}>
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-label="Detail účtu"
+        style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
+        className="h-full w-full max-w-md border-l shadow-2xl overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }} className="sticky top-0 z-10 flex items-center justify-between px-5 py-3 border-b">
+          <h3 className="text-sm font-black uppercase tracking-widest m-0">Detail účtu</h3>
+          <button type="button" onClick={onClose} aria-label="Zavřít detail" className="bg-transparent border-none cursor-pointer text-current opacity-60 hover:opacity-100 p-1"><X size={20} /></button>
+        </div>
+
+        <div className="p-5 space-y-5">
+          {error && <InlineMessage type="error">{error}</InlineMessage>}
+          {!detail && !error && <div className="py-10 flex justify-center"><Loader2 className="animate-spin opacity-50" /></div>}
+
+          {detail && (
+            <>
+              <div>
+                <p className="text-base font-black m-0 break-all">{account.email}</p>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  <Pill tone="accent">{profile ? ROLE_LABELS[profile.role] || profile.role : 'Bez profilu'}</Pill>
+                  {isBanned && <Pill tone="danger">Zablokován</Pill>}
+                  {!account.email_confirmed_at && <Pill tone="warn">E-mail nepotvrzen</Pill>}
+                  {isSelf && <Pill tone="ok">Tohle jsi ty</Pill>}
+                </div>
+                <dl className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1 text-xs mt-3 m-0">
+                  <dt style={{ color: 'var(--text-muted)' }} className="font-bold">Vytvořen</dt><dd className="m-0 font-semibold">{formatDate(account.created_at)}</dd>
+                  <dt style={{ color: 'var(--text-muted)' }} className="font-bold">Naposledy přihlášen</dt><dd className="m-0 font-semibold">{account.last_sign_in_at ? `${formatDateTime(account.last_sign_in_at)} (${relativeTime(account.last_sign_in_at)})` : 'nikdy'}</dd>
+                  {profile && <><dt style={{ color: 'var(--text-muted)' }} className="font-bold">Mince</dt><dd className="m-0 font-semibold">{formatNumber(profile.coins)}</dd></>}
+                  {profile && <><dt style={{ color: 'var(--text-muted)' }} className="font-bold">Série (streak)</dt><dd className="m-0 font-semibold">{profile.current_streak ?? 0} dní</dd></>}
+                </dl>
+                {!profile && <div className="mt-3"><InlineMessage>Účet zatím nemá profil - založí se, jakmile se poprvé přihlásí.</InlineMessage></div>}
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-center">
+                {[['Přečteno', stats.books_read], ['Zvýraznění', stats.highlights], ['Komentáře', stats.comments], ['Hodnocení', stats.ratings], ['Odemčené', stats.books_active], ['Vydané', stats.published_books]].map(([label, value]) => (
+                  <div key={label} style={{ backgroundColor: 'var(--bg-secondary)' }} className="rounded-lg py-2">
+                    <p className="text-lg font-black m-0 tabular-nums">{value}</p>
+                    <p style={{ color: 'var(--text-muted)' }} className="text-[10px] font-bold uppercase m-0">{label}</p>
+                  </div>
+                ))}
+              </div>
+
+              <section className="space-y-3">
+                <h4 className="text-xs font-black uppercase tracking-wider m-0">Akce</h4>
+                {msg && <InlineMessage type={msg.type}>{msg.text}</InlineMessage>}
+                {isSelf && <InlineMessage>Na vlastním účtu jde jen poslat odkaz pro obnovu hesla. Roli, blokování a mazání může provést jiný správce.</InlineMessage>}
+
+                <div className="flex items-end gap-2 flex-wrap">
+                  <label className="block flex-1 min-w-[140px]">
+                    <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block mb-1">Role</span>
+                    <select aria-label="Role" value={roleDraft} onChange={(e) => setRoleDraft(e.target.value)} disabled={isSelf || !profile || busy} style={selectStyle} className={`${selectClass} w-full disabled:opacity-50`}>
+                      {!profile && <option value="">-</option>}
+                      {Object.entries(ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                  </label>
+                  <SmallButton tone="primary" busy={busy} disabled={isSelf || !profile || roleDraft === profile?.role} onClick={() => run(() => supabase.rpc('admin_set_role', { p_user_id: userId, p_role: roleDraft }), 'Role změněna.')}>
+                    <ShieldCheck size={13} /> Uložit roli
+                  </SmallButton>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <SmallButton busy={busy} onClick={sendReset}><KeyRound size={13} /> Poslat odkaz pro reset hesla</SmallButton>
+                  {isBanned ? (
+                    <SmallButton busy={busy} disabled={isSelf} onClick={() => run(() => supabase.rpc('admin_set_user_banned', { p_user_id: userId, p_banned: false }), 'Účet odblokován.')}><Ban size={13} /> Odblokovat</SmallButton>
+                  ) : !confirmBan ? (
+                    <SmallButton busy={busy} disabled={isSelf || isAdminTarget} onClick={() => setConfirmBan(true)}><Ban size={13} /> Zablokovat</SmallButton>
+                  ) : (
+                    <span className="inline-flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold">Zablokovat a odhlásit?</span>
+                      <SmallButton tone="danger" busy={busy} onClick={async () => { const ok = await run(() => supabase.rpc('admin_set_user_banned', { p_user_id: userId, p_banned: true }), 'Účet zablokován a odhlášen ze zařízení.'); if (ok) setConfirmBan(false); }}>Ano, zablokovat</SmallButton>
+                      <SmallButton disabled={busy} onClick={() => setConfirmBan(false)}>Zrušit</SmallButton>
+                    </span>
+                  )}
+                </div>
+                {isAdminTarget && !isSelf && <p style={{ color: 'var(--text-muted)' }} className="text-[11px] m-0 opacity-80">Účet správce nejde blokovat ani mazat - nejdřív mu změň roli.</p>}
+
+                <div style={{ borderColor: 'rgba(239,68,68,0.35)' }} className="border rounded-lg p-3 space-y-2">
+                  <p className="text-[11px] font-black uppercase tracking-wider text-red-500 m-0">Nebezpečná zóna</p>
+                  <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">Nevratně smaže účet i všechna jeho data (rozečtené knihy, záložky, zvýraznění, hodnocení, komentáře, mince).</p>
+                  {hasBooks && <p className="text-xs font-bold text-amber-600 m-0">Účet má vydané knihy ({stats.published_books}) - napřed je smaž nebo předej jinému autorovi.</p>}
+                  <SmallButton tone="danger" disabled={isSelf || isAdminTarget || hasBooks} onClick={() => { setDeleteError(''); setDeleteOpen(true); }}><Trash2 size={13} /> Smazat účet</SmallButton>
+                </div>
+              </section>
+
+              <section>
+                <h4 className="text-xs font-black uppercase tracking-wider m-0 mb-2">Poslední pohyby mincí</h4>
+                {detail.transactions.length === 0 ? <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 opacity-70">Žádné pohyby.</p> : (
+                  <ul className="m-0 p-0 list-none space-y-1">
+                    {detail.transactions.map((t, i) => (
+                      <li key={i} style={{ borderColor: 'var(--border-color)' }} className="flex items-center justify-between gap-3 text-xs border-b last:border-b-0 py-1.5">
+                        <span className="min-w-0"><span className="font-bold">{sourceLabel(t.source_type)}</span> <span style={{ color: 'var(--text-muted)' }} className="opacity-70">· {formatDateTime(t.created_at)}</span></span>
+                        <span style={{ color: t.amount >= 0 ? '#10b981' : '#ef4444' }} className="font-black tabular-nums shrink-0">{t.amount > 0 ? '+' : ''}{t.amount}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </>
+          )}
+        </div>
+      </aside>
+
+      <TypedConfirm
+        open={deleteOpen}
+        title="Smazat účet natrvalo"
+        description={`Smaže se účet ${account?.email || ''} i všechna jeho data. Zpět to nejde vzít.`}
+        expected={account?.email || ''}
+        confirmLabel="Smazat účet"
+        busy={busy}
+        error={deleteError}
+        onConfirm={doDelete}
+        onCancel={() => setDeleteOpen(false)}
+      />
+    </div>
+  );
+};
+
+export const AccountsTab = ({ currentUserId, preset, onChanged }) => {
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [role, setRole] = useState('all');
+  const [status, setStatus] = useState('all');
+  const [sort, setSort] = useState('created_desc');
+  const [page, setPage] = useState(0);
+  const [result, setResult] = useState({ total: 0, rows: [] });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [selectedId, setSelectedId] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const requestSeq = useRef(0);
+
+  // Přednastavený filtr z Přehledu (např. "účty bez profilu").
+  useEffect(() => {
+    if (!preset) return;
+    setRole(preset.role || 'all');
+    setStatus(preset.status || 'all');
+    setSearchInput(preset.search || '');
+    setSearch(preset.search || '');
+    setPage(0);
+  }, [preset?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const t = setTimeout(() => { setSearch(searchInput); setPage(0); }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  useEffect(() => {
+    // Pořadí odpovědí se nezaručuje: když uživatel píše rychle, pomalejší starší odpověď
+    // nesmí přepsat novější výsledek.
+    const seq = ++requestSeq.current;
+    setLoading(true);
+    (async () => {
+      const { data, error: rpcError } = await supabase.rpc('admin_list_users', { p_search: search, p_role: role, p_status: status, p_sort: sort, p_limit: PAGE_SIZE, p_offset: page * PAGE_SIZE });
+      if (seq !== requestSeq.current) return;
+      if (rpcError) setError(mapAdminError(rpcError));
+      else { setError(''); setResult(data); }
+      setLoading(false);
+    })();
+  }, [search, role, status, sort, page, reloadKey]);
+
+  const changeFilter = (setter) => (e) => { setter(e.target.value); setPage(0); };
+  const pageCount = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
+  const from = result.total === 0 ? 0 : page * PAGE_SIZE + 1;
+  const to = Math.min(result.total, (page + 1) * PAGE_SIZE);
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex flex-wrap gap-2 items-center">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" />
+            <input type="search" aria-label="Hledat účet" placeholder="Hledat podle e-mailu..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} style={selectStyle} className="w-full pl-9 pr-3 py-2.5 border rounded-lg text-sm font-semibold outline-none" />
+          </div>
+          <select aria-label="Filtr role" value={role} onChange={changeFilter(setRole)} style={selectStyle} className={selectClass}>{ROLE_FILTERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+          <select aria-label="Filtr stavu" value={status} onChange={changeFilter(setStatus)} style={selectStyle} className={selectClass}>{STATUS_FILTERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+          <select aria-label="Řazení" value={sort} onChange={changeFilter(setSort)} style={selectStyle} className={selectClass}>{SORTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+        </div>
+      </Card>
+
+      {error && <InlineMessage type="error">{error}</InlineMessage>}
+
+      <Card>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-black uppercase tracking-wider m-0">Účty <span style={{ color: 'var(--text-muted)' }} className="font-bold normal-case tracking-normal">({formatNumber(result.total)})</span></p>
+          {loading && <Loader2 size={14} className="animate-spin opacity-50" />}
+        </div>
+
+        {result.rows.length === 0 && !loading ? (
+          <p style={{ color: 'var(--text-muted)' }} className="text-sm m-0 py-6 text-center opacity-70">Žádný účet neodpovídá filtru.</p>
+        ) : (
+          <ul className="m-0 p-0 list-none divide-y" style={{ borderColor: 'var(--border-color)' }}>
+            {result.rows.map(r => (
+              <li key={r.id}>
+                <button type="button" data-testid="account-row" onClick={() => setSelectedId(r.id)} className="w-full text-left bg-transparent border-none cursor-pointer text-current py-3 px-1 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4 hover:bg-black/5 rounded-lg">
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-bold break-all">{r.email}</span>
+                    <span className="flex flex-wrap gap-1 mt-1">
+                      <Pill tone="accent">{r.has_profile ? ROLE_LABELS[r.role] || r.role : 'Bez profilu'}</Pill>
+                      {r.is_banned && <Pill tone="danger">Zablokován</Pill>}
+                      {!r.email_confirmed && <Pill tone="warn">Nepotvrzen</Pill>}
+                    </span>
+                  </span>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-xs flex sm:block gap-3 sm:text-right sm:w-40 shrink-0">
+                    <span className="block">přihlášen {relativeTime(r.last_sign_in_at)}</span>
+                    <span className="block opacity-80">{formatNumber(r.coins)} mincí · {r.books_read} přečteno</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="flex items-center justify-between gap-3 mt-4 pt-3 border-t" style={{ borderColor: 'var(--border-color)' }}>
+          <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0">Zobrazeno {from}-{to} z {formatNumber(result.total)}</p>
+          <div className="flex items-center gap-2">
+            <SmallButton aria-label="Předchozí strana" disabled={page === 0 || loading} onClick={() => setPage(p => p - 1)}><ChevronLeft size={14} /></SmallButton>
+            <span className="text-xs font-bold tabular-nums">{page + 1} / {pageCount}</span>
+            <SmallButton aria-label="Další strana" disabled={page + 1 >= pageCount || loading} onClick={() => setPage(p => p + 1)}><ChevronRight size={14} /></SmallButton>
+          </div>
+        </div>
+      </Card>
+
+      {selectedId && (
+        <AccountDetail
+          userId={selectedId}
+          currentUserId={currentUserId}
+          onClose={() => setSelectedId(null)}
+          onChanged={() => { setReloadKey(k => k + 1); onChanged?.(); }}
+        />
+      )}
+    </div>
+  );
+};
 
 export const AdminDashboard = () => {
   // --- Základní stavy dat ---
@@ -11,7 +619,10 @@ export const AdminDashboard = () => {
   const [comments, setComments] = useState([]);
   
   // --- Stavy rozhraní (UX) ---
-  const [activeTab, setActiveTab] = useState('books'); // books | users | logs
+  const [activeTab, setActiveTab] = useState('overview'); // overview | accounts | books | homepage | users | logs
+  const { user: adminUser } = useAuth();
+  const [accountsPreset, setAccountsPreset] = useState(null); // filtr předaný z Přehledu do záložky Účty
+  const [bulkGrantOpen, setBulkGrantOpen] = useState(false); // potvrzení hromadného rozdání knihy
   const [globalLoading, setGlobalLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   
@@ -512,13 +1123,20 @@ export const AdminDashboard = () => {
     }
   };
 
-  const assignSelectedBookToAllUsers = async () => {
+  // Rozdání knihy VŠEM účtům je nevratné a ničí její cenu, proto se místo prostého
+  // "OK / Zrušit" musí opsat název knihy (viz TypedConfirm dole).
+  const assignSelectedBookToAllUsers = () => {
     if (!selectedBookId) return alert('Nejprve zvolte knihu z rozevíracího seznamu.');
     const selectedBook = books.find(b => b.id === selectedBookId);
     if (!selectedBook) return;
     if (profiles.length === 0) return alert('V systému nejsou žádní uživatelé.');
-    if (!confirm(`🚨 Opravdu chcete knihu "${selectedBook.title}" IHNED aktivovat VŠEM registrovaným čtenářům?`)) return;
+    setBulkGrantOpen(true);
+  };
 
+  const runBulkGrant = async () => {
+    const selectedBook = books.find(b => b.id === selectedBookId);
+    if (!selectedBook) return setBulkGrantOpen(false);
+    setBulkGrantOpen(false);
     setActionLoading(true);
     try {
       const { data: alreadyHasBook, error: fetchError } = await supabase.from('user_books').select('user_id, id, status').eq('book_id', selectedBookId);
@@ -601,11 +1219,13 @@ export const AdminDashboard = () => {
       </div>
 
       {/* TAB NAVIGACE */}
-      <div className="flex border-b font-black text-xs uppercase tracking-wider space-x-1" style={{ borderColor: 'var(--border-color)' }}>
+      <div className="flex border-b font-black text-xs uppercase tracking-wider space-x-1 overflow-x-auto scrollbar-hide" style={{ borderColor: 'var(--border-color)' }}>
         {[
+          { id: 'overview', label: 'Přehled', icon: <LayoutDashboard size={14} /> },
+          { id: 'accounts', label: 'Účty', icon: <UserCog size={14} /> },
           { id: 'books', label: 'Knihovna & Editace', icon: <Database size={14} /> },
           { id: 'homepage', label: 'Domovská stránka', icon: <Layout size={14} /> },
-          { id: 'users', label: 'Uživatelé & Licence', icon: <Users size={14} /> },
+          { id: 'users', label: 'Licence & odměny', icon: <Users size={14} /> },
           { id: 'logs', label: 'Systémový Syslog', icon: <Terminal size={14} /> }
         ].map(tab => (
           <button
@@ -616,7 +1236,7 @@ export const AdminDashboard = () => {
               borderColor: activeTab === tab.id ? 'var(--border-color)' : 'transparent',
               color: activeTab === tab.id ? 'var(--bg-primary)' : 'var(--text-muted)'
             }}
-            className={`flex items-center gap-2 px-4 py-3 border-t border-x rounded-t-xl transition-all cursor-pointer -mb-[1px]`}
+            className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-3 border-t border-x rounded-t-xl transition-all cursor-pointer -mb-[1px]`}
           >
             {tab.icon} {tab.label}
           </button>
@@ -628,6 +1248,17 @@ export const AdminDashboard = () => {
         <div className="w-full bg-yellow-500 text-black text-center text-xs font-black py-1 rounded animate-pulse uppercase tracking-widest">
           Probíhá zápis do databáze Supabase... Čekejte prosím.
         </div>
+      )}
+
+      {activeTab === 'overview' && (
+        <OverviewTab
+          onOpenAccounts={(preset) => { setAccountsPreset({ ...preset, nonce: Date.now() }); setActiveTab('accounts'); }}
+          onOpenBooks={() => setActiveTab('books')}
+        />
+      )}
+
+      {activeTab === 'accounts' && (
+        <AccountsTab currentUserId={adminUser?.id} preset={accountsPreset} onChanged={refreshData} />
       )}
 
       {/* 2. ZÁLOŽKA: SPRÁVA KNIH */}
@@ -1354,6 +1985,15 @@ export const AdminDashboard = () => {
         </Card>
       )}
 
+      <TypedConfirm
+        open={bulkGrantOpen}
+        title="Rozdat knihu všem"
+        description={`Kniha "${books.find(b => b.id === selectedBookId)?.title || ''}" se okamžitě odemkne ZDARMA všem ${profiles.length} načteným účtům. Její cena tím pro ně přestane platit a zpět to nejde vzít.`}
+        expected={books.find(b => b.id === selectedBookId)?.title || ''}
+        confirmLabel="Rozdat všem"
+        onConfirm={runBulkGrant}
+        onCancel={() => setBulkGrantOpen(false)}
+      />
     </div>
   );
 };
