@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { THEMES } from './theme';
+import { THEMES, initMotionPref } from './theme';
 import { ThemeContext, AuthProvider, ProtectedAdminRoute, ProtectedUserRoute, useAuth } from './contexts/AuthContext';
 import { Navbar } from './components/Navbar';
 import { SettingsModal } from './components/SettingsModal';
@@ -30,6 +30,8 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('jomarid-books-theme') || 'saas');
+
+  useEffect(() => initMotionPref(), []); // omezení pohybu (Nastavení -> Vzhled, nebo nastavení zařízení)
 
   useEffect(() => {
     const vars = THEMES[currentTheme] || THEMES.saas;
