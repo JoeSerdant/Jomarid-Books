@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { BookDetailModal } from '../components/BookDetailModal';
@@ -29,6 +29,18 @@ export const UserLibrary = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('smart');
   const [detailBook, setDetailBook] = useState(null);
+
+  // Výsledek z vyhledávání, který ještě nemám odemčený, sem přijde jako location.state.openBookId
+  // a rovnou se otevře jeho detail (s tlačítkem Koupit).
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const id = location.state?.openBookId;
+    if (!id || loading) return;
+    const target = books.find(b => b.id === id);
+    if (target) setDetailBook(target);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.state, loading, books]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadLibraryData = useCallback(async () => {
     if (!user) return;
