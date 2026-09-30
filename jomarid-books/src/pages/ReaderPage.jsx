@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } fr
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { FONT_FAMILIES, LINE_HEIGHTS, TEXT_WIDTHS } from '../theme';
 import {
   BookMarked, Loader2, Star, X, Settings2, List, Minimize2, Maximize2,
   Play, Pause, Clock, ChevronRight, ChevronLeft, Highlighter, Trash2,
@@ -10,21 +11,6 @@ import {
 // ============================================================================
 // Čtecí nastavení - beze změny oproti dřívější verzi, pořád localStorage.
 // ============================================================================
-const FONT_FAMILIES = {
-  serif:    { label: 'Serifové',    className: 'font-serif' },
-  sans:     { label: 'Bezpatkové',  className: 'font-sans' },
-  readable: { label: 'Čitelné',     className: 'font-sans tracking-wide' },
-};
-const LINE_HEIGHTS = {
-  compact: { label: 'Kompaktní', value: 1.5 },
-  normal:  { label: 'Normální',  value: 1.8 },
-  airy:    { label: 'Vzdušné',   value: 2.2 },
-};
-const TEXT_WIDTHS = {
-  narrow: { label: 'Úzký',    ratio: 0.62 },
-  medium: { label: 'Střední', ratio: 0.72 },
-  wide:   { label: 'Široký',  ratio: 0.82 },
-};
 const AVG_WORDS_PER_MINUTE = 200;
 
 const HIGHLIGHT_COLORS = {
@@ -666,7 +652,7 @@ export const ReaderPage = () => {
   const readingText = paperMode ? '#3b2f1e' : 'var(--text-body)';
 
   return (
-    <div style={{ backgroundColor: readingBg, height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }} className="transition-colors duration-200">
+    <div style={{ backgroundColor: readingBg, height: 'calc(100dvh - var(--navbar-h, 4rem))', display: 'flex', flexDirection: 'column', overflow: 'hidden' }} className="transition-colors duration-200">
 
       <div style={{ backgroundColor: 'var(--border-color)' }} className="shrink-0 h-1 z-40">
         <div style={{ backgroundColor: 'var(--bg-primary)', width: `${liveProgress}%` }} className="h-full transition-all duration-150" />
@@ -684,26 +670,26 @@ export const ReaderPage = () => {
       )}
 
       {!focusMode && (
-        <div className="shrink-0 px-4 pt-4 pb-2 max-w-[100vw]">
-          <div className="border-b pb-4 text-center max-w-2xl mx-auto" style={{ borderColor: 'var(--border-color)' }}>
-            <Link to="/app" className="text-[10px] font-black uppercase tracking-wider no-underline opacity-50 hover:opacity-100 transition-all inline-flex items-center gap-1 mb-3" style={{ color: readingText }}>
+        <div className="shrink-0 px-3 sm:px-4 pt-2 sm:pt-4 pb-1 sm:pb-2 max-w-[100vw]">
+          <div className="border-b pb-2 sm:pb-4 text-center max-w-2xl mx-auto" style={{ borderColor: 'var(--border-color)' }}>
+            <Link to="/app" className="text-[10px] font-black uppercase tracking-wider no-underline opacity-50 hover:opacity-100 transition-all hidden sm:inline-flex items-center gap-1 mb-3" style={{ color: readingText }}>
               ← Zpět do knihovny
             </Link>
-            <h1 style={{ color: readingText }} className="text-xl sm:text-3xl font-black uppercase tracking-tight m-0 truncate">{book.title}</h1>
-            <p className="text-xs uppercase font-bold mt-1 opacity-60 m-0" style={{ color: 'var(--text-muted)' }}>Autor: {book.author_display || book.author}</p>
-            <p style={{ color: 'var(--text-muted)' }} className="text-[11px] mt-2 opacity-70 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+            <h1 style={{ color: readingText }} className="text-base sm:text-3xl font-black uppercase tracking-tight m-0 truncate">{book.title}</h1>
+            <p className="hidden sm:block text-xs uppercase font-bold mt-1 opacity-60 m-0" style={{ color: 'var(--text-muted)' }}>Autor: {book.author_display || book.author}</p>
+            <p style={{ color: 'var(--text-muted)' }} className="text-[11px] mt-1 sm:mt-2 opacity-70 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
               <span className="flex items-center gap-1"><Clock size={11} /> zbývá ~{remainingMinutes} min</span>
               <span>Strana {currentPage} / {totalPages}</span>
             </p>
           </div>
 
-          <div ref={toolbarRef} className="flex items-center justify-center gap-2 relative flex-wrap mt-3 max-w-2xl mx-auto">
+          <div ref={toolbarRef} className="flex items-center justify-center gap-1.5 sm:gap-2 relative flex-wrap mt-2 sm:mt-3 max-w-2xl mx-auto">
             <button
               onClick={() => setShowSettings(v => !v)}
               style={{ borderColor: 'var(--border-color)', backgroundColor: showSettings ? 'var(--bg-primary)' : 'var(--bg-card)', color: showSettings ? 'white' : 'var(--text-body)' }}
               className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
             >
-              <Settings2 size={12} /> Vzhled
+              <Settings2 size={12} /><span className="hidden sm:inline"> Vzhled</span><span className="sr-only sm:hidden">Vzhled</span>
             </button>
 
             {chapters.length > 0 && (
@@ -712,7 +698,7 @@ export const ReaderPage = () => {
                 style={{ borderColor: 'var(--border-color)', backgroundColor: showToc ? 'var(--bg-primary)' : 'var(--bg-card)', color: showToc ? 'white' : 'var(--text-body)' }}
                 className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
               >
-                <List size={12} /> Obsah
+                <List size={12} /><span className="hidden sm:inline"> Obsah</span><span className="sr-only sm:hidden">Obsah</span>
               </button>
             )}
 
@@ -722,7 +708,7 @@ export const ReaderPage = () => {
               className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
               title="Automatické listování"
             >
-              {autoAdvance ? <Pause size={12} /> : <Play size={12} />} Auto
+              {autoAdvance ? <Pause size={12} /> : <Play size={12} />}<span className="hidden sm:inline"> Auto</span><span className="sr-only sm:hidden">Auto</span>
             </button>
 
             <button
@@ -731,7 +717,7 @@ export const ReaderPage = () => {
               className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
               title="Fokus režim (F)"
             >
-              <Maximize2 size={12} /> Fokus
+              <Maximize2 size={12} /><span className="hidden sm:inline"> Fokus</span><span className="sr-only sm:hidden">Fokus</span>
             </button>
 
             <button
@@ -740,7 +726,7 @@ export const ReaderPage = () => {
               className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
               title="Uložit místo (B)"
             >
-              <BookMarked size={12} /> Místo
+              <BookMarked size={12} /><span className="hidden sm:inline"> Místo</span><span className="sr-only sm:hidden">Místo</span>
             </button>
             <button
               onClick={() => setShowBookmarks(v => !v)}
@@ -1002,7 +988,7 @@ export const ReaderPage = () => {
       {/* --- Spodní lišta se šipkami a číslem stránky - hlavní ovládání
           listování, proto viditelná VŽDY, i ve fokus režimu (na rozdíl od
           horní lišty s nastavením/obsahem/záložkami). --- */}
-      <div className="shrink-0 flex items-center justify-center gap-5 py-3">
+      <div className="shrink-0 flex items-center justify-center gap-5 py-2 sm:py-3">
         <button
           onClick={prevPage}
           disabled={currentPage <= 1}
@@ -1025,7 +1011,7 @@ export const ReaderPage = () => {
       </div>
 
       {!focusMode && (
-        <div className="shrink-0 px-4 pb-3 max-w-2xl mx-auto w-full">
+        <div className={`shrink-0 px-4 pb-3 max-w-2xl mx-auto w-full ${currentPage >= totalPages ? '' : 'hidden sm:block'}`}>
           <div style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }} className="border rounded-xl p-3 flex items-center justify-center gap-3 flex-wrap">
             <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider opacity-70">Ohodnotit knihu:</span>
             <div className="flex gap-1">
@@ -1039,7 +1025,7 @@ export const ReaderPage = () => {
               <span style={{ color: 'var(--text-muted)' }} className="text-[10px] opacity-60">({parseFloat(book.avg_rating || 0).toFixed(1)} ⭐, {book.ratings_count})</span>
             )}
           </div>
-          <p style={{ color: 'var(--text-muted)' }} className="text-center text-[10px] opacity-40 mt-2">
+          <p style={{ color: 'var(--text-muted)' }} className="hidden sm:block text-center text-[10px] opacity-40 mt-2">
             Ťukni do krajů pro listování · vyber text pro zvýraznění · mezerník/šipky · B záložka · F fokus
           </p>
         </div>
