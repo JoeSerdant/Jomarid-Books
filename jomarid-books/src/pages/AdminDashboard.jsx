@@ -36,6 +36,7 @@ const SOURCE_LABELS = {
   daily_login: 'Denní přihlášení',
   admin_grant: 'Přidělil admin',
   book_purchase: 'Nákupy knih',
+  book_sale: 'Prodeje knih (autorům)',
   streak_freeze_purchase: 'Streak Freeze',
 };
 const sourceLabel = (sourceType) => {
