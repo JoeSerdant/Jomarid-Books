@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { X, User, ShieldCheck, Palette, Database, Check, Loader2, Download } from 'lucide-react';
+import { X, User, ShieldCheck, Palette, Database, Check, Loader2, Download, BookOpen, RotateCcw } from 'lucide-react';
 import { useAuth, useTheme } from '../contexts/AuthContext';
 import { supabase, verifyPassword, validateNewPassword, mapAuthError } from '../lib/supabase';
 import { BOOK_BADGES } from '../constants/badges';
-import { THEMES, FONT_FAMILIES, LINE_HEIGHTS, TEXT_WIDTHS, FONT_SIZE_RANGE, AUTO_ADVANCE_RANGE, loadReaderPrefs, saveReaderPref } from '../theme';
+import {
+  THEMES, FONT_FAMILIES, LINE_HEIGHTS, TEXT_WIDTHS, ALIGNMENTS, LETTER_SPACINGS, PAGE_MARGINS, PAGE_BREAKS, PAGE_ANIMATIONS, MOTION_OPTIONS,
+  FONT_SIZE_RANGE, AUTO_ADVANCE_RANGE, WPM_RANGE, NIGHT_RANGE,
+  loadReaderPrefs, saveReaderPref, resetReaderPrefs, readerTypography, loadMotionPref, saveMotionPref,
+} from '../theme';
 
 // ---- Sdílené stavební prvky nastavení ----
 const Section = ({ title, description, danger = false, children }) => (
@@ -291,7 +295,7 @@ const SecurityTab = ({ user, onClose }) => {
   );
 };
 
-// ---- Záložka: Vzhled a čtečka ----
+// ---- Záložka: Vzhled ----
 const THEME_OPTIONS = [
   { key: 'saas', label: 'Světlý' },
   { key: 'dark', label: 'Tmavý' },
@@ -319,17 +323,32 @@ const Segmented = ({ options, value, onChange, ariaLabel }) => (
   </div>
 );
 
+const ToggleRow = ({ title, description, checked, onChange, disabled }) => (
+  <div className="flex items-center justify-between gap-4">
+    <div className="min-w-0">
+      <p className="text-sm font-bold m-0">{title}</p>
+      {description && <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 mt-0.5 opacity-80 leading-relaxed">{description}</p>}
+    </div>
+    <Toggle checked={checked} label={title} disabled={disabled} onChange={onChange} />
+  </div>
+);
+
+const RangeRow = ({ label, valueLabel, min, max, step = 1, value, onChange, hint }) => (
+  <div>
+    <div className="flex items-center justify-between mb-1.5">
+      <span className="text-xs font-bold">{label}</span>
+      <span style={{ color: 'var(--text-muted)' }} className="text-xs font-bold">{valueLabel}</span>
+    </div>
+    <input type="range" aria-label={label} min={min} max={max} step={step} value={value} onChange={e => onChange(Number(e.target.value))} className="w-full" style={{ accentColor: 'var(--bg-primary)' }} />
+    {hint && <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 mt-1 opacity-80 leading-relaxed">{hint}</p>}
+  </div>
+);
+
+const Label = ({ children }) => <span className="text-xs font-bold block mb-1.5">{children}</span>;
+
 const AppearanceTab = () => {
   const { currentTheme, changeTheme } = useTheme();
-  const [prefs, setPrefs] = useState(loadReaderPrefs);
-
-  const update = (name, value) => {
-    saveReaderPref(name, value);
-    setPrefs(p => ({ ...p, [name]: value }));
-  };
-
-  const previewBg = prefs.paper ? '#f4ecd8' : 'var(--bg-secondary)';
-  const previewColor = prefs.paper ? '#3b2f1e' : 'var(--text-body)';
+  const [motion, setMotion] = useState(loadMotionPref);
 
   return (
     <div className="space-y-4">
@@ -359,40 +378,99 @@ const AppearanceTab = () => {
         </div>
       </Section>
 
-      <Section title="Výchozí nastavení čtečky" description="Použije se, když otevřeš knihu. Přímo ve čtečce jde všechno dál měnit.">
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs font-bold">Velikost písma</span>
-            <span style={{ color: 'var(--text-muted)' }} className="text-xs font-bold">{prefs.fontSize} px</span>
-          </div>
-          <input type="range" aria-label="Velikost písma" min={FONT_SIZE_RANGE.min} max={FONT_SIZE_RANGE.max} value={prefs.fontSize} onChange={e => update('fontSize', Number(e.target.value))} className="w-full" style={{ accentColor: 'var(--bg-primary)' }} />
-        </div>
-        <div><span className="text-xs font-bold block mb-1.5">Písmo</span><Segmented ariaLabel="Písmo" options={FONT_FAMILIES} value={prefs.fontFamily} onChange={v => update('fontFamily', v)} /></div>
-        <div><span className="text-xs font-bold block mb-1.5">Řádkování</span><Segmented ariaLabel="Řádkování" options={LINE_HEIGHTS} value={prefs.lineHeight} onChange={v => update('lineHeight', v)} /></div>
-        <div><span className="text-xs font-bold block mb-1.5">Tvar stránky</span><Segmented ariaLabel="Tvar stránky" options={TEXT_WIDTHS} value={prefs.textWidth} onChange={v => update('textWidth', v)} /></div>
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-bold m-0">Papírový režim</p>
-            <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 mt-0.5 opacity-80">Teplé pozadí jen pro samotný text.</p>
-          </div>
-          <Toggle checked={prefs.paper} label="Papírový režim" onChange={v => update('paper', v)} />
-        </div>
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs font-bold">Rychlost auto-listování</span>
-            <span style={{ color: 'var(--text-muted)' }} className="text-xs font-bold">{prefs.autoAdvance} s / stránku</span>
-          </div>
-          <input type="range" aria-label="Rychlost auto-listování" min={AUTO_ADVANCE_RANGE.min} max={AUTO_ADVANCE_RANGE.max} value={prefs.autoAdvance} onChange={e => update('autoAdvance', Number(e.target.value))} className="w-full" style={{ accentColor: 'var(--bg-primary)' }} />
-        </div>
-
-        <div
-          data-testid="reader-preview"
-          style={{ backgroundColor: previewBg, color: previewColor, fontSize: `${prefs.fontSize}px`, lineHeight: LINE_HEIGHTS[prefs.lineHeight].value, borderColor: 'var(--border-color)' }}
-          className={`border rounded-xl p-4 ${FONT_FAMILIES[prefs.fontFamily].className}`}
-        >
-          Zbytek už objevíte sami cestou - a čím dál se dostanete, tím víc toho appka odemkne.
-        </div>
+      <Section title="Pohyb a animace" description="Omezení vypne přechody a animace v celé aplikaci (včetně otáčení stránek ve čtečce). Hodí se při nevolnosti z pohybu i na slabších telefonech.">
+        <Segmented ariaLabel="Pohyb a animace" options={MOTION_OPTIONS} value={motion} onChange={v => { saveMotionPref(v); setMotion(v); }} />
+        <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 opacity-80">
+          {motion === 'system' ? 'Řídí se nastavením zařízení („omezit pohyb“).' : motion === 'reduce' ? 'Animace jsou vypnuté.' : 'Animace jsou zapnuté bez ohledu na nastavení zařízení.'}
+        </p>
       </Section>
+    </div>
+  );
+};
+
+// ---- Záložka: Čtečka ----
+const SAMPLE_TEXT = 'Na ranním nebi se pomalu rozhořívala první hvězda. „Dnes půjdeme dál,“ řekla tiše. Nejneobyčejnější na tom všem bylo, že nikdo z nich nepochyboval o tom, že cesta vede správným směrem – a přece se každý z nich ve skrytu duše bál, že nepředstavitelně dlouhá noc teprve začíná.';
+
+const ReaderTab = () => {
+  const [prefs, setPrefs] = useState(loadReaderPrefs);
+  const [resetDone, setResetDone] = useState(false);
+
+  // Změna ze čtečky (rychlé přepínače) nebo z jiné záložky se projeví i tady.
+  useEffect(() => {
+    const sync = () => setPrefs(p => { const n = loadReaderPrefs(); return JSON.stringify(n) === JSON.stringify(p) ? p : n; });
+    window.addEventListener('jomarid-reader-prefs', sync);
+    return () => window.removeEventListener('jomarid-reader-prefs', sync);
+  }, []);
+
+  const update = (name, value) => {
+    setResetDone(false);
+    saveReaderPref(name, value);
+    setPrefs(p => ({ ...p, [name]: value }));
+  };
+  const reset = () => { resetReaderPrefs(); setPrefs(loadReaderPrefs()); setResetDone(true); };
+
+  const typo = readerTypography(prefs);
+  const previewBg = prefs.paper ? '#f4ecd8' : 'var(--bg-secondary)';
+  const previewColor = prefs.paper ? '#3b2f1e' : 'var(--text-body)';
+  const wakeLockSupported = typeof navigator !== 'undefined' && 'wakeLock' in navigator;
+
+  return (
+    <div className="space-y-4">
+      <div
+        data-testid="reader-preview"
+        lang={typo.lang}
+        style={{ backgroundColor: previewBg, color: previewColor, borderColor: 'var(--border-color)', padding: `${Math.round(typo.padY * 0.6)}px ${typo.padX}px`, ...typo.style }}
+        className={`relative overflow-hidden border rounded-xl max-h-44 sm:max-h-56 ${typo.className}`}
+      >
+        {SAMPLE_TEXT}
+        {prefs.nightFilter > 0 && (
+          <span aria-hidden="true" data-testid="night-preview" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', mixBlendMode: 'multiply', backgroundColor: `rgba(255, 130, 30, ${(prefs.nightFilter / 100) * 0.45})` }} />
+        )}
+      </div>
+
+      <Section title="Text" description="Ukázka nahoře se mění podle tvých voleb. Změny se hned uloží a projeví i v otevřené knize.">
+        <RangeRow label="Velikost písma" valueLabel={`${prefs.fontSize} px`} min={FONT_SIZE_RANGE.min} max={FONT_SIZE_RANGE.max} value={prefs.fontSize} onChange={v => update('fontSize', v)} />
+        <div><Label>Písmo</Label><Segmented ariaLabel="Písmo" options={FONT_FAMILIES} value={prefs.fontFamily} onChange={v => update('fontFamily', v)} /></div>
+        <div><Label>Řádkování</Label><Segmented ariaLabel="Řádkování" options={LINE_HEIGHTS} value={prefs.lineHeight} onChange={v => update('lineHeight', v)} /></div>
+        <div><Label>Zarovnání</Label><Segmented ariaLabel="Zarovnání" options={ALIGNMENTS} value={prefs.align} onChange={v => update('align', v)} /></div>
+        <ToggleRow title="Dělení slov" description="Dlouhá slova se na konci řádku dělí pomlčkou (nejlíp s zarovnáním do bloku). Záleží na prohlížeči, zda umí česky." checked={prefs.hyphens} onChange={v => update('hyphens', v)} />
+        <div><Label>Mezery mezi písmeny</Label><Segmented ariaLabel="Mezery mezi písmeny" options={LETTER_SPACINGS} value={prefs.letterSpacing} onChange={v => update('letterSpacing', v)} /></div>
+      </Section>
+
+      <Section title="Stránka">
+        <div><Label>Tvar stránky</Label><Segmented ariaLabel="Tvar stránky" options={TEXT_WIDTHS} value={prefs.textWidth} onChange={v => update('textWidth', v)} /></div>
+        <div><Label>Okraje</Label><Segmented ariaLabel="Okraje" options={PAGE_MARGINS} value={prefs.margin} onChange={v => update('margin', v)} /></div>
+        <div>
+          <Label>Zalamování stránek</Label>
+          <Segmented ariaLabel="Zalamování stránek" options={PAGE_BREAKS} value={prefs.pageBreak} onChange={v => update('pageBreak', v)} />
+          <p data-testid="page-break-hint" style={{ color: 'var(--text-muted)' }} className="text-xs m-0 mt-1.5 opacity-80 leading-relaxed">{PAGE_BREAKS[prefs.pageBreak].hint}</p>
+        </div>
+        <ToggleRow title="Papírový režim" description="Teplé pozadí jen pro samotný text." checked={prefs.paper} onChange={v => update('paper', v)} />
+        <RangeRow label="Noční filtr" valueLabel={prefs.nightFilter === 0 ? 'vypnuto' : `${prefs.nightFilter} %`} min={NIGHT_RANGE.min} max={NIGHT_RANGE.max} step={5} value={prefs.nightFilter} onChange={v => update('nightFilter', v)} hint="Teplý odstín, který šetří oči večer. Zatmaví celou obrazovku čtečky." />
+      </Section>
+
+      <Section title="Listování">
+        <div><Label>Animace otočení stránky</Label><Segmented ariaLabel="Animace otočení stránky" options={PAGE_ANIMATIONS} value={prefs.pageAnim} onChange={v => update('pageAnim', v)} /></div>
+        <ToggleRow title="Listování ťuknutím" description="Levý a pravý okraj stránky listuje, střed přepíná fokus režim." checked={prefs.tapZones} onChange={v => update('tapZones', v)} />
+        <ToggleRow title="Listování přejetím" description="Přejetí prstem doleva nebo doprava." checked={prefs.swipe} onChange={v => update('swipe', v)} />
+        <RangeRow label="Rychlost auto-listování" valueLabel={`${prefs.autoAdvance} s / stránku`} min={AUTO_ADVANCE_RANGE.min} max={AUTO_ADVANCE_RANGE.max} value={prefs.autoAdvance} onChange={v => update('autoAdvance', v)} />
+      </Section>
+
+      <Section title="Informace při čtení">
+        <ToggleRow title="Pruh postupu" description="Tenký pruh nahoře ukazuje, kolik z knihy máš přečteno." checked={prefs.showProgress} onChange={v => update('showProgress', v)} />
+        <ToggleRow title="Zbývající čas a číslo stránky" checked={prefs.showMeta} onChange={v => update('showMeta', v)} />
+        <RangeRow label="Rychlost čtení" valueLabel={`${prefs.wpm} slov / min`} min={WPM_RANGE.min} max={WPM_RANGE.max} step={10} value={prefs.wpm} onChange={v => update('wpm', v)} hint="Podle ní se odhaduje, kolik minut ti do konce knihy zbývá." />
+        <ToggleRow title="Otevírat ve fokus režimu" description="Bez horní lišty, jen text." checked={prefs.startFocus} onChange={v => update('startFocus', v)} />
+      </Section>
+
+      <Section title="Zařízení">
+        <ToggleRow title="Nechat displej svítit při čtení" description={wakeLockSupported ? 'Displej nezhasne, dokud máš otevřenou knihu.' : 'Tenhle prohlížeč to bohužel nepodporuje.'} checked={prefs.wakeLock} disabled={!wakeLockSupported} onChange={v => update('wakeLock', v)} />
+      </Section>
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <ActionButton variant="ghost" onClick={reset}><RotateCcw size={13} className="inline mr-1.5 -mt-0.5" />Obnovit výchozí nastavení čtečky</ActionButton>
+        {resetDone && <Notice type="success">Nastavení čtečky je zpět na výchozí.</Notice>}
+      </div>
     </div>
   );
 };
@@ -520,7 +598,8 @@ const DataTab = ({ user, role, onClose }) => {
 const TABS = [
   { id: 'profile', label: 'Profil', icon: User, needsUser: true },
   { id: 'security', label: 'Zabezpečení', icon: ShieldCheck, needsUser: true },
-  { id: 'appearance', label: 'Vzhled a čtečka', icon: Palette, needsUser: false },
+  { id: 'appearance', label: 'Vzhled', icon: Palette, needsUser: false },
+  { id: 'reader', label: 'Čtečka', icon: BookOpen, needsUser: false },
   { id: 'data', label: 'Data a účet', icon: Database, needsUser: true },
 ];
 
@@ -581,6 +660,7 @@ export const SettingsModal = ({ isOpen, onClose }) => {
             {activeTab === 'profile' && <ProfileTab user={user} role={role} onClose={onClose} />}
             {activeTab === 'security' && <SecurityTab user={user} onClose={onClose} />}
             {activeTab === 'appearance' && <AppearanceTab />}
+            {activeTab === 'reader' && <ReaderTab />}
             {activeTab === 'data' && <DataTab user={user} role={role} onClose={onClose} />}
           </div>
         </div>
