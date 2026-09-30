@@ -262,7 +262,7 @@ export const UserLibrary = () => {
           <div style={{ backgroundColor: 'var(--bg-secondary)' }} className="w-16 h-20 rounded-xl flex items-center justify-center shrink-0">
             <BookOpen size={24} style={{ color: 'var(--bg-primary)' }} className="opacity-70" />
           </div>
-          <div className="flex-1 min-w-0 text-center sm:text-left">
+          <div className="flex-1 min-w-0 w-full sm:w-auto text-center sm:text-left">
             <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wide opacity-60 block mb-1">Pokračovat ve čtení</span>
             <h3 className="font-black text-base uppercase tracking-tight truncate">{continueBook.title}</h3>
             <div style={{ backgroundColor: 'var(--bg-secondary)' }} className="w-full h-1.5 rounded-full overflow-hidden mt-2 mb-1">
