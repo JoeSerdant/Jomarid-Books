@@ -13,6 +13,9 @@ export function AuthProvider({ children }) {
  const [user, setUser] = useState(null);
  const [role, setRole] = useState(null);
  const [loading, setLoading] = useState(true);
+ // true, kdyz uzivatel prisel z odkazu "obnova hesla" (udalost PASSWORD_RECOVERY) -
+ // App ho pak presmeruje na /reset-password, kde si nastavi nove heslo.
+ const [recoveryMode, setRecoveryMode] = useState(false);
 
  async function syncProfile(sessionUser) {
    if (!sessionUser) {
@@ -64,7 +67,9 @@ export function AuthProvider({ children }) {
      syncProfile(session?.user ?? null);
    });
 
-   const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+   const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+     if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
+     if (event === 'SIGNED_OUT') setRecoveryMode(false);
      syncProfile(session?.user ?? null);
    });
 
@@ -82,7 +87,7 @@ export function AuthProvider({ children }) {
  };
 
  return (
-   <AuthContext.Provider value={{ user, role, loading, login, logout, refreshProfile: () => syncProfile(user) }}>
+   <AuthContext.Provider value={{ user, role, loading, login, logout, recoveryMode, clearRecovery: () => setRecoveryMode(false), refreshProfile: () => syncProfile(user) }}>
      {children}
    </AuthContext.Provider>
  );
