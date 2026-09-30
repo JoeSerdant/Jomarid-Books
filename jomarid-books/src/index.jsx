@@ -1,5 +1,57 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App.jsx'
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#f8fafc">
+    <script>
+      /* Nastaví barvu pozadí jeste PRED prvnim vykreslenim, aby se pri nacteni tmaveho motivu
+         neukazal svetly zablesk. App pak doplni vsechny promenne motivu. Hodnoty musi
+         odpovidat src/theme.js. */
+      (function () {
+        var themes = { saas: ["#f8fafc", "#0f172a", "light"], dark: ["#020617", "#f1f5f9", "dark"], emerald: ["#2d1a10", "#f4ebd9", "dark"] };
+        try {
+          var t = themes[localStorage.getItem("jomarid-books-theme")] || themes.saas, r = document.documentElement;
+          r.style.setProperty("--bg-body", t[0]);
+          r.style.setProperty("--text-body", t[1]);
+          r.style.colorScheme = t[2];
+          document.querySelector('meta[name="theme-color"]').setAttribute("content", t[0]);
+        } catch (e) {}
+      })();
+    </script>
+    <title>Jomarid Books|Knihovna v Kapse</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        // Zde můžeš v budoucnu přidat své barvy, pokud budeš chtít
+      }
+      // Vypne vývojářské hlášky v konzoli
+      console.warn = (function(oldWarn) {
+        return function(msg) {
+          if (typeof msg === 'string' && msg.includes('cdn.tailwindcss.com')) return;
+          oldWarn.apply(console, arguments);
+        };
+      })(console.warn);
+    </script>
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />)
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+      /* Pozadi bere promenne motivu z <html> (nastavuje je App). Drive tu bylo pevne bg-slate-50 na body,
+         takze plocha mimo obsah (napr. pri oddaleni na mobilu) byla vzdy svetla, at byl motiv jakykoliv. */
+      html { background-color: var(--bg-body, #f8fafc); }
+      body { font-family: 'Inter', system-ui, sans-serif; background-color: var(--bg-body, #f8fafc); color: var(--text-body, #0f172a); min-height: 100vh; min-height: 100dvh; }
+      #root { min-height: 100vh; min-height: 100dvh; }
+      /* Skryje posuvnik, ale prvek zustane scrollovatelny (zalozky admina, atd.). */
+      .scrollbar-hide::-webkit-scrollbar { display: none; }
+      .scrollbar-hide { scrollbar-width: none; -ms-overflow-style: none; }
+      h1, h2, h3, h4, .font-heading { font-family: 'Plus Jakarta Sans', sans-serif; }
+    </style>
+  </head>
+  <body class="antialiased overflow-x-hidden">
+    <div id="root"></div>
+    <script type="module" src="./src/index.jsx"></script>
+  </body>
+</html>
