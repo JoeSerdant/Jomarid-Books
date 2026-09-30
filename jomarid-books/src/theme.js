@@ -42,3 +42,52 @@ export const THEMES = {
    '--text-badge': '#a3cfc0',
  }
 };
+
+// Sdílené volby čtečky - používá je ReaderPage i Nastavení, aby se seznamy
+// voleb a klíče v localStorage nikdy nerozjely (stejný princip jako leveling.js).
+export const FONT_FAMILIES = {
+  serif:    { label: 'Serifové',    className: 'font-serif' },
+  sans:     { label: 'Bezpatkové',  className: 'font-sans' },
+  readable: { label: 'Čitelné',     className: 'font-sans tracking-wide' },
+};
+export const LINE_HEIGHTS = {
+  compact: { label: 'Kompaktní', value: 1.5 },
+  normal:  { label: 'Normální',  value: 1.8 },
+  airy:    { label: 'Vzdušné',   value: 2.2 },
+};
+export const TEXT_WIDTHS = {
+  narrow: { label: 'Úzký',    ratio: 0.62 },
+  medium: { label: 'Střední', ratio: 0.72 },
+  wide:   { label: 'Široký',  ratio: 0.82 },
+};
+
+export const READER_STORAGE = {
+  fontSize: 'reader_font_size',
+  fontFamily: 'reader_font_family',
+  lineHeight: 'reader_line_height',
+  textWidth: 'reader_text_width',
+  paper: 'reader_paper_mode',
+  autoAdvance: 'reader_autoadvance_secs',
+};
+export const READER_DEFAULTS = { fontSize: 18, fontFamily: 'serif', lineHeight: 'normal', textWidth: 'medium', paper: false, autoAdvance: 25 };
+export const FONT_SIZE_RANGE = { min: 14, max: 28 };
+export const AUTO_ADVANCE_RANGE = { min: 8, max: 60 };
+
+const pick = (map, key, fallback) => (key && map[key] ? key : fallback);
+
+export const loadReaderPrefs = () => {
+  const num = (k, d) => parseInt(localStorage.getItem(k), 10) || d;
+  return {
+    fontSize: Math.min(FONT_SIZE_RANGE.max, Math.max(FONT_SIZE_RANGE.min, num(READER_STORAGE.fontSize, READER_DEFAULTS.fontSize))),
+    fontFamily: pick(FONT_FAMILIES, localStorage.getItem(READER_STORAGE.fontFamily), READER_DEFAULTS.fontFamily),
+    lineHeight: pick(LINE_HEIGHTS, localStorage.getItem(READER_STORAGE.lineHeight), READER_DEFAULTS.lineHeight),
+    textWidth: pick(TEXT_WIDTHS, localStorage.getItem(READER_STORAGE.textWidth), READER_DEFAULTS.textWidth),
+    paper: localStorage.getItem(READER_STORAGE.paper) === '1',
+    autoAdvance: Math.min(AUTO_ADVANCE_RANGE.max, Math.max(AUTO_ADVANCE_RANGE.min, num(READER_STORAGE.autoAdvance, READER_DEFAULTS.autoAdvance))),
+  };
+};
+
+export const saveReaderPref = (name, value) => {
+  const stored = name === 'paper' ? (value ? '1' : '0') : String(value);
+  localStorage.setItem(READER_STORAGE[name], stored);
+};
