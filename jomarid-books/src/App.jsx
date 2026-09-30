@@ -1,18 +1,30 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { THEMES } from './theme';
-import { ThemeContext, AuthProvider, ProtectedAdminRoute, ProtectedUserRoute } from './contexts/AuthContext';
+import { ThemeContext, AuthProvider, ProtectedAdminRoute, ProtectedUserRoute, useAuth } from './contexts/AuthContext';
 import { Navbar } from './components/Navbar';
 import { SettingsModal } from './components/SettingsModal';
 import { SearchModal } from './components/SearchModal';
 import { HomePage } from './pages/HomePage';
-import { LoginPage } from './pages/LoginPage';
+import { LoginPage, ResetPasswordPage } from './pages/LoginPage';
 import { UserLibrary } from './pages/UserLibrary';
 import { ReaderPage } from './pages/ReaderPage';
 import { PublisherDashboard } from './pages/PublisherDashboard';
 import { UserStats } from './pages/UserStats';
 import { GamesHub, GamePage } from './pages/Games';
 import { AdminDashboard } from './pages/AdminDashboard';
+
+// Po kliknutí na odkaz "obnova hesla" musí uživatel skončit na stránce pro nové heslo,
+// i kdyby ho Supabase (kvůli nepovolené redirect URL) vrátil na úvodní stránku.
+export const RecoveryRedirect = () => {
+  const { recoveryMode } = useAuth();
+  const location = useLocation();
+  if (recoveryMode && location.pathname !== '/reset-password') return <Navigate to="/reset-password" replace />;
+  return null;
+};
+
+// Motivy, ktere maji tmave pozadi - podle toho se nastavi color-scheme (nativni posuvniky, formularove prvky).
+const DARK_THEMES = ['dark', 'emerald'];
 
 export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -21,8 +33,12 @@ export default function App() {
 
   useEffect(() => {
     const vars = THEMES[currentTheme] || THEMES.saas;
-    const b = document.body;
-    Object.keys(vars).forEach(k => b.style.setProperty(k, vars[k]));
+    // Promenne patri na <html>, ne na <body>: pozadi <html> je to, co vidi uzivatel mimo obsah
+    // (oddaleni na mobilu, pretazeni). Na body by ho <html> nevidelo a zustalo by svetle.
+    const root = document.documentElement;
+    Object.keys(vars).forEach(k => root.style.setProperty(k, vars[k]));
+    root.style.colorScheme = DARK_THEMES.includes(currentTheme) ? 'dark' : 'light';
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', vars['--bg-body']);
   }, [currentTheme]);
 
   return (
@@ -30,12 +46,14 @@ export default function App() {
       <ThemeContext.Provider value={{ currentTheme, changeTheme: (t) => { setCurrentTheme(t); localStorage.setItem('jomarid-books-theme', t); } }}>
         <Router>
           <div style={{ background: 'var(--bg-body)', color: 'var(--text-body)' }} className="min-h-screen flex flex-col font-sans antialiased transition-all duration-200">
+            <RecoveryRedirect />
             <Navbar onOpenSearch={() => setIsSearchOpen(true)} onOpenSettings={() => setIsSettingsOpen(true)} />
 
             <main className="flex-1">
               <Routes>
                 <Route path="/" element={<HomePage />} />
                 <Route path="/login" element={<LoginPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
 
                 {/* Chráněné uživatelské sekce */}
                 <Route path="/app" element={<ProtectedUserRoute><UserLibrary /></ProtectedUserRoute>} />
