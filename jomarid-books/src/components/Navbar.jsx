@@ -207,7 +207,8 @@ export const Navbar = ({ onOpenSearch, onOpenSettings }) => {
             onClick={onOpenSettings}
             style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
             className="p-2 border rounded-xl cursor-pointer hover:brightness-95 active:scale-95 transition-all flex items-center justify-center"
-            title="Nastavení vzhledu"
+            title="Nastavení"
+            aria-label="Nastavení"
           >
             <Settings size={16} />
           </button>
