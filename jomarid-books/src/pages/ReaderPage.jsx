@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } fr
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { FONT_FAMILIES, LINE_HEIGHTS, TEXT_WIDTHS } from '../theme';
+import { FONT_FAMILIES, LINE_HEIGHTS, TEXT_WIDTHS, ALIGNMENTS, PAGE_BREAKS, loadReaderPrefs, saveReaderPref, readerTypography } from '../theme';
 import {
   BookMarked, Loader2, Star, X, Settings2, List, Minimize2, Maximize2,
   Play, Pause, Clock, ChevronRight, ChevronLeft, Highlighter, Trash2,
@@ -11,7 +11,6 @@ import {
 // ============================================================================
 // Čtecí nastavení - beze změny oproti dřívější verzi, pořád localStorage.
 // ============================================================================
-const AVG_WORDS_PER_MINUTE = 200;
 
 const HIGHLIGHT_COLORS = {
   amber:   { label: 'Žlutá',   bg: 'rgba(245, 158, 11, 0.35)' },
@@ -70,50 +69,203 @@ function splitContentWithHighlights(content, highlights) {
 // že se zobrazuje) - tady appka sama binárně hledá přesný zlom, takže žádná
 // nesrovnalost mezi "kolik stránek appka myslí, že existuje" a tím, co se
 // doopravdy vykreslí, nemůže vzniknout.
-function computePageBoundaries(content, measureNode, pageHeight) {
-  if (!content || !measureNode || pageHeight <= 0) return [{ start: 0, end: content?.length || 0 }];
-  const totalLen = content.length;
-  const pages = [];
-  let start = 0;
-  let estimate = 1500;
+// <<PAGINATOR-START>>
+// ============================================================================
+// STRÁNKOVÁNÍ (v2)
+//
+// Dřív se pro každou stránku vykresloval ve skrytém uzlu celý ZBYTEK knihy
+// (jen aby se zjistilo, jestli už nejsme na konci) a pak se hledalo půlením,
+// takže čas rostl s druhou mocninou délky knihy (300 kB = 13 s, na telefonu
+// minuty) a UI po celou dobu stálo. Navíc se zalamovalo jen na mezeře, takže
+// 95 % stránek skončilo uprostřed věty.
+//
+// Teď: na každou stránku se vykreslí jen malý výřez textu (o něco delší než
+// stránka), prohlížeč ho rozloží JEDNOU a první řádek, který se už nevejde,
+// se najde půlením přes Range.getBoundingClientRect() - bez dalšího
+// vykreslování. Zlom se pak posune na konec věty / odstavce, pokud je blízko.
+// ============================================================================
+export const BREAK_MODES = { word: 0, sentence: 0.22, paragraph: 0.3 };
 
-  const fits = (end) => {
-    measureNode.textContent = content.slice(start, end);
-    return measureNode.scrollHeight <= pageHeight;
+const isWs = (ch) => ch === ' ' || ch === '\n' || ch === '\t' || ch === '\r'; // NBSP záměrně NENÍ mezera - nezalamuje se
+const CLOSERS = '"\'”“»’)]';
+const SENTENCE_START = /[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ0-9„"“«(\[–—\-]/;
+
+// Vybere, kde stránka skutečně skončí. rawEnd = největší index, kam se ještě vejdou řádky.
+export function chooseBreak(content, start, rawEnd, mode = 'sentence') {
+  if (rawEnd >= content.length) return content.length;
+  // 1) nikdy nelámat uprostřed slova
+  let wordEnd = rawEnd;
+  if (!(isWs(content[rawEnd]) || isWs(content[rawEnd - 1]))) {
+    let i = rawEnd;
+    while (i > start && !isWs(content[i - 1])) i--;
+    if (i > start) wordEnd = i; // u extrémně dlouhého "slova" bez mezery se nechá původní řez
+  }
+  const windowFrac = BREAK_MODES[mode] ?? 0;
+  if (!windowFrac) return wordEnd;
+  // Okno, ve kterém se hledá konec věty: podíl stránky, ale aspoň ~150 znaků (na úzké stránce je 22 % kratší než
+  // průměrná věta) a nejvýš 35 % stránky, aby dole nezůstávala velká prázdná plocha.
+  const pageLen = wordEnd - start;
+  const windowLen = Math.min(Math.floor(pageLen * 0.35), Math.max(Math.floor(pageLen * windowFrac), 150));
+  const lo = Math.max(start + 1, wordEnd - windowLen);
+  // 2) odstavec (jen v režimu "paragraph")
+  if (mode === 'paragraph') {
+    for (let i = wordEnd - 1; i >= lo; i--) if (content[i] === '\n') return i;
+  }
+  // 3) konec věty: . ! ? … (+ uvozovky/závorky) a pak mezera a velké písmeno/číslice/uvozovka
+  //    (malé písmeno za tečkou = zkratka typu "atd. pak", takže to není konec věty)
+  for (let i = wordEnd - 1; i >= lo; i--) {
+    const ch = content[i];
+    if (ch !== '.' && ch !== '!' && ch !== '?' && ch !== '…') continue;
+    let j = i + 1;
+    while (j < content.length && CLOSERS.includes(content[j])) j++;
+    if (j > wordEnd) continue;
+    if (j < content.length && !isWs(content[j])) continue;
+    let k = j;
+    while (k < content.length && isWs(content[k])) k++;
+    if (k >= content.length || SENTENCE_START.test(content[k])) return j;
+  }
+  return wordEnd;
+}
+
+// Vytvoří "stránkovač" nad skrytým měřicím uzlem (stejná šířka, písmo, řádkování,
+// white-space: pre-wrap jako viditelná stránka). nextPage() vrací další stránku.
+export function createPaginator(content, node, pageHeight, { breakMode = 'sentence' } = {}) {
+  const total = content.length;
+  const textNode = document.createTextNode('');
+  node.textContent = '';
+  node.appendChild(textNode);
+  const range = document.createRange();
+  let pos = 0;
+  let avg = 1500;
+
+  // Range.getBoundingClientRect() vrací rámeček ZNAKŮ, ne řádku: nahoře i dole je ještě půl mezery mezi řádky.
+  // Prohlížeč ale ořezává podle spodku ŘÁDKU, takže stránka, jejíž poslední znaky se vejdou a řádek ne, by
+  // přetekla (naměřeno: u některých výšek plochy přetékala skoro každá třetí stránka). Proto se k spodku znaků
+  // přičte rozdíl (výška řádku - výška znaků) / 2.
+  const lineHeightPx = parseFloat(getComputedStyle(node).lineHeight);
+  textNode.nodeValue = 'Mgjpq';
+  range.setStart(textNode, 0);
+  range.setEnd(textNode, 5);
+  const glyphH = range.getBoundingClientRect().height;
+  const slack = Number.isFinite(lineHeightPx) && glyphH > 0
+    ? Math.min(lineHeightPx, Math.max(-glyphH * 0.25, (lineHeightPx - glyphH) / 2))
+    : 0;
+  const limit = pageHeight + 0.5 - slack; // 0,5 px tolerance: prohlížeč zaokrouhluje výšku a méně než pixel neořízne
+
+  const finish = (start, end) => {
+    let e = end;
+    while (e > start + 1 && isWs(content[e - 1])) e--; // stránka nekončí mezerou/novým řádkem
+    pos = end;
+    avg = Math.max(200, Math.round(avg * 0.6 + (e - start) * 0.4));
+    return { start, end: e };
   };
 
-  let guard = 0;
-  while (start < totalLen && guard++ < 5000) {
-    if (fits(totalLen)) {
-      pages.push({ start, end: totalLen });
-      break;
+  const nextPage = () => {
+    while (pos < total && isWs(content[pos])) pos++; // stránka nezačíná mezerou/novým řádkem
+    if (pos >= total) return null;
+    const start = pos;
+    let take = Math.min(total - start, Math.max(300, Math.ceil(avg * 1.3)));
+    for (;;) {
+      textNode.nodeValue = content.slice(start, start + take);
+      const top0 = node.getBoundingClientRect().top;
+      range.setStart(textNode, 0);
+      const bottom = (k) => { range.setEnd(textNode, k); return range.getBoundingClientRect().bottom - top0; };
+      if (bottom(take) <= limit) {
+        if (start + take >= total) return finish(start, total);
+        take = Math.min(total - start, take * 2); // stránka je delší než výřez - zvětšit a znovu
+        continue;
+      }
+      let lo = 1, hi = take - 1, best = 1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (bottom(mid) <= limit) { best = mid; lo = mid + 1; } else hi = mid - 1;
+      }
+      return finish(start, chooseBreak(content, start, start + best, breakMode));
     }
+  };
 
-    let hi = Math.min(totalLen, start + Math.max(50, estimate));
-    while (hi < totalLen && fits(hi)) {
-      hi = Math.min(totalLen, hi + Math.max(50, estimate));
-    }
-    let lo = start + 1;
-    let best = lo;
-    while (lo <= hi) {
-      const mid = Math.floor((lo + hi) / 2);
-      if (fits(mid)) { best = mid; lo = mid + 1; } else { hi = mid - 1; }
-    }
-    // Nelámat uprostřed slova, pokud to jde - couvnout k poslednímu mezerníku.
-    let boundary = best;
-    if (boundary < totalLen) {
-      const lastSpace = content.lastIndexOf(' ', boundary);
-      if (lastSpace > start) boundary = lastSpace + 1;
-    }
-    if (boundary <= start) boundary = best; // pojistka proti nekonečné smyčce u extrémně dlouhého "slova"
-
-    pages.push({ start, end: boundary });
-    estimate = Math.max(200, boundary - start);
-    start = boundary;
-  }
-
-  return pages.length > 0 ? pages : [{ start: 0, end: totalLen }];
+  return { nextPage, get position() { return pos; }, total };
 }
+
+export function paginateSync(content, node, pageHeight, opts = {}) {
+  const p = createPaginator(content, node, pageHeight, opts);
+  const pages = [];
+  for (let page = p.nextPage(); page; page = p.nextPage()) pages.push(page);
+  return pages.length ? pages : [{ start: 0, end: content.length }];
+}
+
+// Stejné, ale po dávkách, s průběhem a možností zrušit. Mezi dávkami se uvolní hlavní vlákno, aby šlo
+// ovládat stránku; dávka je ale nutné držet delší (40 ms), protože každé uvolnění dovolí prohlížeči
+// vykreslit celý snímek a na pomalém telefonu to stojí víc než samotná práce (naměřeno: 12 ms dávky
+// = 11 s, 40 ms dávky = zlomek). Uvolňuje se přes MessageChannel (setTimeout má po pár opakováních
+// minimální prodlevu 4 ms), a hned, jakmile čeká vstup uživatele (Chrome: isInputPending).
+const yieldToBrowser = () => new Promise(resolve => {
+  const ch = new MessageChannel();
+  ch.port1.onmessage = () => { ch.port1.close(); resolve(); };
+  ch.port2.postMessage(0);
+});
+export async function paginateAll(content, node, pageHeight, { breakMode, isCancelled, onProgress, budgetMs = 40 } = {}) {
+  const p = createPaginator(content, node, pageHeight, { breakMode });
+  const pages = [];
+  const input = typeof navigator !== 'undefined' && navigator.scheduling && navigator.scheduling.isInputPending ? navigator.scheduling : null;
+  let t = performance.now();
+  for (let page = p.nextPage(); page; page = p.nextPage()) {
+    pages.push(page);
+    const now = performance.now();
+    if (now - t > budgetMs || (input && now - t > 8 && input.isInputPending())) {
+      if (isCancelled && isCancelled()) return null;
+      if (onProgress) onProgress(pages, p.position / Math.max(1, p.total));
+      await yieldToBrowser();
+      t = performance.now();
+    }
+  }
+  return pages.length ? pages : [{ start: 0, end: content.length }];
+}
+
+// Stránka, na které leží daný znak (půlením). Znak v "mezeře" mezi stránkami patří té následující.
+export function pageIndexForOffset(pages, offset) {
+  if (!pages.length) return 0;
+  let lo = 0, hi = pages.length - 1, ans = 0;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (pages[mid].start <= offset) { ans = mid; lo = mid + 1; } else hi = mid - 1;
+  }
+  return pages[ans].end <= offset && ans < pages.length - 1 ? ans + 1 : ans;
+}
+// <<PAGINATOR-END>>
+
+// --- Mezipaměť stránkování: stejná kniha + stejné nastavení + stejná velikost plochy = stejné stránky, takže
+// se při dalším otevření nic nepočítá. Platnost hlídá podpis (délka a otisk textu, velikost plochy, nastavení)
+// a navíc kontrola, že se zobrazená stránka opravdu vejde (viz níže) - když ne, mezipaměť se zahodí.
+const PAGE_CACHE_KEY = 'jomarid-page-cache-v1';
+const PAGE_CACHE_MAX = 6;
+const quickHash = (s) => {
+  let h = s.length;
+  const step = Math.max(1, Math.floor(s.length / 64));
+  for (let i = 0; i < s.length; i += step) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+};
+export const pageCacheSig = (bookId, content, w, h, typoKey) => `${bookId}|${content.length}|${quickHash(content)}|${w}x${h}|${typoKey}`;
+const loadPageCache = () => { try { const v = JSON.parse(localStorage.getItem(PAGE_CACHE_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } };
+export const readPageCache = (sig, contentLength) => {
+  const hit = loadPageCache().find(e => e && e.sig === sig && typeof e.data === 'string');
+  if (!hit) return null;
+  try {
+    const pages = hit.data.split(',').map(x => { const [a, b] = x.split('.'); return { start: parseInt(a, 36), end: parseInt(b, 36) }; });
+    let prevEnd = 0;
+    for (const p of pages) { if (!(p.start >= prevEnd && p.end > p.start && p.end <= contentLength)) return null; prevEnd = p.end; }
+    return pages.length ? pages : null;
+  } catch { return null; }
+};
+export const writePageCache = (sig, pages) => {
+  if (pages.length < 3) return;
+  try {
+    const rest = loadPageCache().filter(e => e && e.sig !== sig);
+    const entry = { sig, t: Date.now(), data: pages.map(p => p.start.toString(36) + '.' + p.end.toString(36)).join(',') };
+    localStorage.setItem(PAGE_CACHE_KEY, JSON.stringify([entry, ...rest].slice(0, PAGE_CACHE_MAX)));
+  } catch { /* plné úložiště apod. - mezipaměť je jen urychlení */ }
+};
+export const dropPageCache = (sig) => { try { localStorage.setItem(PAGE_CACHE_KEY, JSON.stringify(loadPageCache().filter(e => e && e.sig !== sig))); } catch { /* nevadí */ } };
 
 // Spočítá absolutní pozici v PŮVODNÍM textu z DOM uzlu + offsetu uvnitř něj -
 // funguje bez ohledu na to, kolik <mark> prvků mezi tím leží (projde všechny
@@ -139,18 +291,41 @@ export const ReaderPage = () => {
   const [initialScroll, setInitialScroll] = useState(0);
   const [liveProgress, setLiveProgress] = useState(0);
 
-  const [fontSize, setFontSize] = useState(() => parseInt(localStorage.getItem('reader_font_size'), 10) || 18);
-  const [fontFamilyKey, setFontFamilyKey] = useState(() => localStorage.getItem('reader_font_family') || 'serif');
-  const [lineHeightKey, setLineHeightKey] = useState(() => localStorage.getItem('reader_line_height') || 'normal');
-  const [textWidthKey, setTextWidthKey] = useState(() => localStorage.getItem('reader_text_width') || 'medium');
-  const [paperMode, setPaperMode] = useState(() => localStorage.getItem('reader_paper_mode') === '1');
+  // Nastavení čtečky sdílí Nastavení (ozubené kolečko) i tahle stránka: obojí čte a zapisuje stejné klíče
+  // a změna z jednoho místa se hned projeví i v druhém (událost jomarid-reader-prefs).
+  const [prefs, setPrefs] = useState(loadReaderPrefs);
+  const setPref = useCallback((name, value) => {
+    saveReaderPref(name, value);
+    setPrefs(p => (p[name] === value ? p : { ...p, [name]: value }));
+  }, []);
+  useEffect(() => {
+    const sync = () => setPrefs(p => { const n = loadReaderPrefs(); return JSON.stringify(n) === JSON.stringify(p) ? p : n; });
+    window.addEventListener('jomarid-reader-prefs', sync);
+    return () => window.removeEventListener('jomarid-reader-prefs', sync);
+  }, []);
+  const fontSize = prefs.fontSize;
+  const fontFamilyKey = prefs.fontFamily;
+  const lineHeightKey = prefs.lineHeight;
+  const textWidthKey = prefs.textWidth;
+  const paperMode = prefs.paper;
+  const autoAdvanceSeconds = prefs.autoAdvance;
+  const setFontSize = (v) => setPref('fontSize', typeof v === 'function' ? v(prefs.fontSize) : v);
+  const setFontFamilyKey = (v) => setPref('fontFamily', v);
+  const setLineHeightKey = (v) => setPref('lineHeight', v);
+  const setTextWidthKey = (v) => setPref('textWidth', v);
+  const setPaperMode = (v) => setPref('paper', typeof v === 'function' ? v(prefs.paper) : v);
+  const setAutoAdvanceSeconds = (v) => setPref('autoAdvance', v);
+  const typo = readerTypography(prefs);
+  const typoRef = useRef(typo);
+  typoRef.current = typo;
+  // Co všechno mění rozložení textu, a tedy vyžaduje přepočet stránek.
+  const typoKey = JSON.stringify([prefs.fontSize, prefs.fontFamily, prefs.lineHeight, prefs.textWidth, prefs.align, prefs.hyphens, prefs.letterSpacing, prefs.margin, prefs.pageBreak]);
 
   const [showSettings, setShowSettings] = useState(false);
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showToc, setShowToc] = useState(false);
-  const [focusMode, setFocusMode] = useState(false);
+  const [focusMode, setFocusMode] = useState(() => loadReaderPrefs().startFocus);
   const [autoAdvance, setAutoAdvance] = useState(false);
-  const [autoAdvanceSeconds, setAutoAdvanceSeconds] = useState(() => parseInt(localStorage.getItem('reader_autoadvance_secs'), 10) || 25);
 
   const [bookmarks, setBookmarks] = useState([]);
   const [myRating, setMyRating] = useState(0);
@@ -162,6 +337,8 @@ export const ReaderPage = () => {
   const [noteDraft, setNoteDraft] = useState('');
 
   const [currentPage, setCurrentPage] = useState(1);
+  const currentPageRef = useRef(1);
+  currentPageRef.current = currentPage;
 
   const hasBeenMarkedReadRef = useRef(false);
   const hadExistingRowRef = useRef(false);
@@ -173,12 +350,6 @@ export const ReaderPage = () => {
   const suppressTapRef = useRef(false);
   const pendingSaveRef = useRef(null);
 
-  useEffect(() => { localStorage.setItem('reader_font_size', fontSize); }, [fontSize]);
-  useEffect(() => { localStorage.setItem('reader_font_family', fontFamilyKey); }, [fontFamilyKey]);
-  useEffect(() => { localStorage.setItem('reader_line_height', lineHeightKey); }, [lineHeightKey]);
-  useEffect(() => { localStorage.setItem('reader_text_width', textWidthKey); }, [textWidthKey]);
-  useEffect(() => { localStorage.setItem('reader_paper_mode', paperMode ? '1' : '0'); }, [paperMode]);
-  useEffect(() => { localStorage.setItem('reader_autoadvance_secs', autoAdvanceSeconds); }, [autoAdvanceSeconds]);
 
   useEffect(() => {
     const fetchBookData = async () => {
@@ -249,68 +420,154 @@ export const ReaderPage = () => {
   const remainingMinutes = useMemo(() => {
     if (wordCount === 0) return 0;
     const remainingWords = Math.round(wordCount * (1 - liveProgress / 100));
-    return Math.max(1, Math.round(remainingWords / AVG_WORDS_PER_MINUTE));
-  }, [wordCount, liveProgress]);
+    return Math.max(1, Math.round(remainingWords / prefs.wpm));
+  }, [wordCount, liveProgress, prefs.wpm]);
 
-  // --- Stránkování: appka sama změří ve skryté kopii (stejná šířka, písmo,
-  // řádkování jako viditelná stránka), kolik znaků se do jedné výšky vejde,
-  // a podle toho spočítá přesné hranice VŠECH stránek předem. Oproti CSS
-  // sloupcům (dvakrát se to rozešlo s tím, co appka myslela, že je vidět)
-  // tohle appka sama plně řídí - vždycky se vykresluje jen přesně JEDNA
-  // stránka, nic jiného v DOM ani neexistuje, takže nemá co "prokouknout".
+  // --- Stránkování (v2, viz createPaginator výše). Spočítá se po dávkách, takže se UI nezasekne, a čtenář
+  // vidí stránku, na které skončil, jakmile je spočítaná (netřeba čekat na celou knihu). Po změně písma
+  // apod. zůstane na stejném místě textu (podle znaku, ne podle čísla stránky).
   const [pages, setPages] = useState([{ start: 0, end: 0 }]);
-  const [paginating, setPaginating] = useState(false);
+  const [paginating, setPaginating] = useState(true);
+  const [pagesComplete, setPagesComplete] = useState(false);
   const measureRef = useRef(null);
   const totalPages = pages.length;
+  const isLastPage = pagesComplete && currentPage >= totalPages;
+  const paginateTokenRef = useRef(0);
+  const anchorOffsetRef = useRef(null); // začátek stránky, kterou čtenář právě čte
+  const pendingJumpRef = useRef(null);  // skok (záložka/obsah) za hranici dosud spočítaných stránek
+  const lastSizeRef = useRef({ w: 0, h: 0 });
+  const dirRef = useRef(1);
+  const progressTextRef = useRef(null); // procenta přípravy se píšou přímo do DOM - překreslovat kvůli nim celou čtečku každých 40 ms by stránkování zpomalilo několikanásobně
+  const sigRef = useRef('');
+  const fromCacheRef = useRef(false); // aktuální stránky pochází z mezipaměti (pak se hlídá, že se opravdu vejdou)
+  const forceRef = useRef(false);
+  const trimRef = useRef(0);
+  const typoKeyRef = useRef('');
+  typoKeyRef.current = typoKey;
 
   const recomputePages = useCallback(() => {
     const container = containerRef.current;
-    const measureNode = measureRef.current;
-    if (!container || !measureNode || !book?.content) return;
-    const innerWidth = container.clientWidth - 48; // odpovídá 24px+24px vnitřnímu odsazení stránky
-    const innerHeight = container.clientHeight - 56; // odpovídá 28px+28px
+    const node = measureRef.current;
+    const content = book?.content;
+    if (!container || !node || !content) return;
+    const { padX, padY } = typoRef.current;
+    // Zlomkové rozměry (clientHeight zaokrouhluje na celé pixely a o půl pixelu se pak stránka nevejde).
+    // trimRef = pojistka: když se zobrazená stránka přesto nevejde, příště se počítá o pár pixelů nižší.
+    const box = container.getBoundingClientRect();
+    const innerWidth = box.width - 2 * padX;
+    const innerHeight = box.height - 2 * padY - trimRef.current;
     if (innerWidth <= 0 || innerHeight <= 0) return;
+    lastSizeRef.current = { w: container.clientWidth, h: container.clientHeight };
 
-    setPaginating(true);
-    measureNode.style.width = `${innerWidth}px`;
-    // Necháme prohlížeč nejdřív doopravdy vykreslit novou šířku měřicího uzlu,
-    // než na něm začneme měřit - jinak by první měření mohlo číst starou šířku.
-    requestAnimationFrame(() => {
-      const newPages = computePageBoundaries(book.content, measureNode, innerHeight);
-      setPages(newPages);
+    const token = ++paginateTokenRef.current;
+    const cancelled = () => token !== paginateTokenRef.current;
+    const anchor = anchorOffsetRef.current ?? Math.floor((initialScroll / 100) * content.length);
+    node.style.width = `${innerWidth}px`;
+    const sig = pageCacheSig(id, content, innerWidth, innerHeight, typoKeyRef.current);
+    sigRef.current = sig;
+    const cached = forceRef.current ? null : readPageCache(sig, content.length);
+    forceRef.current = false;
+    if (cached) {
+      fromCacheRef.current = true;
+      setPages(cached);
+      setCurrentPage(pageIndexForOffset(cached, anchor) + 1);
       setPaginating(false);
+      setPagesComplete(true);
+      return;
+    }
+    fromCacheRef.current = false;
+    setPaginating(true);
+    setPagesComplete(false);
+    if (progressTextRef.current) progressTextRef.current.textContent = '...';
+    const fontsReady = (document.fonts && document.fonts.ready) || Promise.resolve();
+    fontsReady.then(() => {
+      if (cancelled()) return;
+      requestAnimationFrame(async () => {
+        if (cancelled()) return;
+        let revealed = false;
+        let lastPush = 0;
+        const reveal = (pgs) => {
+          revealed = true;
+          setPages(pgs.slice());
+          setCurrentPage(pageIndexForOffset(pgs, anchor) + 1);
+          setPaginating(false);
+        };
+        const result = await paginateAll(content, node, innerHeight, {
+          breakMode: typoRef.current.breakMode,
+          isCancelled: cancelled,
+          onProgress: (pgs) => {
+            if (!revealed) {
+              if (pgs[pgs.length - 1].end > anchor) reveal(pgs);
+              else if (progressTextRef.current) progressTextRef.current.textContent = `... ${Math.min(99, Math.round(100 * pgs[pgs.length - 1].end / Math.max(1, anchor)))} %`;
+            }
+            else if (performance.now() - lastPush > 800) { lastPush = performance.now(); setPages(pgs.slice()); }
+          },
+        });
+        if (!result || cancelled()) return;
+        setPages(result);
+        if (!revealed) setCurrentPage(pageIndexForOffset(result, anchor) + 1);
+        setPaginating(false);
+        setPagesComplete(true);
+        writePageCache(sig, result);
+        const jump = pendingJumpRef.current;
+        if (jump != null) { pendingJumpRef.current = null; setCurrentPage(pageIndexForOffset(result, jump) + 1); }
+      });
     });
-  }, [book?.content]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [book?.content, initialScroll, id]);
 
   useLayoutEffect(() => {
     if (loading || !book) return;
+    if (!book.content) { setPaginating(false); setPagesComplete(true); return; }
+    trimRef.current = 0;
     recomputePages();
-    const ro = new ResizeObserver(() => recomputePages());
+    let timer = null;
+    // Jen když se OPRAVDU změnila velikost plochy (ResizeObserver hlásí i první měření a drobné posuny
+    // při schovávání lišty prohlížeče na telefonu).
+    const onResize = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const c = containerRef.current;
+        if (!c || (c.clientWidth === lastSizeRef.current.w && c.clientHeight === lastSizeRef.current.h)) return;
+        recomputePages();
+      }, 200);
+    };
+    const ro = new ResizeObserver(onResize);
     if (containerRef.current) ro.observe(containerRef.current);
-    window.addEventListener('resize', recomputePages);
+    window.addEventListener('resize', onResize);
+    const recomputeNow = () => recomputePages(); // dočtené webové písmo může změnit šířku textu
+    if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', recomputeNow);
     return () => {
+      clearTimeout(timer);
       ro.disconnect();
-      window.removeEventListener('resize', recomputePages);
+      window.removeEventListener('resize', onResize);
+      if (document.fonts && document.fonts.removeEventListener) document.fonts.removeEventListener('loadingdone', recomputeNow);
+      paginateTokenRef.current++; // rozpočítané stránkování se zahodí
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, book, fontSize, fontFamilyKey, lineHeightKey, textWidthKey, focusMode]);
+  }, [loading, book, typoKey, focusMode]);
 
-  // Po přepočtu (např. po změně velikosti písma) se appka snaží zůstat na
-  // ZHRUBA stejném místě v textu (podle procenta), ne nutně na stejné
-  // stránce - přesně tak, jak se chovají i skutečné čtečky.
-  const lastPercentRef = useRef(0);
-  useEffect(() => { lastPercentRef.current = liveProgress; }, [liveProgress]);
-  const didSetInitialRef = useRef(false);
+  // Pojistka: nic se nesmí uříznout. Kdyby se zobrazená stránka (z mezipaměti i čerstvě spočítaná, třeba kvůli
+  // neobvyklému písmu) přesto nevešla, zahodí se mezipaměť a stránky se spočítají znovu o trochu nižší.
+  useLayoutEffect(() => {
+    if (paginating) return;
+    const el = contentRef.current;
+    if (!el) return;
+    const over = el.scrollHeight - el.clientHeight;
+    if (over > 1 && trimRef.current < 40) {
+      trimRef.current += Math.max(2, Math.ceil(over) + 1);
+      fromCacheRef.current = false;
+      dropPageCache(sigRef.current);
+      forceRef.current = true;
+      recomputePages();
+    }
+  }, [currentPage, pages, paginating]);
+
+  // Kde čtenář je (začátek stránky) - po přepočtu se vrátí na stejné místo textu.
   useEffect(() => {
-    if (pages.length <= 1 && pages[0]?.end === 0) return; // ještě nedopočítáno
-    const targetPercent = didSetInitialRef.current ? lastPercentRef.current : initialScroll;
-    didSetInitialRef.current = true;
-    const targetOffset = (targetPercent / 100) * (book?.content?.length || 0);
-    let pageIdx = pages.findIndex(p => targetOffset >= p.start && targetOffset < p.end);
-    if (pageIdx === -1) pageIdx = targetPercent >= 100 ? pages.length - 1 : 0;
-    setCurrentPage(pageIdx + 1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pages]);
+    const pg = pages[currentPage - 1];
+    if (!paginating && pg && pg.end > 0) anchorOffsetRef.current = pg.start;
+  }, [currentPage, pages, paginating]);
 
   const persistPosition = useCallback((percent, isReadNow) => {
     if (!user || !id) return;
@@ -349,18 +606,19 @@ export const ReaderPage = () => {
   // celého textu) - stejná 0-100 škála, jakou appka používala i dřív u
   // scrollování, takže žádná změna DB schématu není potřeba.
   useEffect(() => {
-    if (!book?.content || pages.length === 0) return;
+    if (!book?.content || paginating || pages.length === 0 || pages[0].end === 0) return;
     const page = pages[currentPage - 1];
     if (!page) return;
     const percent = book.content.length > 0 ? Math.min(100, (page.start / book.content.length) * 100) : 0;
     setLiveProgress(percent);
-    if (currentPage >= totalPages) hasBeenMarkedReadRef.current = true;
+    if (isLastPage) hasBeenMarkedReadRef.current = true;
     persistPosition(percent, hasBeenMarkedReadRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, pages]);
+  }, [currentPage, pages, paginating, pagesComplete]);
 
   const goToPage = useCallback((pageNum) => {
-    setCurrentPage(p => Math.min(totalPages, Math.max(1, pageNum)));
+    dirRef.current = pageNum >= currentPageRef.current ? 1 : -1;
+    setCurrentPage(Math.min(totalPages, Math.max(1, pageNum)));
   }, [totalPages]);
 
   const nextPage = useCallback(() => goToPage(currentPage + 1), [goToPage, currentPage]);
@@ -368,11 +626,12 @@ export const ReaderPage = () => {
 
   const goToPercent = useCallback((percent) => {
     if (!book?.content) return;
-    const targetOffset = (percent / 100) * book.content.length;
-    let pageIdx = pages.findIndex(p => targetOffset >= p.start && targetOffset < p.end);
-    if (pageIdx === -1) pageIdx = percent >= 100 ? pages.length - 1 : 0;
-    setCurrentPage(pageIdx + 1);
-  }, [book?.content, pages]);
+    const target = Math.floor((percent / 100) * book.content.length);
+    const covered = pages[pages.length - 1]?.end ?? 0;
+    // cíl leží za dosud spočítanými stránkami - po dopočítání se na něj skočí
+    if (!pagesComplete && target >= covered) { pendingJumpRef.current = target; setCurrentPage(pages.length); return; }
+    setCurrentPage(pageIndexForOffset(pages, target) + 1);
+  }, [book?.content, pages, pagesComplete]);
 
   const currentScrollPercent = useCallback(() => liveProgress, [liveProgress]);
 
@@ -594,8 +853,8 @@ export const ReaderPage = () => {
     const adx = Math.abs(dx), ady = Math.abs(dy);
 
     if (adx < 10 && ady < 10) {
-      handleTapNavigation(t.clientX);
-    } else if (adx > 50 && adx > ady * 1.5) {
+      if (prefs.tapZones) handleTapNavigation(t.clientX);
+    } else if (prefs.swipe && adx > 50 && adx > ady * 1.5) {
       if (dx < 0) nextPage(); else prevPage();
     }
   };
@@ -613,8 +872,24 @@ export const ReaderPage = () => {
   const handleContainerClick = (e) => {
     if (suppressTapRef.current) { suppressTapRef.current = false; return; }
     if (window.getSelection()?.toString()) return;
-    handleTapNavigation(e.clientX);
+    if (prefs.tapZones) handleTapNavigation(e.clientX);
   };
+
+  // --- Displej nezhasne, dokud se čte (Screen Wake Lock; nepodporuje každý prohlížeč, pak se nic neděje).
+  useEffect(() => {
+    if (!prefs.wakeLock || typeof navigator === 'undefined' || !('wakeLock' in navigator)) return;
+    let lock = null;
+    const acquire = async () => {
+      try { if (document.visibilityState === 'visible') lock = await navigator.wakeLock.request('screen'); } catch { /* prohlížeč nepovolil */ }
+    };
+    acquire();
+    const onVisible = () => { if (document.visibilityState === 'visible') acquire(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      if (lock && lock.release) lock.release().catch(() => {});
+    };
+  }, [prefs.wakeLock]);
 
   // --- Klik mimo panel (vzhled/obsah/záložky) ho zavře.
   useEffect(() => {
@@ -650,13 +925,24 @@ export const ReaderPage = () => {
   const textWidth = TEXT_WIDTHS[textWidthKey] || TEXT_WIDTHS.medium;
   const readingBg = paperMode ? '#f4ecd8' : 'var(--bg-body)';
   const readingText = paperMode ? '#3b2f1e' : 'var(--text-body)';
+  // Dokud se stránky dopočítávají, celkový počet je jen odhad (podle toho, jak daleko v textu už jsou).
+  const coveredEnd = pages[totalPages - 1]?.end || 0;
+  const estimatedTotal = pagesComplete || coveredEnd <= 0 ? totalPages : Math.max(totalPages, Math.round(totalPages * book.content.length / coveredEnd));
+  const totalLabel = pagesComplete ? totalPages : `~${estimatedTotal}`;
+  const animClass = prefs.pageAnim === 'fade' ? 'reader-anim-fade' : prefs.pageAnim === 'slide' ? (dirRef.current >= 0 ? 'reader-anim-next' : 'reader-anim-prev') : '';
 
   return (
     <div style={{ backgroundColor: readingBg, height: 'calc(100dvh - var(--navbar-h, 4rem))', display: 'flex', flexDirection: 'column', overflow: 'hidden' }} className="transition-colors duration-200">
 
-      <div style={{ backgroundColor: 'var(--border-color)' }} className="shrink-0 h-1 z-40">
-        <div style={{ backgroundColor: 'var(--bg-primary)', width: `${liveProgress}%` }} className="h-full transition-all duration-150" />
-      </div>
+      {prefs.nightFilter > 0 && (
+        <div aria-hidden="true" data-testid="night-filter" style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 35, mixBlendMode: 'multiply', backgroundColor: `rgba(255, 130, 30, ${(prefs.nightFilter / 100) * 0.45})` }} />
+      )}
+
+      {prefs.showProgress && (
+        <div style={{ backgroundColor: 'var(--border-color)' }} className="shrink-0 h-1 z-40">
+          <div style={{ backgroundColor: 'var(--bg-primary)', width: `${liveProgress}%` }} className="h-full transition-all duration-150" />
+        </div>
+      )}
 
       {focusMode && (
         <button
@@ -677,10 +963,12 @@ export const ReaderPage = () => {
             </Link>
             <h1 style={{ color: readingText }} className="text-base sm:text-3xl font-black uppercase tracking-tight m-0 truncate">{book.title}</h1>
             <p className="hidden sm:block text-xs uppercase font-bold mt-1 opacity-60 m-0" style={{ color: 'var(--text-muted)' }}>Autor: {book.author_display || book.author}</p>
-            <p style={{ color: 'var(--text-muted)' }} className="text-[11px] mt-1 sm:mt-2 opacity-70 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-              <span className="flex items-center gap-1"><Clock size={11} /> zbývá ~{remainingMinutes} min</span>
-              <span>Strana {currentPage} / {totalPages}</span>
-            </p>
+            {prefs.showMeta && (
+              <p style={{ color: 'var(--text-muted)' }} className="text-[11px] mt-1 sm:mt-2 opacity-70 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+                <span className="flex items-center gap-1"><Clock size={11} /> zbývá ~{remainingMinutes} min</span>
+                <span>Strana {currentPage} / {totalLabel}</span>
+              </p>
+            )}
           </div>
 
           <div ref={toolbarRef} className="flex items-center justify-center gap-1.5 sm:gap-2 relative flex-wrap mt-2 sm:mt-3 max-w-2xl mx-auto">
@@ -782,6 +1070,27 @@ export const ReaderPage = () => {
                     ))}
                   </div>
                 </div>
+                <div>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block mb-2">Zarovnání textu</span>
+                  <div className="flex gap-1.5">
+                    {Object.entries(ALIGNMENTS).map(([key, val]) => (
+                      <button key={key} onClick={() => setPref('align', key)} style={{ backgroundColor: prefs.align === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: prefs.align === key ? 'white' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[10px] font-bold">
+                        {val.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block mb-2">Zalamování stránek</span>
+                  <div className="flex gap-1.5">
+                    {Object.entries(PAGE_BREAKS).map(([key, val]) => (
+                      <button key={key} onClick={() => setPref('pageBreak', key)} style={{ backgroundColor: prefs.pageBreak === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: prefs.pageBreak === key ? 'white' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[10px] font-bold">
+                        {val.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 <div className="flex items-center justify-between">
                   <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider">Papírový režim</span>
@@ -859,22 +1168,22 @@ export const ReaderPage = () => {
           }}
         >
           <div
+            key={currentPage}
             ref={contentRef}
-            className={`select-text ${fontFamily.className}`}
+            lang={typo.lang}
+            className={`select-text ${typo.className} ${paginating ? '' : animClass}`}
             style={{
+              ...typo.style,
               width: '100%',
               height: '100%',
-              padding: '28px 24px',
+              padding: `${typo.padY}px ${typo.padX}px`,
               boxSizing: 'border-box',
               color: readingText,
-              fontSize: `${fontSize}px`,
-              lineHeight: lineHeight.value,
-              whiteSpace: 'pre-wrap',
               overflow: 'hidden',
             }}
           >
             {paginating ? (
-              <span style={{ opacity: 0.4 }}>Připravuji stránky...</span>
+              <span style={{ opacity: 0.4 }}>Připravuji stránky<span ref={progressTextRef}>...</span></span>
             ) : contentSegments.length > 0 ? contentSegments.map(seg => (
               seg.type === 'highlight' ? (
                 <mark
@@ -895,17 +1204,15 @@ export const ReaderPage = () => {
           <div
             ref={measureRef}
             aria-hidden="true"
-            className={fontFamily.className}
+            lang={typo.lang}
+            className={typo.className}
             style={{
+              ...typo.style,
               position: 'fixed',
               top: 0,
               left: '-9999px',
               visibility: 'hidden',
               height: 'auto',
-              fontSize: `${fontSize}px`,
-              lineHeight: lineHeight.value,
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'normal',
             }}
           />
 
@@ -998,7 +1305,7 @@ export const ReaderPage = () => {
           <ChevronLeft size={18} />
         </button>
         <span style={{ color: readingText }} className="text-xs font-black tabular-nums min-w-[64px] text-center">
-          {currentPage} / {totalPages}
+          {currentPage} / {totalLabel}
         </span>
         <button
           onClick={nextPage}
@@ -1011,7 +1318,7 @@ export const ReaderPage = () => {
       </div>
 
       {!focusMode && (
-        <div className={`shrink-0 px-4 pb-3 max-w-2xl mx-auto w-full ${currentPage >= totalPages ? '' : 'hidden sm:block'}`}>
+        <div className={`shrink-0 px-4 pb-3 max-w-2xl mx-auto w-full ${isLastPage ? '' : 'hidden sm:block'}`}>
           <div style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }} className="border rounded-xl p-3 flex items-center justify-center gap-3 flex-wrap">
             <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider opacity-70">Ohodnotit knihu:</span>
             <div className="flex gap-1">
