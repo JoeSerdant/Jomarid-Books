@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -57,6 +57,18 @@ export const Navbar = ({ onOpenSearch, onOpenSettings }) => {
     };
   }, [user?.id]);
 
+  // Vyska navigace se predava zbytku appky pres --navbar-h (napr. ctecka tim vi, kolik mista ma).
+  const navRef = useRef(null);
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    const apply = () => document.documentElement.style.setProperty('--navbar-h', `${el.getBoundingClientRect().height}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const renderRoleBadge = () => {
     if (role === 'správce') {
       return (
@@ -81,6 +93,7 @@ export const Navbar = ({ onOpenSearch, onOpenSettings }) => {
 
   return (
     <nav 
+      ref={navRef}
       style={{ 
         backgroundColor: 'var(--bg-card)', 
         borderColor: 'var(--border-color)',
@@ -88,13 +101,13 @@ export const Navbar = ({ onOpenSearch, onOpenSettings }) => {
       }} 
       className="sticky top-0 z-40 w-full border-b transition-all duration-200"
     >
-      <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+      <div className="max-w-6xl mx-auto px-3 sm:px-4 grid grid-cols-[auto_minmax(0,1fr)] sm:grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 sm:gap-x-4">
         
-        {/* LOGO */}
-        <div className="flex items-center gap-6">
+        {/* LOGO + ODKAZY (na telefonu druhý řádek pod logem a účtem) */}
+        <>
           <Link 
             to="/" 
-            className="no-underline flex items-center gap-2 group"
+            className="col-start-1 row-start-1 h-14 sm:h-16 no-underline flex items-center gap-2 group"
           >
             <div className="w-8 h-8 rounded-lg bg-[var(--bg-primary)] flex items-center justify-center text-white font-black shadow-sm group-hover:scale-105 transition-transform">
               J
@@ -109,42 +122,42 @@ export const Navbar = ({ onOpenSearch, onOpenSettings }) => {
 
           {/* ODKAZY */}
           {user && (
-            <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto scrollbar-hide">
+            <div style={{ borderColor: 'var(--border-color)' }} className="col-span-2 row-start-2 sm:col-span-1 sm:col-start-2 sm:row-start-1 min-w-0 flex items-stretch sm:items-center justify-around sm:justify-start gap-1 sm:gap-2 border-t sm:border-t-0 py-1 sm:py-0">
               <Link 
                 to="/app" 
                 style={{ color: 'var(--text-body)' }}
-                className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all"
+                className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all"
               >
                 <Library size={14} className="opacity-70" />
-                <span className="hidden md:inline">Knihovna</span>
+                <span className="text-[9px] leading-none sm:hidden md:inline md:text-xs md:leading-normal">Knihovna</span>
               </Link>
               
               <Link 
                 to="/stats" 
                 style={{ color: 'var(--text-body)' }}
-                className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all"
+                className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all"
               >
                 <BarChart3 size={14} className="opacity-70" />
-                <span className="hidden md:inline">Statistiky</span>
+                <span className="text-[9px] leading-none sm:hidden md:inline md:text-xs md:leading-normal">Statistiky</span>
               </Link>
 
               <Link 
                 to="/games" 
                 style={{ color: 'var(--text-body)' }}
-                className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all text-purple-600 dark:text-purple-400"
+                className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all text-purple-600 dark:text-purple-400"
               >
                 <Gamepad2 size={14} className="opacity-80 animate-pulse" />
-                <span className="hidden md:inline">Hry</span>
+                <span className="text-[9px] leading-none sm:hidden md:inline md:text-xs md:leading-normal">Hry</span>
               </Link>
 
               {role === 'nakladatel' && (
                 <Link 
                   to="/publisher" 
                   style={{ color: 'var(--text-body)' }}
-                  className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all text-emerald-600 dark:text-emerald-400"
+                  className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all text-emerald-600 dark:text-emerald-400"
                 >
                   <Compass size={14} className="opacity-80" />
-                  <span className="hidden md:inline">Studio</span>
+                  <span className="text-[9px] leading-none sm:hidden md:inline md:text-xs md:leading-normal">Studio</span>
                 </Link>
               )}
 
@@ -152,18 +165,18 @@ export const Navbar = ({ onOpenSearch, onOpenSettings }) => {
                 <Link 
                   to="/admin" 
                   style={{ color: 'var(--text-body)' }}
-                  className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all text-amber-600 dark:text-amber-400"
+                  className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all text-amber-600 dark:text-amber-400"
                 >
                   <Shield size={14} className="opacity-80" />
-                  <span className="hidden md:inline">Admin</span>
+                  <span className="text-[9px] leading-none sm:hidden md:inline md:text-xs md:leading-normal">Admin</span>
                 </Link>
               )}
             </div>
           )}
-        </div>
+        </>
 
         {/* PRAVÁ STRANA */}
-        <div className="flex items-center gap-2">
+        <div className="col-start-2 sm:col-start-3 row-start-1 justify-self-end h-14 sm:h-16 flex items-center gap-1.5 sm:gap-2">
           {user && (
             <div 
               style={{ 
@@ -171,7 +184,7 @@ export const Navbar = ({ onOpenSearch, onOpenSettings }) => {
                 borderColor: 'var(--border-color)', 
                 color: 'var(--text-badge)' 
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-black shadow-sm"
+              className="shrink-0 flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl border text-xs font-black shadow-sm"
               title="Tvoje Jomarid Coins"
             >
               <Coins size={14} className="text-amber-500 fill-amber-500/20" />
