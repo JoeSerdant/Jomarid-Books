@@ -1,8 +1,22 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from 'tailwindcss';
+import autoprefixer from 'autoprefixer';
 
 export default defineConfig({
   plugins: [react()],
+
+  // Tailwind se kompiluje při sestavení (dřív se za běhu stahoval z CDN, což je jen pro vývoj:
+  // zpomalovalo to první vykreslení a ukázalo se nastylované až po načtení skriptu).
+  // Konfigurace je tady, aby nebyl potřeba další soubor; direktivy @tailwind jsou v index.html.
+  css: {
+    postcss: {
+      plugins: [
+        tailwindcss({ content: ['./index.html', './src/**/*.{js,jsx}'] }),
+        autoprefixer(),
+      ],
+    },
+  },
 
   esbuild: {
     keepNames: true,
