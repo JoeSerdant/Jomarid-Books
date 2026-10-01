@@ -82,7 +82,123 @@ const Toggle = ({ checked, onChange, disabled, label }) => (
 // ---- Záložka: Profil ----
 const ROLE_LABELS = { 'uživatel': 'Čtenář', nakladatel: 'Nakladatel', 'správce': 'Správce' };
 
+const USERNAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{1,18}[A-Za-z0-9]$/;
+const USERNAME_ERRORS = {
+  username_invalid: 'Jméno musí mít 3-20 znaků: písmena a-z bez diakritiky, číslice, tečka, podtržítko nebo pomlčka (na začátku a na konci jen písmeno nebo číslice).',
+  username_reserved: 'Tohle jméno je rezervované. Zvol jiné.',
+  username_taken: 'Tohle jméno už někdo používá.',
+};
+const USERNAME_HINTS = {
+  same: 'Tohle je tvoje současné jméno.',
+  checking: 'Zjišťuju, jestli je volné...',
+  available: 'Jméno je volné.',
+  taken: USERNAME_ERRORS.username_taken,
+  reserved: USERNAME_ERRORS.username_reserved,
+  invalid: 'Zatím neplatné: 3-20 znaků, a-z bez diakritiky, číslice, tečka, podtržítko, pomlčka.',
+  error: 'Dostupnost se nepodařilo zjistit. Zkus to za chvíli.',
+};
+
+// Uživatelské jméno: unikátní, vidí ho ostatní (např. v žebříčku). Měnit jde jednou za 7 dní.
+const UsernameSection = ({ profile, onSaved }) => {
+  const current = profile.username || '';
+  const [value, setValue] = useState(current);
+  const [check, setCheck] = useState('same');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const trimmed = value.trim();
+
+  useEffect(() => {
+    if (trimmed === current) { setCheck('same'); return undefined; }
+    if (!USERNAME_RE.test(trimmed)) { setCheck(trimmed ? 'invalid' : 'same'); return undefined; }
+    setCheck('checking');
+    let alive = true;
+    const t = setTimeout(async () => {
+      const { data, error } = await supabase.rpc('username_available', { p_username: trimmed });
+      if (!alive) return;
+      setCheck(error ? 'error' : data?.available ? 'available' : (data?.problem || 'taken'));
+    }, 400);
+    return () => { alive = false; clearTimeout(t); };
+  }, [trimmed, current]);
+
+  const save = async (e) => {
+    e.preventDefault();
+    setMsg(null);
+    setBusy(true);
+    const { data, error } = await supabase.rpc('set_username', { p_username: trimmed });
+    setBusy(false);
+    if (error) {
+      const m = String(error.message || '');
+      if (m.includes('username_cooldown')) {
+        const when = error.hint ? new Date(error.hint).toLocaleDateString('cs-CZ') : null;
+        return setMsg({ type: 'error', text: `Jméno jde měnit jednou za 7 dní.${when ? ` Znovu to půjde ${when}.` : ''}` });
+      }
+      const code = Object.keys(USERNAME_ERRORS).find(k => m.includes(k));
+      return setMsg({ type: 'error', text: code ? USERNAME_ERRORS[code] : 'Uložení se nepovedlo. Zkus to znovu.' });
+    }
+    onSaved(data?.username || trimmed);
+    setValue(data?.username || trimmed);
+    setMsg({ type: 'success', text: 'Jméno je uložené. Další změnu půjde udělat za 7 dní.' });
+  };
+
+  if (!('username' in profile)) {
+    return (
+      <Section title="Uživatelské jméno" description="Takhle tě vidí ostatní čtenáři.">
+        <Notice type="info">Uživatelská jména se zapnou po aktualizaci databáze.</Notice>
+      </Section>
+    );
+  }
+
+  const tone = check === 'available' ? '#10b981' : (check === 'same' || check === 'checking') ? 'var(--text-muted)' : '#ef4444';
+  return (
+    <Section title="Uživatelské jméno" description="Takhle tě vidí ostatní - například v žebříčku. Ukáže se i u tvých knih, pokud nemáš krycí jméno.">
+      <form onSubmit={save} className="space-y-3">
+        <Field label="Jméno (3-20 znaků)">
+          <TextInput value={value} onChange={e => setValue(e.target.value)} maxLength={20} autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-describedby="username-hint" />
+        </Field>
+        <p id="username-hint" aria-live="polite" style={{ color: tone }} className="text-xs font-bold m-0 min-h-[16px]">{USERNAME_HINTS[check]}</p>
+        {msg && <Notice type={msg.type}>{msg.text}</Notice>}
+        <ActionButton type="submit" busy={busy} disabled={check !== 'available'}>Uložit jméno</ActionButton>
+      </form>
+    </Section>
+  );
+};
+
+// Krycí jméno nakladatele: u jeho knih se čtenářům ukáže místo uživatelského jména.
+const PenNameSection = ({ profile, onSaved }) => {
+  const [value, setValue] = useState(profile.pen_name || '');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const saved = profile.pen_name || '';
+
+  const save = async (pen) => {
+    setMsg(null);
+    setBusy(true);
+    const { data, error } = await supabase.rpc('set_pen_name', { new_pen_name: pen });
+    setBusy(false);
+    if (error) return setMsg({ type: 'error', text: error.message || 'Uložení se nepovedlo.' });
+    onSaved(data?.pen_name || null);
+    setValue(data?.pen_name || '');
+    setMsg({ type: 'success', text: pen ? 'Krycí jméno je uložené a promítlo se do všech tvých knih.' : 'Krycí jméno je zrušené, u knih se ukazuje tvoje uživatelské jméno.' });
+  };
+
+  return (
+    <Section title="Krycí jméno (nakladatel)" description="U tvých knih se čtenářům ukáže místo uživatelského jména. Změna se rovnou promítne na všechny vydané knihy.">
+      <form onSubmit={(e) => { e.preventDefault(); save(value); }} className="space-y-3">
+        <Field label="Krycí jméno (2-50 znaků)">
+          <TextInput value={value} onChange={e => setValue(e.target.value)} maxLength={50} placeholder={profile.username || ''} />
+        </Field>
+        {msg && <Notice type={msg.type}>{msg.text}</Notice>}
+        <div className="flex flex-wrap items-center gap-3">
+          <ActionButton type="submit" busy={busy} disabled={value.trim() === saved}>Uložit krycí jméno</ActionButton>
+          {saved && <button type="button" onClick={() => save(null)} disabled={busy} style={{ color: 'var(--text-muted)' }} className="text-xs font-bold underline bg-transparent border-none cursor-pointer p-0 disabled:opacity-50">Zrušit krycí jméno</button>}
+        </div>
+      </form>
+    </Section>
+  );
+};
+
 const ProfileTab = ({ user, role }) => {
+  const { refreshProfile } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [saved, setSaved] = useState('');
@@ -93,7 +209,7 @@ const ProfileTab = ({ user, role }) => {
     (async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('show_in_leaderboard, featured_badge, unlocked_badges, pen_name')
+        .select('*')
         .eq('id', user.id)
         .maybeSingle();
       if (cancelled) return;
@@ -132,17 +248,12 @@ const ProfileTab = ({ user, role }) => {
           <dd className="m-0 font-semibold">{ROLE_LABELS[role] || 'Čtenář'}</dd>
           <dt style={{ color: 'var(--text-muted)' }} className="text-xs font-bold">Člen od</dt>
           <dd className="m-0 font-semibold">{memberSince}</dd>
-          {profile.pen_name && (
-            <>
-              <dt style={{ color: 'var(--text-muted)' }} className="text-xs font-bold">Krycí jméno</dt>
-              <dd className="m-0 font-semibold">
-                {profile.pen_name} <Link to="/publisher" style={{ color: 'var(--bg-primary)' }} className="text-xs font-bold ml-1">upravit</Link>
-              </dd>
-            </>
-          )}
         </dl>
         {profile.missing && <Notice type="info">Profil se ti založí při příštím přihlášení - do té doby jdou nastavit jen údaje výše.</Notice>}
       </Section>
+
+      {canEdit && <UsernameSection profile={profile} onSaved={(name) => { setProfile(p => ({ ...p, username: name })); refreshProfile?.(); }} />}
+      {canEdit && (role === 'nakladatel' || role === 'správce') && <PenNameSection profile={profile} onSaved={(pen) => setProfile(p => ({ ...p, pen_name: pen }))} />}
 
       <Section title="Veřejná viditelnost" description="Co o tobě uvidí ostatní čtenáři.">
         <div className="flex items-center justify-between gap-4">
@@ -179,6 +290,7 @@ const ProfileTab = ({ user, role }) => {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const SecurityTab = ({ user }) => {
+  const { username: accountName } = useAuth();
   const navigate = useNavigate();
 
   const [curPw, setCurPw] = useState('');
@@ -232,13 +344,14 @@ const SecurityTab = ({ user }) => {
     } finally { setEmailBusy(false); }
   };
 
-  const sendResetLink = async () => {
+  // Heslo se neposílá e-mailem: žádost jde správci, který vydá dočasné heslo a předá ho mimo aplikaci.
+  const requestAdminHelp = async () => {
     setResetMsg(null);
     setResetBusy(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(user.email, { redirectTo: `${window.location.origin}/reset-password` });
-      if (error) return setResetMsg({ type: 'error', text: mapAuthError(error) });
-      setResetMsg({ type: 'success', text: `Odkaz pro nastavení nového hesla je na cestě na ${user.email}. Mrkni i do spamu.` });
+      const { error } = await supabase.rpc('request_password_help', { p_email: user.email, p_username: accountName || '', p_note: 'Žádost z Nastavení (uživatel je přihlášený).' });
+      if (error) return setResetMsg({ type: 'error', text: 'Žádost se nepodařilo odeslat. Zkus to znovu.' });
+      setResetMsg({ type: 'success', text: 'Žádost je u správce. Až ti vydá dočasné heslo, dostaneš ho od něj mimo aplikaci. Po přihlášení si nastavíš vlastní.' });
     } finally { setResetBusy(false); }
   };
 
@@ -261,8 +374,8 @@ const SecurityTab = ({ user }) => {
           {pwMsg && <Notice type={pwMsg.type}>{pwMsg.text}</Notice>}
           <div className="flex flex-wrap items-center gap-3">
             <ActionButton type="submit" busy={pwBusy}>Změnit heslo</ActionButton>
-            <button type="button" onClick={sendResetLink} disabled={resetBusy} style={{ color: 'var(--bg-primary)' }} className="text-xs font-bold bg-transparent border-none cursor-pointer underline disabled:opacity-50 p-0">
-              Nepamatuju si současné heslo
+            <button type="button" onClick={requestAdminHelp} disabled={resetBusy} style={{ color: 'var(--bg-primary)' }} className="text-xs font-bold bg-transparent border-none cursor-pointer underline disabled:opacity-50 p-0">
+              Nepamatuju si současné heslo - požádat správce
             </button>
           </div>
           {resetMsg && <Notice type={resetMsg.type}>{resetMsg.text}</Notice>}
