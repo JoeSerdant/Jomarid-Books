@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Button, Card } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
-import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle, LayoutDashboard, UserCog, Loader2, CheckCircle2, X, ChevronLeft, ChevronRight, Ban, KeyRound, Trash2, ShieldCheck, Bell, Copy, Flag } from 'lucide-react';
+import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle, LayoutDashboard, UserCog, Loader2, CheckCircle2, X, ChevronLeft, ChevronRight, Ban, KeyRound, Trash2, ShieldCheck, Bell, Copy, Flag, Eye, EyeOff } from 'lucide-react';
 
 // ============================================================================
 // Admin: Přehled a správa účtů (pomocné prvky, záložka Přehled, záložka Účty)
@@ -600,7 +600,7 @@ const NOTIF_FILTERS = [['open', 'Otevřené'], ['all', 'Vše']];
 const REPORT_STATUS = { open: ['Otevřené', 'warn'], done: ['Smazáno', 'ok'], dismissed: ['Ponecháno', 'muted'] };
 const REPORT_REASONS = { spam: 'spam', abuse: 'urážky', inappropriate: 'nevhodný obsah', other: 'jiný důvod' };
 
-export const NotificationsTab = ({ onCountChange, currentUserId }) => {
+export const NotificationsTab = ({ onCountChange, currentUserId, onOpenAccount }) => {
   const [filter, setFilter] = useState('open');
   const [items, setItems] = useState(null);
   const [error, setError] = useState('');
@@ -725,6 +725,7 @@ export const NotificationsTab = ({ onCountChange, currentUserId }) => {
             {isPassword && <p style={{ color: 'var(--text-muted)' }} className="text-[11px] m-0 leading-relaxed opacity-90">{n.payload?.logged_in ? 'Žádost poslal přihlášený uživatel z Nastavení.' : 'Žádost poslal nepřihlášený člověk (zapomenuté heslo).'} E-mail i jméno sedí, ale to samo nedokazuje, že žádá majitel účtu - ověř to mimo aplikaci.</p>}
 
             <div className="flex flex-wrap gap-2">
+              {u && onOpenAccount && <SmallButton onClick={() => onOpenAccount(u)}><UserCog size={13} /> Otevřít účet</SmallButton>}
               {n.status === 'open' && isReport ? (
                 <>
                   {confirmDeleteId === n.id
@@ -776,6 +777,7 @@ export const AccountsTab = ({ currentUserId, preset, onChanged }) => {
     setSearchInput(preset.search || '');
     setSearch(preset.search || '');
     setPage(0);
+    if (preset.openId) setSelectedId(preset.openId);
   }, [preset?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -808,7 +810,7 @@ export const AccountsTab = ({ currentUserId, preset, onChanged }) => {
         <div className="flex flex-wrap gap-2 items-center">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" />
-            <input type="search" aria-label="Hledat účet" placeholder="Hledat podle e-mailu..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} style={selectStyle} className="w-full pl-9 pr-3 py-2.5 border rounded-lg text-sm font-semibold outline-none" />
+            <input type="search" aria-label="Hledat účet" placeholder="Hledat podle e-mailu nebo jména..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} style={selectStyle} className="w-full pl-9 pr-3 py-2.5 border rounded-lg text-sm font-semibold outline-none" />
           </div>
           <select aria-label="Filtr role" value={role} onChange={changeFilter(setRole)} style={selectStyle} className={selectClass}>{ROLE_FILTERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
           <select aria-label="Filtr stavu" value={status} onChange={changeFilter(setStatus)} style={selectStyle} className={selectClass}>{STATUS_FILTERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
@@ -833,6 +835,7 @@ export const AccountsTab = ({ currentUserId, preset, onChanged }) => {
                 <button type="button" data-testid="account-row" onClick={() => setSelectedId(r.id)} className="w-full text-left bg-transparent border-none cursor-pointer text-current py-3 px-1 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4 hover:bg-black/5 rounded-lg">
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-bold break-all">{r.email}</span>
+                    {r.username && <span data-testid="account-username" style={{ color: 'var(--text-muted)' }} className="block text-xs font-semibold break-all">@{r.username}</span>}
                     <span className="flex flex-wrap gap-1 mt-1">
                       <Pill tone="accent">{r.has_profile ? ROLE_LABELS[r.role] || r.role : 'Bez profilu'}</Pill>
                       {r.is_banned && <Pill tone="danger">Zablokován</Pill>}
@@ -947,6 +950,10 @@ export const AdminDashboard = () => {
       const { data: b } = await supabase
         .from('books')
         .select('id, title, author, author_display, author_id, fake_likes, is_auto_assigned, price_coins, book_likes(count)');
+
+      // Skryté knihy zvlášť: kdyby sloupec is_hidden ještě neexistoval (starší databáze), jen se nezobrazí štítky.
+      const { data: hiddenRows, error: hiddenErr } = await supabase.from('books').select('id, is_hidden');
+      const hiddenMap = new Map((!hiddenErr && hiddenRows ? hiddenRows : []).map(r => [r.id, !!r.is_hidden]));
         
       // 2. Načtení profilů
       const { data: p } = await supabase
@@ -999,6 +1006,7 @@ export const AdminDashboard = () => {
           authorId: book.author_id || null,
           fake_likes: fikes,
           is_auto_assigned: book.is_auto_assigned || false,
+          isHidden: hiddenMap.get(book.id) || false,
           price_coins: book.price_coins ?? 150,
           likesCount: realLikes + fikes 
         };
@@ -1298,6 +1306,19 @@ export const AdminDashboard = () => {
     }
   };
 
+  // Skrytá kniha zmizí z katalogu pro čtenáře; autor a správce ji dál vidí. Autor ji může zase zveřejnit sám.
+  const toggleBookHidden = async (book) => {
+    setActionLoading(true);
+    const { error } = await supabase.from('books').update({ is_hidden: !book.isHidden }).eq('id', book.id);
+    if (!error) {
+      await safeLog('WARN', `${book.isHidden ? 'Znovu zveřejněna' : 'Skryta'} kniha: ${book.title}`);
+      refreshData();
+    } else {
+      alert('Chyba při změně viditelnosti knihy: ' + error.message);
+    }
+    setActionLoading(false);
+  };
+
   const toggleBookAutoAssign = async (bookId, currentStatus) => {
     setActionLoading(true);
     const { error } = await supabase
@@ -1527,7 +1548,7 @@ export const AdminDashboard = () => {
       )}
 
       {activeTab === 'notifications' && (
-        <NotificationsTab onCountChange={setPendingCount} currentUserId={adminUser?.id} />
+        <NotificationsTab onCountChange={setPendingCount} currentUserId={adminUser?.id} onOpenAccount={(u) => { setAccountsPreset({ search: u.email || '', openId: u.id, nonce: Date.now() }); setActiveTab('accounts'); }} />
       )}
 
       {activeTab === 'accounts' && (
@@ -1719,6 +1740,11 @@ export const AdminDashboard = () => {
                       <span className="truncate flex-1">
                         <span className="text-sm font-black block truncate flex items-center gap-1.5">
                           {b.title}
+                          {b.isHidden && (
+                            <span data-testid="hidden-badge" className="bg-slate-500/20 text-slate-500 font-black px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide flex items-center gap-0.5">
+                              <EyeOff size={10} /> Skrytá
+                            </span>
+                          )}
                           {b.is_auto_assigned && (
                             <span className="bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 font-black px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide flex items-center gap-0.5">
                               <Sparkles size={10} className="fill-current" /> Auto
@@ -1746,6 +1772,17 @@ export const AdminDashboard = () => {
                           title="Editovat parametry a text"
                         >
                           ✎
+                        </button>
+                        <button
+                          onClick={() => toggleBookHidden(b)}
+                          disabled={actionLoading}
+                          aria-label={b.isHidden ? `Zveřejnit knihu ${b.title}` : `Skrýt knihu ${b.title}`}
+                          aria-pressed={b.isHidden}
+                          style={{ color: b.isHidden ? 'var(--bg-primary)' : 'var(--text-muted)' }}
+                          className="bg-transparent border-none cursor-pointer hover:scale-110 transition-transform flex items-center disabled:opacity-40"
+                          title={b.isHidden ? 'Skrytá - klikni pro zveřejnění' : 'Skrýt před čtenáři'}
+                        >
+                          {b.isHidden ? <EyeOff size={15} /> : <Eye size={15} />}
                         </button>
                         <button 
                           onClick={async () => { 
