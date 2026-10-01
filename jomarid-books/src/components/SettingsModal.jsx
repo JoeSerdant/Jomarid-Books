@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { X, User, ShieldCheck, Palette, Database, Check, Loader2, Download, BookOpen, RotateCcw } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, User, ShieldCheck, Palette, Database, Check, Loader2, Download, BookOpen, RotateCcw } from 'lucide-react';
 import { useAuth, useTheme } from '../contexts/AuthContext';
 import { supabase, verifyPassword, validateNewPassword, mapAuthError } from '../lib/supabase';
 import { BOOK_BADGES } from '../constants/badges';
@@ -82,7 +82,7 @@ const Toggle = ({ checked, onChange, disabled, label }) => (
 // ---- Záložka: Profil ----
 const ROLE_LABELS = { 'uživatel': 'Čtenář', nakladatel: 'Nakladatel', 'správce': 'Správce' };
 
-const ProfileTab = ({ user, role, onClose }) => {
+const ProfileTab = ({ user, role }) => {
   const [profile, setProfile] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [saved, setSaved] = useState('');
@@ -136,7 +136,7 @@ const ProfileTab = ({ user, role, onClose }) => {
             <>
               <dt style={{ color: 'var(--text-muted)' }} className="text-xs font-bold">Krycí jméno</dt>
               <dd className="m-0 font-semibold">
-                {profile.pen_name} <Link to="/publisher" onClick={onClose} style={{ color: 'var(--bg-primary)' }} className="text-xs font-bold ml-1">upravit</Link>
+                {profile.pen_name} <Link to="/publisher" style={{ color: 'var(--bg-primary)' }} className="text-xs font-bold ml-1">upravit</Link>
               </dd>
             </>
           )}
@@ -178,7 +178,7 @@ const ProfileTab = ({ user, role, onClose }) => {
 // ---- Záložka: Zabezpečení ----
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const SecurityTab = ({ user, onClose }) => {
+const SecurityTab = ({ user }) => {
   const navigate = useNavigate();
 
   const [curPw, setCurPw] = useState('');
@@ -248,7 +248,6 @@ const SecurityTab = ({ user, onClose }) => {
     const { error } = await supabase.auth.signOut({ scope: 'global' });
     setSignOutBusy(false);
     if (error) return setSignOutMsg({ type: 'error', text: mapAuthError(error) });
-    onClose();
     navigate('/login');
   };
 
@@ -507,7 +506,7 @@ const DELETE_ERRORS = {
   not_authenticated: 'Přihlášení vypršelo, přihlas se prosím znovu.',
 };
 
-const DataTab = ({ user, role, onClose }) => {
+const DataTab = ({ user, role }) => {
   const navigate = useNavigate();
   const [exportBusy, setExportBusy] = useState(false);
   const [exportMsg, setExportMsg] = useState(null);
@@ -563,7 +562,6 @@ const DataTab = ({ user, role, onClose }) => {
     }
     // Účet už na serveru neexistuje - stačí zahodit lokální session.
     await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
-    onClose();
     navigate('/');
   };
 
@@ -594,7 +592,8 @@ const DataTab = ({ user, role, onClose }) => {
   );
 };
 
-// ---- Samotný dialog Nastavení ----
+// ---- Stránka Nastavení (/settings/:záložka) ----
+// Každá záložka má vlastní adresu, takže jde sdílet odkaz, obnovit stránku a funguje tlačítko Zpět.
 const TABS = [
   { id: 'profile', label: 'Profil', icon: User, needsUser: true },
   { id: 'security', label: 'Zabezpečení', icon: ShieldCheck, needsUser: true },
@@ -603,69 +602,89 @@ const TABS = [
   { id: 'data', label: 'Data a účet', icon: Database, needsUser: true },
 ];
 
-export const SettingsModal = ({ isOpen, onClose }) => {
-  const { user, role } = useAuth();
-  const [tab, setTab] = useState('profile');
+export const SettingsPage = () => {
+  const { user, role, loading } = useAuth();
+  const { tab } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const navRef = useRef(null);
 
+  // Na úzkém displeji se menu záložek posouvá do strany - aktivní záložka musí být vždy vidět.
+  // Posouvá se jen samo menu (ne celá stránka).
   useEffect(() => {
-    if (!isOpen) return;
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [isOpen, onClose]);
+    const nav = navRef.current;
+    const current = nav?.querySelector('[aria-current="page"]');
+    if (!nav || !current || nav.scrollWidth <= nav.clientWidth) return;
+    nav.scrollLeft = current.offsetLeft - (nav.clientWidth - current.offsetWidth) / 2;
+  }, [tab, loading]);
 
-  if (!isOpen) return null;
+  // Dokud se neví, jestli je uživatel přihlášený, nic nepřesměrovávat (jinak by obnovení stránky
+  // na /settings/security přeskočilo na Vzhled, protože "user" je na chvíli null).
+  if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="animate-spin" /></div>;
 
   const visibleTabs = TABS.filter(t => !t.needsUser || user);
-  const activeTab = visibleTabs.some(t => t.id === tab) ? tab : visibleTabs[0].id;
+  const active = visibleTabs.find(t => t.id === tab);
+  if (!active) return <Navigate to={`/settings/${visibleTabs[0].id}`} replace />;
+
+  // Přišel-li uživatel z jiné stránky, vrátí ho Zpět tam; po otevření odkazu rovnou se vrátí do aplikace.
+  const goBack = () => (location.key !== 'default' ? navigate(-1) : navigate(user ? '/app' : '/'));
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[110] flex justify-center items-center p-3 sm:p-4" onClick={onClose}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Nastavení"
-        style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
-        className="border rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92dvh] h-[640px] flex flex-col sm:flex-row overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div style={{ color: 'var(--text-body)' }} className="max-w-4xl mx-auto px-3 sm:px-4 py-6 sm:py-10">
+      <div className="flex items-center gap-3 mb-5">
+        <button
+          type="button"
+          onClick={goBack}
+          aria-label="Zpět"
+          title="Zpět"
+          style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
+          className="w-10 h-10 shrink-0 border rounded-xl cursor-pointer flex items-center justify-center hover:brightness-95 active:scale-95 transition-all"
+        >
+          <ArrowLeft size={18} />
+        </button>
+        <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight m-0">Nastavení</h1>
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-4 md:gap-6 md:items-start">
         <nav
+          ref={navRef}
           aria-label="Sekce nastavení"
-          style={{ borderColor: 'var(--border-color)' }}
-          className="shrink-0 flex sm:flex-col gap-1 p-2 sm:p-3 border-b sm:border-b-0 sm:border-r overflow-x-auto scrollbar-hide sm:w-52"
+          className="relative shrink-0 flex md:flex-col gap-1 overflow-x-auto scrollbar-hide md:w-56 md:sticky md:top-24 -mx-1 px-1 md:mx-0 md:px-0"
         >
           {visibleTabs.map(({ id, label, icon: Icon }) => {
-            const active = id === activeTab;
+            const isActive = id === active.id;
             return (
-              <button
+              <Link
                 key={id}
-                type="button"
-                onClick={() => setTab(id)}
-                aria-current={active ? 'page' : undefined}
-                style={{ backgroundColor: active ? 'var(--bg-primary)' : 'transparent', color: active ? 'var(--text-primary)' : 'var(--text-body)' }}
-                className="shrink-0 flex items-center gap-2 px-3 py-2.5 rounded-lg border-none cursor-pointer text-xs font-black uppercase tracking-wider text-left whitespace-nowrap"
+                to={`/settings/${id}`}
+                replace
+                aria-current={isActive ? 'page' : undefined}
+                style={{
+                  backgroundColor: isActive ? 'var(--bg-primary)' : 'var(--bg-card)',
+                  color: isActive ? 'var(--text-primary)' : 'var(--text-body)',
+                  borderColor: isActive ? 'transparent' : 'var(--border-color)',
+                }}
+                className="shrink-0 flex items-center gap-2 px-3 py-2.5 rounded-xl border no-underline text-xs font-black uppercase tracking-wider whitespace-nowrap"
               >
                 <Icon size={15} /> {label}
-              </button>
+              </Link>
             );
           })}
         </nav>
 
-        <div className="flex-1 min-w-0 flex flex-col">
-          <div style={{ borderColor: 'var(--border-color)' }} className="shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 border-b">
-            <h3 className="text-sm font-black uppercase tracking-widest m-0">{visibleTabs.find(t => t.id === activeTab).label}</h3>
-            <button type="button" onClick={onClose} aria-label="Zavřít nastavení" className="opacity-60 hover:opacity-100 cursor-pointer text-current bg-transparent border-none p-1"><X size={20} /></button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-            {activeTab === 'profile' && <ProfileTab user={user} role={role} onClose={onClose} />}
-            {activeTab === 'security' && <SecurityTab user={user} onClose={onClose} />}
-            {activeTab === 'appearance' && <AppearanceTab />}
-            {activeTab === 'reader' && <ReaderTab />}
-            {activeTab === 'data' && <DataTab user={user} role={role} onClose={onClose} />}
-          </div>
-        </div>
+        <section
+          aria-labelledby="settings-heading"
+          style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}
+          className="flex-1 min-w-0 border rounded-2xl shadow-sm p-4 sm:p-6"
+        >
+          <h2 id="settings-heading" className="text-sm font-black uppercase tracking-widest m-0 mb-4">{active.label}</h2>
+          {active.id === 'profile' && <ProfileTab user={user} role={role} />}
+          {active.id === 'security' && <SecurityTab user={user} />}
+          {active.id === 'appearance' && <AppearanceTab />}
+          {active.id === 'reader' && <ReaderTab />}
+          {active.id === 'data' && <DataTab user={user} role={role} />}
+        </section>
       </div>
     </div>
   );
 };
-
