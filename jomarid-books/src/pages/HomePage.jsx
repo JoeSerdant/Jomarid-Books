@@ -727,7 +727,8 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
 // opravdový, doporučená kniha je opravdu nevlastněná kniha z katalogu.
 // ============================================================================
 const LoggedInHome = ({ user, personal, loading, navigate }) => {
-  const username = user.email ? user.email.split('@')[0] : 'čtenáři';
+  const { username: accountName } = useAuth();
+  const username = accountName || (user.email ? user.email.split('@')[0] : 'čtenáři');
 
   if (loading || !personal) {
     return (
