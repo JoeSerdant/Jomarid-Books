@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { THEMES, initMotionPref } from './theme';
 import { ThemeContext, AuthProvider, ProtectedAdminRoute, ProtectedUserRoute, useAuth } from './contexts/AuthContext';
 import { Navbar } from './components/Navbar';
-import { SettingsModal } from './components/SettingsModal';
+import { SettingsPage } from './components/SettingsModal';
 import { SearchModal } from './components/SearchModal';
 import { HomePage } from './pages/HomePage';
 import { LoginPage, ResetPasswordPage } from './pages/LoginPage';
@@ -28,7 +28,6 @@ const DARK_THEMES = ['dark', 'emerald'];
 
 export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('jomarid-books-theme') || 'saas');
 
   useEffect(() => initMotionPref(), []); // omezení pohybu (Nastavení -> Vzhled, nebo nastavení zařízení)
@@ -49,13 +48,16 @@ export default function App() {
         <Router>
           <div style={{ background: 'var(--bg-body)', color: 'var(--text-body)' }} className="min-h-screen flex flex-col font-sans antialiased transition-all duration-200">
             <RecoveryRedirect />
-            <Navbar onOpenSearch={() => setIsSearchOpen(true)} onOpenSettings={() => setIsSettingsOpen(true)} />
+            <Navbar onOpenSearch={() => setIsSearchOpen(true)} />
 
             <main className="flex-1">
               <Routes>
                 <Route path="/" element={<HomePage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+                {/* Nastavení - veřejné (Vzhled a Čtečka jdou i bez účtu); záložky účtu se odhlášenému nezobrazí */}
+                <Route path="/settings/:tab?" element={<SettingsPage />} />
 
                 {/* Chráněné uživatelské sekce */}
                 <Route path="/app" element={<ProtectedUserRoute><UserLibrary /></ProtectedUserRoute>} />
@@ -74,7 +76,6 @@ export default function App() {
               </Routes>
             </main>
 
-            <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
             <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
           </div>
         </Router>
