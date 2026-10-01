@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import {
@@ -409,7 +410,7 @@ const TABS = [
 ];
 
 export const PublisherDashboard = () => {
-  const { user } = useAuth();
+  const { user, username: accountName } = useAuth();
   const [tab, setTab] = useState('overview');
   const [days, setDays] = useState(30);
   const [data, setData] = useState(null);
@@ -438,13 +439,10 @@ export const PublisherDashboard = () => {
   const [grantEmail, setGrantEmail] = useState('');
   const [granting, setGranting] = useState(false);
 
-  // krycí jméno
+  // krycí jméno (jen ke čtení - mění se v Nastavení -> Profil)
   const [penName, setPenName] = useState('');
-  const [penNameInput, setPenNameInput] = useState('');
-  const [savingPenName, setSavingPenName] = useState(false);
-  const [penNameError, setPenNameError] = useState('');
 
-  const getUsername = useCallback((email) => (email ? email.split('@')[0] : ''), []);
+  const getUsername = useCallback((email) => accountName || (email ? email.split('@')[0] : ''), [accountName]);
 
   const showNotice = useCallback((type, text) => setNotice({ type, text, id: Date.now() }), []);
   useEffect(() => {
@@ -467,7 +465,7 @@ export const PublisherDashboard = () => {
     if (!user) return;
     (async () => {
       const { data: prof, error } = await supabase.from('profiles').select('pen_name').eq('id', user.id).maybeSingle();
-      if (!error && prof) { setPenName(prof.pen_name || ''); setPenNameInput(prof.pen_name || ''); }
+      if (!error && prof) setPenName(prof.pen_name || '');
     })();
   }, [user]);
 
@@ -574,25 +572,6 @@ export const PublisherDashboard = () => {
     if (res?.result === 'granted') { showNotice('success', `Licence byla darována čtenáři ${grantEmail.trim()}.`); setGrantEmail(''); await loadDashboard(); }
     else if (res?.result === 'already_owned') showNotice('info', 'Tenhle čtenář už knihu má.');
     else showNotice('error', 'Čtenář s tímhle e-mailem nebyl nalezen. Zkontroluj, že je to e-mail, kterým se registroval.');
-  };
-
-  // ---- krycí jméno ----
-  const handleSavePenName = async () => {
-    setPenNameError(''); setSavingPenName(true);
-    try {
-      const { data: res, error } = await supabase.rpc('set_pen_name', { new_pen_name: penNameInput });
-      if (error) throw error;
-      setPenName(res?.pen_name || ''); setPenNameInput(res?.pen_name || '');
-      showNotice('success', 'Krycí jméno je uložené a promítlo se do všech tvých knih.');
-    } catch (err) { setPenNameError(err.message || 'Uložení selhalo.'); } finally { setSavingPenName(false); }
-  };
-  const handleClearPenName = async () => {
-    setPenNameError(''); setSavingPenName(true);
-    try {
-      const { error } = await supabase.rpc('set_pen_name', { new_pen_name: null });
-      if (error) throw error;
-      setPenName(''); setPenNameInput('');
-    } catch (err) { setPenNameError(err.message || 'Zrušení selhalo.'); } finally { setSavingPenName(false); }
   };
 
   const textStats = useMemo(() => {
@@ -805,14 +784,11 @@ export const PublisherDashboard = () => {
           </Card>
 
           <Card>
-            <h3 className="font-black mb-1.5 text-sm uppercase tracking-tight flex items-center gap-2"><Feather size={16} style={{ color: 'var(--bg-primary)' }} /> Krycí jméno</h3>
-            <p style={mutedStyle} className="text-xs mb-4 opacity-70">Místo účtu {getUsername(user?.email)} se u tvých knih čtenářům zobrazuje jméno podle tvého výběru. Změna se rovnou promítne na všechny už vydané knihy.</p>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-              <input type="text" aria-label="Krycí jméno" placeholder={`Např. ${getUsername(user?.email)}`} value={penNameInput} onChange={(e) => setPenNameInput(e.target.value)} maxLength={50} style={inputStyle} className="flex-1 min-w-0 p-3 border rounded-xl font-bold outline-none text-sm" />
-              <button type="button" onClick={handleSavePenName} disabled={savingPenName || penNameInput === penName} style={primaryBtn} className="px-5 py-3 rounded-xl font-black uppercase text-xs border-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0">{savingPenName ? 'Ukládám...' : 'Uložit'}</button>
-              {penName && <button type="button" onClick={handleClearPenName} disabled={savingPenName} style={mutedStyle} className="text-xs font-bold underline bg-transparent border-none cursor-pointer shrink-0 disabled:opacity-50">Zrušit krycí jméno</button>}
-            </div>
-            {penNameError && <p className="text-red-500 text-xs font-bold mt-2 m-0">{penNameError}</p>}
+            <h3 className="font-black mb-1.5 text-sm uppercase tracking-tight flex items-center gap-2"><Feather size={16} style={{ color: 'var(--bg-primary)' }} /> Jméno u tvých knih</h3>
+            <p style={mutedStyle} className="text-xs mb-4 opacity-80">
+              Čtenářům se u tvých knih ukazuje <b data-testid="author-shown">{penName || getUsername(user?.email)}</b> ({penName ? 'tvoje krycí jméno' : 'tvoje uživatelské jméno'}). Obojí se nastavuje v Nastavení → Profil.
+            </p>
+            <Link to="/settings/profile" style={primaryBtn} className="inline-block px-5 py-2.5 rounded-xl font-black uppercase text-xs no-underline">Otevřít nastavení profilu</Link>
           </Card>
         </div>
       )}
