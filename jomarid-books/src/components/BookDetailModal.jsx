@@ -107,7 +107,7 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
         </button>
 
         <h2 className="text-xl font-black uppercase tracking-tight m-0 pr-8">{book.title}</h2>
-        <p style={{ color: 'var(--text-muted)' }} className="text-xs font-bold opacity-70 mt-1">Autor: {book.author}</p>
+        <p style={{ color: 'var(--text-muted)' }} className="text-xs font-bold opacity-70 mt-1">Autor: {book.authorId ? <Link to={`/autor/${book.authorId}`} style={{ color: 'inherit' }} className="font-black underline underline-offset-2">{book.author}</Link> : book.author}</p>
 
         <div className="flex flex-wrap items-center gap-2 mt-3">
           {book.avgRating > 0 && (
