@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { BarChart3, Coins, Compass, Gamepad2, Library, LogOut, Search, Settings, Shield } from 'lucide-react';
 
-export const Navbar = ({ onOpenSearch, onOpenSettings }) => {
+export const Navbar = ({ onOpenSearch }) => {
   const { user, logout, role } = useAuth();
   const navigate = useNavigate();
+  const onSettingsPage = useLocation().pathname.startsWith('/settings');
   const [coins, setCoins] = useState(0);
 
   const username = user?.email ? user.email.split('@')[0] : 'Čtenář';
@@ -203,15 +204,16 @@ export const Navbar = ({ onOpenSearch, onOpenSettings }) => {
             </button>
           )}
 
-          <button
-            onClick={onOpenSettings}
-            style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
-            className="p-2 border rounded-xl cursor-pointer hover:brightness-95 active:scale-95 transition-all flex items-center justify-center"
+          <Link
+            to="/settings"
+            aria-current={onSettingsPage ? 'page' : undefined}
+            style={{ backgroundColor: onSettingsPage ? 'var(--bg-primary)' : 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: onSettingsPage ? 'var(--text-primary)' : 'var(--text-body)' }}
+            className="p-2 border rounded-xl cursor-pointer hover:brightness-95 active:scale-95 transition-all flex items-center justify-center no-underline"
             title="Nastavení"
             aria-label="Nastavení"
           >
             <Settings size={16} />
-          </button>
+          </Link>
 
           {user ? (
             <div className="flex items-center gap-2 pl-2 border-l" style={{ borderColor: 'var(--border-color)' }}>
