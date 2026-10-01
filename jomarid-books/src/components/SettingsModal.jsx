@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, User, ShieldCheck, Palette, Database, Check, Loader2, Download, BookOpen, RotateCcw } from 'lucide-react';
+import { ArrowLeft, User, ShieldCheck, Palette, Database, Check, Loader2, Download, BookOpen, RotateCcw, Bell, EyeOff, MessageCircle, UserCog, Gift, X } from 'lucide-react';
 import { useAuth, useTheme } from '../contexts/AuthContext';
 import { supabase, verifyPassword, validateNewPassword, mapAuthError } from '../lib/supabase';
 import { BOOK_BADGES } from '../constants/badges';
@@ -710,10 +710,105 @@ const DataTab = ({ user, role }) => {
 const TABS = [
   { id: 'profile', label: 'Profil', icon: User, needsUser: true },
   { id: 'security', label: 'Zabezpečení', icon: ShieldCheck, needsUser: true },
+  { id: 'notifications', label: 'Oznámení', icon: Bell, needsUser: true },
   { id: 'appearance', label: 'Vzhled', icon: Palette, needsUser: false },
   { id: 'reader', label: 'Čtečka', icon: BookOpen, needsUser: false },
   { id: 'data', label: 'Data a účet', icon: Database, needsUser: true },
 ];
+
+const INBOX_ICONS = { book_hidden: EyeOff, book_unhidden: EyeOff, comment_removed: MessageCircle, username_changed: UserCog, license_received: Gift };
+const timeAgo = (iso) => {
+  const sec = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (sec < 60) return 'právě teď';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `před ${min} min`;
+  const hrs = Math.floor(min / 60);
+  if (hrs < 24) return `před ${hrs} h`;
+  const days = Math.floor(hrs / 24);
+  return days === 1 ? 'včera' : `před ${days} dny`;
+};
+const announceUnread = (n) => window.dispatchEvent(new CustomEvent('jomarid-user-notifications', { detail: n }));
+
+// Oznámení od správce a autorů (skrytá kniha, odstraněný komentář, dar knihy...).
+// Otevření záložky označí vše jako přečtené; nepřečtené zůstanou do odchodu zvýrazněné.
+const InboxTab = () => {
+  const [items, setItems] = useState(null);
+  const [error, setError] = useState('');
+  const [missing, setMissing] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const load = async (markRead) => {
+    const { data, error: rpcError } = await supabase.rpc('my_notifications', { p_limit: 50 });
+    if (rpcError) {
+      if (rpcError.code === 'PGRST202' || /could not find the function/i.test(String(rpcError.message || ''))) setMissing(true);
+      else setError('Oznámení se nepodařilo načíst. Zkus to za chvíli.');
+      setItems([]);
+      return;
+    }
+    setError('');
+    setItems(data || []);
+    if (markRead && (data || []).some(n => !n.read_at)) {
+      const { error: markError } = await supabase.rpc('mark_notifications_read');
+      if (!markError) announceUnread(0);
+    }
+  };
+
+  useEffect(() => { load(true); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const removeOne = async (id) => {
+    setBusy(true);
+    const { error: rpcError } = await supabase.rpc('delete_my_notifications', { p_id: id });
+    setBusy(false);
+    if (rpcError) return setError('Smazání se nepovedlo. Zkus to znovu.');
+    setItems(prev => (prev || []).filter(n => n.id !== id));
+  };
+
+  const removeRead = async () => {
+    setBusy(true);
+    const { error: rpcError } = await supabase.rpc('delete_my_notifications');
+    if (rpcError) { setBusy(false); return setError('Smazání se nepovedlo. Zkus to znovu.'); }
+    await load(false);
+    setBusy(false);
+  };
+
+  if (missing) return <Notice type="info">Oznámení se zapnou po aktualizaci databáze.</Notice>;
+  if (items === null) return <div className="flex items-center gap-2 text-xs font-bold" style={{ color: 'var(--text-muted)' }}><Loader2 size={14} className="animate-spin" /> Načítám...</div>;
+
+  return (
+    <div className="space-y-3">
+      {error && <Notice type="error">{error}</Notice>}
+      {items.length === 0 ? (
+        <p style={{ color: 'var(--text-muted)' }} className="text-sm m-0 py-6 text-center leading-relaxed">Zatím nemáš žádná oznámení. Ozveme se, když správce zasáhne do tvé knihy nebo komentáře, nebo když ti autor daruje knihu.</p>
+      ) : (
+        <>
+          <div className="flex items-center justify-between gap-3">
+            <span style={{ color: 'var(--text-muted)' }} className="text-xs font-bold">{items.length} {items.length === 1 ? 'oznámení' : items.length < 5 ? 'oznámení' : 'oznámení'}</span>
+            <ActionButton variant="secondary" busy={busy} onClick={removeRead}>Smazat přečtená</ActionButton>
+          </div>
+          <ul className="list-none p-0 m-0 space-y-2">
+            {items.map(n => {
+              const Icon = INBOX_ICONS[n.kind] || Bell;
+              const isNew = !n.read_at;
+              return (
+                <li key={n.id} data-testid="inbox-item" data-unread={isNew ? 'true' : 'false'}
+                  style={{ backgroundColor: 'var(--bg-secondary)', borderColor: isNew ? 'var(--bg-primary)' : 'var(--border-color)' }}
+                  className="border rounded-xl p-3 flex items-start gap-3">
+                  <span style={{ backgroundColor: 'var(--bg-card)', color: 'var(--bg-primary)' }} className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"><Icon size={15} /></span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-black m-0 break-words">{n.title}{isNew && <span style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="ml-2 align-middle px-1.5 py-0.5 rounded text-[9px] font-black uppercase">Nové</span>}</p>
+                    {n.body && <p style={{ color: 'var(--text-body)' }} className="text-xs m-0 mt-1 leading-relaxed break-words">{n.body}</p>}
+                    <p style={{ color: 'var(--text-muted)' }} className="text-[11px] m-0 mt-1 opacity-80">{timeAgo(n.created_at)}</p>
+                  </div>
+                  <button type="button" onClick={() => removeOne(n.id)} disabled={busy} aria-label={`Smazat oznámení: ${n.title}`} title="Smazat" style={{ color: 'var(--text-muted)' }} className="bg-transparent border-none cursor-pointer w-8 h-8 -m-1 flex items-center justify-center shrink-0 opacity-60 hover:opacity-100 disabled:opacity-30"><X size={14} /></button>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+};
 
 export const SettingsPage = () => {
   const { user, role, loading } = useAuth();
@@ -793,6 +888,7 @@ export const SettingsPage = () => {
           <h2 id="settings-heading" className="text-sm font-black uppercase tracking-widest m-0 mb-4">{active.label}</h2>
           {active.id === 'profile' && <ProfileTab user={user} role={role} />}
           {active.id === 'security' && <SecurityTab user={user} />}
+          {active.id === 'notifications' && <InboxTab />}
           {active.id === 'appearance' && <AppearanceTab />}
           {active.id === 'reader' && <ReaderTab />}
           {active.id === 'data' && <DataTab user={user} role={role} />}
