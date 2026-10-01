@@ -788,7 +788,10 @@ export const PublisherDashboard = () => {
             <p style={mutedStyle} className="text-xs mb-4 opacity-80">
               Čtenářům se u tvých knih ukazuje <b data-testid="author-shown">{penName || getUsername(user?.email)}</b> ({penName ? 'tvoje krycí jméno' : 'tvoje uživatelské jméno'}). Obojí se nastavuje v Nastavení → Profil.
             </p>
-            <Link to="/settings/profile" style={primaryBtn} className="inline-block px-5 py-2.5 rounded-xl font-black uppercase text-xs no-underline">Otevřít nastavení profilu</Link>
+            <div className="flex flex-wrap gap-2">
+              <Link to="/settings/profile" style={primaryBtn} className="inline-block px-5 py-2.5 rounded-xl font-black uppercase text-xs no-underline">Otevřít nastavení profilu</Link>
+              {user?.id && <Link to={`/autor/${user.id}`} data-testid="author-page-link" style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="inline-block px-5 py-2.5 rounded-xl font-black uppercase text-xs no-underline">Moje stránka autora</Link>}
+            </div>
           </Card>
         </div>
       )}
