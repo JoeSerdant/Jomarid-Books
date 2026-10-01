@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Button, Card } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
-import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle, LayoutDashboard, UserCog, Loader2, CheckCircle2, X, ChevronLeft, ChevronRight, Ban, KeyRound, Trash2, ShieldCheck, Bell, Copy, Flag, Eye, EyeOff } from 'lucide-react';
+import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle, LayoutDashboard, UserCog, Loader2, CheckCircle2, X, ChevronLeft, ChevronRight, Ban, KeyRound, Trash2, ShieldCheck, Bell, Copy, Flag, Eye, EyeOff, Download } from 'lucide-react';
 
 // ============================================================================
 // Admin: Přehled a správa účtů (pomocné prvky, záložka Přehled, záložka Účty)
@@ -755,6 +755,200 @@ export const NotificationsTab = ({ onCountChange, currentUserId, onOpenAccount }
   );
 };
 
+// ============================================================================
+// Admin: Syslog (auditní log) - filtry na serveru, hledání, období, stránkování a export do CSV
+// ============================================================================
+const LOG_TYPES = ['INFO', 'SUCCESS', 'WARN', 'DANGER', 'ERROR'];
+const LOG_PERIODS = [['24h', 'Posledních 24 h', 86400000], ['7d', 'Posledních 7 dní', 7 * 86400000], ['30d', 'Posledních 30 dní', 30 * 86400000], ['all', 'Celá historie', null]];
+const LOG_PAGE = 50;
+const LOG_EXPORT_PAGE = 1000;
+const LOG_EXPORT_MAX = 5000;
+const LOG_TYPE_COLORS = { INFO: 'text-sky-400', SUCCESS: 'text-emerald-400', WARN: 'text-yellow-400', DANGER: 'text-red-500 font-extrabold', ERROR: 'text-red-500 font-extrabold' };
+
+const escapeLike = (text) => text.replace(/[\\%_]/g, '\\$&');
+
+// Buňka CSV: uvozovky se zdvojují a buňka začínající = + - @ se označí apostrofem (jinak by ji Excel vyhodnotil jako vzorec).
+export const csvCell = (value) => {
+  let text = value == null ? '' : String(value).replace(/\r?\n/g, ' ');
+  if (/^[=+\-@\t]/.test(text)) text = `'${text}`;
+  return `"${text.replace(/"/g, '""')}"`;
+};
+// Středník jako oddělovač a BOM na začátku: česká verze Excelu jinak špatně čte diakritiku i sloupce.
+export const buildLogsCsv = (rows) => `\uFEFF${['"Čas"', '"Typ"', '"Zpráva"'].join(';')}\r\n${rows.map(r => [csvCell(r.created_at), csvCell(r.log_type || 'INFO'), csvCell(r.message)].join(';')).join('\r\n')}`;
+
+export const downloadTextFile = (filename, text) => {
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
+const buildLogQuery = ({ type, period, search }, from, to) => {
+  let q = supabase.from('system_logs').select('*', { count: 'exact' }).order('created_at', { ascending: false }).range(from, to);
+  if (type !== 'all') q = q.eq('log_type', type);
+  const span = LOG_PERIODS.find(p => p[0] === period)?.[2];
+  if (span) q = q.gte('created_at', new Date(Date.now() - span).toISOString());
+  const text = search.trim();
+  if (text) q = q.ilike('message', `%${escapeLike(text)}%`);
+  return q;
+};
+
+export const LogsTab = ({ download = downloadTextFile }) => {
+  const [type, setType] = useState('all');
+  const [period, setPeriod] = useState('7d');
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [rows, setRows] = useState(null);
+  const [total, setTotal] = useState(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const requestRef = useRef(0);
+  const filtersRef = useRef({ type, period, search });
+  filtersRef.current = { type, period, search };
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput), 350);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  const load = useCallback(async () => {
+    const id = ++requestRef.current;
+    setRows(null);
+    setError('');
+    const { data, error: rpcError, count } = await buildLogQuery({ type, period, search }, 0, LOG_PAGE - 1);
+    if (id !== requestRef.current) return; // mezitím se změnil filtr: starou odpověď zahodit
+    if (rpcError) { setError('Logy se nepodařilo načíst. Zkus to znovu.'); setRows([]); setTotal(0); setHasMore(false); return; }
+    const list = data || [];
+    setRows(list);
+    setTotal(typeof count === 'number' ? count : list.length);
+    setHasMore(typeof count === 'number' ? list.length < count : list.length === LOG_PAGE);
+  }, [type, period, search]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Nové záznamy přicházejí živě - zobrazí se jen ty, které odpovídají aktuálním filtrům.
+  useEffect(() => {
+    const sub = supabase.channel('sys_logs_tab')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'system_logs' }, (payload) => {
+        const row = payload?.new;
+        if (!row) return;
+        const f = filtersRef.current;
+        if (f.type !== 'all' && row.log_type !== f.type) return;
+        const needle = f.search.trim().toLowerCase();
+        if (needle && !String(row.message || '').toLowerCase().includes(needle)) return;
+        setRows(prev => (prev && !prev.some(r => r.id === row.id) ? [row, ...prev] : prev));
+        setTotal(prev => (typeof prev === 'number' ? prev + 1 : prev));
+      }).subscribe();
+    return () => { supabase.removeChannel(sub); };
+  }, []);
+
+  const loadMore = async () => {
+    if (!rows) return;
+    setLoadingMore(true);
+    const { data, error: rpcError, count } = await buildLogQuery(filtersRef.current, rows.length, rows.length + LOG_PAGE - 1);
+    setLoadingMore(false);
+    if (rpcError) return setError('Další záznamy se nepodařilo načíst.');
+    const more = (data || []).filter(r => !rows.some(x => x.id === r.id));
+    const next = [...rows, ...more];
+    setRows(next);
+    setHasMore(typeof count === 'number' ? next.length < count : (data || []).length === LOG_PAGE);
+  };
+
+  const exportCsv = async () => {
+    setExporting(true);
+    setMsg(null);
+    const all = [];
+    let truncated = false;
+    for (let from = 0; from < LOG_EXPORT_MAX; from += LOG_EXPORT_PAGE) {
+      const { data, error: rpcError } = await buildLogQuery(filtersRef.current, from, from + LOG_EXPORT_PAGE - 1);
+      if (rpcError) { setExporting(false); return setMsg({ type: 'error', text: 'Export se nepodařil. Zkus to znovu.' }); }
+      all.push(...(data || []));
+      if (!data || data.length < LOG_EXPORT_PAGE) break;
+      if (from + LOG_EXPORT_PAGE >= LOG_EXPORT_MAX) truncated = true;
+    }
+    download(`syslog_${new Date().toISOString().slice(0, 10)}.csv`, buildLogsCsv(all));
+    // Export dat je sám citlivá akce: zapíše se do logu.
+    await supabase.from('system_logs').insert([{ log_type: 'INFO', message: `Správce exportoval syslog do CSV (${all.length} záznamů).` }]);
+    setMsg({ type: 'success', text: truncated ? `Exportováno ${all.length} nejnovějších záznamů (nejvýš ${LOG_EXPORT_MAX}). Zúžením filtru získáš starší.` : `Exportováno záznamů: ${all.length}.` });
+    setExporting(false);
+  };
+
+  const filtered = type !== 'all' || period !== '7d' || search.trim() !== '';
+  const inputCls = 'bg-slate-900 border border-slate-800 rounded-lg text-emerald-400 font-mono text-xs outline-none px-2.5 py-2 placeholder:text-slate-600';
+
+  return (
+    // Pevné tmavé pozadí (ne <Card>): ten si bere barvy z motivu, takže ve světlém motivu by světlé písmo terminálu zmizelo.
+    <div data-testid="logs-panel" style={{ backgroundColor: '#020617', borderColor: '#0f172a' }} className="text-emerald-400 font-mono p-4 sm:p-5 border border-solid shadow-2xl rounded-2xl space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-black uppercase tracking-widest pb-3 border-b border-solid border-slate-900">
+        <span className="flex items-center gap-1.5 text-slate-400"><Terminal size={14} /> Systémový log</span>
+        <span className="flex items-center gap-1.5 text-[10px] text-slate-500 normal-case tracking-normal font-bold"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> živě</span>
+      </div>
+
+      <div className="space-y-3">
+        <div role="group" aria-label="Typ záznamu" className="flex flex-wrap gap-1.5">
+          {['all', ...LOG_TYPES].map(t => (
+            <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)}
+              className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider cursor-pointer ${type === t ? 'bg-emerald-400 text-slate-950 border-emerald-400' : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-emerald-400'}`}>
+              {t === 'all' ? 'Vše' : t}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input type="search" aria-label="Hledat v logu" placeholder="Hledat ve zprávách..." value={searchInput} onChange={e => setSearchInput(e.target.value)} className={`${inputCls} flex-1 min-w-0`} />
+          <select aria-label="Období" value={period} onChange={e => setPeriod(e.target.value)} className={`${inputCls} cursor-pointer`}>
+            {LOG_PERIODS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 font-bold">
+        <span data-testid="logs-count">{rows === null ? 'Načítám...' : `Zobrazeno ${rows.length}${typeof total === 'number' ? ` z ${total}` : ''}${filtered ? ' (podle filtru)' : ''}`}</span>
+        <span className="flex gap-2">
+          <button type="button" onClick={load} className="inline-flex items-center gap-1 bg-slate-900 border border-slate-800 text-slate-300 rounded-lg px-2.5 py-1.5 cursor-pointer text-[10px] font-black uppercase tracking-wider hover:text-emerald-400"><RefreshCw size={11} /> Obnovit</button>
+          <button type="button" onClick={exportCsv} disabled={exporting || !rows || rows.length === 0} className="inline-flex items-center gap-1 bg-slate-900 border border-slate-800 text-slate-300 rounded-lg px-2.5 py-1.5 cursor-pointer text-[10px] font-black uppercase tracking-wider hover:text-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed">
+            {exporting ? <Loader2 size={11} className="animate-spin" /> : <Download size={11} />} Export CSV
+          </button>
+        </span>
+      </div>
+
+      {msg && <p role={msg.type === 'error' ? 'alert' : 'status'} className={`text-[11px] font-bold m-0 ${msg.type === 'error' ? 'text-red-400' : 'text-emerald-300'}`}>{msg.text}</p>}
+      {error && <p role="alert" className="text-[11px] font-bold m-0 text-red-400">{error}</p>}
+
+      <div className="max-h-[500px] overflow-y-auto space-y-1.5 pr-2 text-xs">
+        {rows === null ? (
+          <p className="text-slate-500 text-center py-12 m-0 flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" /> Načítám...</p>
+        ) : rows.length === 0 ? (
+          <p className="text-slate-500 italic text-center py-12 m-0">{filtered ? 'Žádný záznam neodpovídá filtru.' : 'Žádné systémové logy zatím nebyly zachyceny.'}</p>
+        ) : (
+          rows.map((log, index) => (
+            <div key={log.id || index} data-testid="log-row" className="py-1.5 border-b border-slate-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-1 hover:bg-slate-900/30 px-1 rounded transition-colors">
+              <span className="break-words min-w-0">
+                <span className={`inline-block w-20 uppercase font-black ${LOG_TYPE_COLORS[log.log_type] || 'text-slate-400'}`}>[{log.log_type || 'INFO'}]</span>
+                <span className="text-slate-200">{log.message}</span>
+              </span>
+              <span className="text-[10px] text-slate-500 shrink-0 font-sans sm:font-mono">{log.created_at ? new Date(log.created_at).toLocaleString('cs-CZ') : 'Nyní'}</span>
+            </div>
+          ))
+        )}
+        {hasMore && rows && rows.length > 0 && (
+          <div className="pt-2 text-center">
+            <button type="button" onClick={loadMore} disabled={loadingMore} className="inline-flex items-center gap-1.5 bg-slate-900 border border-slate-800 text-slate-300 rounded-lg px-4 py-2 cursor-pointer text-[10px] font-black uppercase tracking-wider hover:text-emerald-400 disabled:opacity-50">
+              {loadingMore && <Loader2 size={11} className="animate-spin" />} Načíst starší
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export const AccountsTab = ({ currentUserId, preset, onChanged }) => {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -878,12 +1072,12 @@ export const AdminDashboard = () => {
   // --- Základní stavy dat ---
   const [books, setBooks] = useState([]);
   const [profiles, setProfiles] = useState([]);
-  const [logs, setLogs] = useState([]);
   const [comments, setComments] = useState([]);
   
   // --- Stavy rozhraní (UX) ---
   const [activeTab, setActiveTab] = useState('overview'); // overview | notifications | accounts | books | homepage | users | logs
   const [pendingCount, setPendingCount] = useState(0); // otevrena upozorneni (odznak na zalozce)
+  const [logCount, setLogCount] = useState(0); // pocet zaznamu v syslogu (karta v Prehledu)
   useEffect(() => {
     (async () => {
       const { data, error } = await supabase.rpc('admin_open_notifications_count');
@@ -900,7 +1094,6 @@ export const AdminDashboard = () => {
   const [searchBook, setSearchBook] = useState('');
   const [searchUser, setSearchUser] = useState('');
   const [filterRole, setFilterRole] = useState('all');
-  const [filterLogType, setFilterLogType] = useState('all');
 
   // --- Formulářové stavy pro Knihy ---
   const [title, setTitle] = useState('');
@@ -961,13 +1154,9 @@ export const AdminDashboard = () => {
         .select('*')
         .order('created_at', { ascending: false });
       
-      // 3. Načtení logů
-      const { data: l } = await supabase
-        .from('system_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(30);
-      
+      const { count: logsTotal } = await supabase.from('system_logs').select('id', { count: 'exact', head: true });
+      setLogCount(typeof logsTotal === 'number' ? logsTotal : 0);
+
       // 4. Posledních 50 komentářů napříč knihami - pro moderaci (viz sekce Komentáře).
       const { data: c } = await supabase
         .from('book_comments')
@@ -1028,7 +1217,6 @@ export const AdminDashboard = () => {
 
       setBooks(booksWithLikes); 
       setProfiles(p || []); 
-      setLogs(l || []);
       setComments(mapovaneKomentare);
     } catch (err) {
       console.error("Chyba v refreshData:", err);
@@ -1040,12 +1228,6 @@ export const AdminDashboard = () => {
   // Inicializace a real-time poslech na systémové logy
   useEffect(() => {
     refreshData();
-    const sub = supabase.channel('sys_logs')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'system_logs' }, payload => {
-        setLogs(prev => [payload.new, ...prev].slice(0, 50));
-      }).subscribe();
-    
-    return () => { supabase.removeChannel(sub); };
   }, []);
 
   // --- Klientské vyhledávací a filtrační procesory (useMemo) ---
@@ -1065,10 +1247,6 @@ export const AdminDashboard = () => {
     });
   }, [profiles, searchUser, filterRole]);
 
-  const filteredLogs = useMemo(() => {
-    if (filterLogType === 'all') return logs;
-    return logs.filter(l => l.log_type === filterLogType);
-  }, [logs, filterLogType]);
 
   // --- Handlery akcí ---
   const handleResolveAuthorId = async (bookId) => {
@@ -1501,7 +1679,7 @@ export const AdminDashboard = () => {
           <div className="p-3 rounded-xl bg-purple-500/10 text-purple-500"><Terminal size={22}/></div>
           <div>
             <h4 style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider opacity-60">Live Stream Log</h4>
-            <p className="text-xl font-black">{logs.length} Záznamů</p>
+            <p className="text-xl font-black">{logCount} Záznamů</p>
           </div>
         </Card>
       </div>
@@ -2247,53 +2425,7 @@ export const AdminDashboard = () => {
       )}
 
       {/* 4. ZÁLOŽKA: SYSTÉMOVÉ LOGY (FULL CORE SYSLOG) */}
-      {activeTab === 'logs' && (
-        <Card className="bg-slate-950 text-emerald-400 font-mono p-5 border border-slate-900 shadow-2xl rounded-2xl space-y-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-xs font-black uppercase tracking-widest pb-3 border-b border-solid border-slate-900 gap-2">
-            <span className="flex items-center gap-1.5 text-slate-400"><Terminal size={14} /> Postgres Live Core Syslog</span>
-            <div className="flex gap-2 items-center bg-slate-900 p-1.5 rounded-xl border border-slate-800 self-stretch sm:self-auto">
-              <span className="text-slate-500 pl-1 text-[10px]">Filtr eventu:</span>
-              <select 
-                value={filterLogType} 
-                onChange={e => setFilterLogType(e.target.value)}
-                className="bg-transparent border-none text-emerald-400 font-mono outline-none text-xs cursor-pointer"
-              >
-                <option value="all">VŠECHNY LOGY</option>
-                <option value="SUCCESS">SUCCESS</option>
-                <option value="WARN">WARN</option>
-                <option value="DANGER">DANGER</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="max-h-[500px] overflow-y-auto space-y-1.5 pr-2 font-mono text-xs scrollbar-thin scrollbar-thumb-slate-800">
-            {filteredLogs.length === 0 ? (
-              <p className="text-slate-500 italic text-center py-12">Žádné systémové logy v zadané konfiguraci nebyly zachyceny.</p>
-            ) : (
-              filteredLogs.map((log, index) => {
-                let badgeColor = "text-emerald-400";
-                if (log.log_type === 'WARN') badgeColor = "text-yellow-400";
-                if (log.log_type === 'DANGER' || log.log_type === 'ERROR') badgeColor = "text-red-500 font-extrabold";
-                
-                return (
-                  <div key={log.id || index} className="py-1.5 border-b border-slate-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-1 hover:bg-slate-900/30 px-1 rounded transition-colors">
-                    <span className="break-all">
-                      <span className={`inline-block w-20 uppercase font-black ${badgeColor}`}>[{log.log_type || 'INFO'}]</span>
-                      <span className="text-slate-200">{log.message}</span>
-                    </span>
-                    <span className="text-[10px] text-slate-500 shrink-0 font-sans sm:font-mono">
-                      {log.created_at ? new Date(log.created_at).toLocaleString('cs-CZ') : 'Nyní'}
-                    </span>
-                  </div>
-                );
-              })
-            )}
-          </div>
-          <div className="text-[10px] text-slate-500 pt-2 border-t border-slate-900 text-right">
-            Kanál Real-time Event Stream přes WebSockets [Aktivní]
-          </div>
-        </Card>
-      )}
+      {activeTab === 'logs' && <LogsTab />}
 
       <TypedConfirm
         open={bulkGrantOpen}
