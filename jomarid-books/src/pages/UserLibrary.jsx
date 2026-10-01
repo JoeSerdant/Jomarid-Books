@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { BookDetailModal } from '../components/BookDetailModal';
 import {
   BookOpen, Coins, Heart, Loader2, LogOut, ShieldOff, Sparkles, Star,
-  Search, ArrowDownAZ, X, Library,
+  Search, ArrowDownAZ, X, Library, ArrowLeft, Feather,
 } from 'lucide-react';
 
 const SORT_OPTIONS = [
@@ -93,6 +93,7 @@ export const UserLibrary = () => {
           id: singleBook.id,
           title: singleBook.title,
           author: singleBook.author_display || singleBook.author,
+          authorId: singleBook.author_id || null,
           likesCount: totalLikesCount,
           isLiked: freshLikedIds.includes(singleBook.id),
           avgRating: parseFloat(singleBook.avg_rating) || 0,
@@ -457,6 +458,94 @@ export const UserLibrary = () => {
         buying={detailBook ? submittingId === detailBook.id : false}
         coins={coins}
       />
+    </div>
+  );
+};
+
+const czCount = (n, one, few, many) => `${n} ${n === 1 ? one : n >= 2 && n <= 4 ? few : many}`;
+
+// Veřejná stránka autora: jméno (krycí jméno, jinak uživatelské), souhrn hodnocení a jeho neskryté knihy.
+// Kliknutí na knihu otevře její detail v knihovně (stejně jako výsledek z vyhledávání).
+export const AuthorPage = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [state, setState] = useState({ status: 'loading' });
+
+  useEffect(() => {
+    let alive = true;
+    setState({ status: 'loading' });
+    (async () => {
+      const { data, error } = await supabase.rpc('author_profile', { p_author: id });
+      if (!alive) return;
+      if (error) {
+        const msg = String(error.message || '');
+        if (error.code === 'PGRST202' || /could not find the function/i.test(msg)) return setState({ status: 'missing' });
+        if (error.code === '22P02' || /invalid input syntax/i.test(msg)) return setState({ status: 'notfound' }); // adresa není platné ID
+        return setState({ status: 'error' });
+      }
+      setState(data?.found ? { status: 'ok', author: data } : { status: 'notfound' });
+    })();
+    return () => { alive = false; };
+  }, [id]);
+
+  const goBack = () => (location.key !== 'default' ? navigate(-1) : navigate('/app'));
+  const a = state.author;
+
+  return (
+    <div style={{ color: 'var(--text-body)' }} className="max-w-3xl mx-auto px-3 sm:px-4 py-6 sm:py-10">
+      <div className="flex items-center gap-3 mb-5">
+        <button type="button" onClick={goBack} aria-label="Zpět" title="Zpět" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="w-10 h-10 shrink-0 border rounded-xl cursor-pointer flex items-center justify-center hover:brightness-95 active:scale-95 transition-all">
+          <ArrowLeft size={18} />
+        </button>
+        <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight m-0 break-words min-w-0">{state.status === 'ok' ? a.name : 'Autor'}</h1>
+      </div>
+
+      {state.status === 'loading' && <div className="flex items-center gap-2 text-xs font-bold py-10 justify-center" style={{ color: 'var(--text-muted)' }}><Loader2 size={16} className="animate-spin" /> Načítám...</div>}
+      {state.status === 'notfound' && <p style={{ color: 'var(--text-muted)' }} className="text-sm text-center py-10 m-0">Tenhle autor tu není. Možná už nepublikuje, nebo je odkaz špatný.</p>}
+      {state.status === 'missing' && <p style={{ color: 'var(--text-muted)' }} className="text-sm text-center py-10 m-0">Stránky autorů se zapnou po aktualizaci databáze.</p>}
+      {state.status === 'error' && <p role="alert" className="text-sm text-center py-10 m-0 text-red-500 font-bold">Autora se nepodařilo načíst. Zkus to za chvíli.</p>}
+
+      {state.status === 'ok' && (
+        <>
+          <section style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl shadow-sm p-4 sm:p-5 mb-5 flex flex-wrap items-center gap-x-6 gap-y-3">
+            <span style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--bg-primary)' }} className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"><Feather size={22} /></span>
+            <div className="min-w-0 flex-1">
+              <p style={{ color: 'var(--text-muted)' }} className="text-[11px] font-black uppercase tracking-wider m-0">{a.pen_name ? 'Autor · krycí jméno' : 'Autor'}</p>
+              <p className="text-sm font-bold m-0 mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+                <span data-testid="author-books-count">{czCount(a.books_count, 'kniha', 'knihy', 'knih')}</span>
+                {a.ratings_count > 0
+                  ? <span data-testid="author-rating" className="inline-flex items-center gap-1"><Star size={13} className="fill-current text-amber-500" /> {Number(a.avg_rating).toFixed(1)} <span style={{ color: 'var(--text-muted)' }} className="font-semibold">({czCount(a.ratings_count, 'hodnocení', 'hodnocení', 'hodnocení')})</span></span>
+                  : <span style={{ color: 'var(--text-muted)' }} className="font-semibold">zatím bez hodnocení</span>}
+              </p>
+            </div>
+            {a.is_self && <Link to="/publisher" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider no-underline">Spravovat moje knihy</Link>}
+          </section>
+
+          {a.books.length === 0 ? (
+            <p style={{ color: 'var(--text-muted)' }} className="text-sm text-center py-8 m-0">Autor zatím nemá žádné zveřejněné knihy.</p>
+          ) : (
+            <ul className="list-none p-0 m-0 space-y-3">
+              {a.books.map(b => (
+                <li key={b.id}>
+                  <button type="button" data-testid="author-book" onClick={() => navigate('/app', { state: { openBookId: b.id } })} style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="w-full text-left border rounded-2xl p-4 cursor-pointer hover:brightness-95 active:scale-[0.99] transition-all flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-black break-words">{b.title}</span>
+                      {b.genres?.length > 0 && <span className="flex flex-wrap gap-1 mt-1.5">{b.genres.map(g => <span key={g} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' }} className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase">{g}</span>)}</span>}
+                      {b.description && <span style={{ color: 'var(--text-muted)' }} className="block text-xs mt-2 leading-relaxed line-clamp-2 break-words">{b.description}</span>}
+                    </span>
+                    <span className="flex sm:flex-col items-center sm:items-end gap-x-4 gap-y-1 text-xs font-bold shrink-0">
+                      <span className="inline-flex items-center gap-1" title="Hodnocení"><Star size={12} className="fill-current text-amber-500" /> {b.ratings_count > 0 ? Number(b.avg_rating).toFixed(1) : '-'}</span>
+                      <span className="inline-flex items-center gap-1" title="Líbí se"><Heart size={12} className="fill-current text-red-400" /> {b.likes}</span>
+                      <span className="inline-flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>{b.is_auto_assigned || b.price_coins === 0 ? 'Zdarma' : <><Coins size={12} className="text-amber-500" /> {b.price_coins}</>}</span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
     </div>
   );
 };
