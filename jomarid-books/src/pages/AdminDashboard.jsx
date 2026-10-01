@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Button, Card } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
-import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle, LayoutDashboard, UserCog, Loader2, CheckCircle2, X, ChevronLeft, ChevronRight, Ban, KeyRound, Trash2, ShieldCheck, Bell, Copy } from 'lucide-react';
+import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle, LayoutDashboard, UserCog, Loader2, CheckCircle2, X, ChevronLeft, ChevronRight, Ban, KeyRound, Trash2, ShieldCheck, Bell, Copy, Flag } from 'lucide-react';
 
 // ============================================================================
 // Admin: Přehled a správa účtů (pomocné prvky, záložka Přehled, záložka Účty)
@@ -55,6 +55,7 @@ const ADMIN_ERRORS = {
   cannot_reset_self: 'Heslo sobě vydat nejde - použij Supabase (Authentication -> Users) nebo druhého správce.',
   notification_not_found: 'Upozornění už neexistuje (mohlo být mezitím smazáno).',
   invalid_status: 'Neplatný stav upozornění.',
+  already_handled: 'Tohle upozornění už bylo vyřízeno.',
   username_invalid: 'Neplatné uživatelské jméno (3-20 znaků, a-z, číslice, . _ -).',
   username_reserved: 'Tohle jméno je rezervované.',
   username_taken: 'Tohle jméno už někdo používá.',
@@ -596,6 +597,8 @@ export const TempPasswordDialog = ({ target, onClose, onIssued }) => {
 
 const NOTIF_STATUS = { open: ['Otevřené', 'warn'], done: ['Vyřízeno', 'ok'], dismissed: ['Zamítnuto', 'muted'] };
 const NOTIF_FILTERS = [['open', 'Otevřené'], ['all', 'Vše']];
+const REPORT_STATUS = { open: ['Otevřené', 'warn'], done: ['Smazáno', 'ok'], dismissed: ['Ponecháno', 'muted'] };
+const REPORT_REASONS = { spam: 'spam', abuse: 'urážky', inappropriate: 'nevhodný obsah', other: 'jiný důvod' };
 
 export const NotificationsTab = ({ onCountChange, currentUserId }) => {
   const [filter, setFilter] = useState('open');
@@ -605,6 +608,7 @@ export const NotificationsTab = ({ onCountChange, currentUserId }) => {
   const [busyId, setBusyId] = useState(null);
   const [msg, setMsg] = useState(null);
   const [issueFor, setIssueFor] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   const load = useCallback(async () => {
     const { data, error: rpcError } = await supabase.rpc('admin_notifications_list', { p_status: filter });
@@ -632,6 +636,18 @@ export const NotificationsTab = ({ onCountChange, currentUserId }) => {
     const { error: rpcError } = await supabase.rpc('admin_set_notification_status', { p_id: n.id, p_status: status });
     setBusyId(null);
     if (rpcError) return setMsg({ type: 'error', text: mapAdminError(rpcError) });
+    await load();
+  };
+
+  // Nahlášený komentář: smazat, nebo ponechat (smazání chce druhé kliknutí).
+  const resolveReport = async (n, del) => {
+    setBusyId(n.id);
+    setMsg(null);
+    setConfirmDeleteId(null);
+    const { data, error: rpcError } = await supabase.rpc('admin_resolve_comment_report', { p_notification: n.id, p_delete: del });
+    setBusyId(null);
+    if (rpcError) return setMsg({ type: 'error', text: mapAdminError(rpcError) });
+    setMsg({ type: 'success', text: del ? (data?.deleted ? 'Komentář je smazaný.' : 'Komentář už byl dřív smazaný, upozornění je vyřízené.') : 'Komentář je ponechaný.' });
     await load();
   };
 
@@ -673,7 +689,8 @@ export const NotificationsTab = ({ onCountChange, currentUserId }) => {
       )}
 
       {(items || []).map(n => {
-        const [statusLabel, statusTone] = NOTIF_STATUS[n.status] || [n.status, 'muted'];
+        const isReport = n.kind === 'comment_report';
+        const [statusLabel, statusTone] = (isReport ? REPORT_STATUS : NOTIF_STATUS)[n.status] || [n.status, 'muted'];
         const u = n.user;
         const isPassword = n.kind === 'password_request';
         return (
@@ -681,7 +698,7 @@ export const NotificationsTab = ({ onCountChange, currentUserId }) => {
           <Card className="space-y-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <h4 className="text-sm font-black uppercase tracking-tight m-0 flex items-center gap-2"><KeyRound size={15} /> {n.title}</h4>
+                <h4 className="text-sm font-black uppercase tracking-tight m-0 flex items-center gap-2">{isReport ? <Flag size={15} /> : <KeyRound size={15} />} {n.title}</h4>
                 <p style={{ color: 'var(--text-muted)' }} className="text-[11px] m-0 mt-1 opacity-80">{relativeTime(n.created_at)} · {formatDateTime(n.created_at)}{n.handled_at ? ` · vyřízeno ${formatDateTime(n.handled_at)}` : ''}</p>
               </div>
               <Pill tone={statusTone}>{statusLabel}</Pill>
@@ -696,11 +713,28 @@ export const NotificationsTab = ({ onCountChange, currentUserId }) => {
               </dl>
             ) : <InlineMessage>Účet už neexistuje.</InlineMessage>}
 
+            {isReport && (
+              <dl className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1 text-xs m-0">
+                <dt style={{ color: 'var(--text-muted)' }} className="font-bold">Kniha</dt><dd className="m-0 font-semibold break-words">{n.payload?.book_title || '-'}</dd>
+                <dt style={{ color: 'var(--text-muted)' }} className="font-bold">Nahlášení</dt>
+                <dd className="m-0 font-semibold">{n.payload?.reports || 1}× <span style={{ color: 'var(--text-muted)' }}>({Object.entries(n.payload?.reasons || {}).map(([k, v]) => `${REPORT_REASONS[k] || k} ${v}×`).join(', ')})</span></dd>
+              </dl>
+            )}
+
             {n.body && <p style={{ backgroundColor: 'var(--bg-secondary)' }} className="text-sm m-0 rounded-lg px-3 py-2 leading-relaxed whitespace-pre-wrap break-words">„{n.body}“</p>}
             {isPassword && <p style={{ color: 'var(--text-muted)' }} className="text-[11px] m-0 leading-relaxed opacity-90">{n.payload?.logged_in ? 'Žádost poslal přihlášený uživatel z Nastavení.' : 'Žádost poslal nepřihlášený člověk (zapomenuté heslo).'} E-mail i jméno sedí, ale to samo nedokazuje, že žádá majitel účtu - ověř to mimo aplikaci.</p>}
 
             <div className="flex flex-wrap gap-2">
-              {n.status === 'open' ? (
+              {n.status === 'open' && isReport ? (
+                <>
+                  {confirmDeleteId === n.id
+                    ? <SmallButton tone="danger" busy={busyId === n.id} onClick={() => resolveReport(n, true)}><Trash2 size={13} /> Opravdu smazat</SmallButton>
+                    : <SmallButton tone="danger" busy={busyId === n.id} onClick={() => setConfirmDeleteId(n.id)}><Trash2 size={13} /> Smazat komentář</SmallButton>}
+                  <SmallButton busy={busyId === n.id} onClick={() => (confirmDeleteId === n.id ? setConfirmDeleteId(null) : resolveReport(n, false))}>
+                    <CheckCircle2 size={13} /> {confirmDeleteId === n.id ? 'Zpět' : 'Ponechat komentář'}
+                  </SmallButton>
+                </>
+              ) : n.status === 'open' ? (
                 <>
                   {isPassword && u && <SmallButton tone="primary" disabled={u.id === currentUserId} onClick={() => setIssueFor({ id: u.id, username: u.username, email: u.email, notificationId: n.id })}><KeyRound size={13} /> Vydat dočasné heslo</SmallButton>}
                   <SmallButton busy={busyId === n.id} onClick={() => setStatus(n, 'dismissed')}><XCircle size={13} /> Zamítnout</SmallButton>
