@@ -5,12 +5,29 @@ import { supabase } from '../lib/supabase';
 import { BarChart3, Coins, Compass, Gamepad2, Library, LogOut, Search, Settings, Shield } from 'lucide-react';
 
 export const Navbar = ({ onOpenSearch }) => {
-  const { user, logout, role } = useAuth();
+  const { user, logout, role, username: accountName } = useAuth();
   const navigate = useNavigate();
-  const onSettingsPage = useLocation().pathname.startsWith('/settings');
+  const location = useLocation();
+  const onSettingsPage = location.pathname.startsWith('/settings');
+  const [pending, setPending] = useState(0); // otevrena upozorneni pro spravce
   const [coins, setCoins] = useState(0);
 
-  const username = user?.email ? user.email.split('@')[0] : 'Čtenář';
+  const username = accountName || (user?.email ? user.email.split('@')[0] : 'Čtenář');
+
+  // Správce: odznak s počtem otevřených upozornění (žádosti o heslo...).
+  useEffect(() => {
+    if (role !== 'správce') { setPending(0); return undefined; }
+    let alive = true;
+    const refresh = async () => {
+      const { data, error } = await supabase.rpc('admin_open_notifications_count');
+      if (alive && !error && typeof data === 'number') setPending(data);
+    };
+    refresh();
+    const onCount = (e) => { if (typeof e.detail === 'number') setPending(e.detail); };
+    window.addEventListener('jomarid-admin-notifications', onCount);
+    const timer = setInterval(refresh, 60000);
+    return () => { alive = false; clearInterval(timer); window.removeEventListener('jomarid-admin-notifications', onCount); };
+  }, [role, location.pathname]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -165,10 +182,14 @@ export const Navbar = ({ onOpenSearch }) => {
               {role === 'správce' && (
                 <Link 
                   to="/admin" 
+                  title={pending > 0 ? `Admin - ${pending} otevřených upozornění` : 'Admin'}
                   style={{ color: 'var(--text-body)' }}
                   className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all text-amber-600 dark:text-amber-400"
                 >
-                  <Shield size={14} className="opacity-80" />
+                  <span className="relative inline-flex">
+                    <Shield size={14} className="opacity-80" />
+                    {pending > 0 && <span data-testid="admin-badge" className="absolute -top-1.5 -right-2.5 min-w-[14px] h-[14px] px-1 rounded-full bg-red-500 text-white text-[9px] font-black leading-[14px] text-center">{pending > 9 ? '9+' : pending}</span>}
+                  </span>
                   <span className="text-[9px] leading-none sm:hidden md:inline md:text-xs md:leading-normal">Admin</span>
                 </Link>
               )}
