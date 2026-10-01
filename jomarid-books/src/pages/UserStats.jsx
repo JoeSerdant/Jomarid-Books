@@ -286,7 +286,15 @@ export const UserStats = () => {
       });
 
       // 6. LEADERBOARDS
-      const { data: allProfiles } = await supabase.from('profiles').select('id, email, fake_xp, bonus_xp, unlocked_badges, featured_badge, highest_goal_completed').eq('show_in_leaderboard', true);
+      // Žebříček bere server (leaderboard_profiles): jen uživatelské jméno a statistiky, žádné e-maily ostatních.
+      let allProfiles = null;
+      const lbRes = await supabase.rpc('leaderboard_profiles');
+      if (!lbRes.error && Array.isArray(lbRes.data)) allProfiles = lbRes.data;
+      else {
+        // starší databáze bez funkce leaderboard_profiles
+        const { data: legacyProfiles } = await supabase.from('profiles').select('id, email, fake_xp, bonus_xp, unlocked_badges, featured_badge, highest_goal_completed').eq('show_in_leaderboard', true);
+        allProfiles = legacyProfiles;
+      }
       if (allProfiles && allProfiles.length > 0) {
         const [allBooksRes, allActsRes] = await Promise.all([
           supabase.from('user_books').select('user_id, updated_at').eq('is_read', true),
@@ -337,7 +345,7 @@ export const UserStats = () => {
           const { level: uLvl } = calculateLevelAndProgress(uXpTotal);
 
           return {
-            email: p.email ? p.email.split('@')[0] : 'Anonym',
+            email: p.username || (p.email ? p.email.split('@')[0] : 'Anonym'),
             streak: uStreak,
             level: uLvl,
             totalRead: uBooks.length,
