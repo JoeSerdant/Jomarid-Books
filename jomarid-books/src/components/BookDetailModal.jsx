@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { BookOpen, Coins, Heart, Loader2, MessageCircle, Star, X } from 'lucide-react';
+import { BookOpen, Coins, Flag, Heart, Loader2, MessageCircle, Star, X } from 'lucide-react';
 
 export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
   const { user } = useAuth();
@@ -11,6 +11,12 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
   const [newComment, setNewComment] = useState('');
   const [postingComment, setPostingComment] = useState(false);
   const [commentError, setCommentError] = useState('');
+  // nahlášení cizího komentáře správci
+  const [reportingId, setReportingId] = useState(null);
+  const [reportReason, setReportReason] = useState('spam');
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportError, setReportError] = useState('');
+  const [reported, setReported] = useState({});
 
   useEffect(() => {
     if (!book) return;
@@ -18,6 +24,9 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
     setLoadingComments(true);
     setNewComment('');
     setCommentError('');
+    setReportingId(null);
+    setReportError('');
+    setReported({});
     supabase
       .from('book_comments')
       .select('id, content, author_name, user_id, created_at')
@@ -64,6 +73,26 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
     } catch (err) {
       console.error('Nepodařilo se smazat komentář:', err);
     }
+  };
+
+  const handleReport = async (commentId) => {
+    setReportBusy(true);
+    setReportError('');
+    const { error } = await supabase.rpc('report_comment', { p_comment: commentId, p_reason: reportReason });
+    setReportBusy(false);
+    if (error) {
+      const m = String(error.message || '');
+      setReportError(
+        m.includes('too_many_reports') ? 'Moc nahlášení za krátkou dobu. Zkus to později.'
+        : m.includes('comment_not_found') ? 'Komentář už neexistuje.'
+        : m.includes('cannot_report_own') ? 'Vlastní komentář nahlásit nejde.'
+        : (error.code === 'PGRST202' || /could not find the function/i.test(m)) ? 'Nahlašování zatím není zapnuté.'
+        : 'Nahlášení se nepovedlo. Zkus to znovu.'
+      );
+      return;
+    }
+    setReported(prev => ({ ...prev, [commentId]: true }));
+    setReportingId(null);
   };
 
   return (
@@ -163,15 +192,36 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
           ) : (
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {comments.map(c => (
-                <div key={c.id} style={{ backgroundColor: 'var(--bg-secondary)' }} className="p-2.5 rounded-lg flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <span style={{ color: 'var(--text-badge)' }} className="text-[10px] font-black uppercase block">{c.author_name}</span>
-                    <span style={{ color: 'var(--text-body)' }} className="text-xs break-words">{c.content}</span>
+                <div key={c.id} style={{ backgroundColor: 'var(--bg-secondary)' }} className="p-2.5 rounded-lg">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <span style={{ color: 'var(--text-badge)' }} className="text-[10px] font-black uppercase block">{c.author_name}</span>
+                      <span style={{ color: 'var(--text-body)' }} className="text-xs break-words">{c.content}</span>
+                    </div>
+                    {c.user_id === user?.id ? (
+                      <button onClick={() => handleDeleteComment(c.id)} aria-label="Smazat svůj komentář" className="bg-transparent border-none cursor-pointer p-0.5 text-red-400 opacity-60 hover:opacity-100 shrink-0">
+                        <X size={12} />
+                      </button>
+                    ) : reported[c.id] ? (
+                      <span style={{ color: 'var(--text-muted)' }} className="text-[9px] font-bold uppercase shrink-0 opacity-70">Nahlášeno</span>
+                    ) : user && (
+                      <button onClick={() => { setReportingId(prev => (prev === c.id ? null : c.id)); setReportError(''); }} aria-label="Nahlásit komentář" aria-expanded={reportingId === c.id} title="Nahlásit komentář" style={{ color: 'var(--text-muted)' }} className="bg-transparent border-none cursor-pointer p-1 opacity-50 hover:opacity-100 shrink-0">
+                        <Flag size={12} />
+                      </button>
+                    )}
                   </div>
-                  {c.user_id === user?.id && (
-                    <button onClick={() => handleDeleteComment(c.id)} className="bg-transparent border-none cursor-pointer p-0.5 text-red-400 opacity-60 hover:opacity-100 shrink-0">
-                      <X size={12} />
-                    </button>
+                  {reportingId === c.id && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <select aria-label="Důvod nahlášení" value={reportReason} onChange={(e) => setReportReason(e.target.value)} disabled={reportBusy} style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="border rounded-lg px-2 py-1 text-[11px] font-bold outline-none">
+                        <option value="spam">Spam</option>
+                        <option value="abuse">Urážky</option>
+                        <option value="inappropriate">Nevhodný obsah</option>
+                        <option value="other">Jiný důvod</option>
+                      </select>
+                      <button onClick={() => handleReport(c.id)} disabled={reportBusy} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="border-none rounded-lg px-3 py-1 text-[10px] font-black uppercase cursor-pointer disabled:opacity-50">{reportBusy ? 'Odesílám...' : 'Odeslat'}</button>
+                      <button onClick={() => { setReportingId(null); setReportError(''); }} disabled={reportBusy} style={{ color: 'var(--text-muted)' }} className="bg-transparent border-none text-[10px] font-bold underline cursor-pointer p-0">Zrušit</button>
+                      {reportError && <span role="alert" className="text-red-500 text-[10px] basis-full">{reportError}</span>}
+                    </div>
                   )}
                 </div>
               ))}
