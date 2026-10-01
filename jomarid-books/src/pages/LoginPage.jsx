@@ -8,6 +8,17 @@ import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 const INPUT_STYLE = { backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' };
 const INPUT_CLASS = 'w-full p-3 border rounded-lg text-sm font-bold outline-none transition-colors placeholder:opacity-50';
 
+const USERNAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{1,18}[A-Za-z0-9]$/;
+const NAME_HINTS = {
+  idle: 'Nepovinné. Když ho nevyplníš, vytvoříme ho z e-mailu; změnit ho půjde v Nastavení.',
+  checking: 'Zjišťuju, jestli je volné...',
+  available: 'Jméno je volné.',
+  taken: 'Tohle jméno už někdo používá.',
+  reserved: 'Tohle jméno je rezervované. Zvol jiné.',
+  invalid: 'Zatím neplatné: 3-20 znaků, a-z bez diakritiky, číslice, tečka, podtržítko, pomlčka.',
+  error: 'Dostupnost teď nejde ověřit - jméno se zkusí použít při vytvoření účtu.',
+};
+
 const TITLES = { login: 'Vstup do čítárny', signup: 'Vytvořit nový účet', forgot: 'Zapomenuté heslo' };
 const SUBMIT_LABELS = { login: 'Odemknout čítárnu', signup: 'Zaregistrovat se', forgot: 'Poslat žádost správci' };
 
@@ -32,6 +43,23 @@ export const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const { login, user } = useAuth();
   const navigate = useNavigate();
+  const [nameCheck, setNameCheck] = useState('idle'); // idle | checking | available | taken | reserved | invalid | error
+
+  // Registrace: průběžná kontrola, jestli je vybrané jméno volné (bez prodlevy by to bylo dotaz na každé písmeno).
+  useEffect(() => {
+    if (mode !== 'signup') return undefined;
+    const wanted = username.trim();
+    if (!wanted) { setNameCheck('idle'); return undefined; }
+    if (!USERNAME_RE.test(wanted)) { setNameCheck('invalid'); return undefined; }
+    setNameCheck('checking');
+    let alive = true;
+    const timer = setTimeout(async () => {
+      const { data, error: rpcError } = await supabase.rpc('username_available_public', { p_username: wanted });
+      if (!alive) return;
+      setNameCheck(rpcError ? 'error' : data?.available ? 'available' : (data?.problem || 'taken'));
+    }, 400);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [username, mode]);
 
   if (user) return <Navigate to="/app" replace />;
 
@@ -45,7 +73,11 @@ export const LoginPage = () => {
 
     try {
       if (mode === 'signup') {
-        const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
+        const wanted = username.trim();
+        if (wanted && !USERNAME_RE.test(wanted)) { setError('Uživatelské jméno: 3-20 znaků, a-z bez diakritiky, číslice, tečka, podtržítko nebo pomlčka. Nebo pole nech prázdné.'); return; }
+        if (wanted && (nameCheck === 'taken' || nameCheck === 'reserved')) { setError('Tohle uživatelské jméno nejde použít. Zvol jiné, nebo pole nech prázdné.'); return; }
+        // Vybrané jméno jde v user_metadata; server ho při založení profilu znovu ověří (platné, volné, nerezervované).
+        const { data, error: signUpError } = await supabase.auth.signUp(wanted ? { email, password, options: { data: { username: wanted } } } : { email, password });
         if (signUpError) throw signUpError;
 
         // Supabase u již existujícího e-mailu (při zapnutém potvrzování) NEVRÁTÍ chybu,
@@ -117,6 +149,12 @@ export const LoginPage = () => {
               className={INPUT_CLASS}
               required
             />
+          )}
+          {mode === 'signup' && (
+            <div>
+              <input type="text" placeholder="Uživatelské jméno (nepovinné)" value={username} onChange={e => setUsername(e.target.value)} autoComplete="off" autoCapitalize="none" spellCheck={false} maxLength={20} aria-describedby="signup-username-hint" style={INPUT_STYLE} className={INPUT_CLASS} />
+              <p id="signup-username-hint" aria-live="polite" style={{ color: nameCheck === 'available' ? '#10b981' : (nameCheck === 'idle' || nameCheck === 'checking' || nameCheck === 'error') ? 'var(--text-muted)' : '#ef4444' }} className="text-[11px] font-bold m-0 mt-1.5 px-1 leading-snug">{NAME_HINTS[nameCheck]}</p>
+            </div>
           )}
 
           {error && (
