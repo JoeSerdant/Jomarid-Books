@@ -10,9 +10,25 @@ export const Navbar = ({ onOpenSearch }) => {
   const location = useLocation();
   const onSettingsPage = location.pathname.startsWith('/settings');
   const [pending, setPending] = useState(0); // otevrena upozorneni pro spravce
+  const [unread, setUnread] = useState(0); // neprectena oznameni uzivatele (tecka u ozubeneho kola)
   const [coins, setCoins] = useState(0);
 
   const username = accountName || (user?.email ? user.email.split('@')[0] : 'Čtenář');
+
+  // Nepřečtená oznámení (od správce / autorů): počet u ozubeného kola, kde je záložka Oznámení.
+  useEffect(() => {
+    if (!user) { setUnread(0); return undefined; }
+    let alive = true;
+    const refresh = async () => {
+      const { data, error } = await supabase.rpc('my_unread_notifications_count');
+      if (alive && !error && typeof data === 'number') setUnread(data);
+    };
+    refresh();
+    const onCount = (e) => { if (typeof e.detail === 'number') setUnread(e.detail); };
+    window.addEventListener('jomarid-user-notifications', onCount);
+    const timer = setInterval(refresh, 60000);
+    return () => { alive = false; clearInterval(timer); window.removeEventListener('jomarid-user-notifications', onCount); };
+  }, [user?.id, location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Správce: odznak s počtem otevřených upozornění (žádosti o heslo...).
   useEffect(() => {
@@ -230,10 +246,13 @@ export const Navbar = ({ onOpenSearch }) => {
             aria-current={onSettingsPage ? 'page' : undefined}
             style={{ backgroundColor: onSettingsPage ? 'var(--bg-primary)' : 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: onSettingsPage ? 'var(--text-primary)' : 'var(--text-body)' }}
             className="p-2 border rounded-xl cursor-pointer hover:brightness-95 active:scale-95 transition-all flex items-center justify-center no-underline"
-            title="Nastavení"
-            aria-label="Nastavení"
+            title={unread > 0 ? `Nastavení - nepřečtených oznámení: ${unread}` : 'Nastavení'}
+            aria-label={unread > 0 ? `Nastavení, nepřečtených oznámení: ${unread}` : 'Nastavení'}
           >
-            <Settings size={16} />
+            <span className="relative inline-flex">
+              <Settings size={16} />
+              {unread > 0 && <span data-testid="notif-badge" className="absolute -top-2 -right-2.5 min-w-[14px] h-[14px] px-1 rounded-full bg-red-500 text-white text-[9px] font-black leading-[14px] text-center">{unread > 9 ? '9+' : unread}</span>}
+            </span>
           </Link>
 
           {user ? (
