@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Button, Card } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
-import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle, LayoutDashboard, UserCog, Loader2, CheckCircle2, X, ChevronLeft, ChevronRight, Ban, KeyRound, Trash2, ShieldCheck } from 'lucide-react';
+import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle, LayoutDashboard, UserCog, Loader2, CheckCircle2, X, ChevronLeft, ChevronRight, Ban, KeyRound, Trash2, ShieldCheck, Bell, Copy } from 'lucide-react';
 
 // ============================================================================
 // Admin: Přehled a správa účtů (pomocné prvky, záložka Přehled, záložka Účty)
@@ -52,6 +52,12 @@ const ADMIN_ERRORS = {
   user_not_found: 'Účet už neexistuje (mohl být mezitím smazán).',
   profile_not_found: 'Účet nemá profil - založí se při jeho příštím přihlášení.',
   invalid_role: 'Neplatná role.',
+  cannot_reset_self: 'Heslo sobě vydat nejde - použij Supabase (Authentication -> Users) nebo druhého správce.',
+  notification_not_found: 'Upozornění už neexistuje (mohlo být mezitím smazáno).',
+  invalid_status: 'Neplatný stav upozornění.',
+  username_invalid: 'Neplatné uživatelské jméno (3-20 znaků, a-z, číslice, . _ -).',
+  username_reserved: 'Tohle jméno je rezervované.',
+  username_taken: 'Tohle jméno už někdo používá.',
 };
 const mapAdminError = (err) => {
   const msg = String(err?.message || '');
@@ -318,6 +324,8 @@ const AccountDetail = ({ userId, currentUserId, onClose, onChanged }) => {
   const [confirmBan, setConfirmBan] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [tempOpen, setTempOpen] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
 
   const load = useCallback(async () => {
     const { data, error: rpcError } = await supabase.rpc('admin_user_detail', { p_user_id: userId });
@@ -325,6 +333,7 @@ const AccountDetail = ({ userId, currentUserId, onClose, onChanged }) => {
     setError('');
     setDetail(data);
     setRoleDraft(data?.profile?.role || '');
+    setNameDraft(data?.profile?.username || '');
   }, [userId]);
   useEffect(() => { setDetail(null); setMsg(null); setConfirmBan(false); load(); }, [load]);
 
@@ -355,14 +364,6 @@ const AccountDetail = ({ userId, currentUserId, onClose, onChanged }) => {
     setDeleteOpen(false);
     onChanged?.();
     onClose();
-  };
-
-  const sendReset = async () => {
-    setBusy(true);
-    setMsg(null);
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(detail.account.email, { redirectTo: `${window.location.origin}/reset-password` });
-    setBusy(false);
-    setMsg(resetError ? { type: 'error', text: 'Odkaz se nepodařilo odeslat: ' + resetError.message } : { type: 'success', text: `Odkaz pro obnovu hesla odeslán na ${detail.account.email}.` });
   };
 
   const account = detail?.account;
@@ -423,7 +424,21 @@ const AccountDetail = ({ userId, currentUserId, onClose, onChanged }) => {
               <section className="space-y-3">
                 <h4 className="text-xs font-black uppercase tracking-wider m-0">Akce</h4>
                 {msg && <InlineMessage type={msg.type}>{msg.text}</InlineMessage>}
-                {isSelf && <InlineMessage>Na vlastním účtu jde jen poslat odkaz pro obnovu hesla. Roli, blokování a mazání může provést jiný správce.</InlineMessage>}
+                {isSelf && <InlineMessage>Na vlastním účtu nejde měnit roli, blokovat, mazat ani vydat dočasné heslo - to může provést jiný správce.</InlineMessage>}
+
+                {profile?.must_change_password && <InlineMessage>Čeká na změnu hesla: správce vydal dočasné heslo a uživatel si zatím nenastavil vlastní.</InlineMessage>}
+
+                {profile && 'username' in profile && (
+                  <div className="flex items-end gap-2 flex-wrap">
+                    <label className="block flex-1 min-w-[140px]">
+                      <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block mb-1">Uživatelské jméno</span>
+                      <input aria-label="Uživatelské jméno" value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} maxLength={20} autoCapitalize="none" spellCheck={false} disabled={busy} style={selectStyle} className="w-full p-2.5 border rounded-lg text-xs font-bold outline-none disabled:opacity-50" />
+                    </label>
+                    <SmallButton busy={busy} disabled={nameDraft.trim() === (profile.username || '') || nameDraft.trim().length < 3} onClick={() => run(() => supabase.rpc('admin_set_username', { p_user: userId, p_username: nameDraft.trim() }), 'Jméno přejmenováno.')}>
+                      <UserCog size={13} /> Přejmenovat
+                    </SmallButton>
+                  </div>
+                )}
 
                 <div className="flex items-end gap-2 flex-wrap">
                   <label className="block flex-1 min-w-[140px]">
@@ -439,7 +454,7 @@ const AccountDetail = ({ userId, currentUserId, onClose, onChanged }) => {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <SmallButton busy={busy} onClick={sendReset}><KeyRound size={13} /> Poslat odkaz pro reset hesla</SmallButton>
+                  <SmallButton busy={busy} disabled={isSelf} onClick={() => setTempOpen(true)}><KeyRound size={13} /> Vydat dočasné heslo</SmallButton>
                   {isBanned ? (
                     <SmallButton busy={busy} disabled={isSelf} onClick={() => run(() => supabase.rpc('admin_set_user_banned', { p_user_id: userId, p_banned: false }), 'Účet odblokován.')}><Ban size={13} /> Odblokovat</SmallButton>
                   ) : !confirmBan ? (
@@ -491,6 +506,216 @@ const AccountDetail = ({ userId, currentUserId, onClose, onChanged }) => {
         onConfirm={doDelete}
         onCancel={() => setDeleteOpen(false)}
       />
+
+      {tempOpen && (
+        <TempPasswordDialog
+          target={{ id: userId, username: profile?.username || (account?.email || '').split('@')[0], email: account?.email }}
+          onClose={() => setTempOpen(false)}
+          onIssued={() => { load(); onChanged?.(); }}
+        />
+      )}
+    </div>
+  );
+};
+
+// ============================================================================
+// Admin: Upozornění (žádosti o heslo...) a vydání dočasného hesla
+// ============================================================================
+// Dočasné heslo se ukáže JEDNOU hned po vydání (nikde se neukládá). Uživatel se odhlásí ze všech
+// zařízení a při příštím přihlášení si musí nastavit vlastní heslo.
+export const TempPasswordDialog = ({ target, onClose, onIssued }) => {
+  const [step, setStep] = useState('confirm'); // 'confirm' | 'result'
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape' && !busy) onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [busy, onClose]);
+
+  const issue = async () => {
+    setBusy(true);
+    setError('');
+    const { data, error: rpcError } = await supabase.rpc('admin_issue_temp_password', { p_user: target.id, p_notification: target.notificationId || null });
+    setBusy(false);
+    if (rpcError) return setError(mapAdminError(rpcError));
+    setResult(data);
+    setStep('result');
+    onIssued?.();
+  };
+
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(result.temp_password); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* schránka nemusí být dostupná */ }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[130] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3" onClick={() => { if (!busy) onClose(); }}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Dočasné heslo"
+        onClick={(e) => e.stopPropagation()}
+        style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
+        className="border rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-4 max-h-[92dvh] overflow-y-auto"
+      >
+        {step === 'confirm' ? (
+          <>
+            <h3 className="text-base font-black uppercase tracking-tight m-0 flex items-center gap-2"><KeyRound size={18} /> Vydat dočasné heslo?</h3>
+            <p className="text-sm m-0 leading-relaxed">Účet: <b className="break-all">{target.username || target.email}</b>{target.email && target.username ? <span style={{ color: 'var(--text-muted)' }} className="break-all"> ({target.email})</span> : null}</p>
+            <ul style={{ color: 'var(--text-muted)' }} className="text-xs m-0 pl-4 space-y-1.5 leading-relaxed">
+              <li>Staré heslo přestane platit a uživatel bude <b>odhlášen ze všech zařízení</b> (už přihlášená zařízení se odhlásí nejpozději do hodiny, než vyprší jejich přihlášení).</li>
+              <li>Heslo se ti ukáže <b>jen jednou</b> a nikde se neukládá.</li>
+              <li>Předej ho uživateli <b>mimo aplikaci</b> a nejdřív ověř, že žádá opravdu majitel účtu. Shoda e-mailu a jména to sama nedokazuje.</li>
+              <li>Při přihlášení si uživatel musí hned nastavit vlastní heslo.</li>
+            </ul>
+            {error && <InlineMessage type="error">{error}</InlineMessage>}
+            <div className="flex gap-2 justify-end">
+              <SmallButton onClick={onClose} disabled={busy}>Zrušit</SmallButton>
+              <SmallButton tone="danger" busy={busy} onClick={issue}><KeyRound size={13} /> Vydat heslo</SmallButton>
+            </div>
+          </>
+        ) : (
+          <>
+            <h3 className="text-base font-black uppercase tracking-tight m-0 flex items-center gap-2"><CheckCircle2 size={18} style={{ color: '#10b981' }} /> Dočasné heslo je vydané</h3>
+            <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0">Účet <b>{result?.username || target.username}</b>. Heslo se ukazuje jen teď - až dialog zavřeš, už ho neuvidíš (můžeš vydat nové).</p>
+            <div style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }} className="border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <code data-testid="temp-password" className="min-w-0 text-lg font-black tracking-wider break-all select-all">{result?.temp_password}</code>
+              <SmallButton onClick={copy}><Copy size={13} /> {copied ? 'Zkopírováno' : 'Kopírovat'}</SmallButton>
+            </div>
+            <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">Předej ho uživateli mimo aplikaci. Ze všech zařízení se odhlásí (nejpozději do hodiny) a po přihlášení si musí nastavit vlastní heslo.</p>
+            <div className="flex justify-end"><SmallButton tone="primary" onClick={onClose}>Hotovo</SmallButton></div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const NOTIF_STATUS = { open: ['Otevřené', 'warn'], done: ['Vyřízeno', 'ok'], dismissed: ['Zamítnuto', 'muted'] };
+const NOTIF_FILTERS = [['open', 'Otevřené'], ['all', 'Vše']];
+
+export const NotificationsTab = ({ onCountChange, currentUserId }) => {
+  const [filter, setFilter] = useState('open');
+  const [items, setItems] = useState(null);
+  const [error, setError] = useState('');
+  const [missing, setMissing] = useState(false);
+  const [busyId, setBusyId] = useState(null);
+  const [msg, setMsg] = useState(null);
+  const [issueFor, setIssueFor] = useState(null);
+
+  const load = useCallback(async () => {
+    const { data, error: rpcError } = await supabase.rpc('admin_notifications_list', { p_status: filter });
+    if (rpcError) {
+      if (rpcError.code === 'PGRST202' || /could not find the function|does not exist/i.test(String(rpcError.message || ''))) setMissing(true);
+      else setError(mapAdminError(rpcError));
+      setItems([]);
+      return;
+    }
+    setMissing(false);
+    setError('');
+    setItems(data || []);
+    const { data: count } = await supabase.rpc('admin_open_notifications_count');
+    if (typeof count === 'number') {
+      onCountChange?.(count);
+      window.dispatchEvent(new CustomEvent('jomarid-admin-notifications', { detail: count }));
+    }
+  }, [filter, onCountChange]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const setStatus = async (n, status) => {
+    setBusyId(n.id);
+    setMsg(null);
+    const { error: rpcError } = await supabase.rpc('admin_set_notification_status', { p_id: n.id, p_status: status });
+    setBusyId(null);
+    if (rpcError) return setMsg({ type: 'error', text: mapAdminError(rpcError) });
+    await load();
+  };
+
+  const clearHandled = async () => {
+    setMsg(null);
+    const { data, error: rpcError } = await supabase.rpc('admin_clear_handled_notifications');
+    if (rpcError) return setMsg({ type: 'error', text: mapAdminError(rpcError) });
+    setMsg({ type: 'success', text: `Smazáno vyřízených upozornění: ${data?.deleted ?? 0}.` });
+    await load();
+  };
+
+  if (missing) {
+    return <InlineMessage type="error">Upozornění potřebují novější databázi. Spusť v Supabase (SQL Editor) skript <b>username_zadosti.sql</b> a obnov stránku.</InlineMessage>;
+  }
+
+  const hasHandled = (items || []).some(n => n.status !== 'open');
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div role="group" aria-label="Filtr upozornění" className="flex gap-1">
+          {NOTIF_FILTERS.map(([value, label]) => (
+            <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}
+              style={filter === value ? { backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' } : { backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }}
+              className="px-3 py-1.5 rounded-lg border-none cursor-pointer text-[11px] font-black uppercase tracking-wider">{label}</button>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <SmallButton onClick={load}><RefreshCw size={13} /> Obnovit</SmallButton>
+          {filter === 'all' && hasHandled && <SmallButton onClick={clearHandled}><Trash2 size={13} /> Smazat vyřízená</SmallButton>}
+        </div>
+      </div>
+
+      {msg && <InlineMessage type={msg.type}>{msg.text}</InlineMessage>}
+      {error && <InlineMessage type="error">{error}</InlineMessage>}
+      {items === null && <p style={{ color: 'var(--text-muted)' }} className="text-xs font-bold flex items-center gap-2 m-0"><Loader2 size={14} className="animate-spin" /> Načítám...</p>}
+      {items && items.length === 0 && !error && (
+        <Card className="text-center py-10"><p style={{ color: 'var(--text-muted)' }} className="text-xs font-bold m-0">{filter === 'open' ? 'Žádná otevřená upozornění.' : 'Zatím žádná upozornění.'}</p></Card>
+      )}
+
+      {(items || []).map(n => {
+        const [statusLabel, statusTone] = NOTIF_STATUS[n.status] || [n.status, 'muted'];
+        const u = n.user;
+        const isPassword = n.kind === 'password_request';
+        return (
+          <div key={n.id} data-testid="notification">
+          <Card className="space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h4 className="text-sm font-black uppercase tracking-tight m-0 flex items-center gap-2"><KeyRound size={15} /> {n.title}</h4>
+                <p style={{ color: 'var(--text-muted)' }} className="text-[11px] m-0 mt-1 opacity-80">{relativeTime(n.created_at)} · {formatDateTime(n.created_at)}{n.handled_at ? ` · vyřízeno ${formatDateTime(n.handled_at)}` : ''}</p>
+              </div>
+              <Pill tone={statusTone}>{statusLabel}</Pill>
+            </div>
+
+            {u ? (
+              <dl className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1 text-xs m-0">
+                <dt style={{ color: 'var(--text-muted)' }} className="font-bold">Účet</dt><dd className="m-0 font-semibold break-all">{u.username || '-'} <span style={{ color: 'var(--text-muted)' }}>({ROLE_LABELS[u.role] || u.role})</span></dd>
+                <dt style={{ color: 'var(--text-muted)' }} className="font-bold">E-mail</dt><dd className="m-0 font-semibold break-all">{u.email}</dd>
+                <dt style={{ color: 'var(--text-muted)' }} className="font-bold">Založen</dt><dd className="m-0 font-semibold">{formatDate(u.created_at)}</dd>
+                <dt style={{ color: 'var(--text-muted)' }} className="font-bold">Poslední přihlášení</dt><dd className="m-0 font-semibold">{u.last_sign_in_at ? relativeTime(u.last_sign_in_at) : 'nikdy'}</dd>
+              </dl>
+            ) : <InlineMessage>Účet už neexistuje.</InlineMessage>}
+
+            {n.body && <p style={{ backgroundColor: 'var(--bg-secondary)' }} className="text-sm m-0 rounded-lg px-3 py-2 leading-relaxed whitespace-pre-wrap break-words">„{n.body}“</p>}
+            {isPassword && <p style={{ color: 'var(--text-muted)' }} className="text-[11px] m-0 leading-relaxed opacity-90">{n.payload?.logged_in ? 'Žádost poslal přihlášený uživatel z Nastavení.' : 'Žádost poslal nepřihlášený člověk (zapomenuté heslo).'} E-mail i jméno sedí, ale to samo nedokazuje, že žádá majitel účtu - ověř to mimo aplikaci.</p>}
+
+            <div className="flex flex-wrap gap-2">
+              {n.status === 'open' ? (
+                <>
+                  {isPassword && u && <SmallButton tone="primary" disabled={u.id === currentUserId} onClick={() => setIssueFor({ id: u.id, username: u.username, email: u.email, notificationId: n.id })}><KeyRound size={13} /> Vydat dočasné heslo</SmallButton>}
+                  <SmallButton busy={busyId === n.id} onClick={() => setStatus(n, 'dismissed')}><XCircle size={13} /> Zamítnout</SmallButton>
+                  <SmallButton busy={busyId === n.id} onClick={() => setStatus(n, 'done')}><CheckCircle2 size={13} /> Vyřízeno</SmallButton>
+                </>
+              ) : (
+                <SmallButton busy={busyId === n.id} onClick={() => setStatus(n, 'open')}><RefreshCw size={13} /> Znovu otevřít</SmallButton>
+              )}
+            </div>
+          </Card>
+          </div>
+        );
+      })}
+
+      {issueFor && <TempPasswordDialog target={issueFor} onClose={() => setIssueFor(null)} onIssued={load} />}
     </div>
   );
 };
@@ -620,7 +845,14 @@ export const AdminDashboard = () => {
   const [comments, setComments] = useState([]);
   
   // --- Stavy rozhraní (UX) ---
-  const [activeTab, setActiveTab] = useState('overview'); // overview | accounts | books | homepage | users | logs
+  const [activeTab, setActiveTab] = useState('overview'); // overview | notifications | accounts | books | homepage | users | logs
+  const [pendingCount, setPendingCount] = useState(0); // otevrena upozorneni (odznak na zalozce)
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await supabase.rpc('admin_open_notifications_count');
+      if (!error && typeof data === 'number') setPendingCount(data);
+    })();
+  }, []);
   const { user: adminUser } = useAuth();
   const [accountsPreset, setAccountsPreset] = useState(null); // filtr předaný z Přehledu do záložky Účty
   const [bulkGrantOpen, setBulkGrantOpen] = useState(false); // potvrzení hromadného rozdání knihy
@@ -685,7 +917,7 @@ export const AdminDashboard = () => {
       // 2. Načtení profilů
       const { data: p } = await supabase
         .from('profiles')
-        .select('id, email, role, created_at, fake_xp, coins, unlocked_badges, featured_badge, streak_freezes, highest_goal_completed, pen_name')
+        .select('*')
         .order('created_at', { ascending: false });
       
       // 3. Načtení logů
@@ -840,7 +1072,7 @@ export const AdminDashboard = () => {
     // nehada a author_id zustane prazdne, nez aby se kniha omylem prirad
     // ila spatnemu uctu.
     const targetUsername = (author || '').trim();
-    const matchingProfiles = profiles.filter(p => p.email && p.email.split('@')[0] === targetUsername);
+    const matchingProfiles = profiles.filter(p => p.email && (p.username || p.email.split('@')[0]) === targetUsername);
     let resolvedProfile = null;
     if (matchingProfiles.length === 1) {
       resolvedProfile = matchingProfiles[0];
@@ -1223,6 +1455,7 @@ export const AdminDashboard = () => {
       <div className="flex border-b font-black text-xs uppercase tracking-wider space-x-1 overflow-x-auto scrollbar-hide" style={{ borderColor: 'var(--border-color)' }}>
         {[
           { id: 'overview', label: 'Přehled', icon: <LayoutDashboard size={14} /> },
+          { id: 'notifications', label: 'Upozornění', icon: <Bell size={14} />, badge: pendingCount },
           { id: 'accounts', label: 'Účty', icon: <UserCog size={14} /> },
           { id: 'books', label: 'Knihovna & Editace', icon: <Database size={14} /> },
           { id: 'homepage', label: 'Domovská stránka', icon: <Layout size={14} /> },
@@ -1240,6 +1473,7 @@ export const AdminDashboard = () => {
             className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-3 border-t border-x rounded-t-xl transition-all cursor-pointer -mb-[1px]`}
           >
             {tab.icon} {tab.label}
+            {tab.badge > 0 && <span data-testid="tab-badge" className="min-w-[18px] h-[18px] px-1.5 rounded-full bg-red-500 text-white text-[10px] font-black leading-[18px] text-center">{tab.badge}</span>}
           </button>
         ))}
       </div>
@@ -1256,6 +1490,10 @@ export const AdminDashboard = () => {
           onOpenAccounts={(preset) => { setAccountsPreset({ ...preset, nonce: Date.now() }); setActiveTab('accounts'); }}
           onOpenBooks={() => setActiveTab('books')}
         />
+      )}
+
+      {activeTab === 'notifications' && (
+        <NotificationsTab onCountChange={setPendingCount} currentUserId={adminUser?.id} />
       )}
 
       {activeTab === 'accounts' && (
