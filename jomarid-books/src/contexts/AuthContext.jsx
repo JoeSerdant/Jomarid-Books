@@ -16,11 +16,16 @@ export function AuthProvider({ children }) {
  // true, kdyz uzivatel prisel z odkazu "obnova hesla" (udalost PASSWORD_RECOVERY) -
  // App ho pak presmeruje na /reset-password, kde si nastavi nove heslo.
  const [recoveryMode, setRecoveryMode] = useState(false);
+ // uzivatelske jmeno (z profilu; jinak zaklad e-mailu) a priznak "spravce vydal docasne heslo - musi si nastavit vlastni"
+ const [username, setUsername] = useState('');
+ const [mustChange, setMustChange] = useState(false);
 
  async function syncProfile(sessionUser) {
    if (!sessionUser) {
      setUser(null);
      setRole(null);
+     setUsername('');
+     setMustChange(false);
      setLoading(false);
      return;
    }
@@ -28,7 +33,7 @@ export function AuthProvider({ children }) {
    try {
      let { data, error } = await supabase
        .from('profiles')
-       .select('role')
+       .select('*')
        .eq('id', sessionUser.id)
        .single();
 
@@ -54,6 +59,8 @@ export function AuthProvider({ children }) {
        setRole(null);
      } else {
        setRole(data?.role || 'uživatel');
+       setUsername(data?.username || (sessionUser.email ? sessionUser.email.split('@')[0] : ''));
+       setMustChange(!!data?.must_change_password);
      }
    } catch (catchedError) {
      console.error("Auth sync crash:", catchedError);
@@ -87,7 +94,7 @@ export function AuthProvider({ children }) {
  };
 
  return (
-   <AuthContext.Provider value={{ user, role, loading, login, logout, recoveryMode, clearRecovery: () => setRecoveryMode(false), refreshProfile: () => syncProfile(user) }}>
+   <AuthContext.Provider value={{ user, role, loading, login, logout, username, mustChangePassword: mustChange, recoveryMode: recoveryMode || mustChange, clearRecovery: () => { setRecoveryMode(false); setMustChange(false); }, refreshProfile: () => syncProfile(user) }}>
      {children}
    </AuthContext.Provider>
  );
