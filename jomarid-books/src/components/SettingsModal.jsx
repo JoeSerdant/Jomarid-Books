@@ -8,6 +8,7 @@ import {
   THEMES, FONT_FAMILIES, LINE_HEIGHTS, TEXT_WIDTHS, ALIGNMENTS, LETTER_SPACINGS, PAGE_MARGINS, PAGE_BREAKS, PAGE_ANIMATIONS, MOTION_OPTIONS,
   FONT_SIZE_RANGE, AUTO_ADVANCE_RANGE, WPM_RANGE, NIGHT_RANGE,
   loadReaderPrefs, saveReaderPref, resetReaderPrefs, readerTypography, loadMotionPref, saveMotionPref,
+  CUSTOM_THEME_KEY, CUSTOM_PRESETS, resolveTheme, deriveTheme, normalizeHex, contrast,
 } from '../theme';
 
 // ---- Sdílené stavební prvky nastavení ----
@@ -412,7 +413,29 @@ const THEME_OPTIONS = [
   { key: 'saas', label: 'Světlý' },
   { key: 'dark', label: 'Tmavý' },
   { key: 'emerald', label: 'Dřevo a zeleň' },
+  { key: CUSTOM_THEME_KEY, label: 'Vlastní' },
 ];
+
+// Jedna barva: nativní výběr barvy + zápis hex kódu (platí se až když je kód úplný).
+const ColorField = ({ label, value, onChange }) => {
+  const [text, setText] = useState(value);
+  useEffect(() => { setText(value); }, [value]);
+  return (
+    <div>
+      <Label>{label}</Label>
+      <div className="flex items-center gap-2">
+        <input type="color" aria-label={label} value={value} onChange={e => onChange(e.target.value)} className="h-9 w-12 p-0 border-none rounded-md cursor-pointer bg-transparent" />
+        <input
+          type="text" aria-label={`${label} (hex kód)`} value={text} maxLength={7} spellCheck={false}
+          onChange={e => { setText(e.target.value); const h = normalizeHex(e.target.value); if (h) onChange(h); }}
+          onBlur={() => setText(value)}
+          style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
+          className="w-24 px-2 py-1.5 rounded-lg border text-xs font-mono uppercase"
+        />
+      </div>
+    </div>
+  );
+};
 
 const Segmented = ({ options, value, onChange, ariaLabel }) => (
   <div role="radiogroup" aria-label={ariaLabel} className="flex gap-1.5">
@@ -459,15 +482,15 @@ const RangeRow = ({ label, valueLabel, min, max, step = 1, value, onChange, hint
 const Label = ({ children }) => <span className="text-xs font-bold block mb-1.5">{children}</span>;
 
 const AppearanceTab = () => {
-  const { currentTheme, changeTheme } = useTheme();
+  const { currentTheme, changeTheme, customColors, changeCustomColors } = useTheme();
   const [motion, setMotion] = useState(loadMotionPref);
 
   return (
     <div className="space-y-4">
       <Section title="Vzhled aplikace" description="Platí v celé appce - od knihovny přes čtečku až po minihry.">
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {THEME_OPTIONS.map(({ key, label }) => {
-            const t = THEMES[key];
+            const t = key === CUSTOM_THEME_KEY ? deriveTheme(customColors.bg, customColors.accent) : resolveTheme(key);
             const active = currentTheme === key;
             return (
               <button
@@ -488,6 +511,34 @@ const AppearanceTab = () => {
             );
           })}
         </div>
+        {currentTheme === CUSTOM_THEME_KEY && (
+          <div className="space-y-3 pt-1">
+            <div className="flex flex-wrap gap-4">
+              <ColorField label="Pozadí" value={customColors.bg} onChange={bg => changeCustomColors({ ...customColors, bg })} />
+              <ColorField label="Zvýraznění" value={customColors.accent} onChange={accent => changeCustomColors({ ...customColors, accent })} />
+            </div>
+            <div>
+              <Label>Hotové kombinace</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {CUSTOM_PRESETS.map(p => (
+                  <button
+                    key={p.label} type="button" onClick={() => changeCustomColors({ bg: p.bg, accent: p.accent })}
+                    style={{ backgroundColor: p.bg, color: deriveTheme(p.bg, p.accent)['--text-body'], borderColor: p.accent }}
+                    className="px-2.5 py-1 rounded-full border-2 text-[11px] font-bold cursor-pointer"
+                  >{p.label}</button>
+                ))}
+              </div>
+            </div>
+            {contrast(customColors.accent, customColors.bg) < 3 && (
+              <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">
+                Zvýraznění je na tomhle pozadí špatně vidět. Zkus světlejší nebo tmavší odstín.
+              </p>
+            )}
+            <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 opacity-80 leading-relaxed">
+              Ostatní barvy (karty, okraje, text) se dopočítají samy a text se vždy upraví tak, aby byl čitelný.
+            </p>
+          </div>
+        )}
       </Section>
 
       <Section title="Pohyb a animace" description="Omezení vypne přechody a animace v celé aplikaci (včetně otáčení stránek ve čtečce). Hodí se při nevolnosti z pohybu i na slabších telefonech.">

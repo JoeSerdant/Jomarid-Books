@@ -43,6 +43,94 @@ export const THEMES = {
  }
 };
 
+// --- Vlastní motiv ---
+// Uživatel zadá jen dvě barvy (pozadí a zvýraznění), zbylých 12 proměnných se odvodí a text se
+// vždy dorovná na čitelný kontrast (WCAG). Pozor: index.html čte uloženou kopii proměnných.
+export const CUSTOM_THEME_KEY = 'custom';
+export const CUSTOM_THEME_STORAGE = 'jomarid-books-theme-custom'; // {"bg":"#rrggbb","accent":"#rrggbb"}
+export const CUSTOM_VARS_STORAGE = 'jomarid-books-theme-vars';    // odvozené proměnné, čte je index.html před vykreslením
+export const CUSTOM_DEFAULT = { bg: '#1e293b', accent: '#14b8a6' };
+export const CUSTOM_PRESETS = [
+  { label: 'Půlnoc', bg: '#0b1020', accent: '#60a5fa' },
+  { label: 'Fialová', bg: '#1a1033', accent: '#a855f7' },
+  { label: 'Růžová', bg: '#fff1f2', accent: '#e11d48' },
+  { label: 'Papír', bg: '#f5efe0', accent: '#b45309' },
+  { label: 'Oceán', bg: '#06222b', accent: '#22d3ee' },
+  { label: 'Grafit', bg: '#18181b', accent: '#f59e0b' },
+];
+
+export const normalizeHex = (v) => {
+  if (typeof v !== 'string') return null;
+  let h = v.trim().replace(/^#/, '');
+  if (/^[0-9a-f]{3}$/i.test(h)) h = h.split('').map(c => c + c).join('');
+  return /^[0-9a-f]{6}$/i.test(h) ? `#${h.toLowerCase()}` : null;
+};
+const toRgb = (hex) => { const h = normalizeHex(hex).slice(1); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); };
+const toHex = (rgb) => `#${rgb.map(c => Math.round(Math.min(255, Math.max(0, c))).toString(16).padStart(2, '0')).join('')}`;
+const mix = (a, b, t) => { const x = toRgb(a), y = toRgb(b); return toHex(x.map((c, i) => c + (y[i] - c) * t)); };
+export const luminance = (hex) => {
+  const [r, g, b] = toRgb(hex).map(c => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+export const contrast = (a, b) => { const l1 = luminance(a), l2 = luminance(b); return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05); };
+// Posouvá barvu k černé/bílé, dokud nemá proti pozadí aspoň požadovaný kontrast.
+const ensureContrast = (fg, bg, min) => {
+  if (contrast(fg, bg) >= min) return fg;
+  const target = bestOn(bg);
+  for (let t = 0.05; t <= 1.0001; t += 0.05) { const c = mix(fg, target, t); if (contrast(c, bg) >= min) return c; }
+  return target;
+};
+const bestOn = (bg) => (contrast('#ffffff', bg) >= contrast('#000000', bg) ? '#ffffff' : '#000000');
+
+export const isDarkColor = (hex) => bestOn(hex) === '#ffffff';
+
+export const deriveTheme = (bgIn, accentIn) => {
+  const bg = normalizeHex(bgIn) || CUSTOM_DEFAULT.bg;
+  const accent = normalizeHex(accentIn) || CUSTOM_DEFAULT.accent;
+  const dark = isDarkColor(bg);
+  const text = ensureContrast(mix(dark ? '#ffffff' : '#000000', bg, 0.08), bg, 9);
+  const card = dark ? mix(bg, '#ffffff', 0.06) : mix(bg, '#ffffff', 0.55);
+  const secondary = dark ? mix(bg, '#ffffff', 0.11) : mix(bg, '#ffffff', 0.7);
+  const badge = mix(bg, accent, dark ? 0.28 : 0.14);
+  const [r, g, b] = toRgb(bg);
+  return {
+    '--bg-body': bg,
+    '--text-body': text,
+    '--bg-card': card,
+    '--border-color': dark ? mix(bg, '#ffffff', 0.14) : mix(bg, '#000000', 0.11),
+    '--bg-navbar': `rgba(${r}, ${g}, ${b}, 0.85)`,
+    '--text-muted': ensureContrast(mix(text, bg, 0.38), bg, 4.5),
+    '--bg-primary': accent,
+    '--text-primary': bestOn(accent),
+    '--bg-secondary': secondary,
+    '--text-secondary': ensureContrast(mix(text, secondary, 0.12), secondary, 7),
+    '--bg-badge': badge,
+    '--text-badge': ensureContrast(accent, badge, 4.5),
+  };
+};
+
+export const loadCustomColors = () => {
+  try {
+    const o = JSON.parse(localStorage.getItem(CUSTOM_THEME_STORAGE));
+    return { bg: normalizeHex(o && o.bg) || CUSTOM_DEFAULT.bg, accent: normalizeHex(o && o.accent) || CUSTOM_DEFAULT.accent };
+  } catch { return { ...CUSTOM_DEFAULT }; }
+};
+export const saveCustomColors = (colors) => {
+  const vars = deriveTheme(colors.bg, colors.accent);
+  try {
+    localStorage.setItem(CUSTOM_THEME_STORAGE, JSON.stringify({ bg: vars['--bg-body'], accent: vars['--bg-primary'] }));
+    localStorage.setItem(CUSTOM_VARS_STORAGE, JSON.stringify([vars['--bg-body'], vars['--text-body'], isDarkColor(vars['--bg-body']) ? 'dark' : 'light']));
+  } catch { /* nevadí */ }
+};
+
+// Proměnné motivu podle klíče (vestavěné i vlastní) + jestli je tmavý.
+export const resolveTheme = (key) => {
+  if (key === CUSTOM_THEME_KEY) { const c = loadCustomColors(); return deriveTheme(c.bg, c.accent); }
+  return THEMES[key] || THEMES.saas;
+};
+export const DARK_THEMES = ['dark', 'emerald'];
+export const isDarkTheme = (key, vars) => (key === CUSTOM_THEME_KEY ? isDarkColor(vars['--bg-body']) : DARK_THEMES.includes(key));
+
 // Sdílené volby čtečky - používá je ReaderPage i Nastavení, aby se seznamy
 // voleb a klíče v localStorage nikdy nerozjely (stejný princip jako leveling.js).
 export const FONT_FAMILIES = {
