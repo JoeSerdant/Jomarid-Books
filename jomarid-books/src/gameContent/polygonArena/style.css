@@ -264,3 +264,17 @@ button.cc:hover{border-color:var(--accent)}
 
 /* Tlačítko Hrát zůstává vidět i na nízkém displeji (zbytek nabídky se pod ním posouvá). */
 .playDock{position:sticky;bottom:-18px;margin:0 -20px;padding:12px 20px 18px;background:linear-gradient(to bottom,rgba(2,6,23,0),var(--panel) 38%);z-index:3}
+/* Nabídka na nízkém okně (běžný notebook, telefon na výšku) je o něco kompaktnější, ať se vejde víc věcí najednou. */
+@media (min-height:481px) and (max-height:760px){
+  .card{padding:16px 18px 12px}
+  h1{font-size:clamp(26px,7.5vw,34px);margin-bottom:4px}
+  .input{height:40px;margin-bottom:10px}
+  .mgrid button{min-height:44px;padding:4px 10px}
+  .seg button{height:40px}
+  .dinfo{margin-bottom:8px;min-height:0}
+  .btn{height:50px}
+  .row{margin-top:10px}
+  .playDock{bottom:-12px;margin:0 -18px;padding:10px 18px 12px}
+}
+
+

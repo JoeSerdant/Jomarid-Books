@@ -171,7 +171,7 @@ function showDead() {
   $('dTime').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
   $('newBest').classList.toggle('hidden', !best);
   if (best) save.best = d.score;
-  if (!boosted) save.st.bestLevel = Math.max(save.st.bestLevel, d.level);
+  if (!boosted && mode !== 'sandbox') save.st.bestLevel = Math.max(save.st.bestLevel, d.level);
   persist();
   elHud.classList.add('hidden'); elDead.classList.remove('hidden');
 }

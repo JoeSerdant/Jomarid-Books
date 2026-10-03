@@ -331,7 +331,7 @@ const TANKGEN = (function () {
   // Tabulka se dá znovu odvodit kalibračním měřením; 1 = bez korekce.
   const FIX = {
     /*FIX*/
-    afterburner: 0.929, armorShots: 0.942, bigdrones: 1.032, blast: 1.036, bounce: 1.058, bulwark: 1.118, bunker: 0.948, carrier: 0.912, cross: 1.012, fan: 1.071, fire: 0.927, frost: 1.012, gatling: 0.964, heavy: 1.016, hive: 0.984, homing: 1.039, impact: 1.013, lob: 2.239, longbarrel: 0.886, mainGun: 0.820, minefield: 1.207, overclock: 0.962, plating: 0.966, rail: 1.042, ram: 1.080, rear: 1.130, scope: 0.940, spiketrap: 1.153, swarmlets: 0.970, swift: 0.880, trapify: 1.650, turretCore: 0.994, turretPair: 1.064, turretRing: 1.307, twin: 0.951, vamp: 1.047,
+    afterburner: 0.929, armorShots: 0.942, bigdrones: 1.032, blast: 1.036, bounce: 1.058, bulwark: 1.118, bunker: 0.948, carrier: 0.912, cross: 1.012, fan: 1.071, fire: 0.927, frost: 1.012, gatling: 0.964, heavy: 1.016, hive: 0.984, homing: 1.039, impact: 1.013, lob: 2.150, longbarrel: 0.886, mainGun: 0.820, minefield: 1.207, overclock: 0.962, plating: 0.966, rail: 1.042, ram: 1.080, rear: 1.130, scope: 0.940, spiketrap: 1.153, swarmlets: 0.970, swift: 0.880, trapify: 1.650, turretCore: 0.994, turretPair: 1.064, turretRing: 1.307, twin: 0.951, vamp: 1.047,
     /*END*/
   };
   const BOUNDS = { reload: [0.12, 4.5], speed: [0.6, 1.5], hp: [0.6, 3.2], size: [0.78, 1.9], range: [0.3, 2.4], zoom: [0.55, 1], ram: [0.8, 4], regen: [0.8, 3], bhp: [0.8, 3], vamp: [0, 0.3] };
@@ -361,12 +361,24 @@ const TANKGEN = (function () {
     c.look = Object.assign({ n: 0, rot: 0, spikes: 0, fins: 0, plates: 0, trim: '' }, struct.look, { tone: (cap || struct).tone });
     return c;
   }
+  // Strop zranění jedné rány: bomby se kvůli špatné zásahovosti vyvažují obřím zraněním (až 20× víc než základní střela), takže by
+  // jedna rána zabila celý tank. Ruční třídy mají nejvýš ~10 (a jen u pomalých kanónů), proto se přebytek převede na rychlejší palbu:
+  // zranění klesne a nabíjení se zkrátí stejným dílem, síla zůstane.
+  const MAX_SHOT = 7;
+  function capShot(c) {
+    let m = 0; for (const b of c.barrels) if (!b.turret && isGun(b)) m = Math.max(m, b.dmg);
+    if (m <= MAX_SHOT) return;
+    const k = MAX_SHOT / m;
+    for (const b of c.barrels) if (isGun(b) || b.turret) b.dmg *= k;
+    c.reload = clamp(c.reload * k, BOUNDS.reload[0], BOUNDS.reload[1]);
+  }
   // Dokončení potomka: vyvážení na cílovou sílu a korekce podle měření.
   function finalize(c, target, struct, cap) {
     balance(c, target, struct.bal);
     const fx = (FIX[struct.id] || 1) * (cap ? (FIX[cap.id] || 1) : 1);
     if (fx !== 1) for (const b of c.barrels) b.dmg *= fx;
     clampClass(c);
+    capShot(c);
     return c;
   }
   // Potomek rodiče s daným modulem (a případně korunním modulem) bez zápisu do stromu - pro měření a testy.
