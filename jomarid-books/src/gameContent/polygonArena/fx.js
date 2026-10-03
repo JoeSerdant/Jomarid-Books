@@ -46,12 +46,14 @@ const deepen = (c, t) => mixColor(c, '#000000', t);     // ztmavení
 /* ---------- kvalita vykreslování ---------- */
 // 0 = nízká (ploché barvy, žádné záře ani stíny), 1 = střední, 2 = plná. Nastavení "Efekty" určuje strop, rychlost
 // snímků ho případně sníží (a po uklidnění zase zvýší), aby hra zůstala plynulá i na slabším zařízení.
-const fxState = { level: 2, auto: 2, ema: 16.7, slow: 0, fast: 0, forced: -1 };
+const fxState = { level: 2, auto: 2, ema: 16.7, work: 4, slow: 0, fast: 0, forced: -1 };
 const fxLevelNow = () => (fxState.forced >= 0 ? fxState.forced : Math.min(save.set.fx ? 2 : 0, fxState.auto));
-function fxFrame(dtMs) {
-  const f = fxState; f.ema += (Math.min(dtMs, 100) - f.ema) * 0.08;
-  if (f.ema > 26) { f.slow += dtMs; f.fast = 0; } else if (f.ema < 19) { f.fast += dtMs; f.slow = 0; } else { f.slow = 0; f.fast = 0; }
-  if (f.slow > 1500 && f.auto > 0) { f.auto--; f.slow = 0; f.ema = 18; } else if (f.fast > 8000 && f.auto < 2) { f.auto++; f.fast = 0; }
+// dtMs = čas mezi snímky, workMs = čas, který snímek zabral hře (výpočty + kreslení). Kvalita se snižuje, když práce na
+// snímku trvá dlouho (slabé zařízení) nebo snímky chodí hodně pomalu; kadence 30 Hz sama o sobě na věci nic nemění.
+function fxFrame(dtMs, workMs) {
+  const f = fxState; f.ema += (Math.min(dtMs, 100) - f.ema) * 0.08; f.work += (Math.min(workMs, 100) - f.work) * 0.08;
+  if (f.work > 14 || f.ema > 45) { f.slow += dtMs; f.fast = 0; } else if (f.work < 7 && f.ema < 30) { f.fast += dtMs; f.slow = 0; } else { f.slow = 0; f.fast = 0; }
+  if (f.slow > 1500 && f.auto > 0) { f.auto--; f.slow = 0; f.work = 8; f.ema = 20; } else if (f.fast > 10000 && f.auto < 2) { f.auto++; f.fast = 0; }
   f.level = fxLevelNow();
 }
 

@@ -5,6 +5,7 @@
 //   team              hráč je v týmu 1 (spojenci i nepřátelé mají týmové barvy)
 //   solo              smrt hráče končí hru (bez znovuzrození)
 //   noBoss/noEvents   vypne obvyklé bossy a události (režim má vlastní)
+//   noFocus           boti se na hráče nezaměřují víc než na ostatní (obtížnost Peklo)
 //   setup(D)          po obecném přípravě zápasu vytvoří boty a stav režimu
 //   playerStart(p)    upraví hráče při startu (úroveň, statistiky)
 //   tick(dt)          každý krok hry
@@ -146,7 +147,7 @@ const MODES = {
       const w = win ? world.wave : Math.max(0, world.wave - (world.waveState === 'fight' ? 1 : 0));
       return {
         title: win ? 'Přežil jsi všechny vlny!' : 'Konec hry',
-        text: win ? 'Zvládnuté vlny: ' + world.wave + ' z ' + world.waveGoal + '.' : 'Zvládl jsi ' + w + ' ' + wavePlural(w) + ' z ' + world.waveGoal + '.',
+        text: win ? 'Zvládnuté vlny: ' + world.wave + ' z ' + world.waveGoal + '.' : w ? 'Zvládl jsi ' + w + ' ' + wavePlural(w) + ' z ' + world.waveGoal + '.' : 'Padl jsi hned v první vlně.',
         extra: [['Vlna', world.wave], ['Poražených nepřátel', world.waveKills]],
       };
     },
@@ -199,7 +200,7 @@ const MODES = {
     hud() {
       const H = world.hill; if (!H) return '';
       const top = tanks.filter(t => !t.boss).sort((a, b) => (b.hillPts || 0) - (a.hillPts || 0))[0];
-      return '<span>Kopec <b>' + Math.floor(player.hillPts || 0) + '</b> / ' + H.goal + '</span><small>' + (top && top !== player ? 'vede ' + top.name + ' ' + Math.floor(top.hillPts || 0) : 'vedeš ty') + '</small>';
+      return '<span>Kopec <b>' + Math.floor(player.hillPts || 0) + '</b> / ' + H.goal + '</span><small>' + (top && top !== player ? 'vede ' + top.name + ' (' + Math.floor(top.hillPts || 0) + ')' : 'vedeš ty') + '</small>';
     },
     steer(b, ai) {
       const H = world.hill; if (!H || ai.mode === 'flee' || ai.mode === 'heal') return null;
@@ -240,7 +241,7 @@ const MODES = {
 
   /* ---------- Poslední přeživší ---------- */
   royale: {
-    name: 'Poslední přeživší', tag: 'Zužující se bouře', diff: true, solo: true,
+    name: 'Poslední přeživší', tag: 'Zužující se bouře', diff: true, solo: true, noFocus: true, noBoss: true,
     info: 'Všichni začínají silnější a nikdo se nevrací. Bouře se zužuje a ničí všechno za svými hranicemi. Zůstaň naživu jako poslední.',
     setup(D) {
       spawnBots(D);

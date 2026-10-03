@@ -63,7 +63,7 @@ function pickFarmTarget(b) {
   }
 }
 function botDecide(b) {
-  const ai = b.ai, D = DIFFS[diffKey], myPow = power(b);
+  const ai = b.ai, D = DIFFS[diffKey], MD = M(), myPow = power(b);
   if (ai.boss) {
     let best = null, bd = 1250;
     for (let i = 0; i < tanks.length; i++) {
@@ -80,7 +80,7 @@ function botDecide(b) {
     const d = Math.hypot(o.x - b.x, o.y - b.y);
     if (d < nD) { nD = d; near = o; }
     if (d > 1000 || o.invuln > 0) continue;
-    const op = power(o), focus = (o.isPlayer && D.focus > 0 && b.hp > b.maxHp * 0.5) || (ai.fearless && b.hp > b.maxHp * 0.3);   // nejtěžší obtížnost: boti se na hráče sesypou
+    const op = power(o), focus = (o.isPlayer && D.focus > 0 && !MD.noFocus && b.hp > b.maxHp * 0.5) || (ai.fearless && b.hp > b.maxHp * 0.3);   // nejtěžší obtížnost: boti se na hráče sesypou
     if (!focus && op > myPow * (1.15 + ai.courage * 0.55) + 1 && d < 800) { if (d < tD) { tD = d; threat = o; } }
     else if (focus ? d < (500 + ai.aggr * 450) * D.hunt * (1 + D.focus * 0.5) : (op < myPow * (0.8 + ai.aggr * 0.7) && d < (500 + ai.aggr * 450) * D.hunt)) {
       if (o.isPlayer && o.level < D.mercy && !(b.lastAttacker === o && time - b.lastAtkT < 6)) continue;   // začátečníka nechají být

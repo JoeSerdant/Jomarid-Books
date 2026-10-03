@@ -235,3 +235,14 @@ button.cc:hover{border-color:var(--accent)}
 @media (max-height:480px){#dashBtn{bottom:12px;width:48px;height:48px}#perkStrip{bottom:60px}#objbar,#bossbar{top:54px}#banner{bottom:64px}}
 @media (max-height:780px){.logo{display:none}.lead{margin-bottom:10px}}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+
+/* ---------- Lišta cíle režimu na malých displejích ---------- */
+@media (max-width:420px){
+  #objbar{flex-direction:column;gap:0;align-items:center;max-width:calc(100vw - 232px);padding:4px 8px;font-size:12px;white-space:normal;text-align:center;line-height:1.25}
+  #objbar small{font-size:10.5px}
+  #bossbar.low{top:152px}
+}
+@media (max-width:340px){
+  #objbar{top:150px;flex-direction:row;gap:8px;max-width:calc(100vw - 20px);white-space:nowrap}
+  #bossbar.low{top:186px}
+}

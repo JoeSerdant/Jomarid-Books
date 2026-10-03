@@ -59,7 +59,7 @@ function drawZone(g, zn, px) {
   g.fillStyle = gr; g.beginPath(); g.arc(zn.x, zn.y, zn.r, 0, TAU); g.fill();
   if (q >= 1) {
     if (zn.type === 'lava') {
-      glowAt(g, zn.x, zn.y, zn.r * 1.3, '#ff6a30', 0.26 + 0.1 * pulse);
+      glowAt(g, zn.x, zn.y, zn.r * 1.25, '#ff6a30', 0.16 + 0.07 * pulse);
       g.strokeStyle = 'rgba(255,210,120,0.42)'; g.lineWidth = 3 * px;
       for (let k = 0; k < 4; k++) { const a0 = time * 0.5 * (k % 2 ? -1 : 1) + zn.ph + k * 1.6; g.beginPath(); g.arc(zn.x, zn.y, zn.r * (0.3 + 0.17 * k), a0, a0 + 0.9); g.stroke(); }
     } else if (zn.type === 'ice') {

@@ -211,7 +211,7 @@ let lastT = 0, acc = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   let dt = (now - lastT) / 1000; lastT = now;
-  if (dt < 0.25) fxFrame(dt * 1000);
+  const w0 = performance.now(), rawDt = dt;
   if (!(dt > 0)) dt = 0; if (dt > 0.1) dt = 0.1;
   if (!paused) {
     acc += dt; let n = 0;
@@ -220,6 +220,7 @@ function frame(now) {
     frameUI(dt);
   }
   updateCamera(paused ? 0 : dt); render();
+  if (rawDt < 0.25 && !paused) fxFrame(rawDt * 1000, performance.now() - w0);
 }
 
 function boot() {

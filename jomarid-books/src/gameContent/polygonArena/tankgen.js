@@ -257,7 +257,7 @@ const TANKGEN = (function () {
         c.reload *= 1.5; c.range *= 1.1;
       } },
     { id: 'homing', fam: 'seek', min: 3, desc: 'Naváděné střely', look: { n: 3, trim: 'stripe' }, tone: '#ff8aa0', bal: 'dmg', caps: ['fire', 'frost', 'scope'],
-      nouns: ['Honič', 'Pronásledník', 'Ohař', 'Slídil', 'Sokolník', 'Lovčí', 'Detektiv', 'Slídič', 'Vlčák'],
+      nouns: ['Honič', 'Ohař', 'Slídil', 'Sokolník', 'Lovčí', 'Detektiv', 'Slídič', 'Vlčák'],
       ok: p => p.nFront >= 1 && p.nFront <= 3 && p.nMissile === 0 && p.nBomb === 0, aff: () => 1,
       apply(c) { for (const b of frontGuns(c)) { b.kind = 'missile'; b.spd *= 0.85; b.dmg *= 1.05; b.size *= 0.9; b.flare = true; b.pierce = 0; b.streak = false; b.spread = 0; } c.reload *= 1.1; } },
     { id: 'twin', fam: 'rate', min: 2, desc: 'Dvojitá hlaveň, střídavá palba', look: { n: 7, trim: 'stripe' }, tone: '#f0d36a', bal: 'reload', caps: ['overclock', 'frost', 'vamp'],

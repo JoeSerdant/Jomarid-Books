@@ -68,7 +68,7 @@ const DIFFS = {
   easy:   { bots: 6,  noise: 0.34, turn: 3.2, think: 0.5,  dodge: 0.0, lead: 0.15, aggr: 0.45, botDmg: 0.4,  shapeDmg: 0.45, playerHp: 1.8,  playerRegen: 2.2, xpMul: 1.3, botXp: 0.45, keep: 0.1,  keepLvl: 6,  mercy: 6, hunt: 0.5,  inv: 7,  bossHp: 0.5, bossT1: 150, bossT: 240, goal: 25, evGap: 60, smart: 0,   focus: 0,   start: 1 },
   normal: { bots: 11, noise: 0.13, turn: 7.0, think: 0.27, dodge: 0.5, lead: 0.75, aggr: 0.9,  botDmg: 0.8,  shapeDmg: 0.8,  playerHp: 1.25, playerRegen: 1.3, xpMul: 1.2, botXp: 0.8,  keep: 0.22, keepLvl: 10, mercy: 3, hunt: 0.85, inv: 4,  bossHp: 0.8, bossT1: 110, bossT: 190, goal: 32, evGap: 75, smart: 0.5, focus: 0,   start: 1 },
   hard:   { bots: 16, noise: 0.05, turn: 11,  think: 0.17, dodge: 1.0, lead: 1.0,  aggr: 1.2,  botDmg: 1,    shapeDmg: 1,    playerHp: 1,    playerRegen: 1,   xpMul: 1,   botXp: 1,    keep: 0.3,  keepLvl: 14, mercy: 0, hunt: 1,    inv: 3,  bossHp: 1,   bossT1: 90,  bossT: 150, goal: 40, evGap: 80, smart: 1,   focus: 0,   start: 1 },
-  hell:   { bots: 20, noise: 0.04,  turn: 15, think: 0.11, dodge: 1.2, lead: 1.0,  aggr: 1.6,  botDmg: 1.1,  shapeDmg: 1.2,  playerHp: 0.85, playerRegen: 0.8, xpMul: 0.8, botXp: 1.3,  keep: 0.45, keepLvl: 24, mercy: 0, hunt: 1.2,  inv: 3,   bossHp: 1.8, bossT1: 60,  bossT: 100, goal: 50, evGap: 70, smart: 1.6, focus: 0.3, start: 2 },
+  hell:   { bots: 22, noise: 0.04,  turn: 15, think: 0.11, dodge: 1.25, lead: 1.0, aggr: 1.6,  botDmg: 1.1,  shapeDmg: 1.2,  playerHp: 0.85, playerRegen: 0.8, xpMul: 0.8, botXp: 1.3,  keep: 0.45, keepLvl: 24, mercy: 0, hunt: 1.25, inv: 3,   bossHp: 1.8, bossT1: 60,  bossT: 100, goal: 50, evGap: 70, smart: 1.6, focus: 0.4, start: 2 },
 };
 
 /* ---------- statistiky ---------- */
