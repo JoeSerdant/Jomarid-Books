@@ -28,6 +28,7 @@ function parseColor(c) {
   else if (typeof c === 'string' && (m = /^#([0-9a-f]{6})/i.exec(c))) { const n = parseInt(m[1], 16); v = [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
   else if (typeof c === 'string' && (m = /^rgba?\(\s*([\d.]+)[ ,]+([\d.]+)[ ,]+([\d.]+)/i.exec(c))) v = [+m[1], +m[2], +m[3]];
   else v = [150, 160, 170];
+  if (colorCache.size > 2000) colorCache.clear();
   colorCache.set(c, v); return v;
 }
 const rgbaStr = (c, a) => { const v = parseColor(c); return 'rgba(' + v[0] + ',' + v[1] + ',' + v[2] + ',' + a + ')'; };
@@ -44,17 +45,27 @@ const tint = (c, t) => mixColor(c, '#ffffff', t);       // zesvětlení
 const deepen = (c, t) => mixColor(c, '#000000', t);     // ztmavení
 
 /* ---------- kvalita vykreslování ---------- */
-// 0 = nízká (ploché barvy, žádné záře ani stíny), 1 = střední, 2 = plná. Nastavení "Efekty" určuje strop, rychlost
-// snímků ho případně sníží (a po uklidnění zase zvýší), aby hra zůstala plynulá i na slabším zařízení.
-const fxState = { level: 2, auto: 2, ema: 16.7, work: 4, slow: 0, fast: 0, forced: -1 };
+// 0 = nízká (ploché barvy, žádné záře, stíny ani otřesy), 1 = střední (záře střel, odlesky a stínování těl, bez stínů na zemi,
+// záře tvarů a kouře), 2 = plná. Nastavení "Efekty" určuje strop, rychlost snímků ho případně sníží (a po uklidnění zase zvýší),
+// aby hra zůstala plynulá i na slabším zařízení.
+const fxState = { level: 2, auto: 2, ema: 16.7, work: 4, slow: 0, fast: 0, forced: -1, clock: 0, upAt: -1e9, need: 10000 };
 const fxCap = () => (save.set.fx >= 1 ? 2 : save.set.fx > 0 ? 1 : 0);          // volba Efekty: Nízké 0, Střední 0.5, Plné 1
 const fxLevelNow = () => (fxState.forced >= 0 ? fxState.forced : Math.min(fxCap(), fxState.auto));
+// Hráč změnil nastavení: automatika začíná znovu od jeho volby.
+function fxReset() { const f = fxState; f.auto = 2; f.slow = f.fast = 0; f.need = 10000; f.level = fxLevelNow(); }
 // dtMs = čas mezi snímky, workMs = čas, který snímek zabral hře (výpočty + kreslení). Kvalita se snižuje, když práce na
 // snímku trvá dlouho (slabé zařízení) nebo snímky chodí hodně pomalu; kadence 30 Hz sama o sobě na věci nic nemění.
+// Když se zvýšená kvalita hned zase zhroutí, příští zvýšení se odkládá déle (10 s, 20 s ... až 160 s), ať se kvalita nehoupe.
 function fxFrame(dtMs, workMs) {
-  const f = fxState; f.ema += (Math.min(dtMs, 100) - f.ema) * 0.08; f.work += (Math.min(workMs, 100) - f.work) * 0.08;
-  if (f.work > 14 || f.ema > 45) { f.slow += dtMs; f.fast = 0; } else if (f.work < 7 && f.ema < 30) { f.fast += dtMs; f.slow = 0; } else { f.slow = 0; f.fast = 0; }
-  if (f.slow > 1500 && f.auto > 0) { f.auto--; f.slow = 0; f.work = 8; f.ema = 20; } else if (f.fast > 10000 && f.auto < 2) { f.auto++; f.fast = 0; }
+  const f = fxState; f.clock += dtMs;
+  f.ema += (Math.min(dtMs, 100) - f.ema) * 0.08; f.work += (Math.min(workMs, 100) - f.work) * 0.08;
+  if (f.work > 14 || f.ema > 45) { f.slow += dtMs; f.fast = 0; } else if (f.work < 7 && f.ema < 36) { f.fast += dtMs; f.slow = 0; } else { f.slow = 0; f.fast = 0; }
+  const cap = fxCap(); if (f.auto > cap) f.auto = cap;                  // strop z nastavení platí i pro automatiku
+  if (f.slow > 1500 && f.auto > 0) {
+    if (f.clock - f.upAt < 20000) f.need = Math.min(f.need * 2, 160000);
+    f.auto--; f.slow = 0; f.work = 8; f.ema = 20;
+  } else if (f.fast > f.need && f.auto < cap) { f.auto++; f.fast = 0; f.upAt = f.clock; }
+  else if (f.clock - f.upAt > 120000) f.need = 10000;
   f.level = fxLevelNow();
 }
 
@@ -78,29 +89,38 @@ function shadowSprite() {
   g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
   return shadowSpr;
 }
-// Aditivní záře (světlo), jen od střední kvality výš.
-function glowAt(g, x, y, r, color, a) {
-  if (fxState.level < 1 || r < 1) return;
+// Aditivní záře (světlo), od střední kvality výš; ozdobné záře (tvary, láva) až od plné (minLv = 2).
+function glowAt(g, x, y, r, color, a, minLv) {
+  if (fxState.level < (minLv || 1) || r < 1) return;
+  const pa = g.globalAlpha;
   g.globalCompositeOperation = 'lighter'; g.globalAlpha = a;
   g.drawImage(glowSprite(color), x - r, y - r, r * 2, r * 2);
-  g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
+  g.globalCompositeOperation = 'source-over'; g.globalAlpha = pa;
 }
-// Měkký stín pod předmětem (mírně posunutý dolů a doprava).
+// Měkký stín pod předmětem (mírně posunutý dolů a doprava), jen v plné kvalitě.
 function shadowAt(g, x, y, r, a) {
-  if (fxState.level < 1) return;
+  if (fxState.level < 2) return;
+  const pa = g.globalAlpha;
   g.globalAlpha = a === undefined ? 0.55 : a;
   g.drawImage(shadowSprite(), x - r * 1.05 + r * 0.14, y - r * 1.05 + r * 0.26, r * 2.1, r * 2.1);
-  g.globalAlpha = 1;
+  g.globalAlpha = pa;
 }
 
 /* ---------- částice ---------- */
 // Druhy: 0 čtvereček, 1 jiskra (úsečka ve směru letu), 2 kouř (roste a bledne), 3 střep (otáčející se trojúhelník), 4 záře.
 const PCAP = [90, 220, 380];
 const partCap = () => PCAP[fxState.level];
-function addPart(p) { if (parts.length < partCap()) parts.push(p); }
+// Částice daleko mimo obrazovku (většina výbuchů v aréně) se nevyrábějí, ať nezabírají místo těm viditelným.
+function addPart(p) {
+  if (parts.length >= partCap()) return;
+  const z = view.scale * cam.z, mx = view.w / 2 / z + 240, my = view.h / 2 / z + 240;
+  if (Math.abs(p.x - cam.x) > mx || Math.abs(p.y - cam.y) > my) return;
+  parts.push(p);
+}
 function burst(x, y, color, n, speed, size, kind) {
   const lv = fxState.level;
   if (lv === 0) kind = 0; else if (kind === undefined) kind = 3;
+  if (lv === 1) n = Math.max(1, Math.round(n * 0.65));
   for (let i = 0; i < n; i++) {
     const a = rand(0, TAU), s = rand(0.3, 1) * speed;
     addPart({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rand(0.35, 0.75), max: 0.75, r: size * rand(0.5, 1), color, rot: rand(0, TAU), kind, vr: rand(-9, 9) });
@@ -108,6 +128,7 @@ function burst(x, y, color, n, speed, size, kind) {
 }
 function sparks(x, y, color, n, speed) {
   if (fxState.level === 0) return;
+  if (fxState.level === 1) n = Math.max(1, Math.round(n * 0.65));
   for (let i = 0; i < n; i++) { const a = rand(0, TAU), s = rand(0.4, 1) * speed; addPart({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rand(0.18, 0.4), max: 0.4, r: rand(1.2, 2.6), color, rot: 0, kind: 1, vr: 0 }); }
 }
 function smoke(x, y, n, size, color) {

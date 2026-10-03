@@ -4,8 +4,9 @@
 // Princip: třída vzniká z rodiče použitím "modulů". Strukturní modul určuje podobu a roli (přidá zadní hlavně,
 // věže, drony, zesílí kalibr, prodlouží hlavně, zahustí palbu...). Třídy 4. stupně dostanou navíc "korunní"
 // modul se zvláštní vlastností (mráz, oheň, upíří střely, pancíř...). Výsledek se pak modelem síly vyváží vůči
-// rodiči. Všechno je deterministické (náhoda se seeduje id rodiče), takže id tříd i uložený kodex zůstávají
-// stabilní. Funkce profile() / powerOf() používají i boti k výběru třídy a testy k hlídání vyváženosti.
+// rodiči. Všechno je deterministické a šum se odvozuje z dvojice (rodič, modul), ne z jednoho sdíleného proudu čísel:
+// úprava podmínek jednoho modulu tak nepřehodí výběr u ostatních rodičů a id tříd i uložený kodex zůstanou stabilní.
+// Funkce profile() / powerOf() používají i boti k výběru třídy a testy k hlídání vyváženosti.
 const TANKGEN = (function () {
   /* ---------- náhoda a pomocné funkce ---------- */
   const hashStr = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
@@ -23,10 +24,11 @@ const TANKGEN = (function () {
   const isRear = b => !b.turret && Math.cos(b.a) < -0.8;
   const frontGuns = c => c.barrels.filter(b => isGun(b) && isFront(b));
   const sameAng = (a, b) => Math.abs(angDiff(a, b)) < 0.4;
+  const SLOTS = [0, PI / 2, -PI / 2, PI];                           // čtyři strany: vpředu, vlevo, vpravo, vzadu
   function cloneClass(c) {
     const o = Object.assign({}, c);
     o.barrels = c.barrels.map(b => Object.assign({}, b));
-    delete o.look; delete o.prof; delete o.hasTur; delete o.sig;
+    delete o.look; delete o.prof; delete o.hasTur;
     return o;
   }
 
@@ -45,13 +47,21 @@ const TANKGEN = (function () {
       if (b.kind === 'trap') { p.nTrap++; continue; }
       p.nGun++;
       if (b.kind === 'missile') p.nMissile++; else if (b.kind === 'bomb') p.nBomb++;
-      if (isFront(b)) { p.nFront++; nF++; wS += b.w; lS += b.len; sS += b.spd; if (Math.abs(b.a) > 0.15) p.fan = true; }
+      if (isFront(b)) { p.nFront++; nF++; wS += b.w; lS += b.len; sS += b.spd; if (Math.abs(angDiff(0, b.a)) > 0.15) p.fan = true; }
       else if (isRear(b)) p.nRear++; else p.nSide++;
       p.maxDmg = Math.max(p.maxDmg, b.dmg); p.maxPierce = Math.max(p.maxPierce, b.pierce || 0); p.maxBounce = Math.max(p.maxBounce, b.bounce || 0);
       p.spreadMax = Math.max(p.spreadMax, b.spread || 0);
       if (b.blast) p.blast = true;
     }
     p.avgW = nF ? wS / nF : 0; p.avgLen = nF ? lS / nF : 0; p.bSpd = nF ? sS / nF : 1;
+    // Moduly, které přidávají hlavně na pevný úhel, se nesmí trefit na obsazené místo: occ = strana je obsazená jakoukoli
+    // hlavní (i drony a pasti), rimTur = věže na okraji. fSpacing/maxFW hlídají, aby se rozšířené či zdvojené hlavně
+    // nesplynuly se sousedem (odstup středů souběžných čelních hlavní a nejširší čelní hlaveň).
+    p.occ = SLOTS.map(s => c.barrels.some(b => !b.turret && sameAng(b.a, s)));
+    p.rimTur = c.barrels.filter(b => b.turret && b.dist > 0.4).length;
+    const fg = c.barrels.filter(b => isGun(b) && isFront(b));
+    p.maxFW = fg.reduce((m, b) => Math.max(m, b.w), 0); p.fSpacing = 99;
+    for (let i = 0; i < fg.length; i++) for (let j = i + 1; j < fg.length; j++) if (Math.abs(angDiff(fg[i].a, fg[j].a)) < 0.15) p.fSpacing = Math.min(p.fSpacing, Math.abs(fg[i].off - fg[j].off));
     p.minions = c.maxDrones > 0 || c.maxTraps > 0;
     p.sniper = c.range >= 1.35 || c.zoom <= 0.9;
     p.rapid = c.reload <= 0.5;
@@ -110,15 +120,21 @@ const TANKGEN = (function () {
   // podmínka použití ok(profil), příznivost aff(profil) a samotná úprava apply(třída, kontext).
   // Podstatná jména jsou schválně jen rodu mužského, aby se k nim dala přidat přídavná jména ze stejného jazykového
   // tvaru bez skloňování ("Ledový Šíp").
-  const TUR_DEF = { dist: 0.7, tsize: 0.3, dmg: 0.5 };
+  const TUR_DEF = { dist: 0.7, tsize: 0.3 };
+  // Věže dostanou zranění úměrné zbraním rodiče (na plamenometu věž s pevným zraněním přebíjela celou jeho palbu a vyvážení
+  // pak ořezávalo jeho vlastní hlavně).
+  function turDmg(c, k) {
+    const g = (frontGuns(c).length ? frontGuns(c) : c.barrels.filter(isGun)).map(b => b.dmg).sort((x, y) => x - y);
+    return clamp(k * (g.length ? g[g.length >> 1] : 1), 0.2, 0.9);
+  }
   const STRUCT = [
     { id: 'heavy', fam: 'caliber', min: 2, desc: 'Těžké hlavně, drtivé rány', look: { n: 6, trim: 'ring' }, tone: '#d9a05b', bal: 'reload', caps: ['impact', 'plating', 'fire'],
-      nouns: ['Kolos', 'Obr', 'Mamut', 'Hromotluk', 'Bourač', 'Kovář', 'Bizon', 'Kladivář', 'Cyklop', 'Buvol', 'Drtitel', 'Rozbíječ'],
-      ok: p => p.nFront >= 1 && p.maxDmg < 3 && p.avgW < 1.1, aff: p => (p.rapid ? 1.35 : 1) * (p.sniper ? 0.8 : 1),
+      nouns: ['Kolos', 'Obr', 'Mamut', 'Hromotluk', 'Bourač', 'Kovář', 'Bizon', 'Kladivář', 'Cyklop', 'Buvol', 'Lamač', 'Rozbíječ'],
+      ok: p => p.nFront >= 1 && p.maxDmg < 3 && p.avgW < 1.1 && p.fSpacing >= 1.35 * p.maxFW, aff: p => (p.rapid ? 1.35 : 1) * (p.sniper ? 0.8 : 1),
       apply(c) { for (const b of frontGuns(c)) { b.w *= 1.3; b.len *= 1.05; b.dmg *= 1.5; b.spd *= 0.92; b.size *= 1.12; b.recoil *= 1.4; if (b.w > 0.85) b.flare = true; } c.reload *= 1.3; c.size *= 1.06; c.speed *= 0.97; } },
-    { id: 'gatling', fam: 'rate', min: 2, desc: 'Dvojité tenké hlavně, hustá palba', look: { n: 0, trim: 'dots' }, tone: '#f0d36a', bal: 'reload', caps: ['overclock', 'frost', 'fire'],
+    { id: 'gatling', fam: 'rate', min: 2, desc: 'Dvojité tenké hlavně, hustá palba', look: { n: 0, trim: 'dots' }, tone: '#f0d36a', bal: 'reload', caps: ['frost', 'fire'],
       nouns: ['Datel', 'Bubeník', 'Metronom', 'Příval', 'Liják', 'Šrapnel', 'Kolibřík', 'Kulometčík', 'Šermíř', 'Cvrček', 'Švihák'],
-      ok: p => p.nFront >= 1 && p.nFront <= 3 && p.nBar <= 9 && p.nBomb === 0 && p.avgW >= 0.3, aff: p => (p.rapid ? 0.8 : 1.2),
+      ok: p => p.nFront >= 1 && p.nFront <= 3 && p.nBar <= 9 && p.nBomb === 0 && p.avgW >= 0.3 && p.fSpacing >= 1.3 * p.maxFW, aff: p => (p.rapid ? 0.8 : 1.2),
       apply(c) {
         const out = [];
         for (const b of c.barrels) {
@@ -130,23 +146,23 @@ const TANKGEN = (function () {
         }
         c.barrels = out; c.reload *= 0.8;
       } },
-    { id: 'longbarrel', fam: 'reach', min: 2, desc: 'Dlouhé hlavně, větší dostřel', look: { n: 0, trim: 'stripe' }, tone: '#9ad0ff', bal: 'dmg', caps: ['scope', 'frost', 'armorShots'],
-      nouns: ['Sokol', 'Jestřáb', 'Kondor', 'Dalekohled', 'Zvěd', 'Teleskop', 'Orlík', 'Albatros', 'Luňák', 'Vyhlížeč', 'Horizont'],
+    { id: 'longbarrel', fam: 'reach', min: 2, desc: 'Dlouhé hlavně, větší dostřel', look: { n: 0, trim: 'stripe' }, tone: '#9ad0ff', bal: 'dmg', caps: ['frost', 'armorShots'],
+      nouns: ['Sokol', 'Jestřáb', 'Kondor', 'Dalekohled', 'Zvěd', 'Teleskop', 'Orlík', 'Albatros', 'Luňák', 'Pozorovatel', 'Horizont'],
       ok: p => p.nFront >= 1 && p.avgLen < 2.4, aff: p => (p.sniper ? 1.3 : 1) * (p.short ? 0.6 : 1),
       apply(c) { for (const b of frontGuns(c)) { b.len = Math.min(3.4, b.len * 1.3); b.w *= 0.86; b.spd *= 1.35; } c.range *= 1.3; c.zoom *= 0.88; c.reload *= 1.1; c.speed *= 0.97; } },
     { id: 'rail', fam: 'pierce', min: 2, desc: 'Střely prorážejí cíle', look: { n: 4, rot: 0.785, trim: '' }, tone: '#b6a4ff', bal: 'dmg', caps: ['scope', 'armorShots', 'frost'],
-      nouns: ['Šíp', 'Hrot', 'Oštěp', 'Bodák', 'Trn', 'Vrták', 'Průbojník', 'Dráp', 'Osten', 'Pronikač'],
+      nouns: ['Šíp', 'Hrot', 'Oštěp', 'Bodák', 'Trn', 'Vrták', 'Průbojník', 'Dráp', 'Osten', 'Průraz'],
       ok: p => p.nFront >= 1 && p.nFront <= 3 && p.maxPierce <= 2 && p.nMissile === 0 && p.nBomb === 0, aff: p => (p.sniper ? 1.3 : 1),
       apply(c) {
         for (const b of frontGuns(c)) if (b.kind === 'bullet') { b.pierce = Math.min(8, b.pierce + 2); b.w *= 0.82; b.spd *= 1.3; b.dmg *= 0.95; b.len *= 1.12; if (b.w <= 0.7) b.streak = true; }
         c.range *= 1.12; c.reload *= 1.05;
       } },
     { id: 'bounce', fam: 'bounce', min: 2, desc: 'Střely se odrážejí od zdí', look: { n: 0, trim: 'ring' }, tone: '#7fe0c0', bal: 'dmg', caps: ['overclock', 'frost', 'impact'],
-      nouns: ['Míč', 'Skokan', 'Bumerang', 'Pružinář', 'Odraz', 'Kaučuk', 'Poskok', 'Rikošet', 'Žonglér', 'Kamzík', 'Tenista'],
+      nouns: ['Míč', 'Skokan', 'Bumerang', 'Pérák', 'Odraz', 'Kaučuk', 'Poskok', 'Rikošet', 'Žonglér', 'Kamzík', 'Tenista'],
       ok: p => p.nGun + p.nTur >= 1 && p.maxBounce <= 1 && p.nBomb === 0, aff: () => 0.6,
       apply(c) { for (const b of c.barrels) if ((isGun(b) || b.turret) && b.kind !== 'bomb') b.bounce = Math.min(4, b.bounce + 2); c.range *= 1.2; c.reload *= 1.04; } },
     { id: 'blast', fam: 'blast', min: 2, desc: 'Střely při zásahu vybuchnou', look: { n: 8, trim: 'core' }, tone: '#ff9a4d', bal: 'dmg', caps: ['fire', 'impact', 'plating'],
-      nouns: ['Granát', 'Dynamit', 'Petardář', 'Ohňostroj', 'Kráter', 'Detonátor', 'Třaskavec', 'Pyrotechnik', 'Výbuch', 'Zápalník'],
+      nouns: ['Granát', 'Dynamit', 'Střelmistr', 'Ohňostroj', 'Kráter', 'Detonátor', 'Třesk', 'Pyrotechnik', 'Výbuch', 'Zápalník'],
       ok: p => p.nFront >= 1 && !p.blast && p.nGun >= 1, aff: () => 1,
       apply(c) { for (const b of frontGuns(c)) { if (b.kind === 'bullet') { b.blast = 46; b.size *= 1.1; } else b.blast = b.blast ? b.blast * 1.35 : 50; } c.reload *= 1.15; } },
     { id: 'fan', fam: 'spread', min: 2, desc: 'Vějíř střel před sebou', look: { n: 5, trim: '' }, tone: '#ffd24d', bal: 'dmg', caps: ['overclock', 'fire', 'frost'],
@@ -155,12 +171,12 @@ const TANKGEN = (function () {
       apply(c, ctx) {
         const g = frontGuns(c).sort((a, b) => Math.abs(a.off) - Math.abs(b.off))[0];
         const angs = ctx.tier >= 4 ? [0.38, -0.38, 0.76, -0.76] : [0.38, -0.38];
-        angs.forEach((a, i) => c.barrels.push(Object.assign({}, g, { a, off: 0, len: g.len * (i > 1 ? 0.84 : 0.92), w: g.w * 0.78, dmg: g.dmg * (i > 1 ? 0.42 : 0.55), delay: i > 1 ? 0.75 : 0.5 })));
+        angs.forEach((a, i) => c.barrels.push(Object.assign({}, g, { a, off: 0, len: g.len * (i > 1 ? 0.84 : 0.92), w: Math.min(g.w * 0.78, 0.5), dmg: g.dmg * (i > 1 ? 0.42 : 0.55), delay: i > 1 ? 0.75 : 0.5 })));
         c.reload *= 1.08;
       } },
     { id: 'rear', fam: 'cover', min: 2, desc: 'Střílí i dozadu', look: { n: 0, trim: 'cross' }, tone: '#ff8aa0', bal: 'dmg', caps: ['afterburner', 'vamp', 'plating'],
-      nouns: ['Janus', 'Škorpion', 'Štír', 'Zrádce', 'Rak', 'Dvojník', 'Kentaur', 'Zrcadlář'],
-      ok: p => p.nFront >= 1 && p.nRear === 0 && p.nBar <= 9, aff: p => (p.fast ? 1.3 : 1),
+      nouns: ['Janus', 'Škorpion', 'Štír', 'Zrádce', 'Krab', 'Dvojník', 'Kentaur', 'Chameleon'],
+      ok: p => p.nFront >= 1 && p.nBomb === 0 && p.nRear === 0 && !p.occ[3] && p.nBar <= 9, aff: p => (p.fast ? 1.3 : 1),
       apply(c) {
         const add = [];
         for (const b of c.barrels) if (!b.turret && isFront(b) && (b.kind === 'bullet' || b.kind === 'missile' || b.kind === 'trap')) add.push(Object.assign({}, b, { a: b.a + PI, dmg: b.dmg * 0.7, len: b.len * 0.92, delay: (b.delay + 0.5) % 1 }));
@@ -168,7 +184,7 @@ const TANKGEN = (function () {
       } },
     { id: 'cross', fam: 'cover', min: 2, desc: 'Palba i do stran', look: { n: 4, rot: 0, trim: 'cross' }, tone: '#ff8aa0', bal: 'dmg', caps: ['overclock', 'vamp', 'afterburner'],
       nouns: ['Kříž', 'Křižák', 'Kompas', 'Větrník', 'Čtyřlístek', 'Kardinál', 'Templář', 'Rozcestník', 'Satelit'],
-      ok: p => p.nSide === 0 && p.nBar <= 9 && p.nGun >= 1, aff: () => 1,
+      ok: p => p.nSide === 0 && !p.occ[1] && !p.occ[2] && p.nBar <= 9 && p.nGun >= 1, aff: () => 1,
       apply(c) {
         const g = frontGuns(c)[0] || c.barrels.find(isGun);
         const s = (a) => B({ a, len: 1.2, w: Math.min(0.5, g.w * 0.8), dmg: g.dmg * 0.55, spd: g.spd, delay: 0.25, spread: g.spread });
@@ -176,29 +192,29 @@ const TANKGEN = (function () {
       } },
     { id: 'turretPair', fam: 'turret', min: 2, desc: 'Dvě samočinné věže po stranách', look: { n: 7, trim: 'core' }, tone: '#9aa8ff', bal: 'dmg', caps: ['frost', 'plating', 'vamp'],
       nouns: ['Hlídač', 'Dozorce', 'Strážník', 'Gardista', 'Obránce', 'Pobočník', 'Štítonoš', 'Pohraničník'],
-      ok: p => p.nTur <= 2 && p.nBar <= 11, aff: () => 1,
-      apply(c) { c.barrels.push(TUR(Object.assign({ a: PI / 2 }, TUR_DEF)), TUR(Object.assign({ a: -PI / 2 }, TUR_DEF))); c.reload *= 1.04; } },
+      ok: p => p.nTur <= 2 && p.rimTur === 0 && p.nBar <= 11, aff: () => 1,
+      apply(c) { const d = turDmg(c, 0.5); c.barrels.push(TUR(Object.assign({ a: PI / 2, dmg: d }, TUR_DEF)), TUR(Object.assign({ a: -PI / 2, dmg: d }, TUR_DEF))); c.reload *= 1.04; } },
     { id: 'turretRing', fam: 'turret', min: 3, desc: 'Čtyři samočinné věže dokola', look: { n: 8, trim: 'ring' }, tone: '#9aa8ff', bal: 'dmg', caps: ['plating', 'overclock', 'frost'],
-      nouns: ['Dělostřelec', 'Kanonýr', 'Arzenál', 'Kastelán', 'Zbrojíř', 'Zbrojmistr', 'Pevnostník'],
-      ok: p => p.nTur <= 1 && p.nBar <= 10, aff: p => (p.tanky ? 1.3 : 1),
-      apply(c) { [0.78, 2.36, -0.78, -2.36].forEach(a => c.barrels.push(TUR(Object.assign({ a }, TUR_DEF)))); c.reload *= 1.06; c.speed *= 0.97; } },
+      nouns: ['Dělostřelec', 'Kanonýr', 'Arzenál', 'Kastelán', 'Zbrojíř', 'Zbrojmistr', 'Zbrojnoš'],
+      ok: p => p.nTur <= 1 && p.rimTur === 0 && p.nBar <= 10, aff: p => (p.tanky ? 1.3 : 1),
+      apply(c) { const d = turDmg(c, 0.5); [0.78, 2.36, -0.78, -2.36].forEach(a => c.barrels.push(TUR(Object.assign({ a, dmg: d }, TUR_DEF)))); c.reload *= 1.06; c.speed *= 0.97; } },
     { id: 'turretCore', fam: 'turret', min: 2, desc: 'Samočinná věž uprostřed', look: { n: 0, trim: 'core' }, tone: '#9aa8ff', bal: 'dmg', caps: ['overclock', 'vamp', 'frost'],
-      nouns: ['Reaktor', 'Generátor', 'Magnet', 'Atom', 'Pulsar', 'Kvazar', 'Motor', 'Nukleon', 'Orbit'],
+      nouns: ['Reaktor', 'Generátor', 'Magnet', 'Atom', 'Pulsar', 'Kvazar', 'Motor', 'Nukleon', 'Proton'],
       ok: p => p.nTur <= 2 && !p.coreTur && p.nBar <= 12, aff: () => 1,
-      apply(c) { c.barrels.push(TUR({ dist: 0, dmg: 0.6, tsize: 0.4 })); } },
+      apply(c) { c.barrels.push(TUR({ dist: 0, dmg: turDmg(c, 0.6), tsize: 0.4 })); } },
     { id: 'mainGun', fam: 'turret', min: 2, desc: 'Přibylo hlavní dělo vpředu', look: { n: 6, trim: 'core' }, tone: '#d9a05b', bal: 'dmg', caps: ['impact', 'plating', 'fire'],
       nouns: ['Kanón', 'Moždíř', 'Falkon', 'Mušketýr', 'Arkebuzír', 'Galeon', 'Korzár', 'Pirát'],
-      ok: p => p.nFront === 0 && p.nTur >= 1 && p.nGun === 0, aff: () => 3,
+      ok: p => !p.occ[0] && p.nTur >= 1 && p.nGun === 0, aff: () => 3,
       apply(c) { c.barrels.push(B({ len: 1.55, w: 0.6, dmg: 1.1, spd: 1.1 })); c.reload *= 1.1; } },
-    { id: 'swift', fam: 'body', min: 2, desc: 'Hbitý, s tryskami vzadu', look: { n: 3, fins: 2, trim: '' }, tone: '#7fe0ff', bal: 'dmg', caps: ['afterburner', 'vamp', 'frost'],
+    { id: 'swift', fam: 'body', min: 2, desc: 'Hbitý, s tryskami vzadu', look: { n: 3, fins: 2, trim: '' }, tone: '#7fe0ff', bal: 'dmg', caps: ['vamp', 'frost'],
       nouns: ['Gepard', 'Chrt', 'Jelen', 'Zajíc', 'Mustang', 'Pstruh', 'Větřík', 'Rychlík', 'Sprinter', 'Kojot', 'Šakal'],
-      ok: p => !p.fast, aff: p => (p.tanky ? 0.5 : 1.1),
+      ok: p => !p.fast && !p.occ[3], aff: p => (p.tanky ? 0.5 : 1.1),
       apply(c) {
         c.speed *= 1.2; c.size *= 0.9; c.hp *= 0.88;
         c.barrels.push(B({ a: PI - 0.32, len: 1.2, w: 0.3, dmg: 0.3, size: 0.6, recoil: 3 }), B({ a: PI + 0.32, len: 1.2, w: 0.3, dmg: 0.3, size: 0.6, recoil: 3, delay: 0.5 }));
       } },
     { id: 'bulwark', fam: 'body', min: 2, desc: 'Silný pancíř, ale pomalejší', look: { n: 8, plates: 4, trim: '' }, tone: '#9fb0c0', bal: 'dmg', caps: ['impact', 'vamp', 'fire'],
-      nouns: ['Bunkr', 'Pancíř', 'Nosorožec', 'Pásovec', 'Kyrysník', 'Pancéřník', 'Rytíř', 'Golem', 'Hroch', 'Štít', 'Val', 'Monolit', 'Balvan', 'Granit'],
+      nouns: ['Bunkr', 'Pancíř', 'Nosorožec', 'Pásovec', 'Kyrysník', 'Obrněnec', 'Rytíř', 'Golem', 'Hroch', 'Štít', 'Val', 'Monolit', 'Balvan', 'Granit'],
       ok: p => !p.tanky, aff: p => (p.fast ? 1.2 : 1),
       apply(c) { c.hp *= 1.55; c.size *= 1.12; c.speed *= 0.88; c.ram *= 1.25; } },
     { id: 'ram', fam: 'body', min: 2, desc: 'Beran: náraz a boj zblízka', look: { n: 0, spikes: 6, trim: '' }, tone: '#d98c4d', bal: 'dmg', caps: ['impact', 'vamp', 'plating'],
@@ -207,13 +223,13 @@ const TANKGEN = (function () {
       apply(c) { c.ram *= 2.4; c.hp *= 1.3; c.speed *= 1.08; c.range *= 0.75; for (const b of c.barrels) if (isGun(b)) { b.len *= 0.92; b.dmg *= 0.92; } } },
     { id: 'hive', fam: 'minion', min: 2, desc: 'Víc dronů', look: { n: 6, trim: 'dots' }, tone: '#f0c14b', bal: 'dmg', caps: ['fire', 'vamp', 'plating'],
       nouns: ['Úl', 'Sršeň', 'Čmelák', 'Mravenec', 'Trubec', 'Včelař', 'Chovatel', 'Pastýř', 'Mrak'],
-      ok: p => p.nDrone >= 1 && p.nBar <= 10, aff: () => 1.5,
+      ok: p => p.nDrone >= 1 && p.nBar <= 10 && p.occ.some(o => !o), aff: () => 1.5,
       apply(c) {
         const d = c.barrels.find(b => !b.turret && b.kind === 'drone');
         let added = 0;
         for (const a of [PI / 2, -PI / 2, PI, 0]) {
           if (added >= 2) break;
-          if (c.barrels.some(b => !b.turret && b.kind === 'drone' && sameAng(b.a, a))) continue;
+          if (c.barrels.some(b => !b.turret && sameAng(b.a, a))) continue;
           c.barrels.push(Object.assign({}, d, { a, off: 0, delay: added ? 0.5 : 0.25 })); added++;
         }
         c.maxDrones = Math.round(c.maxDrones * 1.35) + 2;
@@ -223,17 +239,17 @@ const TANKGEN = (function () {
       ok: p => p.nDrone >= 1, aff: () => 1.2,
       apply(c) { for (const b of c.barrels) if (!b.turret && b.kind === 'drone') { b.dmg *= 1.5; b.hp *= 1.5; b.size *= 1.3; } c.maxDrones = Math.max(2, Math.round(c.maxDrones * 0.65)); c.reload *= 1.25; } },
     { id: 'swarmlets', fam: 'minionC', min: 2, desc: 'Hejno drobných dronů', look: { n: 5, trim: 'dots' }, tone: '#f0c14b', bal: 'dmg', caps: ['frost', 'overclock', 'vamp'],
-      nouns: ['Komár', 'Pakomár', 'Svatojánek', 'Hmyz', 'Šváb', 'Mol', 'Chrostík', 'Pestřenec'],
+      nouns: ['Komár', 'Pakomár', 'Svatojánek', 'Hmyz', 'Šváb', 'Mol', 'Chrostík', 'Ovád'],
       ok: p => p.nDrone >= 1 && p.nBar <= 10, aff: () => 1.1,
       apply(c) { for (const b of c.barrels) if (!b.turret && b.kind === 'drone') { b.size *= 0.75; b.dmg *= 0.72; } c.maxDrones = Math.round(c.maxDrones * 1.8); c.reload *= 0.8; } },
     { id: 'carrier', fam: 'minion', min: 2, desc: 'Navíc vypouští drony', look: { n: 6, trim: 'stripe' }, tone: '#f0c14b', bal: 'dmg', caps: ['plating', 'vamp', 'overclock'],
       nouns: ['Nosič', 'Hangár', 'Admirál', 'Komodor', 'Kapitán', 'Dopravce', 'Pilot', 'Maršál', 'Generál', 'Kormidelník'],
-      ok: p => p.nDrone === 0 && p.nBar <= 8 && p.nGun >= 1, aff: p => (p.minions ? 0.6 : 1),
+      ok: p => p.nDrone === 0 && p.nBar <= 8 && p.nGun >= 1 && !p.occ[1] && !p.occ[2], aff: p => (p.minions ? 0.6 : 1),
       apply(c) {
         const dr = a => B({ a, len: 1.25, w: 0.7, dmg: 0.55, spd: 0.65, size: 0.8, kind: 'drone', flare: true, delay: a > 0 ? 0 : 0.5 });
         c.barrels.push(dr(PI / 2), dr(-PI / 2)); c.maxDrones = Math.max(c.maxDrones, 5); c.reload *= 1.1;
       } },
-    { id: 'bunker', fam: 'minion', min: 2, desc: 'Odolné, obrovské pasti', look: { n: 4, plates: 4, trim: 'cross' }, tone: '#9fb0c0', bal: 'dmg', caps: ['plating', 'frost', 'fire'],
+    { id: 'bunker', fam: 'minion', min: 2, desc: 'Odolné, obrovské pasti', look: { n: 4, plates: 4, trim: 'cross' }, tone: '#9fb0c0', bal: 'dmg', caps: ['frost', 'fire'],
       nouns: ['Kazamat', 'Sklep', 'Okop', 'Příkop', 'Žalář', 'Sejf', 'Trezor', 'Sklad'],
       ok: p => p.nTrap >= 1, aff: () => 1.5,
       apply(c) { for (const b of c.barrels) if (!b.turret && b.kind === 'trap') { b.hp *= 1.7; b.size *= 1.25; } c.maxTraps = Math.max(3, Math.round(c.maxTraps * 0.8)); c.reload *= 1.15; } },
@@ -242,16 +258,16 @@ const TANKGEN = (function () {
       ok: p => p.nTrap >= 1, aff: () => 1.2,
       apply(c) { for (const b of c.barrels) if (!b.turret && b.kind === 'trap') { b.dmg *= 1.5; b.size *= 0.92; b.spd *= 1.1; } c.reload *= 1.1; } },
     { id: 'minefield', fam: 'minionC', min: 2, desc: 'Víc pastí najednou', look: { n: 4, rot: 0.785, trim: 'dots' }, tone: '#f0c14b', bal: 'dmg', caps: ['frost', 'overclock', 'vamp'],
-      nouns: ['Sapér', 'Zaminovač', 'Kopáč', 'Hrobník', 'Krtek', 'Zákopník', 'Hlodavec', 'Zahradník'],
+      nouns: ['Sapér', 'Ženista', 'Kopáč', 'Hrobník', 'Krtek', 'Šachtař', 'Hlodavec', 'Zahradník'],
       ok: p => p.nTrap >= 1, aff: () => 1.3,
       apply(c) { for (const b of c.barrels) if (!b.turret && b.kind === 'trap') b.spd *= 1.12; c.maxTraps = Math.round(c.maxTraps * 1.7); c.reload *= 0.82; } },
     { id: 'trapify', fam: 'minion', min: 2, desc: 'Zadní pasti kryjí ústup', look: { n: 5, trim: 'cross' }, tone: '#f0c14b', bal: 'dmg', caps: ['afterburner', 'frost', 'plating'],
-      nouns: ['Lapač', 'Chytač', 'Kapkán', 'Pasák', 'Zálesák', 'Trapér', 'Stopař'],
-      ok: p => p.nTrap === 0 && p.nBar <= 9 && p.nFront >= 1, aff: () => 1,
+      nouns: ['Lapač', 'Chytač', 'Kapkán', 'Pytlák', 'Zálesák', 'Trapér', 'Stopař'],
+      ok: p => p.nTrap === 0 && p.nBar <= 9 && p.nFront >= 1 && !p.occ[3], aff: () => 1,
       apply(c) { c.barrels.push(B({ a: PI, len: 1.3, w: 0.8, dmg: 1.1, spd: 0.9, size: 1.4, kind: 'trap', flare: true, recoil: 0.5 })); c.maxTraps = Math.max(c.maxTraps, 6); c.reload *= 1.06; } },
     { id: 'lob', fam: 'blast', min: 3, desc: 'Vrhá bomby s výbuchem', look: { n: 5, trim: 'ring' }, tone: '#ff9a4d', bal: 'dmg', caps: ['fire', 'impact', 'scope'],
-      nouns: ['Katapult', 'Trebuchet', 'Metač', 'Prak', 'Vrhač', 'Minometčík', 'Granátomet', 'Obléhatel'],
-      ok: p => p.nFront >= 1 && p.nFront <= 2 && p.nBomb === 0 && p.nMissile === 0, aff: p => (p.sniper ? 1.2 : 1),
+      nouns: ['Katapult', 'Trebuchet', 'Odpalovač', 'Prak', 'Vrhač', 'Minometčík', 'Granátomet', 'Obléhatel'],
+      ok: p => p.nFront >= 1 && p.nFront <= 2 && p.nBomb === 0 && p.nMissile === 0 && p.fSpacing >= 1.05 * Math.max(0.8, p.maxFW), aff: p => (p.sniper ? 1.2 : 1),
       apply(c) {
         for (const b of frontGuns(c)) { b.kind = 'bomb'; b.lob = true; b.blast = 70; b.dmg *= 1.6; b.spd *= 0.8; b.size *= 1.4; b.flare = true; b.recoil *= 1.5; b.len *= 0.85; b.w = Math.max(b.w, 0.8); b.pierce = 0; b.streak = false; }
         c.reload *= 1.5; c.range *= 1.1;
@@ -260,9 +276,9 @@ const TANKGEN = (function () {
       nouns: ['Honič', 'Ohař', 'Slídil', 'Sokolník', 'Lovčí', 'Detektiv', 'Slídič', 'Vlčák'],
       ok: p => p.nFront >= 1 && p.nFront <= 3 && p.nMissile === 0 && p.nBomb === 0, aff: () => 1,
       apply(c) { for (const b of frontGuns(c)) { b.kind = 'missile'; b.spd *= 0.85; b.dmg *= 1.05; b.size *= 0.9; b.flare = true; b.pierce = 0; b.streak = false; b.spread = 0; } c.reload *= 1.1; } },
-    { id: 'twin', fam: 'rate', min: 2, desc: 'Dvojitá hlaveň, střídavá palba', look: { n: 7, trim: 'stripe' }, tone: '#f0d36a', bal: 'reload', caps: ['overclock', 'frost', 'vamp'],
+    { id: 'twin', fam: 'rate', min: 2, desc: 'Dvojitá hlaveň, střídavá palba', look: { n: 7, trim: 'stripe' }, tone: '#f0d36a', bal: 'reload', caps: ['frost', 'vamp'],
       nouns: ['Blíženec', 'Kastor', 'Pollux', 'Tandem', 'Duet', 'Dvoják'],
-      ok: p => p.nFront === 1 && p.nBar <= 8 && p.nBomb === 0, aff: () => 1,
+      ok: p => p.nFront === 1 && p.nBar <= 8 && p.nBomb === 0 && p.avgW <= 1.2, aff: () => 1,
       apply(c) {
         const out = [];
         for (const b of c.barrels) {
@@ -285,16 +301,16 @@ const TANKGEN = (function () {
       adjs: ['Upíří', 'Krvavý', 'Krvelačný', 'Noční', 'Temný', 'Přízračný', 'Stínový', 'Rudý', 'Hladový', 'Záhrobní'],
       ok: () => true, apply(c) { c.vamp = Math.max(c.vamp || 0, 0.1); for (const b of c.barrels) b.dmg *= 0.96; } },
     { id: 'impact', desc: 'Střely odhazují soupeře', tone: '#c9a15a',
-      adjs: ['Drtivý', 'Dunivý', 'Otřesný', 'Rázový', 'Hřmotný', 'Mocný', 'Zdrcující', 'Bouřlivý'],
+      adjs: ['Drtivý', 'Dunivý', 'Nárazový', 'Rázový', 'Hřmotný', 'Mocný', 'Zdrcující', 'Bouřlivý'],
       ok: p => p.nGun + p.nTur >= 1, apply(c) { for (const b of c.barrels) if (isGun(b) || b.turret) { b.knock = Math.max(b.knock || 1, 2.4); b.size *= 1.08; b.recoil *= 1.15; } } },
     { id: 'plating', desc: 'Pevnější a rychleji se léčí', tone: '#9fb0c0',
       adjs: ['Pancéřový', 'Ocelový', 'Železný', 'Neprůstřelný', 'Kovový', 'Obrněný', 'Chromový', 'Titanový', 'Pevný', 'Litinový'],
       ok: (p, s) => s.id !== 'bulwark' && s.id !== 'bunker', apply(c) { c.hp *= 1.28; c.regen *= 1.35; c.size *= 1.05; c.speed *= 0.95; } },
     { id: 'overclock', desc: 'Rychlejší nabíjení', tone: '#ffe14d',
       adjs: ['Přetaktovaný', 'Zběsilý', 'Rozpálený', 'Horečný', 'Divoký', 'Splašený', 'Nabuzený', 'Elektrický', 'Neúnavný', 'Svižný'],
-      ok: () => true, apply(c) { c.reload *= 0.86; for (const b of c.barrels) if (isGun(b) || b.turret) b.dmg *= 0.97; } },
+      ok: (p, s) => s.bal !== 'reload', apply(c) { c.reload *= 0.86; for (const b of c.barrels) if (isGun(b) || b.turret) b.dmg *= 0.97; } },
     { id: 'scope', desc: 'Větší dostřel a rychlejší střely', tone: '#b6f0a0',
-      adjs: ['Orlí', 'Dalekozraký', 'Bystrozraký', 'Jasnozřivý', 'Přesný', 'Zaměřený', 'Vzdálený', 'Ostrozraký', 'Dalekonosný'],
+      adjs: ['Orlí', 'Dalekozraký', 'Bystrozraký', 'Jasnozřivý', 'Přesný', 'Zaměřený', 'Dálkový', 'Ostrozraký', 'Dalekonosný'],
       ok: (p, s) => p.nFront >= 1 && s.id !== 'longbarrel', apply(c) { c.range *= 1.2; c.zoom *= 0.9; for (const b of frontGuns(c)) b.spd *= 1.15; } },
     { id: 'afterburner', desc: 'Vyšší rychlost pohybu', tone: '#7fe0ff',
       adjs: ['Bleskový', 'Raketový', 'Rychlý', 'Pádící', 'Větrný', 'Letící', 'Zrychlený', 'Proudový', 'Tryskový', 'Hbitý'],
@@ -307,7 +323,7 @@ const TANKGEN = (function () {
   const CAP_BY = {}; for (const k of CAPS) CAP_BY[k.id] = k;
 
   // Záložní jména, kdyby se vyčerpala jména modulu (v praxi to nenastane).
-  const SPARE = ['Drak', 'Gryf', 'Fénix', 'Hydra', 'Bazilišek', 'Minotaur', 'Chrlič', 'Vlkodlak', 'Troll', 'Ogr', 'Trpaslík', 'Čaroděj', 'Alchymista', 'Šaman', 'Poutník', 'Žoldnéř'];
+  const SPARE = ['Drak', 'Gryf', 'Fénix', 'Kraken', 'Bazilišek', 'Minotaur', 'Chrlič', 'Vlkodlak', 'Troll', 'Ogr', 'Trpaslík', 'Čaroděj', 'Alchymista', 'Šaman', 'Poutník', 'Žoldnéř'];
 
   /* ---------- sestavení jednoho potomka ---------- */
   const GROWTH = { 1: 1.04, 2: 1.07, 3: 1.07, 4: 1.13 };      // o kolik je potomek tohoto stupně silnější než rodič
@@ -315,7 +331,7 @@ const TANKGEN = (function () {
   // Tabulka se dá znovu odvodit kalibračním měřením; 1 = bez korekce.
   const FIX = {
     /*FIX*/
-    afterburner: 0.929, armorShots: 0.942, bigdrones: 1.032, blast: 1.036, bounce: 1.058, bulwark: 1.118, bunker: 0.948, carrier: 0.912, cross: 1.012, fan: 1.071, fire: 0.927, frost: 1.012, gatling: 0.964, heavy: 1.016, hive: 0.984, homing: 1.039, impact: 1.013, lob: 2.239, longbarrel: 0.886, mainGun: 0.987, minefield: 1.207, overclock: 0.962, plating: 0.966, rail: 1.042, ram: 1.029, rear: 1.130, scope: 0.898, spiketrap: 1.153, swarmlets: 1.052, swift: 0.880, trapify: 1.574, turretCore: 0.994, turretPair: 1.064, turretRing: 1.307, twin: 0.951, vamp: 1.047,
+    afterburner: 0.929, armorShots: 0.942, bigdrones: 1.032, blast: 1.036, bounce: 1.058, bulwark: 1.118, bunker: 0.948, carrier: 0.912, cross: 1.012, fan: 1.071, fire: 0.927, frost: 1.012, gatling: 0.964, heavy: 1.016, hive: 0.984, homing: 1.039, impact: 1.013, lob: 2.239, longbarrel: 0.886, mainGun: 0.820, minefield: 1.207, overclock: 0.962, plating: 0.966, rail: 1.042, ram: 1.080, rear: 1.130, scope: 0.940, spiketrap: 1.153, swarmlets: 0.970, swift: 0.880, trapify: 1.650, turretCore: 0.994, turretPair: 1.064, turretRing: 1.307, twin: 0.951, vamp: 1.047,
     /*END*/
   };
   const BOUNDS = { reload: [0.12, 4.5], speed: [0.6, 1.5], hp: [0.6, 3.2], size: [0.78, 1.9], range: [0.3, 2.4], zoom: [0.55, 1], ram: [0.8, 4], regen: [0.8, 3], bhp: [0.8, 3], vamp: [0, 0.3] };
@@ -358,7 +374,7 @@ const TANKGEN = (function () {
     const base = CLASSES[parentId], st = STRUCT_BY[structId], cap = capId ? CAP_BY[capId] : null;
     const tier = base.tier + 1;
     const c = build(base, st, cap, tier);
-    return finalize(c, profile(base).power * GROWTH[tier], st, cap);
+    return finalize(c, profile(base).power * (GROWTH[tier] || 1), st, cap);
   }
 
   // Totéž jen s korunním modulem (bez strukturního) - měří se tím čistý vliv korunního modulu.
@@ -366,7 +382,7 @@ const TANKGEN = (function () {
     const base = CLASSES[parentId], cap = CAP_BY[capId], tier = base.tier + 1;
     const c = cloneClass(base); c.tier = tier;
     cap.apply(c, { tier }); clampClass(c); c.struct = 'none'; c.cap = cap.id;
-    return finalize(c, profile(base).power * GROWTH[tier], { id: 'none', bal: 'dmg' }, cap);
+    return finalize(c, profile(base).power * (GROWTH[tier] || 1), { id: 'none', bal: 'dmg' }, cap);
   }
 
   /* ---------- výběr modulů pro rodiče ---------- */
@@ -381,31 +397,39 @@ const TANKGEN = (function () {
   }
   // Seřadí použitelné moduly podle toho, jak se k rodiči hodí (příznivost, trocha náhody, ruční sourozenci se stejným
   // zaměřením se potlačí). Rodinu modulu pak hlídá volající, aby sourozenci nebyli dvakrát stejného druhu.
-  function rankKits(parent, siblings, rng, tier) {
+  // Šum pro dvojici (klíč rodiče, modul): stejný vstup dává vždy stejné číslo, bez ohledu na to, co se vybíralo před tím.
+  const jit = (...parts) => seeded(hashStr(parts.join('|')))();
+  function rankKits(parent, siblings, key, tier) {
     const pp = profile(parent);
     const taken = new Set();
     for (const s of siblings) for (const f of featureSet(s)) taken.add(f);
     return STRUCT.filter(k => k.min <= tier && k.ok(pp))
-      .map(k => ({ k, w: k.aff(pp) * (0.6 + rng() * 0.8) * (taken.has(k.fam) ? 0.5 : 1) }))
+      .map(k => ({ k, w: k.aff(pp) * (0.6 + jit(key, k.id) * 0.8) * (taken.has(k.fam) ? 0.5 : 1) }))
       .sort((x, y) => y.w - x.w).map(x => x.k);
   }
-  function pickCap(parentProf, struct, usedCaps, rng) {
+  function pickCap(parentProf, struct, usedCaps, key) {
     const pool = CAPS.filter(k => k.ok(parentProf, struct));
-    const scored = pool.map(k => ({ k, w: (struct.caps.indexOf(k.id) >= 0 ? 2.2 : 1) * (usedCaps.has(k.id) ? 0.1 : 1) * (0.7 + rng() * 0.6) }));
+    const scored = pool.map(k => ({ k, w: (struct.caps.indexOf(k.id) >= 0 ? 2.2 : 1) * (usedCaps.has(k.id) ? 0.1 : 1) * (0.7 + jit(key, struct.id, k.id) * 0.6) }));
     scored.sort((a, b) => b.w - a.w);
     return scored.length ? scored[0].k : null;
   }
 
   /* ---------- jména ---------- */
+  // Dvouslovná jména se píšou jako u ručně navržených tříd (první slovo velkým, podstatné jméno malým, kromě vlastních jmen),
+  // přídavné jméno nesmí mít stejný kořen jako podstatné ("Drtivý drtič", "Svižný svižník").
+  const PROPER = new Set(['Janus', 'Kastor', 'Pollux', 'Pérák']);
+  const fold = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const sameRoot = (a, b) => fold(a).slice(0, 4) === fold(b).slice(0, 4);
+  const compose = (adj, n) => adj + ' ' + (PROPER.has(n) ? n : n.charAt(0).toLowerCase() + n.slice(1));
   function nameFor(struct, cap, rng, used) {
     const nouns = shuffled(struct.nouns, rng);
     if (!cap) {
       for (const n of nouns) if (!used.has(n)) return n;
     } else {
       const adjs = shuffled(cap.adjs, rng);
-      for (const n of nouns) for (const a of adjs) { const nm = a + ' ' + n; if (!used.has(nm)) return nm; }
+      for (const n of nouns) for (const a of adjs) { if (sameRoot(a, n)) continue; const nm = compose(a, n); if (!used.has(nm)) return nm; }
     }
-    for (const n of shuffled(SPARE, rng)) { const nm = cap ? cap.adjs[0] + ' ' + n : n; if (!used.has(nm)) return nm; }
+    for (const n of shuffled(SPARE, rng)) { const nm = cap ? compose(cap.adjs[0], n) : n; if (!used.has(nm)) return nm; }
     let i = 2; const base = struct.nouns[0]; while (used.has(base + ' ' + i)) i++;
     return base + ' ' + i;
   }
@@ -422,7 +446,7 @@ const TANKGEN = (function () {
         const kids = TREE[id] || (TREE[id] = []);
         const need = 4 - kids.length; if (need <= 0) continue;
         const ct = tier + 1;                                           // stupeň potomků
-        const rng = seeded(hashStr(id + '|' + tier));
+        const key = id + '|' + tier;                                     // z něj se odvozuje všechen šum pro tohoto rodiče
         const sibs = kids.map(k => CLASSES[k]);
         const pp = profile(base);
         // cílová síla: rodič * růst (pokud mají ruční sourozenci jinou sílu, vezmeme střed)
@@ -430,14 +454,14 @@ const TANKGEN = (function () {
         if (sibs.length) { const sp = sibs.map(s => profile(s).power).sort((x, y) => x - y); target = Math.sqrt(target * sp[Math.floor(sp.length / 2)]); }
         const seen = new Set([silhouette(Object.assign({}, base, { look: lookFor(base) }))]);
         for (const s of sibs) seen.add(silhouette(Object.assign({}, s, { look: lookFor(s) })));
-        const ranked = rankKits(base, sibs, rng, ct);
+        const ranked = rankKits(base, sibs, key, ct);
         const usedCaps = new Set(), usedFam = new Set();
         const accepted = [];
         for (const relax of [false, true]) {
           for (const st of ranked) {
             if (accepted.length >= need) break;
             if (accepted.some(a => a.st === st) || (!relax && usedFam.has(st.fam))) continue;
-            const cap = ct >= 4 ? pickCap(pp, st, usedCaps, rng) : null;
+            const cap = ct >= 4 ? pickCap(pp, st, usedCaps, key) : null;
             const c = build(base, st, cap, ct);
             const sg = silhouette(c);
             if (seen.has(sg)) continue;
@@ -447,7 +471,7 @@ const TANKGEN = (function () {
         }
         for (const { st, cap, c } of accepted) {
           finalize(c, target, st, cap);
-          c.name = nameFor(st, cap, rng, used); used.add(c.name);
+          c.name = nameFor(st, cap, seeded(hashStr(key + '|' + st.id + '|' + (cap ? cap.id : ''))), used); used.add(c.name);
           c.info = cap ? st.desc + '. ' + cap.desc : st.desc;
           const childId = id + '_' + st.id + (cap ? '_' + cap.id : '');
           CLASSES[childId] = C(c);
@@ -479,13 +503,9 @@ const TANKGEN = (function () {
   // Silueta: to, co je na tanku vidět na první pohled (hlavně, těleso, doplňky). Dvě třídy se stejnou siluetou
   // vypadají stejně. Podpis navíc zahrnuje značky střel (průraz, odraz, výbuch, mráz, oheň...).
   function silhouette(c) {
-    const bs = c.barrels.map(b => [b.turret ? 'T' : b.kind[0], Math.round(b.a * 4), Math.round(b.len * 3), Math.round(b.w * 6), Math.round(b.off * 4), Math.round((b.dist || 0) * 4), b.flare ? 1 : 0].join('.')).sort();
+    const bs = c.barrels.map(b => [b.turret ? 'T' : b.kind === 'bomb' ? 'o' : b.kind[0], Math.round(b.a * 4), Math.round(b.len * 3), Math.round(b.w * 6), Math.round(b.off * 4), Math.round((b.dist || 0) * 4), b.flare ? 1 : 0].join('.')).sort();
     const L = c.look || {};
     return bs.join('|') + '#' + [L.n || 0, L.spikes || 0, L.fins || 0, L.plates || 0, L.trim || ''].join('.') + '#' + Math.round((c.size || 1) * 10);
-  }
-  function signature(c) {
-    const fl = c.barrels.map(b => (b.pierce >= 2 ? 'p' : '') + (b.bounce ? 'b' : '') + (b.blast ? 'x' : '') + (b.slow ? 's' : '') + (b.burn ? 'f' : '') + (b.knock > 1 ? 'k' : '') + (b.streak ? 't' : '')).sort().join(',');
-    return silhouette(c) + '#' + fl + '#' + ((c.look && c.look.tone) || '');
   }
 
   const TRIMS = ['', 'ring', 'stripe', 'dots', 'core', 'cross'];
@@ -514,6 +534,8 @@ const TANKGEN = (function () {
     for (const id in CLASSES) if (!CLASSES[id].boss) CLASSES[id].prof = profile(CLASSES[id]);
   }
 
-  const gen = fill();
-  return { STRUCT, CAPS, STRUCT_BY, CAP_BY, make, makeCap, FIX, profile, powerOf, offenseOf, toughOf, mobilityOf, reachOf, lookFor, finish, silhouette, signature, featureSet, hashStr, seeded, GROWTH, made: gen.made };
+  // fill() se volá z ascension.js, až když jsou definované i ruční třídy vyšších stupňů a bossové (jejich jména se nesmí použít podruhé).
+  const api = { STRUCT, CAPS, STRUCT_BY, CAP_BY, make, makeCap, FIX, profile, powerOf, offenseOf, toughOf, mobilityOf, reachOf, lookFor, finish, silhouette, featureSet, hashStr, seeded, GROWTH, made: 0 };
+  api.fill = () => { api.made = fill().made; return api.made; };
+  return api;
 })();

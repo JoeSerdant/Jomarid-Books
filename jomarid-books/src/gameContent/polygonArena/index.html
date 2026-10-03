@@ -82,8 +82,10 @@
       <button id="pauseBtn" class="chip pe" aria-label="Pauza" title="Pauza (P)"><svg viewBox="0 0 14 14"><rect x="2" y="1" width="3.6" height="12" rx="1"/><rect x="8.4" y="1" width="3.6" height="12" rx="1"/></svg></button>
     </div>
     <div id="banner"></div>
-    <div id="objbar" class="panel hidden"></div>
-    <div id="bossbar" class="panel hidden"><b id="bossName"></b><div class="bar"><i id="bossFill"></i></div></div>
+    <div id="topbars">
+      <div id="objbar" class="panel hidden"></div>
+      <div id="bossbar" class="panel hidden"><b id="bossName"></b><div class="bar"><i id="bossFill"></i></div></div>
+    </div>
     <div id="stats" class="panel pe"><div id="statHead" class="pe"></div><div id="statRows"></div></div>
     <div id="classes"></div>
     <div id="perkStrip"></div>
@@ -116,7 +118,7 @@
         <button type="button" role="radio" data-d="hell">Peklo</button>
       </div>
       <p class="dinfo" id="diffInfo"></p>
-      <button id="playBtn" class="btn" type="button">Hrát</button>
+      <div class="playDock"><button id="playBtn" class="btn" type="button">Hrát</button></div>
       <div class="row two"><button id="collBtn" type="button">Sbírka a úspěchy</button><button id="setBtn" type="button">Nastavení</button></div>
       <div class="row"><span id="bestText"></span><button id="soundBtn" type="button">Zvuk: vypnutý</button></div>
       <p class="hint" id="hintText"></p>

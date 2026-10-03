@@ -157,10 +157,10 @@ h1{margin:0 0 6px;font-size:clamp(30px,9vw,44px);line-height:1;font-weight:700;l
 #banner.boss{border-color:var(--danger);color:var(--danger)}
 #banner.good,#banner.ach{border-color:var(--accent);color:var(--accent)}
 #banner.event{border-color:#f5c542;color:#f5c542}
-#objbar{position:absolute;top:56px;left:50%;transform:translateX(-50%);padding:5px 12px;font-size:13px;font-weight:700;display:flex;gap:10px;align-items:center;white-space:nowrap}
+#topbars{position:absolute;top:56px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px}
+#objbar{padding:5px 12px;font-size:13px;font-weight:700;display:flex;gap:10px;align-items:center;white-space:nowrap}
 #objbar .tb{color:#4da3ff}#objbar .tr{color:#ff6b5e}#objbar small{color:var(--dim);font-weight:500;font-size:11px}#objbar b{font-variant-numeric:tabular-nums}
-#bossbar{position:absolute;top:56px;left:50%;transform:translateX(-50%);width:min(260px,58vw);padding:6px 10px 8px;text-align:center;border-color:var(--danger)}
-#bossbar.low{top:88px}
+#bossbar{width:min(260px,58vw);padding:6px 10px 8px;text-align:center;border-color:var(--danger)}
 #bossbar b{font-size:12px;color:var(--danger)}
 #bossbar .bar{height:7px;border-radius:4px;background:var(--pip);margin-top:4px;overflow:hidden}
 #bossbar .bar i{display:block;height:100%;width:100%;background:var(--danger)}
@@ -232,17 +232,35 @@ button.cc:hover{border-color:var(--accent)}
   #classes .ccard.perk{width:88px}
   #classes .ccard.perk b{font-size:10px}
 }
-@media (max-height:480px){#dashBtn{bottom:12px;width:48px;height:48px}#perkStrip{bottom:60px}#objbar,#bossbar{top:54px}#banner{bottom:64px}}
+@media (max-height:480px){#dashBtn{bottom:12px;width:48px;height:48px}#perkStrip{bottom:60px}#topbars{top:54px}#banner{bottom:64px}}
 @media (max-height:780px){.logo{display:none}.lead{margin-bottom:10px}}
+@media (max-height:740px){.lead{display:none}}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 
-/* ---------- Lišta cíle režimu na malých displejích ---------- */
-@media (max-width:420px){
-  #objbar{flex-direction:column;gap:0;align-items:center;max-width:calc(100vw - 232px);padding:4px 8px;font-size:12px;white-space:normal;text-align:center;line-height:1.25}
+/* ---------- Lišta cíle a bossbar na malých displejích ---------- */
+/* Do 640 px se lišty vejdou do volného pruhu mezi minimapou vlevo a žebříčkem vpravo (pod tlačítky nahoře), pod sebou.
+   Do 520 px (vlevo je pod minimapou panel Stavba tanku) se bossbar přesune pod žebříček a do 340 px jdou obě lišty
+   pod minimapu a žebříček. */
+@media (max-width:640px){
+  #topbars{left:116px;right:174px;transform:none;align-items:stretch}
+  #objbar{flex-direction:column;gap:0;align-items:center;white-space:normal;text-align:center;line-height:1.25;padding:4px 8px;font-size:12px}
   #objbar small{font-size:10.5px}
-  #bossbar.low{top:152px}
+  #bossbar{width:auto}
+}
+@media (max-width:520px){
+  #topbars{display:contents}
+  #objbar{position:absolute;top:56px;left:116px;right:138px}
+  #bossbar{position:absolute;top:138px;right:10px;width:118px;padding:5px 8px 7px}
+}
+@media (max-width:360px){
+  #objbar{left:104px;right:124px}
+  #bossbar{width:104px}
 }
 @media (max-width:340px){
-  #objbar{top:150px;flex-direction:row;gap:8px;max-width:calc(100vw - 20px);white-space:nowrap}
-  #bossbar.low{top:186px}
+  #topbars{display:flex;top:150px;left:10px;right:10px;align-items:center}
+  #objbar{position:static;flex-direction:row;gap:8px;white-space:nowrap}
+  #bossbar{position:static;width:min(260px,58vw);padding:6px 10px 8px}
 }
+
+/* Tlačítko Hrát zůstává vidět i na nízkém displeji (zbytek nabídky se pod ním posouvá). */
+.playDock{position:sticky;bottom:-18px;margin:0 -20px;padding:12px 20px 18px;background:linear-gradient(to bottom,rgba(2,6,23,0),var(--panel) 38%);z-index:3}

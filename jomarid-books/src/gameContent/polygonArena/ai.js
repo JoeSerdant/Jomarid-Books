@@ -84,7 +84,8 @@ function botDecide(b) {
     if (!focus && op > myPow * (1.15 + ai.courage * 0.55) + 1 && d < 800) { if (d < tD) { tD = d; threat = o; } }
     else if (focus ? d < (500 + ai.aggr * 450) * D.hunt * (1 + D.focus * 0.5) : (op < myPow * (0.8 + ai.aggr * 0.7) && d < (500 + ai.aggr * 450) * D.hunt)) {
       if (o.isPlayer && o.level < D.mercy && !(b.lastAttacker === o && time - b.lastAtkT < 6)) continue;   // začátečníka nechají být
-      const dEff = o.isPlayer ? d / (1 + D.focus) : d;
+      if (MD.huntOk && !MD.huntOk(b, o, d)) continue;                                                  // režim může lov omezit (kopec)
+      const dEff = o.isPlayer && !MD.noFocus ? d / (1 + D.focus) : d;
       if (dEff < pD) { pD = dEff; prey = o; }
     }
   }

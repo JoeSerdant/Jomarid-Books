@@ -12,6 +12,8 @@
 //   hud()             HTML do horní lišty cíle (prázdné = skrytá)
 //   steer(b, ai)      vektor řízení navíc pro bota (kam má jít kvůli cíli režimu)
 //   farmOk(x, y)      smí bot farmit tady?
+//   shapePos()        kde má vzniknout další tvar (null = kdekoli); wanderPoint() kam se mají toulat boti
+//   huntOk(b, o, d)   smí bot b lovit tank o ve vzdálenosti d?
 //   onShapeKill(k,s)  zničený tvar
 //   xpScale(s)        násobek zkušeností za zničený tvar
 //   onKill(k, t)      zničený tank (k = kdo zničil, může být null)
@@ -29,6 +31,7 @@ const MODE_D = {
   hill: { easy: 50, normal: 80, hard: 100, hell: 120 },
   royale: { easy: 1.3, normal: 1.1, hard: 1, hell: 0.85 },        // násobek délky zužování
 };
+const ROYALE_RADII = [2500, 1750, 1200, 800, 500, 260, 90];      // poloměr bezpečného kruhu bouře po jednotlivých zužováních
 const fmtTime = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 const wavePlural = n => (n === 1 ? 'vlnu' : n >= 2 && n <= 4 ? 'vlny' : 'vln');
 
@@ -42,20 +45,28 @@ function allocStats(t, w) {
   }
   recalc(t);
 }
-function boostPlayer(p, lvl) { addScore(p, xpFor(lvl)); allocStats(p, ARCH.balanced.w); p.hp = p.maxHp; }
+// Hráč na začátku režimů s vyšší startovní úrovní. world.boost si pamatuje, na jakou: takové hry se nepočítají do rekordu
+// skóre ani do úspěchů za úroveň, stupeň třídy a vlastnosti (jinak by se daly získat hned na startu).
+function boostPlayer(p, lvl) { world.boost = lvl; addScore(p, xpFor(lvl)); allocStats(p, ARCH.balanced.w); p.hp = p.maxHp; }
+// Vlastnosti bota, které přežijí znovuzrození (respawnBot vytvoří nové chování, newPersona je přidá zpět z t.traits).
+function setTraits(t, tr) { t.traits = tr; Object.assign(t.ai, tr); }
+// Zápas běží (hráč není v nabídce a zápas ještě neskončil): jen tehdy se smí volat háčky režimů.
+const matchLive = () => state !== 'menu' && !world.over;
 // Boti pro režimy "každý sám za sebe".
 function spawnBots(D) { for (let i = 0; i < D.bots; i++) { const t = makeTank(false, '', BOT_COLORS[0]); if (D.start > 1) addScore(t, xpFor(D.start)); } }
 function aliveCount(filter) { let n = 0; for (const t of tanks) if (t.alive && !t.boss && (!filter || filter(t))) n++; return n; }
 
 // Konec zápasu (výhra i porážka). res = { title, text, extra: [[popisek, hodnota], ...] }.
 function finishMatch(win, res) {
-  if (world.over) return;
+  if (world.over || state === 'menu') return;
+  if (player.alive) save.st.secs += Math.round(time - player.born);        // smrt hráče si čas započítá sama
   world.over = true; world.win = win; world.end = res || {};
   player.alive = false;
   for (const b of bullets) if ((b.drone || b.trap) && b.owner === player) b.dead = true;
   state = 'dead'; ui.deadT = 0.8; ui.spec = null; ui.specT = 0;
   Object.assign(deathInfo, { by: '', level: player.level, score: Math.round(player.score), kills: player.kills, time: time - player.born });
   beep(win ? 'ach' : 'die');
+  checkAch(true);                                                           // odměny za výhru hned, ne až v dalším zápase
 }
 // Smrt hráče v režimu bez znovuzrození: hra končí.
 function soloOver(killer) {
@@ -78,16 +89,19 @@ const MODES = {
     info: 'Modří proti červeným. Spojenci ti kryjí záda; vyhrává tým, který první zničí cílový počet tanků.',
     setup(D) {
       const n = Math.max(3, Math.round(D.bots / 2));
-      for (let i = 0; i < n - 1; i++) makeTank(false, '', TEAM_COLORS[1], 1);
-      for (let i = 0; i < n - (diffKey === 'easy' ? 1 : 0); i++) makeTank(false, '', TEAM_COLORS[2], 2);
-    },
-    tick() {
-      const g = DIFFS[diffKey].goal;
-      for (const tm of [1, 2]) if (world.teamScore[tm] >= g) { finishMatch(tm === 1, MODES.teams.result(tm === 1)); if (tm === 1) save.st.wins++; break; }
+      const add = (team, k) => { for (let i = 0; i < k; i++) { const t = makeTank(false, '', TEAM_COLORS[team], team); if (D.start > 1) addScore(t, xpFor(D.start)); } };
+      add(1, n - 1); add(2, n - (diffKey === 'easy' ? 1 : 0));
     },
     hud: () => '<span class="tb">Modří ' + world.teamScore[1] + '</span><small>cíl ' + DIFFS[diffKey].goal + '</small><span class="tr">' + world.teamScore[2] + ' Červení</span>',
     result: (win) => ({ title: win ? 'Vítězství!' : 'Porážka', text: (win ? 'Tvůj tým vyhrál ' : 'Soupeři vyhráli ') + world.teamScore[1] + ' : ' + world.teamScore[2] + '.' }),
-    onKill(k, t) { if (k && k.team && t.team && k.team !== t.team) world.teamScore[k.team]++; },
+    // Konec se vyhodnocuje při zničení tanku, takže platí i zničení v době, kdy hráč čeká na znovuzrození.
+    onKill(k, t) {
+      if (world.over || !k || !k.team || !t.team || k.team === t.team) return;
+      if (++world.teamScore[k.team] < DIFFS[diffKey].goal) return;
+      const win = k.team === 1;
+      if (win) save.st.wins++;
+      finishMatch(win, MODES.teams.result(win));
+    },
   },
 
   /* ---------- Cvičiště ---------- */
@@ -133,7 +147,7 @@ const MODES = {
       for (let i = 0; i < n; i++) {
         const t = makeTank(false, '', TEAM_COLORS[2], 2), a = rand(0, TAU), r = rand(1000, 1500);
         t.x = clamp(player.x + Math.cos(a) * r, 140, WORLD - 140); t.y = clamp(player.y + Math.sin(a) * r, 140, WORLD - 140);
-        t.temp = true; t.invuln = 1.5; t.ai.seek = true; t.ai.fearless = true;
+        t.temp = true; t.invuln = 1.5; setTraits(t, { seek: true, fearless: true });
         addScore(t, xpFor(L));
       }
       if (boss) { spawnBoss(); world.boss.team = 2; }
@@ -147,11 +161,10 @@ const MODES = {
       const w = win ? world.wave : Math.max(0, world.wave - (world.waveState === 'fight' ? 1 : 0));
       return {
         title: win ? 'Přežil jsi všechny vlny!' : 'Konec hry',
-        text: win ? 'Zvládnuté vlny: ' + world.wave + ' z ' + world.waveGoal + '.' : w ? 'Zvládl jsi ' + w + ' ' + wavePlural(w) + ' z ' + world.waveGoal + '.' : 'Padl jsi hned v první vlně.',
+        text: win ? 'Zvládnuté vlny: ' + world.wave + ' z ' + world.waveGoal + '.' : w ? 'Zvládl jsi ' + w + ' ' + wavePlural(w) + ' z ' + world.waveGoal + '.' : world.wave === 0 ? 'Padl jsi dřív, než přišla první vlna.' : 'Padl jsi hned v první vlně.',
         extra: [['Vlna', world.wave], ['Poražených nepřátel', world.waveKills]],
       };
     },
-    deathExtra: () => [['Vlna', world.wave]],
   },
 
   /* ---------- Král kopce ---------- */
@@ -205,9 +218,22 @@ const MODES = {
     steer(b, ai) {
       const H = world.hill; if (!H || ai.mode === 'flee' || ai.mode === 'heal') return null;
       const gx = H.warn ? H.nx : H.x, gy = H.warn ? H.ny : H.y, dx = gx - b.x, dy = gy - b.y, d = Math.hypot(dx, dy) || 1;
-      const w = d > H.r * 0.7 ? (ai.mode === 'hunt' ? 0.9 : 1.6) : 0.15;
+      const w = d > H.r * 0.7 ? (ai.mode === 'hunt' ? 1.3 : 2.2) : 0.2;
       return { x: dx / d * w, y: dy / d * w };
     },
+    // Boti se kolem kopce zdržují (jinak se honí po celé aréně a kopec je víc než polovinu času prázdný): část tvarů vzniká
+    // poblíž, toulání vede k němu a vzdálené cíle mimo kopec neloví. Měřeno na botech: zápas je o čtvrtinu kratší.
+    shapePos() {
+      const H = world.hill; if (!H || Math.random() > 0.4) return null;
+      const a = rand(0, TAU), r = rand(H.r * 0.3, H.r * 2.6);
+      return { x: clamp(H.x + Math.cos(a) * r, 80, WORLD - 80), y: clamp(H.y + Math.sin(a) * r, 80, WORLD - 80) };
+    },
+    wanderPoint() {
+      const H = world.hill; if (!H) return null;
+      const a = rand(0, TAU), r = Math.sqrt(Math.random()) * H.r * 2;
+      return { x: clamp(H.x + Math.cos(a) * r, 120, WORLD - 120), y: clamp(H.y + Math.sin(a) * r, 120, WORLD - 120) };
+    },
+    huntOk(b, o, d) { const H = world.hill; return !H || d < 320 || Math.hypot(o.x - H.x, o.y - H.y) < H.r * 2.4; },
     result(win, t) {
       const H = world.hill;
       return {
@@ -252,7 +278,7 @@ const MODES = {
     playerStart(p) { boostPlayer(p, 12); },
     tick(dt) {
       const S = world.storm; if (!S || world.over) return;
-      const RADII = [2500, 1750, 1200, 800, 500, 260, 90];
+      const RADII = ROYALE_RADII;
       S.t += dt;
       if (S.state === 'wait') {
         S.left -= dt;
@@ -264,7 +290,7 @@ const MODES = {
             S.state = 'shrink'; S.dur = (35 + pr * 3) * S.fight; S.left = S.dur; S.phase = pr;
             banner(pr >= RADII.length - 1 ? 'Poslední zužování bouře!' : 'Bouře se zužuje!', 'boss'); beep('boss');
           }
-        } else if (S.left < 12 && !S.warned) { S.warned = true; banner('Bouře se za chvíli začne zužovat', 'event'); }
+        } else if (S.left < 12 && !S.warned && S.phase < RADII.length - 1) { S.warned = true; banner('Bouře se za chvíli začne zužovat', 'event'); }
       } else {
         S.left -= dt;
         const f = 1 - clamp(S.left / S.dur, 0, 1), e = f * f * (3 - 2 * f);
@@ -275,7 +301,7 @@ const MODES = {
       for (const t of tanks) {
         if (!t.alive || t.boss) continue;
         const d = Math.hypot(t.x - S.cx, t.y - S.cy);
-        if (d > S.r) hurt(t, ((0.025 + 0.012 * S.phase) * t.maxHp + 3) * dt, null, true);
+        if (d > S.r) { t.inOasis = false; hurt(t, ((0.025 + 0.012 * S.phase) * t.maxHp + 3) * dt, null, true); }     // v bouři nepomáhá ani oáza
       }
       S.alive = aliveCount();
       if (player.alive && S.alive <= 1) {
@@ -285,7 +311,7 @@ const MODES = {
     },
     hud() {
       const S = world.storm; if (!S) return '';
-      const st = S.state === 'shrink' ? 'bouře se zužuje (' + fmtTime(S.left) + ')' : S.phase === 0 ? 'bouře začne za ' + fmtTime(S.left) : 'další zužování za ' + fmtTime(S.left);
+      const st = S.state === 'shrink' ? 'bouře se zužuje (' + fmtTime(S.left) + ')' : S.phase >= ROYALE_RADII.length - 1 ? 'poslední kruh' : S.phase === 0 ? 'bouře začne za ' + fmtTime(S.left) : 'další zužování za ' + fmtTime(S.left);
       return '<span>Zbývá <b>' + aliveCount() + '</b></span><small>' + st + '</small>';
     },
     steer(b, ai) {
@@ -324,7 +350,6 @@ const MODES = {
       g.strokeStyle = 'rgba(255,96,150,0.9)'; g.lineWidth = 1.5; g.beginPath(); g.arc(S.cx * k, S.cy * k, S.r * k, 0, TAU); g.stroke();
       if (S.state === 'shrink') { g.strokeStyle = 'rgba(255,255,255,0.7)'; g.beginPath(); g.arc(S.tx * k, S.ty * k, S.tr * k, 0, TAU); g.stroke(); }
     },
-    deathExtra: () => [['Umístění', (world.place || aliveCount() + 1) + '.']],
   },
 
   /* ---------- Hon na bossy ---------- */
@@ -332,7 +357,7 @@ const MODES = {
     name: 'Hon na bossy', tag: 'Dvanáct bossů', diff: true, team: true, solo: true, noBoss: true, noEvents: true,
     info: 'Poraz všech dvanáct bossů za sebou. Začínáš silnější a dva spojenci ti pomáhají. Mezi bossy je krátká pauza. Když padneš, hra končí.',
     setup() {
-      for (let i = 0; i < 2; i++) { const t = makeTank(false, '', TEAM_COLORS[1], 1); addScore(t, xpFor(18)); t.ai.fearless = true; }
+      for (let i = 0; i < 2; i++) { const t = makeTank(false, '', TEAM_COLORS[1], 1); addScore(t, xpFor(18)); setTraits(t, { fearless: true }); }
       Object.assign(world, { rushN: 0, rushT: 9, bossMul: { easy: 1, normal: 1.15, hard: 1.5, hell: 2 }[diffKey] });
     },
     playerStart(p) { boostPlayer(p, 24); },
@@ -341,6 +366,7 @@ const MODES = {
       if (!world.boss) { world.rushT -= dt; if (world.rushT <= 0) { world.rushT = 1e9; spawnBoss(); } }
     },
     onBossDown(t, k) {
+      if (world.over) return;
       world.rushN++;
       save.st.rushBest = Math.max(save.st.rushBest || 0, world.rushN);
       if (world.rushN >= BOSS_IDS.length) {
@@ -356,7 +382,6 @@ const MODES = {
         extra: [['Poražených bossů', world.rushN + ' / ' + BOSS_IDS.length], ['Čas', fmtTime(time - player.born)]],
       };
     },
-    deathExtra: () => [['Poražených bossů', world.rushN]],
   },
 
   /* ---------- Zlatá horečka ---------- */
@@ -377,11 +402,16 @@ const MODES = {
     },
     shapeType() { const q = Math.random(); return q < 0.34 ? 'gold' : q < 0.4 ? 'crystal' : null; },
     xpScale: s => (s.type === 'gold' || s.type === 'crystal' ? 0.25 : 1),                      // zlato je hlavně lup, ne rychlé levelování
-    onShapeKill(k, s) { if (k && (s.type === 'gold' || s.type === 'crystal')) k.loot = (k.loot || 0) + (s.type === 'gold' ? 10 : 40); },
+    onShapeKill(k, s) { if (k && (s.type === 'gold' || s.type === 'crystal')) k.loot = (k.loot || 0) + (s.type === 'gold' ? s.val || 10 : 40); },
     onKill(k, t) {
       const lost = Math.floor((t.loot || 0) * 0.5);
       if (k && k !== t) k.loot = (k.loot || 0) + 25;
-      if (lost > 0) { t.loot -= lost; for (let i = 0; i < Math.min(8, Math.ceil(lost / 10)); i++) { const s = makeShape('gold', t.x + rand(-50, 50), t.y + rand(-50, 50)); s.dvx = rand(-60, 60); s.dvy = rand(-60, 60); } }
+      if (lost > 0) {
+        t.loot -= lost;
+        // celá ztracená část spadne na zem: nejvýš 8 mincí, každá má takovou cenu, aby součet seděl
+        const n = Math.min(8, Math.max(1, Math.ceil(lost / 10))), val = Math.round(lost / n);
+        for (let i = 0; i < n; i++) { const s = makeShape('gold', t.x + rand(-50, 50), t.y + rand(-50, 50)); s.vx = rand(-260, 260); s.vy = rand(-260, 260); s.val = val; }
+      }
     },
     lbList: () => tanks.filter(t => !t.boss && !(t.ai && t.ai.dummy)),
     lbVal: t => t.loot || 0,

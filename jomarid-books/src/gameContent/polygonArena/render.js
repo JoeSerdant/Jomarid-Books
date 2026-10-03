@@ -59,7 +59,7 @@ function drawZone(g, zn, px) {
   g.fillStyle = gr; g.beginPath(); g.arc(zn.x, zn.y, zn.r, 0, TAU); g.fill();
   if (q >= 1) {
     if (zn.type === 'lava') {
-      glowAt(g, zn.x, zn.y, zn.r * 1.25, '#ff6a30', 0.16 + 0.07 * pulse);
+      glowAt(g, zn.x, zn.y, zn.r * 1.25, '#ff6a30', 0.16 + 0.07 * pulse, 2);
       g.strokeStyle = 'rgba(255,210,120,0.42)'; g.lineWidth = 3 * px;
       for (let k = 0; k < 4; k++) { const a0 = time * 0.5 * (k % 2 ? -1 : 1) + zn.ph + k * 1.6; g.beginPath(); g.arc(zn.x, zn.y, zn.r * (0.3 + 0.17 * k), a0, a0 + 0.9); g.stroke(); }
     } else if (zn.type === 'ice') {
@@ -86,21 +86,33 @@ function rrect(g, x, y, w, h, r) {
   g.lineTo(x + r, y + h); g.arc(x + r, y + h - r, r, PI / 2, PI); g.lineTo(x, y + r); g.arc(x + r, y + r, r, PI, PI * 1.5); g.closePath();
 }
 
+// Jedna vadná hodnota (NaN v poloze, záporný poloměr...) shodí vykreslení snímku, ale nesmí nechat plátno v rozbitém stavu
+// (průhlednost, zásobník save) ani shodit hru: plátno se vynuluje a příští snímek začne znovu.
 function render() {
+  try { renderScene(); }
+  catch (e) {
+    if (!render.warned) { render.warned = true; console.error('render:', e); }
+    canvas.width = canvas.width;
+  }
+}
+function renderScene() {
   const g = ctx, W = view.w, H = view.h, z = view.scale * cam.z, px = 1 / z, q = fxState.level;
+  const nowR = performance.now(), rdt = Math.min(0.1, (nowR - (renderScene.last || nowR)) / 1000); renderScene.last = nowR;
+  const ghostK = 1 - Math.exp(-3.7 * rdt);                                   // doběh bílého "ducha" zdraví nezávisí na snímkování
   g.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
   g.fillStyle = theme.bg; g.fillRect(0, 0, W, H);
   const shx = shake > 0 && q > 0 ? (Math.random() - 0.5) * shake * 2 : 0, shy = shake > 0 && q > 0 ? (Math.random() - 0.5) * shake * 2 : 0;
   g.setTransform(view.dpr * z, 0, 0, view.dpr * z, view.dpr * (W / 2 - cam.x * z + shx), view.dpr * (H / 2 - cam.y * z + shy));
-  const vx0 = cam.x - W / 2 * px, vx1 = cam.x + W / 2 * px, vy0 = cam.y - H / 2 * px, vy1 = cam.y + H / 2 * px;
+  const mg = 16 * px;                                                         // okraj navíc: otřes kamery a přesahy záře
+  const vx0 = cam.x - W / 2 * px - mg, vx1 = cam.x + W / 2 * px + mg, vy0 = cam.y - H / 2 * px - mg, vy1 = cam.y + H / 2 * px + mg;
 
   // aréna a mřížka
   g.fillStyle = theme.arena; g.fillRect(0, 0, WORLD, WORLD);
   const GS = 60, gx0 = Math.max(0, Math.floor(vx0 / GS) * GS), gx1 = Math.min(WORLD, vx1);
   const gy0 = Math.max(0, Math.floor(vy0 / GS) * GS), gy1 = Math.min(WORLD, vy1);
   g.beginPath();
-  for (let x = gx0; x <= gx1; x += GS) if (x % (GS * 5)) { g.moveTo(x, Math.max(0, vy0)); g.lineTo(x, Math.min(WORLD, vy1)); }
-  for (let y = gy0; y <= gy1; y += GS) if (y % (GS * 5)) { g.moveTo(Math.max(0, vx0), y); g.lineTo(Math.min(WORLD, vx1), y); }
+  for (let x = gx0; x <= gx1; x += GS) if (x % (GS * 5) || q < 1) { g.moveTo(x, Math.max(0, vy0)); g.lineTo(x, Math.min(WORLD, vy1)); }
+  for (let y = gy0; y <= gy1; y += GS) if (y % (GS * 5) || q < 1) { g.moveTo(Math.max(0, vx0), y); g.lineTo(Math.min(WORLD, vx1), y); }
   g.lineWidth = 1.2 * px; g.strokeStyle = theme.grid; g.stroke();
   if (q >= 1) {                                                              // výraznější čáry po pěti polích
     g.beginPath();
@@ -116,7 +128,7 @@ function render() {
   // zóny
   for (let i = 0; i < world.zones.length; i++) {
     const zn = world.zones[i];
-    if (zn.x + zn.r < vx0 || zn.x - zn.r > vx1 || zn.y + zn.r < vy0 || zn.y - zn.r > vy1) continue;
+    if (zn.x + zn.r * 1.3 < vx0 || zn.x - zn.r * 1.3 > vx1 || zn.y + zn.r * 1.3 < vy0 || zn.y - zn.r * 1.3 > vy1) continue;
     drawZone(g, zn, px);
   }
   // cíl režimu (kopec...)
@@ -125,8 +137,8 @@ function render() {
   // tvary
   g.lineJoin = 'round';
   for (let i = 0; i < shapes.length; i++) {
-    const s = shapes[i], R = s.r * SHAPE_DRAW[s.type];
-    if (s.x + R * 1.4 < vx0 || s.x - R * 1.4 > vx1 || s.y + R * 1.4 < vy0 || s.y - R * 1.4 > vy1) continue;
+    const s = shapes[i], R = s.r * (SHAPE_DRAW[s.type] || 1);
+    if (s.x + R * 2.8 < vx0 || s.x - R * 2.8 > vx1 || s.y + R * 2.8 < vy0 || s.y - R * 2.8 > vy1) continue;
     drawShape(g, s, px);
   }
   // bonusy
@@ -136,14 +148,14 @@ function render() {
     drawPickup(g, pu);
   }
   // stíny tanků
-  if (q >= 1) for (let i = 0; i < tanks.length; i++) {
+  if (q >= 2) for (let i = 0; i < tanks.length; i++) {
     const t = tanks[i]; if (!t.alive || t.x + t.r * 3 < vx0 || t.x - t.r * 3 > vx1 || t.y + t.r * 3 < vy0 || t.y - t.r * 3 > vy1) continue;
     shadowAt(g, t.x, t.y, t.r * 1.15, 0.6);
   }
   // střely
   for (let i = 0; i < bullets.length; i++) {
     const b = bullets[i];
-    if (b.x + b.r < vx0 || b.x - b.r > vx1 || b.y + b.r < vy0 || b.y - b.r > vy1) continue;
+    if (b.x + b.r * 5 < vx0 || b.x - b.r * 5 > vx1 || b.y + b.r * 5 < vy0 || b.y - b.r * 5 > vy1) continue;
     drawBullet(g, b, px);
   }
   // tanky
@@ -153,6 +165,7 @@ function render() {
     if (t.burnT > 0) glowAt(g, t.x, t.y, t.r * 2, '#ff7a2a', 0.45);
     if (t.buff.dmg > 0) glowAt(g, t.x, t.y, t.r * 2.2, '#f2695f', 0.3);
     if (t.buff.speed > 0) glowAt(g, t.x, t.y, t.r * 2.2, '#5fd6f2', 0.28);
+    if (t.onIce || t.dashT > 0) { g.globalAlpha = 0.25; g.fillStyle = theme.ink; for (let k = 1; k <= 3; k++) { g.beginPath(); g.arc(t.x - t.vx * 0.02 * k, t.y - t.vy * 0.02 * k, t.r * (1 - k * 0.15), 0, TAU); g.fill(); } g.globalAlpha = 1; }
     if (t.invuln > 0) g.globalAlpha = 0.62 + 0.2 * Math.sin(time * 18);
     drawTankBody(g, t.x, t.y, t.r, t.angle, t.cls, t.isPlayer ? playerColor(t) : t.color, t.rec, t.hit > 0, t.tur);
     g.globalAlpha = 1;
@@ -166,7 +179,6 @@ function render() {
     }
     if (t.buff.speed > 0 || t.buff.dmg > 0) { g.lineWidth = 2 * px; g.globalAlpha = 0.6; if (t.buff.dmg > 0) { g.strokeStyle = '#f2695f'; g.beginPath(); g.arc(t.x, t.y, t.r * 1.42, 0, TAU); g.stroke(); } if (t.buff.speed > 0) { g.strokeStyle = '#5fd6f2'; g.beginPath(); g.arc(t.x, t.y, t.r * 1.55, 0, TAU); g.stroke(); } g.globalAlpha = 1; }
     if (t.slowT > 0 && t.slowF < 1) { g.strokeStyle = 'rgba(158,231,255,0.8)'; g.lineWidth = 2 * px; g.setLineDash([3 * px, 6 * px]); g.beginPath(); g.arc(t.x, t.y, t.r * 1.22, 0, TAU); g.stroke(); g.setLineDash([]); }
-    if (t.onIce || t.dashT > 0) { g.globalAlpha = 0.25; g.fillStyle = theme.ink; for (let k = 1; k <= 3; k++) { g.beginPath(); g.arc(t.x - t.vx * 0.02 * k, t.y - t.vy * 0.02 * k, t.r * (1 - k * 0.15), 0, TAU); g.fill(); } g.globalAlpha = 1; }
   }
   // režimy, které přebarvují celou scénu (bouře)
   if (MD.drawTop) MD.drawTop(g, { x0: vx0, y0: vy0, x1: vx1, y1: vy1 }, px);
@@ -203,7 +215,7 @@ function render() {
     if (!t.alive || t.x + 200 < vx0 || t.x - 200 > vx1 || t.y + 200 < vy0 || t.y - 200 > vy1) continue;
     const hf = clamp(t.hp / t.maxHp, 0, 1);
     if (t.ghost === undefined || t.ghost < hf) t.ghost = hf;                       // bílý "duch" ukazuje, kolik zdraví právě ubylo
-    else if (t.ghost > hf) { t.ghost += (hf - t.ghost) * 0.06; if (t.ghost - hf < 0.002) t.ghost = hf; }
+    else if (t.ghost > hf) { t.ghost += (hf - t.ghost) * ghostK; if (t.ghost - hf < 0.002) t.ghost = hf; }
     if (hf < 0.999 || t.ghost > hf + 0.002) {
       const w = t.r * 2.2, bh = 6 * px, by = t.y + t.r + 9 * px, f = hf;
       g.fillStyle = 'rgba(0,0,0,.45)'; rrect(g, t.x - w / 2 - px, by - px, w + 2 * px, bh + 2 * px, 3 * px); g.fill();
@@ -231,10 +243,13 @@ function render() {
   g.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
   const low = player && player.alive && state === 'play' ? clamp(1 - player.hp / (player.maxHp * 0.3), 0, 1) : 0;
   const vig = clamp(ui.vig * 0.6 + low * (0.22 + 0.12 * Math.sin(time * 6)), 0, 0.7);
-  if (vig > 0.01 && q > 0) {
-    const vgr = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.32, W / 2, H / 2, Math.hypot(W, H) * 0.58);
-    vgr.addColorStop(0, 'rgba(220,40,40,0)'); vgr.addColorStop(1, 'rgba(220,40,40,' + vig + ')');
-    g.fillStyle = vgr; g.fillRect(0, 0, W, H);
+  if (vig > 0.01) {
+    if (q > 0) {
+      const vgr = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.32, W / 2, H / 2, Math.hypot(W, H) * 0.58);
+      vgr.addColorStop(0, 'rgba(220,40,40,0)'); vgr.addColorStop(1, 'rgba(220,40,40,' + vig + ')');
+      g.fillStyle = vgr;
+    } else g.fillStyle = 'rgba(220,40,40,' + vig * 0.4 + ')';                // nízká kvalita: plochý červený závoj místo přechodu
+    g.fillRect(0, 0, W, H);
   }
   if (state === 'play') {
     if (world.boss && world.boss.alive) offscreenArrow(g, world.boss.x, world.boss.y, '#ff4f5e', z);

@@ -8,6 +8,7 @@ const TAU = Math.PI * 2, PI = Math.PI;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = a => a[(Math.random() * a.length) | 0];
+const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);     // jen vlastní klíče (ne "constructor" a spol.)
 const angDiff = (a, b) => { let d = (b - a) % TAU; if (d > PI) d -= TAU; else if (d < -PI) d += TAU; return d; };
 const $ = id => document.getElementById(id);
 const elApp = $('app');            // třídy touch / offering se přepínají na kořenovém prvku (CSS je čeká na #app)

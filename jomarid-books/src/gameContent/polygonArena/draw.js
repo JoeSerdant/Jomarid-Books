@@ -70,7 +70,7 @@ function drawBarrel(g, b, R, rec, q) {
 
 function bodyPath(g, R, cls, L) {
   if (cls.boss) poly(g, 0, 0, R, cls.bn, 0);
-  else if (L.n >= 3) poly(g, 0, 0, R * (L.n <= 4 ? 1.1 : 1.04), L.n, L.rot || 0);
+  else if (L.n >= 3) poly(g, 0, 0, R * (L.n === 3 ? 1.3 : L.n === 4 ? 1.1 : 1.04), L.n, L.rot || 0);       // trojúhelník je větší, ať jeho strany nejsou daleko uvnitř zásahového kruhu
   else { g.beginPath(); g.arc(0, 0, R, 0, TAU); }
 }
 
@@ -151,7 +151,7 @@ function drawTankBody(g, x, y, R, angle, clsId, color, rec, flash, tur, q) {
 function drawIcon(g, id, size) {
   g.clearRect(0, 0, size, size);
   const cls = CLASSES[id]; let ext = 1;
-  for (const b of cls.barrels) if (!b.turret) ext = Math.max(ext, b.len + Math.abs(b.off) * 0.3);
+  for (const b of cls.barrels) if (!b.turret) ext = Math.max(ext, Math.hypot(b.len, Math.abs(b.off) + b.w / 2) + (b.blast && b.kind !== 'bomb' ? b.w * 0.52 : 0));
   const R = Math.min(size * 0.2, (size * 0.46) / (ext + 0.1));
   drawTankBody(g, size / 2, size / 2, R, -PI / 2, id, playerColor(), null, false, null, 2);
 }
@@ -159,9 +159,9 @@ function drawIcon(g, id, size) {
 /* ---------- tvary ---------- */
 function drawShape(g, s, px) {
   const q = fxState.level, age = time - (s.born || 0), sc = age < 0.3 ? 0.4 + 0.6 * easeOutBack(age / 0.3) : 1;
-  const R = s.r * SHAPE_DRAW[s.type] * sc, col = s.color, wob = s.hit > 0 ? 1 + 0.08 * Math.sin(s.hit * 90) : 1;
+  const R = s.r * (SHAPE_DRAW[s.type] || 1) * sc, col = s.color, wob = s.hit > 0 ? 1 + 0.08 * Math.sin(s.hit * 90) : 1;
   const Rw = R * wob;
-  if (q >= 1) {
+  if (q >= 2) {
     if (s.type === 'gold') glowAt(g, s.x, s.y, Rw * 2.4, '#ffd34d', 0.4 + 0.15 * Math.sin(time * 4 + s.id));
     else if (s.type === 'crystal') glowAt(g, s.x, s.y, Rw * 2.6, '#5cc8ff', 0.5 + 0.2 * Math.sin(time * 3 + s.id));
     else if (s.type === 'alpha') glowAt(g, s.x, s.y, Rw * 2.2, '#b46cf2', 0.5 + 0.2 * Math.sin(time * 2));
@@ -185,10 +185,10 @@ function drawShape(g, s, px) {
     g.fillStyle = 'rgba(255,90,70,' + pulse + ')'; g.beginPath(); g.arc(s.x, s.y, Rw * 0.34, 0, TAU); g.fill();
   } else if (s.type === 'crystal') {
     poly(g, s.x, s.y, Rw * 0.55, 6, s.rot + 0.5); g.fillStyle = 'rgba(255,255,255,.4)'; g.fill();
-    if (q >= 1) { const tw = 0.5 + 0.5 * Math.sin(time * 5 + s.id * 2); g.fillStyle = 'rgba(255,255,255,' + tw + ')'; g.save(); g.translate(s.x - Rw * 0.35, s.y - Rw * 0.4); starPath(g, 5 + 3 * tw, 4, 0.3); g.fill(); g.restore(); }
+    if (q >= 2) { const tw = 0.5 + 0.5 * Math.sin(time * 5 + s.id * 2); g.fillStyle = 'rgba(255,255,255,' + tw + ')'; g.save(); g.translate(s.x - Rw * 0.35, s.y - Rw * 0.4); starPath(g, 5 + 3 * tw, 4, 0.3); g.fill(); g.restore(); }
   } else if (s.type === 'alpha') {
     poly(g, s.x, s.y, Rw * 0.62, 5, s.rot + time * 0.6); g.fillStyle = 'rgba(255,255,255,.18)'; g.fill(); g.lineWidth = 3; g.stroke();
-  } else if (s.type === 'gold' && q >= 1) {                              // lesk přejíždějící po zlatě
+  } else if (s.type === 'gold' && q >= 2) {                              // lesk přejíždějící po zlatě
     g.save(); poly(g, s.x, s.y, Rw, s.n, s.rot); g.clip();
     const sweep = ((time * 0.8 + s.id * 0.37) % 2.4) - 0.7;
     g.fillStyle = 'rgba(255,255,255,0.42)'; g.translate(s.x + sweep * Rw * 2, s.y); g.rotate(0.6); g.fillRect(-Rw * 0.18, -Rw * 2, Rw * 0.36, Rw * 4);
@@ -227,6 +227,12 @@ function drawBullet(g, b, px) {
     g.beginPath(); g.moveTo(b.x - b.vx * 0.05, b.y - b.vy * 0.05); g.lineTo(b.x, b.y); g.stroke();
     if (q >= 1) { g.strokeStyle = '#ffffff'; g.lineWidth = b.r * 0.6; g.globalAlpha = 0.7; g.beginPath(); g.moveTo(b.x - b.vx * 0.03, b.y - b.vy * 0.03); g.lineTo(b.x, b.y); g.stroke(); }
     g.lineCap = 'butt'; g.globalAlpha = 1;
+  } else if (b.bomb) {                                                 // bomba: tmavá koule s doutnákem
+    g.fillStyle = deepen(col, 0.35); g.beginPath(); g.arc(b.x, b.y, b.r, 0, TAU); g.fill(); g.stroke();
+    const ft = 0.6 + 0.4 * Math.sin(time * 30 + b.id);
+    glowAt(g, b.x + b.r * 0.4, b.y - b.r * 0.45, b.r * 1.5, '#ffb04d', 0.7 * ft);
+    g.fillStyle = '#ffd27a'; g.beginPath(); g.arc(b.x + b.r * 0.4, b.y - b.r * 0.45, b.r * 0.26, 0, TAU); g.fill();
+    if (b.blast) { g.strokeStyle = '#ffb04d'; g.lineWidth = 2; g.globalAlpha = 0.45 + 0.4 * Math.sin(time * 14 + b.id); g.beginPath(); g.arc(b.x, b.y, b.r * 1.45, 0, TAU); g.stroke(); g.globalAlpha = 1; }
   } else if (b.missile) {
     const ang = Math.atan2(b.vy, b.vx);
     glowAt(g, b.x - Math.cos(ang) * b.r * 1.7, b.y - Math.sin(ang) * b.r * 1.7, b.r * 3, '#ffb04d', 0.6);

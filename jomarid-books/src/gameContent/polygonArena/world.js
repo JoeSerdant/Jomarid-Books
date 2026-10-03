@@ -236,7 +236,7 @@ function bossDown(t, k) {
   banner((k ? k.name : 'Někdo') + ' porazil bosse ' + t.name + '!', 'good'); beep('boom');
   dropPickup(t.x, t.y, 6);
   if (k && k.isPlayer) { save.st.bosses++; save.st.bossKinds[t.cls] = true; }
-  if (M().onBossDown) M().onBossDown(t, k);
+  if (M().onBossDown && matchLive()) M().onBossDown(t, k);
 }
 function runEvent() {
   const k = pick(['gold', 'swarm', 'crystal', 'supply']);
@@ -278,7 +278,7 @@ function setupMatch() {
   bullets.length = 0; parts.length = 0; texts.length = 0;
   world.pickups.length = 0; world.rings.length = 0; world.zones.length = 0;
   world.boss = null; world.bossN = 0; world.over = false; world.win = false; world.end = null; world.teamScore = [0, 0, 0]; world.matchT = 0;
-  world.hill = null; world.storm = null; world.bossMul = 1;
+  world.hill = null; world.storm = null; world.bossMul = 1; world.boost = 0;
   const D = DIFFS[diffKey]; world.bossT = D.bossT1; world.evT = D.evGap; world.alphaT = 70; world.pickT = 0;
   const MD = M();
   player.team = MD.team ? 1 : 0;

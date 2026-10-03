@@ -30,10 +30,10 @@ let nextId = 1, time = 0, state = 'menu', paused = false, diffKey = 'normal', bu
 let player = null;
 const cam = { x: HALF, y: HALF, z: 1 };
 const view = { w: 800, h: 600, dpr: 1, scale: 1 };
-const ui = { vig: 0, statsDirty: true, offerKey: '', lbT: 0, deadT: 0, spec: null, specT: 0, miniT: 0, statsOpen: false, perkDirty: true, perkKey: '', bannerT: 0, achT: 1 };
+const ui = { vig: 0, statsDirty: true, offerKey: '', lbT: 0, deadT: 0, spec: null, specT: 0, miniT: 0, statsOpen: false, perkDirty: true, perkKey: '', bannerT: 0, achT: 1, achNew: [] };
 const deathInfo = { by: '', level: 1, score: 0, kills: 0, time: 0 };
 let mode = 'ffa', shake = 0;
-const world = { zones: [], pickups: [], rings: [], pickT: 0, bossT: 90, evT: 60, alphaT: 80, boss: null, bossN: 0, teamScore: [0, 0, 0], over: false, winner: 0, matchT: 0, mapName: '' };
+const world = { zones: [], pickups: [], rings: [], pickT: 0, bossT: 90, evT: 60, alphaT: 80, boss: null, bossN: 0, teamScore: [0, 0, 0], over: false, winner: 0, matchT: 0, mapName: '', boost: 0 };
 const TEAM_COLORS = ['', '#4da3ff', '#ff6b5e'];
 
 /* ---------- výpočet odvozených statistik ---------- */

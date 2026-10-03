@@ -28,7 +28,6 @@ Object.assign(CLASSES, {
       B({ len: 1.35, w: 0.85, dmg: 1.9, spd: 0.85 })] }),
 });
 const TIER5_IDS = ['singularita', 'nadnova', 'leviatan', 'nekonecno', 'rojtisice', 'bludiste', 'krupobiti', 'poslednigarda'];
-for (const id in CLASSES) if (CLASSES[id].tier === 4) TREE[id] = TIER5_IDS;
 
 /* ---------- varianty bossů: stejná rodina, výraznější rozptyl sil ---------- */
 function bossVariant(id, from, name, fn) {
@@ -43,6 +42,11 @@ bossVariant('boss_hive_a', 'boss_hive', 'Královna', c => t4.st(c, { maxDrones: 
 bossVariant('boss_hive_b', 'boss_hive', 'Roj', c => { t4.st(c, { maxDrones: 1.7, reload: 0.75, hp: 0.85 }); });
 bossVariant('boss_tower_a', 'boss_tower', 'Maják', c => { t4.tur(c, 2, 0.6, 0.8); t4.st(c, { hp: 1.25 }); });
 bossVariant('boss_tower_b', 'boss_tower', 'Kovadlina', c => { t4.st(c, { hp: 1.3, ram: 1.6, speed: 0.75 }); t4.bul(c, { dmg: 1.25 }); });
+
+// Generátor doplní strom až teď, když jsou definované všechny ruční třídy i bossové (jejich jména se nesmí použít podruhé);
+// teprve potom dostane každá třída 4. stupně nabídku tříd 5. stupně.
+TANKGEN.fill();
+for (const id in CLASSES) if (CLASSES[id].tier === 4) TREE[id] = TIER5_IDS;
 
 const BOSS_IDS = ['boss_guard', 'boss_crusher', 'boss_hive', 'boss_tower',
   'boss_guard_a', 'boss_guard_b', 'boss_crusher_a', 'boss_crusher_b', 'boss_hive_a', 'boss_hive_b', 'boss_tower_a', 'boss_tower_b'];

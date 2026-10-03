@@ -60,14 +60,19 @@ function skinColor() {
 const skinOpen = sk => !sk.need || !!save.ach[sk.need];
 function codexCount() { let n = 0; for (const id in save.codex) if (CLASSES[id] && !CLASSES[id].boss) n++; return n; }
 
-function checkAch() {
-  if (mode === 'sandbox' || !player.alive) return;
+// force = i když hráč právě skončil (výhry se odměňují hned na obrazovce výsledku). Hry s vyšší startovní úrovní (world.boost)
+// se nepočítají do úrovně, stupně třídy, výhod ani vlastností - ty by se daly získat hned na startu.
+function checkAch(force) {
+  if (mode === 'sandbox' || (!player.alive && !force)) return;
   if (!save.codex[player.cls]) save.codex[player.cls] = true;
-  const p = player, st = save.st;
-  st.bestLevel = Math.max(st.bestLevel, p.level);
-  const c = { st, cdx: codexCount(), diff: diffKey, life: { time: time - p.born, kills: p.kills, level: p.level, tier: p.tierDone, perks: p.perkN, maxStat: Math.max.apply(null, p.stats) } };
+  const p = player, st = save.st, bst = world.boost > 0;
+  if (!bst) st.bestLevel = Math.max(st.bestLevel, p.level);
+  const c = { st, cdx: codexCount(), diff: diffKey, life: { time: time - p.born, kills: p.kills, level: bst ? 0 : p.level, tier: bst ? 0 : p.tierDone, perks: bst ? 0 : p.perkN, maxStat: bst ? 0 : Math.max.apply(null, p.stats) } };
   let changed = false;
-  for (const a of ACH) if (!save.ach[a.id] && a.ok(c)) { save.ach[a.id] = true; changed = true; banner('Úspěch: ' + a.name, 'ach'); beep('ach'); buzz(40); }
+  for (const a of ACH) if (!save.ach[a.id] && a.ok(c)) {
+    save.ach[a.id] = true; changed = true; banner('Úspěch: ' + a.name, 'ach'); beep('ach'); buzz(40);
+    if (state !== 'play') ui.achNew.push(a.name);                 // zápas už skončil: úspěch se ukáže na obrazovce výsledku
+  }
   if (changed) persist();
 }
 
@@ -113,7 +118,7 @@ function renderClasses() {
       const g = cv.getContext('2d');
       if (known) drawIcon(g, id, 104); else { g.fillStyle = theme.ink; g.globalAlpha = 0.5; g.font = '700 54px ' + FONT; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('?', 52, 54); g.globalAlpha = 1; }
       el.appendChild(h('b', null, known ? cls.name : '???'));
-      el.appendChild(h('small', null, known ? (PARENT[id] ? 'z: ' + CLASSES[PARENT[id]].name : cls.info) : 'Zatím neobjeveno'));
+      el.appendChild(h('small', null, known ? (PARENT[id] && cls.tier < 5 ? 'z: ' + CLASSES[PARENT[id]].name : cls.info) : 'Zatím neobjeveno'));
       if (sb) el.addEventListener('click', () => { sandboxEquip(id); closeColl(); });
       grid.appendChild(el);
     }
@@ -187,7 +192,7 @@ function renderSettings() {
   sw('Vibrace', 'Jen na dotykových zařízeních', () => save.set.vib, v => { save.set.vib = v; });
   sw('Levá ruka', 'Prohodí páčky: vpravo pohyb, vlevo míření', () => save.set.lefty, v => { save.set.lefty = v; });
   seg('Velikost páček', null, [['Malé', 0.85], ['Střední', 1], ['Velké', 1.3]], () => save.set.ctl, v => { save.set.ctl = v; });
-  seg('Efekty', 'Nízké šetří baterii a výkon', [['Nízké', 0], ['Střední', 0.5], ['Plné', 1]], () => save.set.fx, v => { save.set.fx = v; fxState.level = fxLevelNow(); });
+  seg('Efekty', 'Nízké šetří baterii a výkon', [['Nízké', 0], ['Střední', 0.5], ['Plné', 1]], () => save.set.fx, v => { save.set.fx = v; fxReset(); });
 }
 $('setBtn').addEventListener('click', () => { beep('click'); renderSettings(); elSet.classList.remove('hidden'); });
 function closeSettings() { elSet.classList.add('hidden'); }

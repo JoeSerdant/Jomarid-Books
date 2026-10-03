@@ -60,7 +60,7 @@ function shoot(t, br, idx, ang0, ox, oy) {
   const sp = spd * (drone ? 0.8 : 1);
   const b = {
     id: nextId++, owner: t, x: px, y: py, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-    r: Math.max(3, br.w * R * 0.5 * br.size * (tur ? 0.85 : 1)), hp: t.bulletHp * hpm, dmg, life, drone, trap, missile, crit,
+    r: Math.max(3, br.w * R * 0.5 * br.size * (tur ? 0.85 : 1)), hp: t.bulletHp * hpm, dmg, life, drone, trap, missile, bomb, crit,
     vmax: sp, orb: Math.random() < 0.5 ? 1 : -1, color: t.color, hitId: 0, hitT: 0, dead: false,
     pierce: br.pierce, streak: br.streak, bounce: Math.max(br.bounce, drone || trap ? 0 : pk.bounce),
     blast: br.blast, bdmg: 0, seen: br.pierce ? [] : null, tgt: null, tgtT: 0, boomed: false,
@@ -315,7 +315,7 @@ function bodyCollisions(dt) {
 function killShape(s) {
   s.dead = true;
   const k = s.lastAttacker, D = DIFFS[diffKey];
-  if (k && M().onShapeKill) M().onShapeKill(k, s);
+  if (k && M().onShapeKill && matchLive()) M().onShapeKill(k, s);
   shapeBreakFx(s);
   if (s.type === 'bomb') explode(s.x, s.y, 135, 55, null);
   if (s.type === 'alpha') { world.alphaT = 100; banner('Alfa pětiúhelník zničen', 'good'); dropPickup(s.x, s.y, 4); }
@@ -335,7 +335,7 @@ function killShape(s) {
         const gain = 3 + Math.floor(Math.random() * 4);
         save.st.crystals = (save.st.crystals || 0) + gain;
         floatText(s.x, s.y - s.r - 22, '💎 +' + gain, '#9ee7ff');
-        if (typeof jomaridReward === 'function') jomaridReward('crystal', 5);
+        if (typeof jomaridReward === 'function' && mode !== 'gold') jomaridReward('crystal', 5);     // Zlatá horečka krystaly sype, odměna z webu by se dala farmit
         persist();
       }
     }
@@ -356,7 +356,7 @@ function killTank(t) {
     msg = k.name + ' zničil ' + t.name;
     if (k.isPlayer && !t.boss) { save.st.kills++; }
   } else msg = t.name + ' zahynul';
-  if (M().onKill) M().onKill(k && k !== t ? k : null, t);
+  if (M().onKill && matchLive()) M().onKill(k && k !== t ? k : null, t);
   feed(msg, !!(k && k.isPlayer) || t.isPlayer);
   if (t.boss) bossDown(t, k);
   else if (!(t.ai && t.ai.dummy) && Math.random() < 0.35) dropPickup(t.x, t.y, 1);

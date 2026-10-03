@@ -11,7 +11,8 @@ function pickShapeType(x, y) {
   return 'square';
 }
 function spawnShape() {
-  const x = rand(80, WORLD - 80), y = rand(80, WORLD - 80);
+  const MD = M(), at = MD.shapePos ? MD.shapePos() : null;               // režim může tvary nasměrovat (kolem kopce)
+  const x = at ? at.x : rand(80, WORLD - 80), y = at ? at.y : rand(80, WORLD - 80);
   const type = pickShapeType(x, y), d = SHAPES[type], sp = rand(4, 12), da = rand(0, TAU);
   const s = {
     id: nextId++, isShape: true, type, x, y, vx: 0, vy: 0, dvx: Math.cos(da) * sp, dvy: Math.sin(da) * sp,
@@ -61,6 +62,7 @@ function newPersona(t) {
     orbit: Math.random() < 0.5 ? 1 : -1, mode: 'farm', target: null, fleeFrom: null,
     thinkT: rand(0, 0.3), err: 0, wander: null, wanderT: 0, dodgeX: 0, dodgeY: 0, dodgeT: 0,
   };
+  if (t.traits) Object.assign(t.ai, t.traits);                 // vlastnosti, které režim botovi přidal, přežijí znovuzrození
 }
 function resetTank(t) {
   const p = spawnPos(t.team) || { x: HALF, y: HALF };

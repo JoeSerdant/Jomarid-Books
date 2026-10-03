@@ -5,8 +5,10 @@
 //
 //   npm run polygon:calibrate                       # 24 rodičů na modul, 4 souboje, 4 vlákna
 //   node src/gameContent/polygonArena/tests/calibrate.mjs 30 6 4 0.72 --write   # + zapíše upravené FIX do tankgen.js
+//   node src/gameContent/polygonArena/tests/calibrate.mjs 24 4 4 0.72 --only=turretPair,turretRing   # jen vybrané moduly
 //
-// Argumenty: počet rodičů na modul, počet soubojů, vlákna, cílová výhra (výchozí 0.72), --write.
+// Argumenty: počet rodičů na modul, počet soubojů, vlákna, cílová výhra (výchozí 0.72), --write, --only=modul,modul.
+// S --only se měří (a při --write přepisují) jen vybrané moduly, ostatní hodnoty FIX zůstanou.
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -68,9 +70,11 @@ if (!isMainThread) {
   const get = loadClasses(), CLASSES = get('CLASSES'), TG = get('TANKGEN');
   const tier3 = Object.keys(CLASSES).filter((id) => !CLASSES[id].boss && CLASSES[id].tier === 3);
   const pickN = (arr, n, salt) => { const a = arr.slice(); let h = 0; for (const ch of salt) h = (h * 31 + ch.charCodeAt(0)) >>> 0; for (let i = a.length - 1; i > 0; i--) { h = (h * 1664525 + 1013904223) >>> 0; const j = h % (i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a.slice(0, n); };
+  const ONLY = ((process.argv.find((a) => a.startsWith('--only=')) || '').slice(7)).split(',').filter(Boolean);
+  const want = (k) => !ONLY.length || ONLY.includes(k.id);
   const jobs = [];
-  for (const k of TG.STRUCT) for (const p of pickN(tier3.filter((id) => k.ok(TG.profile(CLASSES[id]))), PARENTS, k.id)) jobs.push({ kind: 'struct', k: k.id, parent: p });
-  for (const k of TG.CAPS) for (const p of pickN(tier3.filter((id) => k.ok(TG.profile(CLASSES[id]), { id: 'none' })), PARENTS, k.id)) jobs.push({ kind: 'cap', k: k.id, parent: p });
+  for (const k of TG.STRUCT.filter(want)) for (const p of pickN(tier3.filter((id) => k.ok(TG.profile(CLASSES[id]))), PARENTS, k.id)) jobs.push({ kind: 'struct', k: k.id, parent: p });
+  for (const k of TG.CAPS.filter(want)) for (const p of pickN(tier3.filter((id) => k.ok(TG.profile(CLASSES[id]), { id: 'none' })), PARENTS, k.id)) jobs.push({ kind: 'cap', k: k.id, parent: p });
   jobs.forEach((j, i) => { j.i = i; });
   console.log(`${jobs.length} dvojic, ${TRIALS} souboje na dvojici, ${THREADS} vlákna (cíl: výhra potomka ${TARGET})\n`);
   const chunks = Array.from({ length: THREADS }, () => []);
@@ -94,7 +98,8 @@ if (!isMainThread) {
     const file = path.join(HERE, '..', 'tankgen.js');
     let s = fs.readFileSync(file, 'utf8');
     const a = s.indexOf('/*FIX*/'), b = s.indexOf('/*END*/');
-    const body = Object.keys(next).sort().map((k) => `${k}: ${next[k].toFixed(3)}`).join(', ');
+    const all = Object.assign({}, cur, next);                      // moduly mimo měření (--only) si nechají dosavadní hodnotu
+    const body = Object.keys(all).sort().map((k) => `${k}: ${all[k].toFixed(3)}`).join(', ');
     s = s.slice(0, a) + '/*FIX*/\n    ' + body + ',\n    ' + s.slice(b);
     fs.writeFileSync(file, s);
     console.log('FIX zapsáno do tankgen.js - spusť měření znovu, dokud se hodnoty neustálí.');

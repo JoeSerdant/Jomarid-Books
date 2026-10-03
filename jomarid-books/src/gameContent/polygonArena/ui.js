@@ -85,7 +85,7 @@ function updateHud2() {
   if (html) { elObj.classList.remove('hidden'); if (elObj.dataset.h !== html) { elObj.innerHTML = html; elObj.dataset.h = html; } }
   else elObj.classList.add('hidden');
   const B = world.boss;
-  if (B && B.alive && mode !== 'sandbox') { elBoss.classList.remove('hidden'); $('bossName').textContent = B.name; $('bossFill').style.width = (clamp(B.hp / B.maxHp, 0, 1) * 100).toFixed(1) + '%'; elBoss.classList.toggle('low', !!html); }
+  if (B && B.alive && mode !== 'sandbox') { elBoss.classList.remove('hidden'); $('bossName').textContent = B.name; $('bossFill').style.width = (clamp(B.hp / B.maxHp, 0, 1) * 100).toFixed(1) + '%'; }
   else elBoss.classList.add('hidden');
 }
 function feed(msg, mine) {
@@ -138,7 +138,7 @@ function startGame(fresh) {
   $('clsBtn').classList.toggle('hidden', mode !== 'sandbox');
   elFeed.replaceChildren(); feedItems.length = 0; elBanner.classList.remove('show');
   cam.x = player.x; cam.y = player.y; cam.z = 1;
-  ui.statsDirty = true; ui.offerKey = '#'; ui.lbT = 0; ui.miniT = 0; ui.statsOpen = false; ui.perkDirty = true;
+  ui.statsDirty = true; ui.offerKey = '#'; ui.lbT = 0; ui.miniT = 0; ui.statsOpen = false; ui.perkDirty = true; ui.achNew = [];
   elLvl.textContent = ''; elScore.textContent = '';
   input.stickL = null; input.stickR = null; shake = 0;
   if (mode === 'teams' && !world.matchT) banner('Aréna: ' + world.mapName + '. Jsi v modrém týmu, cíl: ' + DIFFS[diffKey].goal + ' zničených tanků', 'info');
@@ -148,6 +148,7 @@ function startGame(fresh) {
   beep('click');
 }
 function toMenu() {
+  world.over = true;                                          // opuštěný zápas už nesmí nic vyhodnocovat ani zapisovat do postupu
   if (player.alive) { player.alive = false; for (const b of bullets) if ((b.drone || b.trap) && b.owner === player) b.dead = true; }
   state = 'menu'; paused = false; ui.spec = null; ui.offerKey = '#';
   input.stickL = null; input.stickR = null; input.mouse.down = false;
@@ -155,13 +156,14 @@ function toMenu() {
   elClasses.replaceChildren(); persist(); refreshMenu();
 }
 function showDead() {
-  const d = deathInfo, s = Math.floor(d.time), best = d.score > save.best && d.score > 0 && mode !== 'sandbox';
+  const d = deathInfo, s = Math.floor(d.time), boosted = world.boost > 0, best = d.score > save.best && d.score > 0 && mode !== 'sandbox' && !boosted;
   const E = world.over ? world.end : null;
   if (E) { $('deadTitle').textContent = E.title || 'Konec'; $('deadBy').textContent = E.text || ''; }
   else {
     $('deadTitle').textContent = 'Byl jsi zničen';
     $('deadBy').textContent = d.by ? 'Zničil tě ' + d.by + '.' : 'Zničily tě tvary.';
   }
+  if (ui.achNew.length) { $('deadBy').textContent += ' Úspěch: ' + ui.achNew.join(', ') + '.'; ui.achNew = []; }
   const grid = $('deadGrid'); grid.querySelectorAll('.x').forEach(n => n.remove());
   for (const [label, v] of (E ? E.extra : M().deathExtra && M().deathExtra()) || []) { const bx = h('div', 'x'); bx.appendChild(h('b', null, typeof v === 'number' ? fmt(v) : String(v))); bx.appendChild(h('span', null, label)); grid.appendChild(bx); }
   $('againBtn').textContent = world.over ? 'Nový zápas' : 'Hrát znovu';
@@ -169,7 +171,7 @@ function showDead() {
   $('dTime').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
   $('newBest').classList.toggle('hidden', !best);
   if (best) save.best = d.score;
-  save.st.bestLevel = Math.max(save.st.bestLevel, d.level);
+  if (!boosted) save.st.bestLevel = Math.max(save.st.bestLevel, d.level);
   persist();
   elHud.classList.add('hidden'); elDead.classList.remove('hidden');
 }
@@ -233,7 +235,7 @@ function boot() {
   resize(); window.addEventListener('resize', resize);
   if (window.ResizeObserver) { ui.ro = new ResizeObserver(resize); ui.ro.observe($('app')); }
 
-  diffKey = DIFFS[save.diff] ? save.diff : 'normal'; mode = MODES[save.mode] ? save.mode : 'ffa';
+  diffKey = own(DIFFS, save.diff) ? save.diff : 'normal'; mode = own(MODES, save.mode) ? save.mode : 'ffa';
   player = makeTank(true, save.name || 'Ty', PLAYER_COLOR); player.alive = false;
   setupMatch();
   for (let i = 0; i < SHAPE_TARGET; i++) spawnShape();
