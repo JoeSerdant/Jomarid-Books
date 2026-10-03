@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { THEMES, initMotionPref } from './theme';
+import { resolveTheme, isDarkTheme, saveCustomColors, loadCustomColors, CUSTOM_THEME_KEY, initMotionPref } from './theme';
 import { ThemeContext, AuthProvider, ProtectedAdminRoute, ProtectedUserRoute, useAuth } from './contexts/AuthContext';
 import { Navbar } from './components/Navbar';
 import { SettingsPage } from './components/SettingsModal';
@@ -59,28 +59,30 @@ export const RecoveryRedirect = () => {
   return null;
 };
 
-// Motivy, ktere maji tmave pozadi - podle toho se nastavi color-scheme (nativni posuvniky, formularove prvky).
-const DARK_THEMES = ['dark', 'emerald'];
-
 export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('jomarid-books-theme') || 'saas');
+  const [customColors, setCustomColors] = useState(loadCustomColors); // jen pro motiv „Vlastní“
 
   useEffect(() => initMotionPref(), []); // omezení pohybu (Nastavení -> Vzhled, nebo nastavení zařízení)
 
   useEffect(() => {
-    const vars = THEMES[currentTheme] || THEMES.saas;
+    const vars = resolveTheme(currentTheme);
     // Promenne patri na <html>, ne na <body>: pozadi <html> je to, co vidi uzivatel mimo obsah
     // (oddaleni na mobilu, pretazeni). Na body by ho <html> nevidelo a zustalo by svetle.
     const root = document.documentElement;
     Object.keys(vars).forEach(k => root.style.setProperty(k, vars[k]));
-    root.style.colorScheme = DARK_THEMES.includes(currentTheme) ? 'dark' : 'light';
+    root.style.colorScheme = isDarkTheme(currentTheme, vars) ? 'dark' : 'light';
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', vars['--bg-body']);
-  }, [currentTheme]);
+  }, [currentTheme, customColors]);
 
   return (
     <AuthProvider>
-      <ThemeContext.Provider value={{ currentTheme, changeTheme: (t) => { setCurrentTheme(t); localStorage.setItem('jomarid-books-theme', t); } }}>
+      <ThemeContext.Provider value={{
+        currentTheme, customColors,
+        changeTheme: (t) => { setCurrentTheme(t); localStorage.setItem('jomarid-books-theme', t); },
+        changeCustomColors: (c) => { saveCustomColors(c); setCustomColors(loadCustomColors()); setCurrentTheme(CUSTOM_THEME_KEY); localStorage.setItem('jomarid-books-theme', CUSTOM_THEME_KEY); },
+      }}>
         <Router>
           <div style={{ background: 'var(--bg-body)', color: 'var(--text-body)' }} className="min-h-screen flex flex-col font-sans antialiased transition-all duration-200">
             <RecoveryRedirect />
