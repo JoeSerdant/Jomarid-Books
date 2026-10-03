@@ -16,7 +16,7 @@ function spawnShape() {
   const s = {
     id: nextId++, isShape: true, type, x, y, vx: 0, vy: 0, dvx: Math.cos(da) * sp, dvy: Math.sin(da) * sp,
     r: d.r * rand(0.92, 1.08), hp: d.hp, maxHp: d.hp, rot: rand(0, TAU), spin: rand(-0.5, 0.5),
-    xp: d.xp, dps: d.dps, loss: d.loss, n: d.n, color: d.color, hit: 0, dead: false, lastAttacker: null,
+    xp: d.xp, dps: d.dps, loss: d.loss, n: d.n, color: d.color, hit: 0, dead: false, lastAttacker: null, born: time,
   };
   shapes.push(s); return s;
 }

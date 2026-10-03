@@ -187,7 +187,7 @@ function renderSettings() {
   sw('Vibrace', 'Jen na dotykových zařízeních', () => save.set.vib, v => { save.set.vib = v; });
   sw('Levá ruka', 'Prohodí páčky: vpravo pohyb, vlevo míření', () => save.set.lefty, v => { save.set.lefty = v; });
   seg('Velikost páček', null, [['Malé', 0.85], ['Střední', 1], ['Velké', 1.3]], () => save.set.ctl, v => { save.set.ctl = v; });
-  seg('Efekty', 'Nízké šetří baterii a výkon', [['Nízké', 0], ['Plné', 1]], () => save.set.fx, v => { save.set.fx = v; fxState.level = fxLevelNow(); });
+  seg('Efekty', 'Nízké šetří baterii a výkon', [['Nízké', 0], ['Střední', 0.5], ['Plné', 1]], () => save.set.fx, v => { save.set.fx = v; fxState.level = fxLevelNow(); });
 }
 $('setBtn').addEventListener('click', () => { beep('click'); renderSettings(); elSet.classList.remove('hidden'); });
 function closeSettings() { elSet.classList.add('hidden'); }

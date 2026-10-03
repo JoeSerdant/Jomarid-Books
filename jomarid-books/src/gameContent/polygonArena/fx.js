@@ -47,7 +47,8 @@ const deepen = (c, t) => mixColor(c, '#000000', t);     // ztmavení
 // 0 = nízká (ploché barvy, žádné záře ani stíny), 1 = střední, 2 = plná. Nastavení "Efekty" určuje strop, rychlost
 // snímků ho případně sníží (a po uklidnění zase zvýší), aby hra zůstala plynulá i na slabším zařízení.
 const fxState = { level: 2, auto: 2, ema: 16.7, work: 4, slow: 0, fast: 0, forced: -1 };
-const fxLevelNow = () => (fxState.forced >= 0 ? fxState.forced : Math.min(save.set.fx ? 2 : 0, fxState.auto));
+const fxCap = () => (save.set.fx >= 1 ? 2 : save.set.fx > 0 ? 1 : 0);          // volba Efekty: Nízké 0, Střední 0.5, Plné 1
+const fxLevelNow = () => (fxState.forced >= 0 ? fxState.forced : Math.min(fxCap(), fxState.auto));
 // dtMs = čas mezi snímky, workMs = čas, který snímek zabral hře (výpočty + kreslení). Kvalita se snižuje, když práce na
 // snímku trvá dlouho (slabé zařízení) nebo snímky chodí hodně pomalu; kadence 30 Hz sama o sobě na věci nic nemění.
 function fxFrame(dtMs, workMs) {
