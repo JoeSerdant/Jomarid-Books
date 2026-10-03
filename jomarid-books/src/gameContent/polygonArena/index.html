@@ -82,7 +82,7 @@
       <button id="pauseBtn" class="chip pe" aria-label="Pauza" title="Pauza (P)"><svg viewBox="0 0 14 14"><rect x="2" y="1" width="3.6" height="12" rx="1"/><rect x="8.4" y="1" width="3.6" height="12" rx="1"/></svg></button>
     </div>
     <div id="banner"></div>
-    <div id="teambar" class="panel hidden"></div>
+    <div id="objbar" class="panel hidden"></div>
     <div id="bossbar" class="panel hidden"><b id="bossName"></b><div class="bar"><i id="bossFill"></i></div></div>
     <div id="stats" class="panel pe"><div id="statHead" class="pe"></div><div id="statRows"></div></div>
     <div id="classes"></div>
@@ -106,17 +106,14 @@
       <label class="field" for="nameIn">Jméno</label>
       <input id="nameIn" class="input" maxlength="14" placeholder="Tvoje přezdívka" autocomplete="off" spellcheck="false">
       <div class="field" id="modeLabel">Režim</div>
-      <div class="seg" id="modeSeg" role="radiogroup" aria-labelledby="modeLabel">
-        <button type="button" role="radio" data-m="ffa">Klasika</button>
-        <button type="button" role="radio" data-m="teams">Týmy</button>
-        <button type="button" role="radio" data-m="sandbox">Cvičiště</button>
-      </div>
+      <div class="mgrid" id="modeSeg" role="radiogroup" aria-labelledby="modeLabel"></div>
       <p class="dinfo" id="modeInfo"></p>
       <div class="field" id="diffLabel">Obtížnost botů</div>
       <div class="seg" id="diffSeg" role="radiogroup" aria-labelledby="diffLabel">
         <button type="button" role="radio" data-d="easy">Lehká</button>
         <button type="button" role="radio" data-d="normal">Střední</button>
         <button type="button" role="radio" data-d="hard">Těžká</button>
+        <button type="button" role="radio" data-d="hell">Peklo</button>
       </div>
       <p class="dinfo" id="diffInfo"></p>
       <button id="playBtn" class="btn" type="button">Hrát</button>
@@ -131,7 +128,7 @@
       <p class="big" id="deadTitle">Byl jsi zničen</p>
       <p class="lead" id="deadBy"></p>
       <div id="newBest" class="newbest hidden">Nový osobní rekord</div>
-      <div class="grid2">
+      <div class="grid2" id="deadGrid">
         <div><b id="dLvl">1</b><span>Úroveň</span></div>
         <div><b id="dScore">0</b><span>Skóre</span></div>
         <div><b id="dKills">0</b><span>Zničených tanků</span></div>

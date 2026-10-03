@@ -48,3 +48,6 @@ const BOSS_IDS = ['boss_guard', 'boss_crusher', 'boss_hive', 'boss_tower',
   'boss_guard_a', 'boss_guard_b', 'boss_crusher_a', 'boss_crusher_b', 'boss_hive_a', 'boss_hive_b', 'boss_tower_a', 'boss_tower_b'];
 const CLASS_IDS = Object.keys(CLASSES).filter(id => !CLASSES[id].boss);
 const PARENT = {}; for (const k in TREE) for (const c of TREE[k]) PARENT[c] = k;
+
+// Vzhled a profil všem třídám (až teď, když jsou definované všechny stupně).
+TANKGEN.finish();

@@ -12,7 +12,7 @@ function update(dt) {
   for (let i = 0; i < tanks.length; i++) {
     const t = tanks[i];
     if (!t.alive) {
-      if (t.boss) { tanks.splice(i, 1); i--; continue; }
+      if (t.boss || t.temp) { tanks.splice(i, 1); i--; continue; }
       if (!t.isPlayer) { t.respawnT -= dt; if (t.respawnT <= 0) respawnBot(t); }
       continue;
     }
@@ -50,11 +50,11 @@ function update(dt) {
   for (let n = 0; n < 2 && shapes.length < SHAPE_TARGET; n++) spawnShape();
   worldUpdate(dt);
 
-  const pcap = save.set.fx ? 320 : 90;
+  const pcap = partCap();
   for (let i = parts.length - 1; i >= 0; i--) {
     const p = parts[i]; p.life -= dt;
     if (p.life <= 0 || (i > pcap && Math.random() < 0.5)) { parts.splice(i, 1); continue; }
-    p.x += p.vx * dt; p.y += p.vy * dt; const f = Math.pow(0.02, dt); p.vx *= f; p.vy *= f; p.rot += dt * 4;
+    p.x += p.vx * dt; p.y += p.vy * dt; const f = Math.pow(p.kind === 2 ? 0.25 : p.kind === 1 ? 0.004 : 0.02, dt); p.vx *= f; p.vy *= f; p.rot += (p.vr === undefined ? 4 : p.vr) * dt;
   }
   for (let i = texts.length - 1; i >= 0; i--) {
     const p = texts[i]; p.life -= dt;
@@ -132,7 +132,7 @@ function applyPickup(t, p) {
   else if (p.type === 'dmg') t.buff.dmg = 10;
   else if (p.type === 'shield') t.shield = Math.max(t.shield, t.maxHp * 0.6);
   if (me) { floatText(t.x, t.y - t.r - 18, P.name, P.color); beep('pick'); buzz(12); }
-  burst(p.x, p.y, P.color, 8, 130, 3);
+  burst(p.x, p.y, P.color, 8, 130, 3, 1); ringFx(p.x, p.y, 8, 38, 0.32, P.color, false);
 }
 function updatePickups(dt) {
   const P = world.pickups;
@@ -154,8 +154,7 @@ function updatePickups(dt) {
 
 /* ---------- výbuchy, skok ---------- */
 function explode(x, y, r, dmg, owner) {
-  burst(x, y, '#ffb04d', 14, 230, r * 0.15);
-  world.rings.push({ x, y, r: 6, max: r, life: 0.34, m: 0.34, color: '#ffb04d' });
+  explosionFx(x, y, r, '#ffb04d');
   if (player && player.alive) { const dp = Math.hypot(player.x - x, player.y - y); if (dp < 700) { shake = Math.max(shake, 5 * (1 - dp / 700) + 1.5); beep('boom'); } }
   gBody.near(x, y, r + 90, tmpC);
   const pk = owner ? owner.pk : null;
@@ -169,7 +168,7 @@ function explode(x, y, r, dmg, owner) {
     if (e.isTank) {
       if (e.invuln > 0) continue;
       const dealt = dmg * f * (pk ? pk.tank : 1);
-      if (hurt(e, dealt, owner) && pk && pk.vamp) heal(owner, dealt * pk.vamp);
+      if (hurt(e, dealt, owner) && owner && owner.vamp) heal(owner, dealt * owner.vamp);
       const kb = 120 * f / (1 + e.r / 24); e.vx += dx / d * kb; e.vy += dy / d * kb;
     } else {
       e.hp -= dmg * f * (pk ? pk.shape : 1); if (owner) e.lastAttacker = owner; e.hit = 0.08;
@@ -237,6 +236,7 @@ function bossDown(t, k) {
   banner((k ? k.name : 'Někdo') + ' porazil bosse ' + t.name + '!', 'good'); beep('boom');
   dropPickup(t.x, t.y, 6);
   if (k && k.isPlayer) { save.st.bosses++; save.st.bossKinds[t.cls] = true; }
+  if (M().onBossDown) M().onBossDown(t, k);
 }
 function runEvent() {
   const k = pick(['gold', 'swarm', 'crystal', 'supply']);
@@ -252,50 +252,40 @@ function worldUpdate(dt) {
     if (r.life <= 0) world.rings.splice(i, 1); else r.r = r.max * (1 - Math.pow(r.life / r.m, 2));
   }
   shake *= Math.exp(-9 * dt); if (shake < 0.15) shake = 0;
-  if (state !== 'play' || mode === 'sandbox') return;
-  if (!world.boss) { world.bossT -= dt; if (world.bossT <= 0) spawnBoss(); }
-  else {
-    const B = world.boss; B.age = (B.age || 0) + dt;
-    if (B.age > 150) {                                   // boss odchází, ať se mohl objevit další
-      B.alive = false; for (const b of bullets) if (b.owner === B) b.dead = true;
-      world.boss = null; world.bossT = DIFFS[diffKey].bossT * 0.6; banner('Boss ' + B.name + ' opustil arénu', 'info');
+  if (state !== 'play') return;
+  const MD = M();
+  if (MD.tick) MD.tick(dt);
+  if (!MD.noBoss) {
+    if (!world.boss) { world.bossT -= dt; if (world.bossT <= 0) spawnBoss(); }
+    else {
+      const B = world.boss; B.age = (B.age || 0) + dt;
+      if (B.age > 150) {                                   // boss odchází, ať se mohl objevit další
+        B.alive = false; for (const b of bullets) if (b.owner === B) b.dead = true;
+        world.boss = null; world.bossT = DIFFS[diffKey].bossT * 0.6; banner('Boss ' + B.name + ' opustil arénu', 'info');
+      }
     }
   }
-  world.evT -= dt; if (world.evT <= 0) { runEvent(); world.evT = DIFFS[diffKey].evGap * rand(0.9, 1.6); }
-  world.alphaT -= dt; if (world.alphaT <= 0) { spawnAlpha(); world.alphaT = 130; }
-  if (mode === 'teams' && !world.over) { const g = DIFFS[diffKey].goal; for (const tm of [1, 2]) if (world.teamScore[tm] >= g) { endMatch(tm); break; } }
+  if (!MD.noEvents) {
+    world.evT -= dt; if (world.evT <= 0) { runEvent(); world.evT = DIFFS[diffKey].evGap * rand(0.9, 1.6); }
+    world.alphaT -= dt; if (world.alphaT <= 0) { spawnAlpha(); world.alphaT = 130; }
+  }
 }
 
-/* ---------- zápas, týmy, cvičiště ---------- */
+/* ---------- zápas ---------- */
+// Obecná příprava zápasu; boty a stav konkrétního režimu vytvoří M().setup (viz modes.js).
 function setupMatch() {
   for (let i = tanks.length - 1; i >= 0; i--) if (!tanks[i].isPlayer) tanks.splice(i, 1);
   bullets.length = 0; parts.length = 0; texts.length = 0;
   world.pickups.length = 0; world.rings.length = 0; world.zones.length = 0;
-  world.boss = null; world.bossN = 0; world.over = false; world.winner = 0; world.teamScore = [0, 0, 0]; world.matchT = 0;
+  world.boss = null; world.bossN = 0; world.over = false; world.win = false; world.end = null; world.teamScore = [0, 0, 0]; world.matchT = 0;
+  world.hill = null; world.storm = null; world.bossMul = 1;
   const D = DIFFS[diffKey]; world.bossT = D.bossT1; world.evT = D.evGap; world.alphaT = 70; world.pickT = 0;
-  player.team = mode === 'teams' ? 1 : 0;
-  if (mode === 'teams') {
-    const n = Math.max(3, Math.round(D.bots / 2));
-    for (let i = 0; i < n - 1; i++) makeTank(false, '', TEAM_COLORS[1], 1);
-    for (let i = 0; i < n - (diffKey === 'easy' ? 1 : 0); i++) makeTank(false, '', TEAM_COLORS[2], 2);
-  } else if (mode === 'sandbox') {
-    for (let i = 0; i < 5; i++) {
-      const t = makeTank(false, 'Terč', '#8fa0aa', 0), a = i * TAU / 5;
-      t.ai.dummy = true; t.name = 'Terč'; t.color = '#8fa0aa'; t.x = HALF + Math.cos(a) * 520; t.y = HALF + Math.sin(a) * 520;
-    }
-  } else for (let i = 0; i < D.bots; i++) makeTank(false, '', BOT_COLORS[0]);
+  const MD = M();
+  player.team = MD.team ? 1 : 0;
+  MD.setup(D);
   if (mode !== 'sandbox') { genZones(); save.st.mapsSeen[world.mapName] = true; }
   for (let i = 0; i < (mode === 'sandbox' ? 10 : 8); i++) spawnRandomPickup();
   builtDiff = diffKey; builtMode = mode;
-}
-function endMatch(team) {
-  world.over = true; world.winner = team;
-  const win = team === player.team;
-  if (win) save.st.wins++;
-  player.alive = false;
-  state = 'dead'; ui.deadT = 0.8; ui.spec = null; ui.specT = 0;
-  Object.assign(deathInfo, { by: '', level: player.level, score: Math.round(player.score), kills: player.kills, time: time - player.born });
-  beep(win ? 'ach' : 'die');
 }
 function sandboxEquip(id) {
   const c = CLASSES[id]; if (!c || c.boss) return;

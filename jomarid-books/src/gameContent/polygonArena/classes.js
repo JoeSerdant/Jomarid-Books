@@ -1,7 +1,10 @@
 // Třídy tanků 0.-3. stupně (ručně navržené), továrny na hlavně a třídy, strom vývoje.
 /* ---------- třídy tanků ---------- */
-const B = o => { const b = Object.assign({ a: 0, len: 1.55, w: 0.6, off: 0, rel: 1, delay: 0, dmg: 1, spd: 1, spread: 0, size: 1, recoil: 1, hp: 1, kind: 'bullet', flare: false, pierce: 0, bounce: 0, blast: 0, lob: false, streak: false, turret: false, dist: 0, tsize: 0.34 }, o); b.len += 0.18; return b; };
-const C = o => Object.assign({ reload: 1, speed: 1, zoom: 1, range: 1, maxDrones: 0, maxTraps: 0, hp: 1, ram: 1, size: 1, boss: false, bn: 6, info: '' }, o);
+// Hlaveň. Navíc oproti základním polím: slow = zpomalení zasaženého (0-1), burn = podíl zranění za sekundu jako
+// podpal, knock = násobek odhozu. Třída (C): regen = násobek regenerace, bhp = násobek odolnosti střel, vamp = podíl
+// zranění tanků, který se vrací jako zdraví.
+const B = o => { const b = Object.assign({ a: 0, len: 1.55, w: 0.6, off: 0, rel: 1, delay: 0, dmg: 1, spd: 1, spread: 0, size: 1, recoil: 1, hp: 1, kind: 'bullet', flare: false, pierce: 0, bounce: 0, blast: 0, lob: false, streak: false, turret: false, dist: 0, tsize: 0.34, slow: 0, burn: 0, knock: 1 }, o); b.len += 0.18; return b; };
+const C = o => Object.assign({ reload: 1, speed: 1, zoom: 1, range: 1, maxDrones: 0, maxTraps: 0, hp: 1, ram: 1, size: 1, boss: false, bn: 6, info: '', regen: 1, bhp: 1, vamp: 0 }, o);
 const ring = (n, o, alt) => Array.from({ length: n }, (_, i) => B(Object.assign({ a: i * TAU / n, delay: alt && (i & 1) ? 0.5 : 0 }, o)));
 const TRAP = { kind: 'trap', flare: true, recoil: 0.5 };
 const CLASSES = {

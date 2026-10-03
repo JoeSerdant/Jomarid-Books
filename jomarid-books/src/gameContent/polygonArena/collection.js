@@ -11,6 +11,7 @@ const SKINS = [
   { id: 'ice', name: 'Led', color: '#9ee7ff', need: 'lvl20' },
   { id: 'gold', name: 'Zlatá', color: '#f5c542', need: 'boss' },
   { id: 'ink', name: 'Obsidián', color: '#4b5b6e', need: 'lvl45' },
+  { id: 'magma', name: 'Magma', color: '#ff5a2a', need: 'hell5' },
   { id: 'rainbow', name: 'Duha', color: '#ffffff', need: 'cdx40', rainbow: true },
 ];
 const ACH = [
@@ -36,6 +37,13 @@ const ACH = [
   { id: 'over', name: 'Nadlimit', info: 'Vylepši vlastnost nad maximum až na 12', ok: c => c.life.maxStat >= 12 },
   { id: 'teamwin', name: 'Týmový hráč', info: 'Vyhraj týmový zápas', ok: c => c.st.wins >= 1 },
   { id: 'games10', name: 'Stálice', info: 'Odehraj 10 her', ok: c => c.st.games >= 10 },
+  { id: 'wave10', name: 'Odolný', info: 'Zvládni 10 vln v režimu Přežití', ok: c => c.st.bestWave >= 10 },
+  { id: 'hillwin', name: 'Král kopce', info: 'Vyhraj zápas v režimu Král kopce', ok: c => c.st.hillWins >= 1 },
+  { id: 'royale', name: 'Poslední v bouři', info: 'Vyhraj Posledního přeživšího', ok: c => c.st.royaleWins >= 1 },
+  { id: 'rushall', name: 'Přemožitel', info: 'Poraz všechny bossy v Honu na bossy', ok: c => c.st.rushWins >= 1 },
+  { id: 'gold300', name: 'Zlatokop', info: 'Nasbírej 300 zlata v jedné Zlaté horečce', ok: c => c.st.bestGold >= 300 },
+  { id: 'hell5', name: 'Z pekla', info: 'Dosáhni úrovně 25 na obtížnosti Peklo', ok: c => c.diff === 'hell' && c.life.level >= 25 },
+  { id: 'allmodes', name: 'Všestranný', info: 'Zahraj si všechny režimy', ok: c => Object.keys(c.st.modesPlayed || {}).length >= MODE_IDS.length },
 ];
 const ACH_BY = {}; for (const a of ACH) ACH_BY[a.id] = a;
 
@@ -57,7 +65,7 @@ function checkAch() {
   if (!save.codex[player.cls]) save.codex[player.cls] = true;
   const p = player, st = save.st;
   st.bestLevel = Math.max(st.bestLevel, p.level);
-  const c = { st, cdx: codexCount(), life: { time: time - p.born, kills: p.kills, level: p.level, tier: p.tierDone, perks: p.perkN, maxStat: Math.max.apply(null, p.stats) } };
+  const c = { st, cdx: codexCount(), diff: diffKey, life: { time: time - p.born, kills: p.kills, level: p.level, tier: p.tierDone, perks: p.perkN, maxStat: Math.max.apply(null, p.stats) } };
   let changed = false;
   for (const a of ACH) if (!save.ach[a.id] && a.ok(c)) { save.ach[a.id] = true; changed = true; banner('Úspěch: ' + a.name, 'ach'); beep('ach'); buzz(40); }
   if (changed) persist();
@@ -153,7 +161,7 @@ function renderSkins() {
 }
 function renderStats() {
   const st = save.st, m = Math.floor(st.secs / 60);
-  const rows = [['Odehraných her', st.games], ['Zničených tanků', st.kills], ['Zničených tvarů', st.shapes], ['💎 Krystaly', st.crystals || 0], ['Poražených bossů', st.bosses], ['Druhů bossů poraženo', Object.keys(st.bossKinds || {}).length + ' / ' + BOSS_IDS.length], ['Nejvyšší úroveň', st.bestLevel], ['Nejlepší skóre', save.best], ['Vyhrané týmové zápasy', st.wins], ['Vybrané výhody', st.perks], ['Zničení', st.deaths], ['Navštívené arény', Object.keys(st.mapsSeen || {}).length + ' / ' + MAP_PRESETS.length], ['Čas ve hře (min)', m]];
+  const rows = [['Odehraných her', st.games], ['Zničených tanků', st.kills], ['Zničených tvarů', st.shapes], ['💎 Krystaly', st.crystals || 0], ['Poražených bossů', st.bosses], ['Druhů bossů poraženo', Object.keys(st.bossKinds || {}).length + ' / ' + BOSS_IDS.length], ['Nejvyšší úroveň', st.bestLevel], ['Nejlepší skóre', save.best], ['Vyhrané týmové zápasy', st.wins], ['Nejlepší vlna (Přežití)', st.bestWave || 0], ['Výhry: Král kopce', st.hillWins || 0], ['Výhry: Poslední přeživší', st.royaleWins || 0], ['Hon na bossy: nejvíc bossů', (st.rushBest || 0) + ' / ' + BOSS_IDS.length], ['Nejvíc zlata', st.bestGold || 0], ['Vybrané výhody', st.perks], ['Zničení', st.deaths], ['Navštívené arény', Object.keys(st.mapsSeen || {}).length + ' / ' + MAP_PRESETS.length], ['Čas ve hře (min)', m]];
   const grid = h('div', 'stgrid');
   for (const [name, v] of rows) { const d = h('div'); d.appendChild(h('b', null, typeof v === 'string' ? v : fmt(v))); d.appendChild(h('span', null, name)); grid.appendChild(d); }
   elCollBody.appendChild(grid);
@@ -179,7 +187,7 @@ function renderSettings() {
   sw('Vibrace', 'Jen na dotykových zařízeních', () => save.set.vib, v => { save.set.vib = v; });
   sw('Levá ruka', 'Prohodí páčky: vpravo pohyb, vlevo míření', () => save.set.lefty, v => { save.set.lefty = v; });
   seg('Velikost páček', null, [['Malé', 0.85], ['Střední', 1], ['Velké', 1.3]], () => save.set.ctl, v => { save.set.ctl = v; });
-  seg('Efekty', 'Nízké šetří baterii a výkon', [['Nízké', 0], ['Plné', 1]], () => save.set.fx, v => { save.set.fx = v; });
+  seg('Efekty', 'Nízké šetří baterii a výkon', [['Nízké', 0], ['Plné', 1]], () => save.set.fx, v => { save.set.fx = v; fxState.level = fxLevelNow(); });
 }
 $('setBtn').addEventListener('click', () => { beep('click'); renderSettings(); elSet.classList.remove('hidden'); });
 function closeSettings() { elSet.classList.add('hidden'); }

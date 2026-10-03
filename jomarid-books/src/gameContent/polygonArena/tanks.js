@@ -1,6 +1,7 @@
 // Vytváření tvarů a tanků, osobnosti botů.
 /* ---------- tvary: vytvoření ---------- */
 function pickShapeType(x, y) {
+  const MD = M(); if (MD.shapeType) { const ty = MD.shapeType(); if (ty) return ty; }
   if (mode !== 'sandbox') { const q2 = Math.random(); if (q2 < 0.02) return 'bomb'; if (q2 < 0.032) return 'crystal'; }
   const f = 1 - clamp(Math.hypot(x - HALF, y - HALF) / (HALF * 0.95), 0, 1);
   const q = Math.random(), hex = 0.0025 + 0.02 * f * f, pent = 0.035 + 0.16 * f, tri = 0.24;
@@ -42,7 +43,7 @@ function spawnPos(team) {
   let best = null, bd = -1;
   for (let i = 0; i < 24; i++) {
     let x = rand(260, WORLD - 260); const y = rand(260, WORLD - 260);
-    if (team === 1) x = rand(260, 1100); else if (team === 2) x = rand(WORLD - 1100, WORLD - 260);
+    if (mode === 'teams') { if (team === 1) x = rand(260, 1100); else if (team === 2) x = rand(WORLD - 1100, WORLD - 260); }
     let bad = false; for (const z of world.zones) if (z.type === 'lava' && Math.hypot(z.x - x, z.y - y) < z.r + 60) bad = true;
     if (bad) continue;
     let md = 1e9;
@@ -66,7 +67,7 @@ function resetTank(t) {
   t.x = p.x; t.y = p.y; t.vx = 0; t.vy = 0; t.angle = rand(0, TAU);
   t.score = 0; t.level = 1; t.points = 0; t.bonusN = 0; t.traps = 0; t.stats = [0, 0, 0, 0, 0, 0, 0, 0];
   t.cls = 'basic'; t.tierDone = 0; t.bt = [0]; t.rec = [0]; t.tur = [0]; t.drones = 0;
-  t.perks = {}; t.perkN = 0; t.perkOffer = null; t.buff = { speed: 0, dmg: 0 }; t.shield = 0; t.dashCd = 0; t.dashT = 0; t.slowT = 0; t.boss = false; t.adr = false; t.onIce = false; t.inOasis = false; t.combo = 0;
+  t.perks = {}; t.perkN = 0; t.perkOffer = null; t.buff = { speed: 0, dmg: 0 }; t.shield = 0; t.dashCd = 0; t.dashT = 0; t.slowT = 0; t.burnT = 0; t.burnDps = 0; t.burnSrc = null; t.boss = false; t.adr = false; t.onIce = false; t.inOasis = false; t.combo = 0;
   t.maxHp = 0; t.hp = 0; recalc(t);
   t.alive = true; t.invuln = t.isPlayer ? DIFFS[diffKey].inv : 3; t.dmgT = 99; t.kills = 0; t.lastAttacker = null; t.lastAtkT = -99;
   t.born = time; t.wantFire = false; t.wasFiring = false; t.hit = 0; t.moveX = 0; t.moveY = 0;

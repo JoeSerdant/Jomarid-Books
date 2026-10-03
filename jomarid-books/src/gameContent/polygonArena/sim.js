@@ -29,17 +29,18 @@ function aimPoint(from, T, lead) {
   aimOut.x = ax; aimOut.y = ay;
 }
 
-function hurt(t, amt, src) {
+// quiet = zranění v čase (podpal): bez záblesku a otřesů obrazovky
+function hurt(t, amt, src, quiet) {
   if (!t.alive || t.invuln > 0) return false;
   if (t.isPlayer) {                    // obtížnost: zranění hráče od botů / tvarů
     const D = DIFFS[diffKey];
     if (!src) amt *= D.shapeDmg; else if (src !== t && !src.isPlayer) amt *= D.botDmg;
   }
   if (src && src !== t) { t.lastAttacker = src; t.lastAtkT = time; }
-  t.dmgT = 0; t.hit = 0.08;
+  t.dmgT = 0; if (!quiet) t.hit = 0.08;
   if (t.shield > 0) { const a = Math.min(t.shield, amt); t.shield -= a; amt -= a; if (amt <= 0.0001) return true; }
   t.hp -= amt;
-  if (t.isPlayer && amt > 1) { shake = Math.max(shake, Math.min(9, amt * 0.3)); if (amt > t.maxHp * 0.07) buzz(22); }
+  if (!quiet && t.isPlayer && amt > 1) { shake = Math.max(shake, Math.min(9, amt * 0.3)); ui.vig = Math.min(1, ui.vig + amt / t.maxHp * 3 + 0.1); if (amt > t.maxHp * 0.07) buzz(22); }
   return true;
 }
 
@@ -63,6 +64,7 @@ function shoot(t, br, idx, ang0, ox, oy) {
     vmax: sp, orb: Math.random() < 0.5 ? 1 : -1, color: t.color, hitId: 0, hitT: 0, dead: false,
     pierce: br.pierce, streak: br.streak, bounce: Math.max(br.bounce, drone || trap ? 0 : pk.bounce),
     blast: br.blast, bdmg: 0, seen: br.pierce ? [] : null, tgt: null, tgtT: 0, boomed: false,
+    slow: br.slow, burn: br.burn, knock: br.knock,
   };
   if (br.blast) { b.bdmg = dmg * (bomb ? 1 : 0.5); if (bomb) { b.dmg = dmg * 0.2; b.hp = 1; } }
   else if (pk.blast && !drone && !trap) { b.blast = 52; b.bdmg = dmg * 0.4; }
@@ -144,6 +146,7 @@ function tickTank(t, dt) {
   t.dmgT += dt; if (t.hit > 0) t.hit -= dt;
   if (t.dashCd > 0) t.dashCd -= dt;
   if (t.slowT > 0) t.slowT -= dt;
+  if (t.burnT > 0) { t.burnT -= dt; hurt(t, t.burnDps * dt, t.burnSrc, true); if (fxState.level > 0 && Math.random() < dt * 24) burst(t.x + rand(-t.r, t.r) * 0.7, t.y + rand(-t.r, t.r) * 0.7, '#ff9a4d', 1, 40, 3.2, 4); }
   if (t.buff.speed > 0) t.buff.speed -= dt;
   if (t.buff.dmg > 0) t.buff.dmg -= dt;
   t.adr = !!(t.pk.adren && t.hp < t.maxHp * 0.4);
@@ -204,17 +207,20 @@ function bulletHit(b) {
     if (e.isTank) {
       const dmg = b.dmg * pk.tank;
       if (hurt(e, dmg, o)) {
-        if (pk.vamp) heal(o, dmg * pk.vamp);
-        if (pk.slow) { e.slowT = 1.6; e.slowF = 1 - pk.slow; }
+        if (o.vamp) heal(o, dmg * o.vamp);
+        const sl = Math.max(pk.slow, b.slow);
+        if (sl) { e.slowT = 1.6; e.slowF = 1 - sl; }
+        if (b.burn) { const dps = dmg * b.burn; if (e.burnT <= 0 || dps > e.burnDps) e.burnDps = dps; e.burnT = 2.2; e.burnSrc = o; }
       }
-      const kb = clamp(b.dmg * 3, 8, 160) / (1 + e.r / 24) * pk.knock;
+      const kb = clamp(b.dmg * 3, 8, 160) / (1 + e.r / 24) * pk.knock * b.knock;
       e.vx += ux * kb; e.vy += uy * kb;
       b.hp -= e.ramLoss;
       if (e.isPlayer) beep('hit');
     } else {
       const dmg = b.dmg * pk.shape;
       e.hp -= dmg; e.lastAttacker = o; e.hit = 0.08;
-      e.vx += ux * dmg * 8 * Math.min(pk.knock, 1.6); e.vy += uy * dmg * 8 * Math.min(pk.knock, 1.6);
+      const kn = Math.min(pk.knock * b.knock, 1.8);
+      e.vx += ux * dmg * 8 * kn; e.vy += uy * dmg * 8 * kn;
       b.hp -= e.loss;
     }
     if (b.drone) { b.vx = -ux * b.vmax * 0.5; b.vy = -uy * b.vmax * 0.5; }
@@ -309,13 +315,14 @@ function bodyCollisions(dt) {
 function killShape(s) {
   s.dead = true;
   const k = s.lastAttacker, D = DIFFS[diffKey];
-  burst(s.x, s.y, s.color, s.type === 'hex' || s.type === 'alpha' ? 22 : s.type === 'pent' || s.type === 'crystal' ? 14 : 8, 160 + s.r * 2, s.r * 0.22);
+  if (k && M().onShapeKill) M().onShapeKill(k, s);
+  shapeBreakFx(s);
   if (s.type === 'bomb') explode(s.x, s.y, 135, 55, null);
   if (s.type === 'alpha') { world.alphaT = 100; banner('Alfa pětiúhelník zničen', 'good'); dropPickup(s.x, s.y, 4); }
   else if (Math.random() < (s.type === 'crystal' ? 0.3 : 0.045)) dropPickup(s.x, s.y, 1);
   if (k && k.alive && !(k.ai && k.ai.dummy)) {
     const pk = k.pk;
-    const xp = Math.max(1, Math.round(s.xp * (k.level < 30 ? 1 : 1 - (k.level - 30) / 30) * (k.isPlayer ? D.xpMul : D.botXp) * pk.sxp * pk.xp));
+    const xp = Math.max(1, Math.round(s.xp * (k.level < 30 ? 1 : 1 - (k.level - 30) / 30) * (k.isPlayer ? D.xpMul : D.botXp) * pk.sxp * pk.xp * (M().xpScale ? M().xpScale(s) : 1)));
     addScore(k, xp);
     if (pk.greed) heal(k, k.maxHp * 0.03);
     if (k.isPlayer) {
@@ -337,8 +344,7 @@ function killShape(s) {
 function killTank(t) {
   t.alive = false;
   const k = t.lastAttacker && time - t.lastAtkT < 10 ? t.lastAttacker : null, D = DIFFS[diffKey];
-  burst(t.x, t.y, t.color, t.boss ? 60 : 28, 280, t.r * 0.3);
-  world.rings.push({ x: t.x, y: t.y, r: t.r, max: t.r * (t.boss ? 6 : 3.2), life: 0.5, m: 0.5, color: t.color });
+  deathFx(t);
   if (t.boss) shake = Math.max(shake, 12); else if (Math.hypot(t.x - cam.x, t.y - cam.y) < 500) shake = Math.max(shake, 4);
   for (const b of bullets) if ((b.drone || b.trap) && b.owner === t) b.dead = true;
   t.drones = 0; t.traps = 0; t.wantFire = false;
@@ -349,8 +355,8 @@ function killTank(t) {
     if (k.alive && !(k.ai && k.ai.dummy)) { addScore(k, gain); if (k.pk.greed) heal(k, k.maxHp * 0.25); if (k.isPlayer) floatText(t.x, t.y - t.r, '+' + gain, theme.accent); }
     msg = k.name + ' zničil ' + t.name;
     if (k.isPlayer && !t.boss) { save.st.kills++; }
-    if (k.team && t.team && k.team !== t.team) world.teamScore[k.team]++;
   } else msg = t.name + ' zahynul';
+  if (M().onKill) M().onKill(k && k !== t ? k : null, t);
   feed(msg, !!(k && k.isPlayer) || t.isPlayer);
   if (t.boss) bossDown(t, k);
   else if (!(t.ai && t.ai.dummy) && Math.random() < 0.35) dropPickup(t.x, t.y, 1);
@@ -359,5 +365,6 @@ function killTank(t) {
     Object.assign(deathInfo, { by: k ? k.name : '', level: t.level, score: Math.round(t.score), kills: t.kills, time: time - t.born });
     save.st.deaths++; save.st.secs += Math.round(time - t.born);
     beep('die'); buzz(70);
+    if (M().solo) soloOver(k);
   } else t.respawnT = t.ai && t.ai.dummy ? 2.5 : rand(3, 7);
 }

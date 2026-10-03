@@ -30,7 +30,7 @@ let nextId = 1, time = 0, state = 'menu', paused = false, diffKey = 'normal', bu
 let player = null;
 const cam = { x: HALF, y: HALF, z: 1 };
 const view = { w: 800, h: 600, dpr: 1, scale: 1 };
-const ui = { statsDirty: true, offerKey: '', lbT: 0, deadT: 0, spec: null, specT: 0, miniT: 0, statsOpen: false, perkDirty: true, perkKey: '', bannerT: 0, achT: 1 };
+const ui = { vig: 0, statsDirty: true, offerKey: '', lbT: 0, deadT: 0, spec: null, specT: 0, miniT: 0, statsOpen: false, perkDirty: true, perkKey: '', bannerT: 0, achT: 1 };
 const deathInfo = { by: '', level: 1, score: 0, kills: 0, time: 0 };
 let mode = 'ffa', shake = 0;
 const world = { zones: [], pickups: [], rings: [], pickT: 0, bossT: 90, evT: 60, alphaT: 80, boss: null, bossN: 0, teamScore: [0, 0, 0], over: false, winner: 0, matchT: 0, mapName: '' };
@@ -52,13 +52,14 @@ function recalc(t) {
   for (let i = 0; i < 8; i++) _e[i] = eff(st[i]);
   const s = _e, old = t.maxHp || 0, pk = calcPerks(t);
   t.r = 24 * (1 + 0.011 * (L - 1)) * cls.size;
-  t.maxHp = (60 + 3.2 * (L - 1) + 26 * s[1]) * cls.hp * (t.boss ? D.bossHp : 1) * (me ? D.playerHp : 1) * pk.hp;
+  t.maxHp = (60 + 3.2 * (L - 1) + 26 * s[1]) * cls.hp * (t.boss ? D.bossHp * (world.bossMul || 1) : 1) * (me ? D.playerHp : 1) * pk.hp;
   t.hp = old > 0 ? Math.min(t.maxHp, t.hp + (t.maxHp - old)) : t.maxHp;
-  t.regenPct = (0.010 + 0.006 * s[0]) * (me ? D.playerRegen : 1) * pk.regen;
+  t.regenPct = (0.010 + 0.006 * s[0]) * (me ? D.playerRegen : 1) * pk.regen * cls.regen;
   t.ramDps = (12 + 7 * s[2]) * cls.ram * pk.ram;
   t.ramLoss = 8 + 3 * s[2];
   t.bulletSpeed = (520 + 62 * s[3]) * pk.bspd;
-  t.bulletHp = (5 + 6 * s[4]) * pk.bhp;
+  t.bulletHp = (5 + 6 * s[4]) * pk.bhp * cls.bhp;
+  t.vamp = Math.max(pk.vamp, cls.vamp || 0);
   t.bulletDmg = 6 + 3.3 * s[5];
   t.reload = 0.55 * Math.pow(0.86, s[6]) * cls.reload * pk.rel;
   t.speed = 235 * (1 + 0.075 * s[7]) * Math.pow(0.9935, L - 1) * cls.speed * pk.spd;
@@ -87,7 +88,7 @@ function addScore(t, amt) {
   const L = levelFor(t.score, t.level);
   if (L > t.level) {
     t.points += L - t.level; t.level = L; recalc(t);
-    if (t.isPlayer) { floatText(t.x, t.y - t.r - 26, 'Úroveň ' + L, theme.accent); beep('level'); buzz(30); ui.statsDirty = true; world.rings.push({ x: t.x, y: t.y, r: t.r, max: t.r * 3.6, life: 0.6, m: 0.6, color: theme.accent }); }
+    if (t.isPlayer) { floatText(t.x, t.y - t.r - 26, 'Úroveň ' + L, theme.accent); beep('level'); buzz(30); ui.statsDirty = true; ringFx(t.x, t.y, t.r, t.r * 3.6, 0.6, theme.accent, false); sparks(t.x, t.y, theme.accent, 14, 240); }
   }
   if (t.level >= MAX_LEVEL) {          // po dosažení maxima dál přibývají bonusové body
     const n = Math.floor((t.score - xpFor(MAX_LEVEL)) / BONUS_XP);

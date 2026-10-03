@@ -18,8 +18,10 @@
 //   sim.js         - simulace: střelba, pohyb, střely, kolize, smrt
 //   ai.js          - AI botů a ovládání hráče
 //   world.js       - hlavní krok, zóny, bonusy, bossové, události, zápas
+//   modes.js       - herní režimy (Klasika, Týmy, Přežití, Král kopce, Poslední přeživší, Hon na bossy, Zlatá horečka, Cvičiště)
 //   input.js       - vstupy
-//   render.js      - vykreslování
+//   draw.js        - kreslení tanků, tvarů, střel a bonusů
+//   render.js      - vykreslování scény, mini mapa
 //   ui.js          - rozhraní, stavy hry, hlavní smyčka
 //   collection.js  - sbírka a nastavení
 //   main.js        - start
@@ -40,7 +42,9 @@ import tanks from './polygonArena/tanks.js?raw';
 import sim from './polygonArena/sim.js?raw';
 import ai from './polygonArena/ai.js?raw';
 import world from './polygonArena/world.js?raw';
+import modes from './polygonArena/modes.js?raw';
 import input from './polygonArena/input.js?raw';
+import draw from './polygonArena/draw.js?raw';
 import render from './polygonArena/render.js?raw';
 import ui from './polygonArena/ui.js?raw';
 import collection from './polygonArena/collection.js?raw';
@@ -59,7 +63,9 @@ const SCRIPTS = [
   ['sim', sim],
   ['ai', ai],
   ['world', world],
+  ['modes', modes],
   ['input', input],
+  ['draw', draw],
   ['render', render],
   ['ui', ui],
   ['collection', collection],

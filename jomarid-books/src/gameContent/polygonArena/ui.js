@@ -52,22 +52,23 @@ function buildPerkOffer(ids) {
   }
 }
 function updateLB() {
-  const alive = tanks.filter(t => t.alive && !t.boss).sort((a, b) => b.score - a.score);
+  const MD = M(), val = MD.lbVal || (t => t.score);
+  const alive = (MD.lbList ? MD.lbList() : tanks.filter(t => t.alive && !t.boss)).slice().sort((a, b) => val(b) - val(a));
   elLb.replaceChildren();
   const add = (t, i) => {
     const row = h('div', 'lbrow' + (t === player ? ' me' : ''));
     if (t.team) { row.style.borderLeft = '3px solid ' + TEAM_COLORS[t.team]; row.style.paddingLeft = '5px'; }
-    row.appendChild(h('span', null, (i + 1) + '. ' + t.name)); row.appendChild(h('span', null, fmt(t.score)));
+    row.appendChild(h('span', null, (i + 1) + '. ' + t.name)); row.appendChild(h('span', null, MD.lbText ? String(MD.lbText(t)) : fmt(t.score)));
     elLb.appendChild(row);
   };
   alive.slice(0, 6).forEach(add);
   const pi = alive.indexOf(player);
   if (pi >= 6) add(player, pi);
 }
-const elBanner = $('banner'), elDash = $('dashBtn'), elPerks = $('perkStrip'), elBoss = $('bossbar'), elTeam = $('teambar');
+const elBanner = $('banner'), elDash = $('dashBtn'), elPerks = $('perkStrip'), elBoss = $('bossbar'), elObj = $('objbar');
 function banner(text, kind) { elBanner.textContent = text; elBanner.className = 'show ' + (kind || ''); ui.bannerT = 4.2; }
 function buzz(ms) { if (save.set.vib && input.touch && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) { /* ignore */ } } }
-function playerColor() { return mode === 'teams' ? TEAM_COLORS[1] : skinColor(); }
+function playerColor() { return M().team ? TEAM_COLORS[1] : skinColor(); }
 function updateHud2() {
   const p = player, dmax = 7 * p.pk.dashCd, ready = p.dashCd <= 0;
   elDash.style.setProperty('--p', ready ? 100 : Math.round((1 - p.dashCd / dmax) * 100));
@@ -80,14 +81,12 @@ function updateHud2() {
     const chip = (txt, col) => { const d = h('div', 'bf', txt); d.style.color = col; elPerks.appendChild(d); };
     if (bs > 0) chip('Turbo ' + bs, PICKS.speed.color); if (bd > 0) chip('Síla ' + bd, PICKS.dmg.color); if (sh > 0) chip('Štít', PICKS.shield.color);
   }
+  const html = M().hud ? M().hud() : '';
+  if (html) { elObj.classList.remove('hidden'); if (elObj.dataset.h !== html) { elObj.innerHTML = html; elObj.dataset.h = html; } }
+  else elObj.classList.add('hidden');
   const B = world.boss;
-  if (B && B.alive && mode !== 'sandbox') { elBoss.classList.remove('hidden'); $('bossName').textContent = B.name; $('bossFill').style.width = (clamp(B.hp / B.maxHp, 0, 1) * 100).toFixed(1) + '%'; elBoss.classList.toggle('low', mode === 'teams'); }
+  if (B && B.alive && mode !== 'sandbox') { elBoss.classList.remove('hidden'); $('bossName').textContent = B.name; $('bossFill').style.width = (clamp(B.hp / B.maxHp, 0, 1) * 100).toFixed(1) + '%'; elBoss.classList.toggle('low', !!html); }
   else elBoss.classList.add('hidden');
-  if (mode === 'teams') {
-    elTeam.classList.remove('hidden');
-    const html = '<span class="tb">Modří ' + world.teamScore[1] + '</span><small>cíl ' + DIFFS[diffKey].goal + '</small><span class="tr">' + world.teamScore[2] + ' Červení</span>';
-    if (elTeam.dataset.h !== html) { elTeam.innerHTML = html; elTeam.dataset.h = html; }
-  } else elTeam.classList.add('hidden');
 }
 function feed(msg, mine) {
   const el = h('div', mine ? 'me' : '', msg);
@@ -109,6 +108,7 @@ function frameUI(dt) {
     elXp.style.width = (f * 100).toFixed(1) + '%';
     updateHud2();
   }
+  if (ui.vig > 0) ui.vig = Math.max(0, ui.vig - dt * 1.6);
   ui.lbT -= dt; if (ui.lbT <= 0) { ui.lbT = 0.4; if (state !== 'menu') updateLB(); }
   ui.miniT -= dt; if (ui.miniT <= 0) { ui.miniT = 0.1; if (state !== 'menu') drawMini(); }
   if (ui.bannerT > 0) { ui.bannerT -= dt; if (ui.bannerT <= 0) elBanner.classList.remove('show'); }
@@ -131,7 +131,8 @@ function startGame(fresh) {
   persist();
   player.name = nm || 'Ty';
   resetTank(player); player.color = playerColor();
-  if (mode === 'sandbox') sandboxPrep();
+  if (M().playerStart) M().playerStart(player);
+  save.st.modesPlayed[mode] = true;
   state = 'play'; paused = false; ui.spec = null;
   elMenu.classList.add('hidden'); elDead.classList.add('hidden'); elPause.classList.add('hidden'); $('coll').classList.add('hidden'); $('settings').classList.add('hidden'); elHud.classList.remove('hidden');
   $('clsBtn').classList.toggle('hidden', mode !== 'sandbox');
@@ -142,7 +143,8 @@ function startGame(fresh) {
   input.stickL = null; input.stickR = null; shake = 0;
   if (mode === 'teams' && !world.matchT) banner('Aréna: ' + world.mapName + '. Jsi v modrém týmu, cíl: ' + DIFFS[diffKey].goal + ' zničených tanků', 'info');
   else if (mode === 'teams') banner('Zpět v boji za modré! ' + world.teamScore[1] + ' : ' + world.teamScore[2], 'info');
-  else if (mode === 'ffa' && !world.matchT) banner('Aréna: ' + world.mapName, 'info');
+  else if (!world.matchT && mode === 'ffa') banner('Aréna: ' + world.mapName, 'info');
+  else if (!world.matchT && mode !== 'sandbox') banner(M().name + ': ' + M().tag + '. Aréna: ' + world.mapName, 'info');
   beep('click');
 }
 function toMenu() {
@@ -154,14 +156,14 @@ function toMenu() {
 }
 function showDead() {
   const d = deathInfo, s = Math.floor(d.time), best = d.score > save.best && d.score > 0 && mode !== 'sandbox';
-  if (world.over) {
-    const win = world.winner === player.team;
-    $('deadTitle').textContent = win ? 'Vítězství!' : 'Porážka';
-    $('deadBy').textContent = (win ? 'Tvůj tým vyhrál ' : 'Soupeři vyhráli ') + world.teamScore[1] + ' : ' + world.teamScore[2] + '.';
-  } else {
+  const E = world.over ? world.end : null;
+  if (E) { $('deadTitle').textContent = E.title || 'Konec'; $('deadBy').textContent = E.text || ''; }
+  else {
     $('deadTitle').textContent = 'Byl jsi zničen';
     $('deadBy').textContent = d.by ? 'Zničil tě ' + d.by + '.' : 'Zničily tě tvary.';
   }
+  const grid = $('deadGrid'); grid.querySelectorAll('.x').forEach(n => n.remove());
+  for (const [label, v] of (E ? E.extra : M().deathExtra && M().deathExtra()) || []) { const bx = h('div', 'x'); bx.appendChild(h('b', null, typeof v === 'number' ? fmt(v) : String(v))); bx.appendChild(h('span', null, label)); grid.appendChild(bx); }
   $('againBtn').textContent = world.over ? 'Nový zápas' : 'Hrát znovu';
   $('dLvl').textContent = d.level; $('dScore').textContent = fmt(d.score); $('dKills').textContent = d.kills;
   $('dTime').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
@@ -171,24 +173,25 @@ function showDead() {
   persist();
   elHud.classList.add('hidden'); elDead.classList.remove('hidden');
 }
-const MODE_INFO = {
-  ffa: 'Každý sám za sebe. Aréna s bossy, událostmi, zónami a bonusy.',
-  teams: 'Modří proti červeným. Spojenci ti kryjí záda; vyhrává tým, který první zničí cílový počet tanků.',
-  sandbox: 'Bez tlaku: maximální úroveň, střelecké terče a libovolná třída i výhody na jedno klepnutí.',
-};
+// Tlačítka režimů se skládají z tabulky MODES (modes.js).
+for (const id of MODE_IDS) {
+  const m = MODES[id], b = h('button'); b.type = 'button'; b.setAttribute('role', 'radio'); b.dataset.m = id;
+  b.appendChild(h('b', null, m.name)); b.appendChild(h('small', null, m.tag)); $('modeSeg').appendChild(b);
+}
 const DIFF_INFO = {
   easy: 'Málo botů, slabší zásahy, rychlý růst. Boti tě nechají rozkoukat.',
   normal: 'Vyvážené souboje. Boti loví i se brání.',
   hard: 'Hodně přesných botů a žádná milost.',
+  hell: 'Nejtěžší: víc rychlých botů, kteří skoro nechybují, uhýbají a loví hlavně tebe. Slabší regenerace, silnější bossové.',
 };
 function refreshMenu() {
   $('diffInfo').textContent = DIFF_INFO[diffKey] || '';
-  $('modeInfo').textContent = MODE_INFO[mode] || '';
+  $('modeInfo').textContent = M().info || '';
   $('bestText').textContent = save.best > 0 ? 'Rekord: ' + fmt(save.best) : 'Zatím bez rekordu';
   $('soundBtn').textContent = 'Zvuk: ' + (save.sound ? 'zapnutý' : 'vypnutý');
   document.querySelectorAll('#diffSeg button').forEach(b => b.setAttribute('aria-checked', b.dataset.d === diffKey ? 'true' : 'false'));
   document.querySelectorAll('#modeSeg button').forEach(b => b.setAttribute('aria-checked', b.dataset.m === mode ? 'true' : 'false'));
-  const sb = mode === 'sandbox'; $('diffLabel').classList.toggle('hidden', sb); $('diffSeg').classList.toggle('hidden', sb); $('diffInfo').classList.toggle('hidden', sb);
+  const sb = !M().diff; $('diffLabel').classList.toggle('hidden', sb); $('diffSeg').classList.toggle('hidden', sb); $('diffInfo').classList.toggle('hidden', sb);
 }
 document.querySelectorAll('#diffSeg button').forEach(b => b.addEventListener('click', () => { diffKey = b.dataset.d; save.diff = diffKey; refreshMenu(); }));
 document.querySelectorAll('#modeSeg button').forEach(b => b.addEventListener('click', () => { mode = b.dataset.m; save.mode = mode; refreshMenu(); }));
@@ -208,6 +211,7 @@ let lastT = 0, acc = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   let dt = (now - lastT) / 1000; lastT = now;
+  if (dt < 0.25) fxFrame(dt * 1000);
   if (!(dt > 0)) dt = 0; if (dt > 0.1) dt = 0.1;
   if (!paused) {
     acc += dt; let n = 0;
@@ -219,7 +223,7 @@ function frame(now) {
 }
 
 function boot() {
-  readTheme();
+  readTheme(); fxState.level = fxLevelNow();
   try {
     const mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
     if (mq && mq.addEventListener) mq.addEventListener('change', readTheme);
@@ -228,7 +232,7 @@ function boot() {
   resize(); window.addEventListener('resize', resize);
   if (window.ResizeObserver) { ui.ro = new ResizeObserver(resize); ui.ro.observe($('app')); }
 
-  diffKey = DIFFS[save.diff] ? save.diff : 'normal'; mode = ['ffa', 'teams', 'sandbox'].indexOf(save.mode) >= 0 ? save.mode : 'ffa';
+  diffKey = DIFFS[save.diff] ? save.diff : 'normal'; mode = MODES[save.mode] ? save.mode : 'ffa';
   player = makeTank(true, save.name || 'Ty', PLAYER_COLOR); player.alive = false;
   setupMatch();
   for (let i = 0; i < SHAPE_TARGET; i++) spawnShape();

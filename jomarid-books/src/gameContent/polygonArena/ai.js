@@ -14,15 +14,34 @@ function botUpgrade(b) {
   }
   recalc(b);
   const offer = offerOf(b);
-  if (offer) {
-    const pref = offer.filter(id => ai.pref.includes(id));
-    chooseClass(b, pick(pref.length ? pref : offer));
-  }
+  if (offer) chooseClass(b, bestClass(b, offer));
   const po = perkOfferOf(b);
-  if (po) choosePerk(b, pick(po));
+  if (po) choosePerk(b, bestPerk(b, po));
+}
+// Co která povaha bota u třídy oceňuje (kromě celkové síly).
+const ARCH_WANT = { balanced: {}, glass: { off: 0.5, reach: 0.5 }, tank: { tough: 0.7 }, rammer: { tough: 0.5, melee: 1 }, speedy: { mob: 0.9 } };
+// Výběr třídy botem: celková síla podle modelu (čím vyšší obtížnost, tím víc), zaměření povahy, oblíbené třídy a trocha náhody.
+function bestClass(b, offer) {
+  const ai = b.ai, D = DIFFS[diffKey], W = ARCH_WANT[ai.arch] || ARCH_WANT.balanced;
+  let best = offer[0], bs = -1e9;
+  for (const id of offer) {
+    const c = CLASSES[id], p = c.prof; let s = ai.pref.includes(id) ? 0.2 : 0;
+    if (p) s += D.smart * (Math.log(p.power) + (W.off || 0) * Math.log(p.off) + (W.tough || 0) * Math.log(p.tough) + (W.mob || 0) * Math.log(p.mob) + (W.reach || 0) * Math.log(p.reach) + (W.melee || 0) * (c.ram > 1.5 ? 0.4 : 0));
+    s += rand(-0.12, 0.12);
+    if (s > bs) { bs = s; best = id; }
+  }
+  return best;
+}
+// Výhody, které se hodí skoro vždy; zbytek je spíš situační.
+const PERK_SCORE = { hunter: 1, rapid: 1, tough: 0.9, vamp: 0.9, swift: 0.7, armor: 0.7, crit: 0.8, regen: 0.8, shield: 0.8, adren: 0.7, greed: 0.6, far: 0.6, farmer: 0.4, knock: 0.4, scholar: 0.5 };
+function bestPerk(b, po) {
+  const D = DIFFS[diffKey];
+  let best = po[0], bs = -1e9;
+  for (const id of po) { const s = D.smart * 0.5 * (PERK_SCORE[id] || 0.3) + rand(0, 0.5); if (s > bs) { bs = s; best = id; } }
+  return best;
 }
 function pickFarmTarget(b) {
-  const ai = b.ai;
+  const ai = b.ai, MD = M();
   gBody.near(b.x, b.y, 700, tmpA);
   let best = null, bv = 0;
   for (let i = 0; i < tmpA.length; i++) {
@@ -32,6 +51,7 @@ function pickFarmTarget(b) {
     if (e.type === 'pent' && b.level < 4) continue;
     if (e.type === 'bomb' && d < 260) continue;
     if (e.type === 'alpha' && b.level < 14) continue;
+    if (MD.farmOk && !MD.farmOk(e.x, e.y)) continue;
     let v = e.xp / (d + 140);
     if (e === ai.target) v *= 1.25;
     if (v > bv) { bv = v; best = e; }
@@ -39,7 +59,7 @@ function pickFarmTarget(b) {
   ai.target = best;
   if (!best && (!ai.wander || ai.wanderT <= 0)) {
     const a = rand(0, TAU), rr = Math.sqrt(Math.random()) * HALF * 0.85;
-    ai.wander = { x: HALF + Math.cos(a) * rr, y: HALF + Math.sin(a) * rr }; ai.wanderT = 8;
+    ai.wander = (MD.wanderPoint && MD.wanderPoint()) || { x: HALF + Math.cos(a) * rr, y: HALF + Math.sin(a) * rr }; ai.wanderT = 8;
   }
 }
 function botDecide(b) {
@@ -47,7 +67,7 @@ function botDecide(b) {
   if (ai.boss) {
     let best = null, bd = 1250;
     for (let i = 0; i < tanks.length; i++) {
-      const o = tanks[i]; if (o === b || !o.alive || o.boss || o.invuln > 0) continue;
+      const o = tanks[i]; if (o === b || !o.alive || o.boss || o.invuln > 0 || !enemy(b, o)) continue;
       const d = Math.hypot(o.x - b.x, o.y - b.y); if (d < bd) { bd = d; best = o; }
     }
     ai.mode = best ? 'hunt' : 'farm'; ai.target = best; ai.fleeFrom = null;
@@ -60,14 +80,16 @@ function botDecide(b) {
     const d = Math.hypot(o.x - b.x, o.y - b.y);
     if (d < nD) { nD = d; near = o; }
     if (d > 1000 || o.invuln > 0) continue;
-    const op = power(o);
-    if (op > myPow * (1.15 + ai.courage * 0.55) + 1 && d < 800) { if (d < tD) { tD = d; threat = o; } }
-    else if (op < myPow * (0.8 + ai.aggr * 0.7) && d < (500 + ai.aggr * 450) * D.hunt) {
+    const op = power(o), focus = (o.isPlayer && D.focus > 0 && b.hp > b.maxHp * 0.5) || (ai.fearless && b.hp > b.maxHp * 0.3);   // nejtěžší obtížnost: boti se na hráče sesypou
+    if (!focus && op > myPow * (1.15 + ai.courage * 0.55) + 1 && d < 800) { if (d < tD) { tD = d; threat = o; } }
+    else if (focus ? d < (500 + ai.aggr * 450) * D.hunt * (1 + D.focus * 0.5) : (op < myPow * (0.8 + ai.aggr * 0.7) && d < (500 + ai.aggr * 450) * D.hunt)) {
       if (o.isPlayer && o.level < D.mercy && !(b.lastAttacker === o && time - b.lastAtkT < 6)) continue;   // začátečníka nechají být
-      if (d < pD) { pD = d; prey = o; }
+      const dEff = o.isPlayer ? d / (1 + D.focus) : d;
+      if (dEff < pD) { pD = dEff; prey = o; }
     }
   }
-  if (b.hp < b.maxHp * 0.35 && near && nD < 750) { ai.mode = 'flee'; ai.fleeFrom = near; }
+  if (!prey && ai.seek && near) prey = near;                          // vlny: boti míří přímo na tým hráče
+  if (b.hp < b.maxHp * 0.35 && near && nD < 750 && !ai.fearless) { ai.mode = 'flee'; ai.fleeFrom = near; }
   else if (threat) { ai.mode = 'flee'; ai.fleeFrom = threat; }
   else if (prey) { ai.mode = 'hunt'; ai.target = prey; ai.fleeFrom = null; }
   else { ai.mode = 'farm'; ai.fleeFrom = null; if (!ai.target || ai.target.isTank) ai.target = null; pickFarmTarget(b); }
@@ -143,9 +165,11 @@ function botControl(b, dt) {
     const dx = ai.pick.x - b.x, dy = ai.pick.y - b.y, d = Math.hypot(dx, dy) || 1, w = ai.pick.type === 'heal' && b.hp < b.maxHp * 0.65 ? 1.6 : 0.9;
     mx += dx / d * w; my += dy / d * w;
   }
-  const M = 300;
-  if (b.x < M) mx += (M - b.x) / M * 1.5; else if (b.x > WORLD - M) mx -= (b.x - (WORLD - M)) / M * 1.5;
-  if (b.y < M) my += (M - b.y) / M * 1.5; else if (b.y > WORLD - M) my -= (b.y - (WORLD - M)) / M * 1.5;
+  const MD = M();
+  if (MD.steer) { const sv = MD.steer(b, ai); if (sv) { mx += sv.x; my += sv.y; } }                 // cíl režimu (kopec, bouře...)
+  const EDGE = 300;
+  if (b.x < EDGE) mx += (EDGE - b.x) / EDGE * 1.5; else if (b.x > WORLD - EDGE) mx -= (b.x - (WORLD - EDGE)) / EDGE * 1.5;
+  if (b.y < EDGE) my += (EDGE - b.y) / EDGE * 1.5; else if (b.y > WORLD - EDGE) my -= (b.y - (WORLD - EDGE)) / EDGE * 1.5;
   for (let i = 0; i < world.zones.length; i++) {                     // vyhýbání se lávě
     const z = world.zones[i]; if (z.type !== 'lava') continue;
     const dx = b.x - z.x, dy = b.y - z.y, d = Math.hypot(dx, dy) || 1, lim = z.r + 120;

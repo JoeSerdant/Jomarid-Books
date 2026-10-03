@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "test:chess": "node --test src/gameContent/chess/tests/chess.test.mjs",
+    "test:polygon": "node --test src/gameContent/polygonArena/tests/polygon.test.mjs",
     "chess:ladder": "node src/gameContent/chess/tests/ladder.mjs",
     "preview": "vite preview"
   },
