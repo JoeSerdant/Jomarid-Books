@@ -41,7 +41,7 @@ const GAMES = [
   {
     id: 'chess',
     title: 'Chess League',
-    tagline: 'Šachy proti pěti botům rostoucí obtížnosti - se streaky, XP a ligovým postupem.',
+    tagline: 'Šachy proti pěti botům s vlastní osobností - skutečný Elo rating, hodiny, nápověda, rozbor partie a ligový postup.',
     icon: Crown,
     html: CHESS_HTML,
   },
