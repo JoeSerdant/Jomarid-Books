@@ -138,7 +138,7 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
             <button
               onClick={() => onBuy(book)}
               disabled={buying || coins < book.priceCoins}
-              style={{ backgroundColor: coins < book.priceCoins ? 'var(--bg-secondary)' : 'var(--bg-primary)', color: coins < book.priceCoins ? 'var(--text-muted)' : 'white' }}
+              style={{ backgroundColor: coins < book.priceCoins ? 'var(--bg-secondary)' : 'var(--bg-primary)', color: coins < book.priceCoins ? 'var(--text-muted)' : 'var(--text-primary)' }}
               className="w-full py-3 rounded-xl font-black text-xs uppercase tracking-wider border-none cursor-pointer flex items-center justify-center gap-1.5 disabled:cursor-not-allowed"
             >
               {buying ? (
@@ -172,7 +172,7 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
                 <button
                   onClick={handlePostComment}
                   disabled={postingComment || !newComment.trim()}
-                  style={{ backgroundColor: 'var(--bg-primary)', color: 'white' }}
+                  style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
                   className="px-3 py-2.5 rounded-lg text-[10px] font-black uppercase cursor-pointer border-none disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                 >
                   {postingComment ? <Loader2 size={12} className="animate-spin" /> : 'Přidat'}

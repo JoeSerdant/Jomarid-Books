@@ -241,7 +241,7 @@ export const GameLauncher = ({ game }) => {
 
         <button
           onClick={handleOpenGame}
-          style={{ backgroundColor: 'var(--bg-primary)', color: 'white' }}
+          style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
           className="px-8 py-3.5 rounded-xl font-black uppercase tracking-wider text-sm border-none cursor-pointer shadow-lg hover:opacity-90 transition-all flex items-center gap-2"
         >
           <GameIcon size={16} /> Spustit hru
