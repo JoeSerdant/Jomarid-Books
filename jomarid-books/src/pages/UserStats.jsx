@@ -679,7 +679,7 @@ export const UserStats = () => {
         <button
           onClick={handleBuyStreakFreeze}
           disabled={buyingFreeze || stats.jomaridCoins < 150}
-          style={{ backgroundColor: stats.jomaridCoins < 150 ? 'var(--bg-secondary)' : 'var(--bg-primary)', color: stats.jomaridCoins < 150 ? 'var(--text-muted)' : 'white' }}
+          style={{ backgroundColor: stats.jomaridCoins < 150 ? 'var(--bg-secondary)' : 'var(--bg-primary)', color: stats.jomaridCoins < 150 ? 'var(--text-muted)' : 'var(--text-primary)' }}
           className="px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer border-none shadow-sm whitespace-nowrap disabled:cursor-not-allowed flex items-center gap-1.5"
         >
           {buyingFreeze ? <Loader2 size={14} className="animate-spin" /> : <>Koupit za 150 <Coins size={12} /></>}
