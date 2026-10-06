@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "test": "npm run test:theme && npm run test:chess && npm run test:polygon",
+    "test:theme": "node --test src/tests/theme.test.mjs",
     "test:chess": "node --test src/gameContent/chess/tests/chess.test.mjs",
     "test:polygon": "node --test src/gameContent/polygonArena/tests/polygon.test.mjs",
     "polygon:calibrate": "node src/gameContent/polygonArena/tests/calibrate.mjs",

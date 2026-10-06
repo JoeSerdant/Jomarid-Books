@@ -65,6 +65,9 @@ export const normalizeHex = (v) => {
   if (/^[0-9a-f]{3}$/i.test(h)) h = h.split('').map(c => c + c).join('');
   return /^[0-9a-f]{6}$/i.test(h) ? `#${h.toLowerCase()}` : null;
 };
+// Za psaní do pole se bere jen úplný 6místný kód. Zkratka #abc je platná, ale kdyby se brala hned, přepsala by se
+// uprostřed psaní na #aabbcc a zbylé znaky by se zahodily. Zkratka se proto rozbalí až při opuštění pole (normalizeHex).
+export const completeHex = (v) => (typeof v === 'string' && /^#?[0-9a-f]{6}$/i.test(v.trim()) ? normalizeHex(v) : null);
 const toRgb = (hex) => { const h = normalizeHex(hex).slice(1); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); };
 const toHex = (rgb) => `#${rgb.map(c => Math.round(Math.min(255, Math.max(0, c))).toString(16).padStart(2, '0')).join('')}`;
 const mix = (a, b, t) => { const x = toRgb(a), y = toRgb(b); return toHex(x.map((c, i) => c + (y[i] - c) * t)); };
@@ -109,6 +112,15 @@ export const deriveTheme = (bgIn, accentIn) => {
   };
 };
 
+// Zvýraznění, které se od pozadí skoro neliší (pod tímhle kontrastem), je špatně vidět: tlačítka a okraje splynou s plochou.
+export const ACCENT_MIN_CONTRAST = 3;
+// Nejbližší odstín zvýraznění, který už je na daném pozadí vidět (zachová barvu, jen ji posune ke světlé/tmavé).
+export const readableAccent = (accentIn, bgIn) => {
+  const bg = normalizeHex(bgIn) || CUSTOM_DEFAULT.bg;
+  const accent = normalizeHex(accentIn) || CUSTOM_DEFAULT.accent;
+  return ensureContrast(accent, bg, ACCENT_MIN_CONTRAST);
+};
+
 export const loadCustomColors = () => {
   try {
     const o = JSON.parse(localStorage.getItem(CUSTOM_THEME_STORAGE));
@@ -123,11 +135,30 @@ export const saveCustomColors = (colors) => {
   } catch { /* nevadí */ }
 };
 
+// Uložené jsou jen úplné a platné vlastní barvy (poškozená hodnota se bere jako neuložená, ať se použije seed).
+export const hasSavedCustomColors = () => {
+  try { const o = JSON.parse(localStorage.getItem(CUSTOM_THEME_STORAGE)); return !!o && !!normalizeHex(o.bg) && !!normalizeHex(o.accent); } catch { return false; }
+};
+
 // Proměnné motivu podle klíče (vestavěné i vlastní) + jestli je tmavý.
 export const resolveTheme = (key) => {
   if (key === CUSTOM_THEME_KEY) { const c = loadCustomColors(); return deriveTheme(c.bg, c.accent); }
   return THEMES[key] || THEMES.saas;
 };
+// Dvě barvy vlastního motivu odvozené z právě používaného motivu. První přepnutí na „Vlastní“ tak nezačne od výchozí
+// tyrkysové, ale od toho, co uživatel zrovna vidí (zvýraznění se podle potřeby jen dorovná, aby bylo na pozadí vidět).
+export const colorsFromTheme = (key) => {
+  const vars = resolveTheme(key);
+  return { bg: vars['--bg-body'], accent: readableAccent(vars['--bg-primary'], vars['--bg-body']) };
+};
+// První přepnutí na „Vlastní“: pokud ještě nejsou uložené žádné vlastní barvy, uloží se barvy právě používaného motivu.
+// Vrací aktuální vlastní barvy (už uložené se nikdy nepřepisují).
+export const seedCustomColors = (fromKey) => {
+  if (!hasSavedCustomColors()) saveCustomColors(colorsFromTheme(fromKey));
+  return loadCustomColors();
+};
+// Barvy, které „Vlastní“ dostane po kliknutí - podle nich se kreslí náhled dlaždice (aby odpovídal výsledku).
+export const customColorsPreview = (currentKey, saved) => (currentKey !== CUSTOM_THEME_KEY && !hasSavedCustomColors() ? colorsFromTheme(currentKey) : saved);
 export const DARK_THEMES = ['dark', 'emerald'];
 export const isDarkTheme = (key, vars) => (key === CUSTOM_THEME_KEY ? isDarkColor(vars['--bg-body']) : DARK_THEMES.includes(key));
 
