@@ -3,47 +3,44 @@ import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Coins, Loader2, X, Rocket, Swords, Building2, Target, Crown, Lock } from 'lucide-react';
-import { ROCKET_GAME_HTML } from '../gameContent/rocketGame';
-import { WARROOM_HTML } from '../gameContent/warroom';
-import { CITY_CLICKER_HTML } from '../gameContent/cityClicker';
-import { POLYGON_ARENA_HTML } from '../gameContent/polygonArena';
-import { CHESS_HTML } from '../gameContent/chess';
 
+// Každá hra je velký kus textu (stovky kB, šachy i s Reactem). Stahuje se až při spuštění (dynamický import), ne spolu
+// se stránkou Her - jinak by si hráč už při otevření seznamu stáhl všechny hry najednou.
 const GAMES = [
   {
     id: 'rocket',
     title: 'Jomarid Rocket Game',
     tagline: 'Vesmírná arkádová střílečka s vlastními vylepšeními a postupem.',
     icon: Rocket,
-    html: ROCKET_GAME_HTML,
+    load: () => import('../gameContent/rocketGame').then(m => m.ROCKET_GAME_HTML),
   },
   {
     id: 'warroom',
     title: 'Warroom: Frontlines',
     tagline: 'Velitelská taktická hra - řiď frontu, jednotky a zdroje ve velitelském stanu.',
     icon: Swords,
-    html: WARROOM_HTML,
+    load: () => import('../gameContent/warroom').then(m => m.WARROOM_HTML),
   },
   {
     id: 'cityclicker',
     title: 'City Clicker',
     tagline: 'Vybuduj si vlastní město klikáním - se čtyřmi zcela odlišnými vizuálními styly na výběr.',
     icon: Building2,
-    html: CITY_CLICKER_HTML,
+    load: () => import('../gameContent/cityClicker').then(m => m.CITY_CLICKER_HTML),
   },
   {
     id: 'polygonarena',
     title: 'Polygon aréna',
     tagline: 'Rozstřílej tvary, poskládej si stavbu z více než 500 tanků a přežij mezi chytrými boty - osm režimů od vln nepřátel po zužující se bouři a obtížnost až do Pekla.',
     icon: Target,
-    html: POLYGON_ARENA_HTML,
+    load: () => import('../gameContent/polygonArena').then(m => m.POLYGON_ARENA_HTML),
   },
   {
     id: 'chess',
     title: 'Chess League',
     tagline: 'Šachy proti pěti botům s vlastní osobností - skutečný Elo rating, hodiny, nápověda, rozbor partie a ligový postup.',
     icon: Crown,
-    html: CHESS_HTML,
+    load: () => import('../gameContent/chess').then(m => m.CHESS_HTML),
   },
   // Další hra se přidá jako další objekt v tomhle poli.
 ];
@@ -74,8 +71,17 @@ export const GameLauncher = ({ game }) => {
   const [checkingStatus, setCheckingStatus] = useState(true);
   const [showGame, setShowGame] = useState(false);
   const [hasPlayedEnough, setHasPlayedEnough] = useState(false);
+  const [html, setHtml] = useState(null); // text hry; do stažení je null
+  const [loadingGame, setLoadingGame] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const gameOpenedAtRef = useRef(null);
   const iframeRef = useRef(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -116,10 +122,30 @@ export const GameLauncher = ({ game }) => {
     return () => { cancelled = true; };
   }, [user, game]);
 
-  const handleOpenGame = useCallback(() => {
+  // Hra se stáhne až teď (poprvé), další otevření je okamžité. Čas hraní se počítá až od chvíle, kdy se hra zobrazí.
+  const handleOpenGame = useCallback(async () => {
+    if (loadingGame) return;
+    let src = html;
+    if (!src) {
+      setLoadError(false);
+      setLoadingGame(true);
+      try {
+        src = await game.load();
+      } catch (err) {
+        console.error('Nepodařilo se načíst hru:', err?.message || err);
+        if (mountedRef.current) { setLoadError(true); setLoadingGame(false); }
+        return;
+      }
+      if (!mountedRef.current) return;
+      setHtml(src);
+      setLoadingGame(false);
+    }
     gameOpenedAtRef.current = Date.now();
     setShowGame(true);
-  }, []);
+  }, [game, html, loadingGame]);
+
+  // Při najetí myší nebo zaostření se hra stáhne dopředu, takže se po kliknutí obvykle otevře hned.
+  const warmUp = useCallback(() => { game.load().catch(() => {}); }, [game]);
 
   const handleCloseGame = useCallback(() => {
     if (gameOpenedAtRef.current && Date.now() - gameOpenedAtRef.current >= MIN_PLAY_MS) {
@@ -207,7 +233,7 @@ export const GameLauncher = ({ game }) => {
         <iframe
           ref={iframeRef}
           title={game.title}
-          srcDoc={game.html}
+          srcDoc={html}
           allow="clipboard-write"
           style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
         />
@@ -241,11 +267,31 @@ export const GameLauncher = ({ game }) => {
 
         <button
           onClick={handleOpenGame}
+          onPointerEnter={warmUp}
+          onFocus={warmUp}
+          aria-disabled={loadingGame}
+          aria-busy={loadingGame}
           style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
-          className="px-8 py-3.5 rounded-xl font-black uppercase tracking-wider text-sm border-none cursor-pointer shadow-lg hover:opacity-90 transition-all flex items-center gap-2"
+          className="px-8 py-3.5 rounded-xl font-black uppercase tracking-wider text-sm border-none cursor-pointer shadow-lg hover:opacity-90 transition-all flex items-center gap-2 aria-disabled:cursor-wait aria-disabled:opacity-70"
         >
-          <GameIcon size={16} /> Spustit hru
+          {loadingGame ? <><Loader2 size={16} className="animate-spin" /> Načítám hru...</> : <><GameIcon size={16} /> Spustit hru</>}
         </button>
+        {loadError && (
+          // Prohlížeč si neúspěšné načtení souboru pamatuje, takže opakované kliknutí často nepomůže (stejně jako po vydání nové
+          // verze aplikace, kdy staré soubory už neexistují). Spolehlivě pomůže až obnovení stránky.
+          <div role="alert" className="-mt-3 flex flex-col items-center gap-2">
+            <p style={{ color: 'var(--text-body)', borderColor: '#ef4444' }} className="text-xs m-0 border-l-2 pl-2 text-left max-w-sm">
+              Hru se nepodařilo načíst. Zkontroluj připojení a zkus to znovu - když to nepomůže, obnov stránku.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
+              className="px-4 py-2 rounded-lg text-[11px] font-black uppercase tracking-wider cursor-pointer border"
+            >
+              Obnovit stránku
+            </button>
+          </div>
+        )}
 
         <div style={{ borderColor: 'var(--border-color)' }} className="w-full border-t pt-6 flex flex-col items-center gap-3">
           <p style={{ color: 'var(--text-muted)' }} className="text-xs max-w-sm mx-auto opacity-80">
@@ -328,5 +374,5 @@ export const GamePage = () => {
       </div>
     );
   }
-  return <GameLauncher game={game} />;
+  return <GameLauncher key={game.id} game={game} />;
 };

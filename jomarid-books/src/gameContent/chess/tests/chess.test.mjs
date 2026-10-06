@@ -319,6 +319,9 @@ describe('řadič partie', () => {
   });
 });
 
+const NODE_MODULES = path.join(DIR, '..', '..', '..', 'node_modules');
+const UMD_FILES = ['react/umd/react.production.min.js', 'react-dom/umd/react-dom.production.min.js'];
+
 describe('složení dokumentu', () => {
   test('žádný zdroj neobsahuje </script ani <!-- (rozbilo by vložení do HTML)', () => {
     for (const f of [...SOURCES, 'ui.js']) {
@@ -327,10 +330,40 @@ describe('složení dokumentu', () => {
       assert.ok(!/<!--/.test(code), f + ' obsahuje <!--');
     }
   });
-  test('index.html má značky pro styl a skripty a zachovaný most pro odměny', () => {
+  test('index.html má značky pro styl, React a skripty a zachovaný most pro odměny', () => {
     const html = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
-    assert.ok(html.includes('/*__CSS__*/') && html.includes('<!--__SCRIPTS__-->'));
+    assert.ok(html.includes('/*__CSS__*/') && html.includes('<!--__REACT__-->') && html.includes('<!--__SCRIPTS__-->'));
     assert.ok(html.includes('JOMARID-BRIDGE') && html.includes('window.jomaridReward'));
+  });
+  test('React se bere z node_modules, ne z cizího serveru (CDN)', () => {
+    const html = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
+    assert.ok(!/<script[^>]*\ssrc=/i.test(html), 'index.html nesmí načítat skripty zvenku');
+    const composer = fs.readFileSync(path.join(DIR, '..', 'chess.js'), 'utf8');
+    for (const f of UMD_FILES) assert.ok(composer.includes(`node_modules/${f}?raw`), 'chess.js nevkládá ' + f);
+  });
+  test('vložené soubory Reactu neobsahují </script ani <!-- (rozbilo by vložení do HTML)', { skip: !fs.existsSync(NODE_MODULES) && 'chybí node_modules (npm install)' }, () => {
+    for (const f of UMD_FILES) {
+      const umd = fs.readFileSync(path.join(NODE_MODULES, f), 'utf8');
+      assert.ok(!/<\/script/i.test(umd) && !/<!--/.test(umd), f + ' by rozbil vložení do HTML');
+    }
+  });
+  test('skutečně složený dokument: React je vložený před hrou, žádná značka nezůstala a nic se nenačítá zvenku', { skip: !fs.existsSync(path.join(NODE_MODULES, 'vite')) && 'chybí node_modules (npm install)' }, async () => {
+    // chess.js používá Vite "?raw" importy, v čistém Node by nešel načíst - Vite tu slouží jen jako načítač modulů (bez serveru, bez pluginů).
+    const { createServer } = await import('vite');
+    const server = await createServer({ configFile: false, root: path.join(NODE_MODULES, '..'), logLevel: 'silent', appType: 'custom', server: { middlewareMode: true, hmr: false, watch: null }, optimizeDeps: { noDiscovery: true } });
+    try {
+      const { CHESS_HTML: html } = await server.ssrLoadModule('/src/gameContent/chess.js');
+      assert.ok(!/__REACT__|__SCRIPTS__|__CSS__/.test(html), 'zůstala nenahrazená značka');
+      assert.ok(!/<script[^>]*\ssrc=/i.test(html), 'dokument nesmí načítat skripty zvenku (CDN)');
+      const [react, reactDom] = UMD_FILES.map((f) => fs.readFileSync(path.join(NODE_MODULES, f), 'utf8'));
+      const at = (code) => { const i = html.indexOf(code); assert.ok(i >= 0, 'v dokumentu chybí vložený kód'); assert.equal(html.indexOf(code, i + 1), -1, 'vložený kód je v dokumentu víckrát'); return i; };
+      const iReact = at(react), iDom = at(reactDom), iRules = html.indexOf('id="src-rules"'), iUi = html.indexOf('id="src-ui"');
+      assert.ok(iReact < iDom, 'react-dom musí následovat až po reactu');
+      assert.ok(iDom < iRules && iRules < iUi && iRules > 0, 'React musí být před skripty hry');
+      assert.ok(html.indexOf('JOMARID-BRIDGE') < iReact, 'most pro odměny musí být před hrou');
+    } finally {
+      await server.close();
+    }
   });
   test('search.js jde spustit jako Web Worker (žádné DOM API, handler zpráv)', () => {
     const code = fs.readFileSync(path.join(DIR, 'search.js'), 'utf8');

@@ -13,7 +13,9 @@
         try {
           var key = localStorage.getItem("jomarid-books-theme"), t;
           if (key === "custom") { try { t = JSON.parse(localStorage.getItem("jomarid-books-theme-vars")); } catch (e) {} }
-          t = t || themes[key] || themes.saas;
+          /* Ulozene hodnoty musi mit presny tvar [pozadi, text, "light"|"dark"]; cokoli jineho se zahodi a vezme se vestaveny motiv. */
+          var ok = function (v) { return !!v && v.length === 3 && typeof v[0] === "string" && typeof v[1] === "string" && /^#[0-9a-f]{6}$/i.test(v[0]) && /^#[0-9a-f]{6}$/i.test(v[1]) && (v[2] === "light" || v[2] === "dark"); };
+          if (!ok(t)) t = ok(themes[key]) ? themes[key] : themes.saas;
           var r = document.documentElement;
           r.style.setProperty("--bg-body", t[0]);
           r.style.setProperty("--text-body", t[1]);

@@ -15,6 +15,12 @@
 //   ui.js       - React rozhraní
 //
 // Pořadí skriptů je důležité: pozdější soubory používají globální konstanty z dřívějších.
+//
+// React se vkládá přímo do dokumentu (stejná verze, jakou má package-lock), ne z CDN. Hra tak běží i tam, kde je
+// cizí server nedostupný nebo zablokovaný (školní síť, blokátory) a nikdo třetí jí nemůže podstrčit jiný kód.
+// Balíček react v exports soubory umd/ nevystavuje, proto relativní cesta do node_modules.
+import react from '../../node_modules/react/umd/react.production.min.js?raw';
+import reactDom from '../../node_modules/react-dom/umd/react-dom.production.min.js?raw';
 import shell from './chess/index.html?raw';
 import css from './chess/style.css?raw';
 import rules from './chess/rules.js?raw';
@@ -37,7 +43,10 @@ const SCRIPTS = [
   .map(([id, code]) => `<script id="src-${id}">\n${code}\n</script>`)
   .join('\n');
 
+const REACT = [react, reactDom].map(code => `<script>\n${code}\n</script>`).join('\n');
+
 // Funkce jako náhrada (ne řetězec), aby se v kódu nevykládaly speciální sekvence jako "$&".
 export const CHESS_HTML = shell
   .replace('/*__CSS__*/', () => css)
+  .replace('<!--__REACT__-->', () => REACT)
   .replace('<!--__SCRIPTS__-->', () => SCRIPTS);

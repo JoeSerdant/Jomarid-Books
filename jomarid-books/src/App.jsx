@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { resolveTheme, isDarkTheme, saveCustomColors, loadCustomColors, CUSTOM_THEME_KEY, initMotionPref } from './theme';
+import { resolveTheme, isDarkTheme, saveCustomColors, loadCustomColors, seedCustomColors, CUSTOM_THEME_KEY, initMotionPref } from './theme';
 import { ThemeContext, AuthProvider, ProtectedAdminRoute, ProtectedUserRoute, useAuth } from './contexts/AuthContext';
 import { Navbar } from './components/Navbar';
 import { SettingsPage } from './components/SettingsModal';
@@ -59,9 +59,14 @@ export const RecoveryRedirect = () => {
   return null;
 };
 
+// Úložiště prohlížeče může být zablokované (přísná ochrana soukromí, některé spravované prohlížeče) - pak přístup k němu
+// vyhazuje chybu. Bez těchhle obalů by při čtení motivu spadlo celé vykreslování a stránka by zůstala prázdná.
+const readStored = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
+const writeStored = (key, value) => { try { localStorage.setItem(key, value); } catch { /* nevadí, motiv platí aspoň do zavření stránky */ } };
+
 export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('jomarid-books-theme') || 'saas');
+  const [currentTheme, setCurrentTheme] = useState(() => readStored('jomarid-books-theme') || 'saas');
   const [customColors, setCustomColors] = useState(loadCustomColors); // jen pro motiv „Vlastní“
 
   useEffect(() => initMotionPref(), []); // omezení pohybu (Nastavení -> Vzhled, nebo nastavení zařízení)
@@ -80,8 +85,12 @@ export default function App() {
     <AuthProvider>
       <ThemeContext.Provider value={{
         currentTheme, customColors,
-        changeTheme: (t) => { setCurrentTheme(t); localStorage.setItem('jomarid-books-theme', t); },
-        changeCustomColors: (c) => { saveCustomColors(c); setCustomColors(loadCustomColors()); setCurrentTheme(CUSTOM_THEME_KEY); localStorage.setItem('jomarid-books-theme', CUSTOM_THEME_KEY); },
+        changeTheme: (t) => {
+          // První přepnutí na „Vlastní“ začne od barev, které uživatel právě vidí, ne od výchozí tyrkysové.
+          if (t === CUSTOM_THEME_KEY) setCustomColors(seedCustomColors(currentTheme));
+          setCurrentTheme(t); writeStored('jomarid-books-theme', t);
+        },
+        changeCustomColors: (c) => { saveCustomColors(c); setCustomColors(loadCustomColors()); setCurrentTheme(CUSTOM_THEME_KEY); writeStored('jomarid-books-theme', CUSTOM_THEME_KEY); },
       }}>
         <Router>
           <div style={{ background: 'var(--bg-body)', color: 'var(--text-body)' }} className="min-h-screen flex flex-col font-sans antialiased transition-all duration-200">
