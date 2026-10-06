@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { resolveTheme, isDarkTheme, saveCustomColors, loadCustomColors, CUSTOM_THEME_KEY, initMotionPref } from './theme';
+import { resolveTheme, isDarkTheme, saveCustomColors, loadCustomColors, hasSavedCustomColors, colorsFromTheme, CUSTOM_THEME_KEY, initMotionPref } from './theme';
 import { ThemeContext, AuthProvider, ProtectedAdminRoute, ProtectedUserRoute, useAuth } from './contexts/AuthContext';
 import { Navbar } from './components/Navbar';
 import { SettingsPage } from './components/SettingsModal';
@@ -80,7 +80,11 @@ export default function App() {
     <AuthProvider>
       <ThemeContext.Provider value={{
         currentTheme, customColors,
-        changeTheme: (t) => { setCurrentTheme(t); localStorage.setItem('jomarid-books-theme', t); },
+        changeTheme: (t) => {
+          // První přepnutí na „Vlastní“ začne od barev, které uživatel právě vidí, ne od výchozí tyrkysové.
+          if (t === CUSTOM_THEME_KEY && !hasSavedCustomColors()) { saveCustomColors(colorsFromTheme(currentTheme)); setCustomColors(loadCustomColors()); }
+          setCurrentTheme(t); localStorage.setItem('jomarid-books-theme', t);
+        },
         changeCustomColors: (c) => { saveCustomColors(c); setCustomColors(loadCustomColors()); setCurrentTheme(CUSTOM_THEME_KEY); localStorage.setItem('jomarid-books-theme', CUSTOM_THEME_KEY); },
       }}>
         <Router>

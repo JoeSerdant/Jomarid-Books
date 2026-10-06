@@ -8,7 +8,7 @@ import {
   THEMES, FONT_FAMILIES, LINE_HEIGHTS, TEXT_WIDTHS, ALIGNMENTS, LETTER_SPACINGS, PAGE_MARGINS, PAGE_BREAKS, PAGE_ANIMATIONS, MOTION_OPTIONS,
   FONT_SIZE_RANGE, AUTO_ADVANCE_RANGE, WPM_RANGE, NIGHT_RANGE,
   loadReaderPrefs, saveReaderPref, resetReaderPrefs, readerTypography, loadMotionPref, saveMotionPref,
-  CUSTOM_THEME_KEY, CUSTOM_PRESETS, resolveTheme, deriveTheme, normalizeHex, contrast,
+  CUSTOM_THEME_KEY, CUSTOM_PRESETS, ACCENT_MIN_CONTRAST, resolveTheme, deriveTheme, completeHex, normalizeHex, readableAccent, contrast,
 } from '../theme';
 
 // ---- Sdílené stavební prvky nastavení ----
@@ -430,9 +430,8 @@ const ColorField = ({ label, value, onChange }) => {
           onChange={e => {
             const raw = e.target.value;
             setText(raw);
-            // Za psaní se použije jen úplný 6místný kód. Zkratka #abc (3 číslice) je platná, ale kdyby se brala hned,
-            // přepsala by se na #aabbcc uprostřed psaní a zbylé znaky by se zahodily - proto až při opuštění pole.
-            if (/^#?[0-9a-f]{6}$/i.test(raw.trim())) onChange(normalizeHex(raw));
+            const h = completeHex(raw); // za psaní jen úplný 6místný kód, zkratka #abc až při opuštění pole
+            if (h) onChange(h);
           }}
           onBlur={() => { const h = normalizeHex(text); if (h) { setText(h); onChange(h); } else setText(value); }}
           style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
@@ -535,10 +534,15 @@ const AppearanceTab = () => {
                 ))}
               </div>
             </div>
-            {contrast(customColors.accent, customColors.bg) < 3 && (
-              <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">
-                Zvýraznění je na tomhle pozadí špatně vidět. Zkus světlejší nebo tmavší odstín.
-              </p>
+            {contrast(customColors.accent, customColors.bg) < ACCENT_MIN_CONTRAST && (
+              <div className="flex flex-wrap items-center gap-2">
+                <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">
+                  Zvýraznění je na tomhle pozadí špatně vidět. Zkus světlejší nebo tmavší odstín.
+                </p>
+                <ActionButton type="button" variant="ghost" onClick={() => changeCustomColors({ ...customColors, accent: readableAccent(customColors.accent, customColors.bg) })}>
+                  Upravit automaticky
+                </ActionButton>
+              </div>
             )}
             <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 opacity-80 leading-relaxed">
               Ostatní barvy (karty, okraje, text) se dopočítají samy a text se vždy upraví tak, aby byl čitelný.

@@ -319,6 +319,9 @@ describe('řadič partie', () => {
   });
 });
 
+const NODE_MODULES = path.join(DIR, '..', '..', '..', 'node_modules');
+const UMD_FILES = ['react/umd/react.production.min.js', 'react-dom/umd/react-dom.production.min.js'];
+
 describe('složení dokumentu', () => {
   test('žádný zdroj neobsahuje </script ani <!-- (rozbilo by vložení do HTML)', () => {
     for (const f of [...SOURCES, 'ui.js']) {
@@ -327,10 +330,22 @@ describe('složení dokumentu', () => {
       assert.ok(!/<!--/.test(code), f + ' obsahuje <!--');
     }
   });
-  test('index.html má značky pro styl a skripty a zachovaný most pro odměny', () => {
+  test('index.html má značky pro styl, React a skripty a zachovaný most pro odměny', () => {
     const html = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
-    assert.ok(html.includes('/*__CSS__*/') && html.includes('<!--__SCRIPTS__-->'));
+    assert.ok(html.includes('/*__CSS__*/') && html.includes('<!--__REACT__-->') && html.includes('<!--__SCRIPTS__-->'));
     assert.ok(html.includes('JOMARID-BRIDGE') && html.includes('window.jomaridReward'));
+  });
+  test('React se bere z node_modules, ne z cizího serveru (CDN)', () => {
+    const html = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
+    assert.ok(!/<script[^>]*\ssrc=/i.test(html), 'index.html nesmí načítat skripty zvenku');
+    const composer = fs.readFileSync(path.join(DIR, '..', 'chess.js'), 'utf8');
+    for (const f of UMD_FILES) assert.ok(composer.includes(`node_modules/${f}?raw`), 'chess.js nevkládá ' + f);
+  });
+  test('vložené soubory Reactu neobsahují </script ani <!-- (rozbilo by vložení do HTML)', { skip: !fs.existsSync(NODE_MODULES) && 'chybí node_modules (npm install)' }, () => {
+    for (const f of UMD_FILES) {
+      const umd = fs.readFileSync(path.join(NODE_MODULES, f), 'utf8');
+      assert.ok(!/<\/script/i.test(umd) && !/<!--/.test(umd), f + ' by rozbil vložení do HTML');
+    }
   });
   test('search.js jde spustit jako Web Worker (žádné DOM API, handler zpráv)', () => {
     const code = fs.readFileSync(path.join(DIR, 'search.js'), 'utf8');
