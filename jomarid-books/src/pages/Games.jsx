@@ -34,7 +34,7 @@ const GAMES = [
   {
     id: 'polygonarena',
     title: 'Polygon aréna',
-    tagline: 'Rozstřílej tvary, poskládej si stavbu tanku a přežij mezi chytrými boty - klasika, týmy nebo cvičiště.',
+    tagline: 'Rozstřílej tvary, poskládej si stavbu z více než 500 tanků a přežij mezi chytrými boty - osm režimů od vln nepřátel po zužující se bouři a obtížnost až do Pekla.',
     icon: Target,
     html: POLYGON_ARENA_HTML,
   },
