@@ -427,8 +427,14 @@ const ColorField = ({ label, value, onChange }) => {
         <input type="color" aria-label={label} value={value} onChange={e => onChange(e.target.value)} className="h-9 w-12 p-0 border-none rounded-md cursor-pointer bg-transparent" />
         <input
           type="text" aria-label={`${label} (hex kód)`} value={text} maxLength={7} spellCheck={false}
-          onChange={e => { setText(e.target.value); const h = normalizeHex(e.target.value); if (h) onChange(h); }}
-          onBlur={() => setText(value)}
+          onChange={e => {
+            const raw = e.target.value;
+            setText(raw);
+            // Za psaní se použije jen úplný 6místný kód. Zkratka #abc (3 číslice) je platná, ale kdyby se brala hned,
+            // přepsala by se na #aabbcc uprostřed psaní a zbylé znaky by se zahodily - proto až při opuštění pole.
+            if (/^#?[0-9a-f]{6}$/i.test(raw.trim())) onChange(normalizeHex(raw));
+          }}
+          onBlur={() => { const h = normalizeHex(text); if (h) { setText(h); onChange(h); } else setText(value); }}
           style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
           className="w-24 px-2 py-1.5 rounded-lg border text-xs font-mono uppercase"
         />

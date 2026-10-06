@@ -284,7 +284,7 @@ export const UserLibrary = () => {
             <span style={{ color: 'var(--text-muted)' }} className="text-[10px] opacity-70">{Math.round(continueBook.scrollPosition)} % přečteno</span>
           </div>
           <Link to={`/read/${continueBook.id}`} className="no-underline shrink-0 w-full sm:w-auto">
-            <button style={{ backgroundColor: 'var(--bg-primary)', color: 'white' }} className="w-full sm:w-auto px-6 py-3 rounded-xl font-black text-xs uppercase tracking-wider border-none cursor-pointer hover:brightness-105 transition-all flex items-center justify-center gap-2">
+            <button style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="w-full sm:w-auto px-6 py-3 rounded-xl font-black text-xs uppercase tracking-wider border-none cursor-pointer hover:brightness-105 transition-all flex items-center justify-center gap-2">
               <BookOpen size={14} /> Pokračovat
             </button>
           </Link>
@@ -367,11 +367,11 @@ export const UserLibrary = () => {
 
       {allGenres.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => setGenreFilter('all')} style={{ backgroundColor: genreFilter === 'all' ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: genreFilter === 'all' ? 'white' : 'var(--text-muted)' }} className="px-3 py-1 rounded-full font-black text-[10px] uppercase border-none cursor-pointer transition-all">
+          <button onClick={() => setGenreFilter('all')} style={{ backgroundColor: genreFilter === 'all' ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: genreFilter === 'all' ? 'var(--text-primary)' : 'var(--text-muted)' }} className="px-3 py-1 rounded-full font-black text-[10px] uppercase border-none cursor-pointer transition-all">
             Všechny žánry
           </button>
           {allGenres.map(g => (
-            <button key={g} onClick={() => setGenreFilter(g)} style={{ backgroundColor: genreFilter === g ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: genreFilter === g ? 'white' : 'var(--text-muted)' }} className="px-3 py-1 rounded-full font-black text-[10px] uppercase border-none cursor-pointer transition-all">
+            <button key={g} onClick={() => setGenreFilter(g)} style={{ backgroundColor: genreFilter === g ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: genreFilter === g ? 'var(--text-primary)' : 'var(--text-muted)' }} className="px-3 py-1 rounded-full font-black text-[10px] uppercase border-none cursor-pointer transition-all">
               {g}
             </button>
           ))}
@@ -434,7 +434,7 @@ export const UserLibrary = () => {
                   ) : (
                     <button
                       onClick={() => setDetailBook(sb)}
-                      style={{ backgroundColor: coins < sb.priceCoins ? 'var(--bg-secondary)' : 'var(--bg-primary)', color: coins < sb.priceCoins ? 'var(--text-muted)' : 'white' }}
+                      style={{ backgroundColor: coins < sb.priceCoins ? 'var(--bg-secondary)' : 'var(--bg-primary)', color: coins < sb.priceCoins ? 'var(--text-muted)' : 'var(--text-primary)' }}
                       className="w-full py-2.5 rounded-xl font-black text-[10px] uppercase tracking-wider border-none cursor-pointer flex items-center justify-center gap-1"
                     >
                       {coins < sb.priceCoins ? (
