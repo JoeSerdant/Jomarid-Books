@@ -222,7 +222,7 @@ function frame(now) {
     frameUI(dt);
   }
   updateCamera(paused ? 0 : dt); render();
-  if (rawDt < 0.25 && !paused) fxFrame(rawDt * 1000, performance.now() - w0);
+  if (!paused) fxFrame(Math.min(rawDt, 0.5) * 1000, performance.now() - w0);       // dlouhá pauza (karta na pozadí) ovlivní jen jeden snímek, trvale pomalé snímky kvalitu sníží
 }
 
 function boot() {

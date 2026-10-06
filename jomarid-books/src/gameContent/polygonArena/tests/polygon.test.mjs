@@ -442,3 +442,34 @@ test('Zlatá horečka: krystaly nespouštějí odměnu z webu, v běžných rež
   arena.mode = 'ffa'; arena.startGame(true); arena.player.invuln = 999; killCrystal();
   assert.equal(run('__rw.length'), 1); assert.equal(run('__rw[0][0]'), 'crystal');
 });
+test('Zlatá horečka: zlato z minulého zápasu se při restartu nehromadí', () => {
+  const { arena } = fresh({ seed: 41 });
+  arena.setDiff('easy'); arena.mode = 'gold';
+  const goldish = () => arena.shapes.filter((s) => s.type === 'gold' || s.type === 'crystal').length;
+  arena.startGame(true); const n1 = arena.shapes.length;
+  assert.equal(goldish(), 60);
+  for (let i = 0; i < 4; i++) arena.startGame(true);
+  assert.equal(goldish(), 60); assert.ok(arena.shapes.length <= n1 + 2, `tvarů přibývá: ${n1} -> ${arena.shapes.length}`);
+});
+test('Zlatá horečka: mince po zničení nesou přesně ztracenou část lupu', () => {
+  const { arena } = fresh({ seed: 42 });
+  arena.setDiff('easy'); arena.mode = 'gold'; arena.startGame(true); arena.player.invuln = 999;
+  for (const loot of [30, 33, 7, 200, 1001]) {
+    for (let i = arena.shapes.length - 1; i >= 0; i--) if (arena.shapes[i].val) arena.shapes.splice(i, 1);
+    const bot = arena.tanks.find((t) => !t.isPlayer && t.alive); bot.loot = loot; bot.invuln = 0; bot.hp = -1e9; steps(arena, 2);
+    const lost = Math.floor(loot / 2), sum = arena.shapes.filter((s) => s.val).reduce((a, s) => a + s.val, 0);
+    assert.equal(sum, lost, `lup ${loot}: mince nesou ${sum} místo ${lost}`);
+  }
+});
+test('Kvalita vykreslování: trvale pomalé snímky ji sníží, jednorázová pauza ne', () => {
+  const calm = fresh({ seed: 43 });
+  calm.arena.setDiff('easy'); calm.arena.mode = 'ffa'; calm.arena.startGame(true);
+  calm.run('lastT = 1000'); calm.run('frame(41000)');                                  // karta 40 s na pozadí = jeden obří snímek
+  for (let i = 1; i <= 120; i++) calm.run(`frame(${41000 + 17 * i})`);
+  assert.equal(calm.arena.fxState.auto, 2, 'jedna pauza kvalitu nesníží');
+  const slow = fresh({ seed: 44 });
+  slow.arena.setDiff('easy'); slow.arena.mode = 'ffa'; slow.arena.startGame(true);
+  slow.run('lastT = 1000');
+  for (let i = 1; i <= 40; i++) slow.run(`frame(${1000 + 300 * i})`);                  // 300 ms na snímek, i to je potřeba zachytit
+  assert.ok(slow.arena.fxState.auto < 2, 'pomalá zařízení se dočkají nižší kvality: ' + slow.arena.fxState.auto);
+});

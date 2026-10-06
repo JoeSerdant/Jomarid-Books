@@ -388,7 +388,12 @@ const MODES = {
   gold: {
     name: 'Zlatá horečka', tag: 'Čtyři minuty na lup', diff: true,
     info: 'Čtyři minuty na to nasbírat co nejvíc zlata ze zlatých čtverců a krystalů. Po zničení přijdeš o polovinu lupu a spadne na zem. Vyhrává nejbohatší.',
-    setup(D) { spawnBots(D); world.goldT = 240; for (const t of tanks) t.loot = 0; for (let i = 0; i < 60; i++) makeShape(Math.random() < 0.8 ? 'gold' : 'crystal', rand(200, WORLD - 200), rand(200, WORLD - 200)); },
+    setup(D) {
+      spawnBots(D); world.goldT = 240; for (const t of tanks) t.loot = 0;
+      // tvary přežívají mezi zápasy, takže zlato a krystaly z minulé Zlaté horečky se odeberou, ať se při restartech nehromadí
+      for (let i = shapes.length - 1; i >= 0; i--) if (shapes[i].type === 'gold' || shapes[i].type === 'crystal') shapes.splice(i, 1);
+      for (let i = 0; i < 60; i++) makeShape(Math.random() < 0.8 ? 'gold' : 'crystal', rand(200, WORLD - 200), rand(200, WORLD - 200));
+    },
     tick(dt) {
       if (world.over) return;
       world.goldT -= dt;
@@ -408,9 +413,9 @@ const MODES = {
       if (k && k !== t) k.loot = (k.loot || 0) + 25;
       if (lost > 0) {
         t.loot -= lost;
-        // celá ztracená část spadne na zem: nejvýš 8 mincí, každá má takovou cenu, aby součet seděl
-        const n = Math.min(8, Math.max(1, Math.ceil(lost / 10))), val = Math.round(lost / n);
-        for (let i = 0; i < n; i++) { const s = makeShape('gold', t.x + rand(-50, 50), t.y + rand(-50, 50)); s.vx = rand(-260, 260); s.vy = rand(-260, 260); s.val = val; }
+        // celá ztracená část spadne na zem: nejvýš 8 mincí a zbytek po dělení se rozdá po jedné z nich, aby součet seděl přesně
+        const n = Math.min(8, Math.max(1, Math.ceil(lost / 10))), base = Math.floor(lost / n), rem = lost - base * n;
+        for (let i = 0; i < n; i++) { const s = makeShape('gold', t.x + rand(-50, 50), t.y + rand(-50, 50)); s.vx = rand(-260, 260); s.vy = rand(-260, 260); s.val = base + (i < rem ? 1 : 0); }
       }
     },
     lbList: () => tanks.filter(t => !t.boss && !(t.ai && t.ai.dummy)),
