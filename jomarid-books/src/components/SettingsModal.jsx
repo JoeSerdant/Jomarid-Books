@@ -8,7 +8,7 @@ import {
   THEMES, FONT_FAMILIES, LINE_HEIGHTS, TEXT_WIDTHS, ALIGNMENTS, LETTER_SPACINGS, PAGE_MARGINS, PAGE_BREAKS, PAGE_ANIMATIONS, MOTION_OPTIONS,
   FONT_SIZE_RANGE, AUTO_ADVANCE_RANGE, WPM_RANGE, NIGHT_RANGE,
   loadReaderPrefs, saveReaderPref, resetReaderPrefs, readerTypography, loadMotionPref, saveMotionPref,
-  CUSTOM_THEME_KEY, CUSTOM_PRESETS, ACCENT_MIN_CONTRAST, resolveTheme, deriveTheme, completeHex, normalizeHex, readableAccent, contrast,
+  CUSTOM_THEME_KEY, CUSTOM_PRESETS, ACCENT_MIN_CONTRAST, resolveTheme, deriveTheme, completeHex, normalizeHex, readableAccent, customColorsPreview, contrast,
 } from '../theme';
 
 // ---- Sdílené stavební prvky nastavení ----
@@ -495,7 +495,9 @@ const AppearanceTab = () => {
       <Section title="Vzhled aplikace" description="Platí v celé appce - od knihovny přes čtečku až po minihry.">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {THEME_OPTIONS.map(({ key, label }) => {
-            const t = key === CUSTOM_THEME_KEY ? deriveTheme(customColors.bg, customColors.accent) : resolveTheme(key);
+            // Náhled „Vlastní“ ukazuje barvy, které dostane po kliknutí (poprvé barvy právě používaného motivu).
+            const preview = customColorsPreview(currentTheme, customColors);
+            const t = key === CUSTOM_THEME_KEY ? deriveTheme(preview.bg, preview.accent) : resolveTheme(key);
             const active = currentTheme === key;
             return (
               <button
@@ -539,7 +541,7 @@ const AppearanceTab = () => {
                 <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">
                   Zvýraznění je na tomhle pozadí špatně vidět. Zkus světlejší nebo tmavší odstín.
                 </p>
-                <ActionButton type="button" variant="ghost" onClick={() => changeCustomColors({ ...customColors, accent: readableAccent(customColors.accent, customColors.bg) })}>
+                <ActionButton type="button" onClick={() => changeCustomColors({ ...customColors, accent: readableAccent(customColors.accent, customColors.bg) })}>
                   Upravit automaticky
                 </ActionButton>
               </div>

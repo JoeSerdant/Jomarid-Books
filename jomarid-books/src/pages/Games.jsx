@@ -269,9 +269,10 @@ export const GameLauncher = ({ game }) => {
           onClick={handleOpenGame}
           onPointerEnter={warmUp}
           onFocus={warmUp}
-          disabled={loadingGame}
+          aria-disabled={loadingGame}
+          aria-busy={loadingGame}
           style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
-          className="px-8 py-3.5 rounded-xl font-black uppercase tracking-wider text-sm border-none cursor-pointer shadow-lg hover:opacity-90 transition-all flex items-center gap-2 disabled:cursor-wait disabled:opacity-70"
+          className="px-8 py-3.5 rounded-xl font-black uppercase tracking-wider text-sm border-none cursor-pointer shadow-lg hover:opacity-90 transition-all flex items-center gap-2 aria-disabled:cursor-wait aria-disabled:opacity-70"
         >
           {loadingGame ? <><Loader2 size={16} className="animate-spin" /> Načítám hru...</> : <><GameIcon size={16} /> Spustit hru</>}
         </button>
@@ -284,8 +285,8 @@ export const GameLauncher = ({ game }) => {
             </p>
             <button
               onClick={() => window.location.reload()}
-              style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }}
-              className="px-4 py-2 rounded-lg text-[11px] font-black uppercase tracking-wider cursor-pointer border-none"
+              style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
+              className="px-4 py-2 rounded-lg text-[11px] font-black uppercase tracking-wider cursor-pointer border"
             >
               Obnovit stránku
             </button>

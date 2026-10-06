@@ -347,6 +347,24 @@ describe('složení dokumentu', () => {
       assert.ok(!/<\/script/i.test(umd) && !/<!--/.test(umd), f + ' by rozbil vložení do HTML');
     }
   });
+  test('skutečně složený dokument: React je vložený před hrou, žádná značka nezůstala a nic se nenačítá zvenku', { skip: !fs.existsSync(path.join(NODE_MODULES, 'vite')) && 'chybí node_modules (npm install)' }, async () => {
+    // chess.js používá Vite "?raw" importy, v čistém Node by nešel načíst - Vite tu slouží jen jako načítač modulů (bez serveru, bez pluginů).
+    const { createServer } = await import('vite');
+    const server = await createServer({ configFile: false, root: path.join(NODE_MODULES, '..'), logLevel: 'silent', appType: 'custom', server: { middlewareMode: true, hmr: false, watch: null }, optimizeDeps: { noDiscovery: true } });
+    try {
+      const { CHESS_HTML: html } = await server.ssrLoadModule('/src/gameContent/chess.js');
+      assert.ok(!/__REACT__|__SCRIPTS__|__CSS__/.test(html), 'zůstala nenahrazená značka');
+      assert.ok(!/<script[^>]*\ssrc=/i.test(html), 'dokument nesmí načítat skripty zvenku (CDN)');
+      const [react, reactDom] = UMD_FILES.map((f) => fs.readFileSync(path.join(NODE_MODULES, f), 'utf8'));
+      const at = (code) => { const i = html.indexOf(code); assert.ok(i >= 0, 'v dokumentu chybí vložený kód'); assert.equal(html.indexOf(code, i + 1), -1, 'vložený kód je v dokumentu víckrát'); return i; };
+      const iReact = at(react), iDom = at(reactDom), iRules = html.indexOf('id="src-rules"'), iUi = html.indexOf('id="src-ui"');
+      assert.ok(iReact < iDom, 'react-dom musí následovat až po reactu');
+      assert.ok(iDom < iRules && iRules < iUi && iRules > 0, 'React musí být před skripty hry');
+      assert.ok(html.indexOf('JOMARID-BRIDGE') < iReact, 'most pro odměny musí být před hrou');
+    } finally {
+      await server.close();
+    }
+  });
   test('search.js jde spustit jako Web Worker (žádné DOM API, handler zpráv)', () => {
     const code = fs.readFileSync(path.join(DIR, 'search.js'), 'utf8');
     assert.ok(!/\bdocument\b|\blocalStorage\b/.test(code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '').replace(/typeof document/g, '')));

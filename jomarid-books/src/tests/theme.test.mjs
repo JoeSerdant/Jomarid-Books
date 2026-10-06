@@ -3,7 +3,7 @@
 // Hlídají hlavně to, co se dřív rozbilo nebo co se snadno rozbije znovu:
 //  - psaní hex kódu znak po znaku (zkratka #abc se nesmí rozbalit uprostřed psaní),
 //  - čitelnost: text na pozadí i na zvýraznění má vždy kontrast aspoň 4,5:1 (u libovolné dvojice barev),
-//  - první přepnutí na „Vlastní“ vychází z barev, které uživatel právě vidí,
+//  - první přepnutí na „Vlastní“ vychází z barev, které uživatel právě vidí (a náhled dlaždice to ukazuje),
 //  - skript v index.html, který nastavuje barvu pozadí před prvním vykreslením, se nenechá zmást poškozeným úložištěm.
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
@@ -166,15 +166,42 @@ describe('první přepnutí na „Vlastní“', () => {
   test('neznámý klíč spadne na světlý motiv', () => {
     assert.deepEqual(T.colorsFromTheme('neexistuje'), T.colorsFromTheme('saas'));
   });
-  test('po uložení seedu se „Vlastní“ zobrazí s barvami původního motivu a seed se už nepřepisuje', () => {
-    // Stejná logika jako changeTheme v App.jsx.
-    const switchTo = (current, next) => { if (next === T.CUSTOM_THEME_KEY && !T.hasSavedCustomColors()) T.saveCustomColors(T.colorsFromTheme(current)); };
-    switchTo('dark', T.CUSTOM_THEME_KEY);
+  test('seedCustomColors: poprvé uloží barvy právě používaného motivu a „Vlastní“ je pak zobrazí', () => {
+    const got = T.seedCustomColors('dark');
+    assert.equal(got.bg, T.THEMES.dark['--bg-body']);
+    assert.equal(got.accent, T.THEMES.dark['--bg-primary']);
+    assert.equal(T.hasSavedCustomColors(), true);
     assert.equal(T.resolveTheme(T.CUSTOM_THEME_KEY)['--bg-body'], T.THEMES.dark['--bg-body']);
     assert.equal(T.resolveTheme(T.CUSTOM_THEME_KEY)['--bg-primary'], T.THEMES.dark['--bg-primary']);
-    T.saveCustomColors({ bg: '#fff1f2', accent: '#e11d48' }); // uživatel si barvy upraví
-    switchTo('saas', T.CUSTOM_THEME_KEY);                     // další přepnutí nic nepřepíše
+  });
+  test('seedCustomColors: už uložené (i upravené) vlastní barvy nikdy nepřepíše', () => {
+    T.saveCustomColors({ bg: '#fff1f2', accent: '#e11d48' });
+    assert.deepEqual(T.seedCustomColors('saas'), { bg: '#fff1f2', accent: '#e11d48' });
+    assert.deepEqual(T.seedCustomColors('emerald'), { bg: '#fff1f2', accent: '#e11d48' });
     assert.deepEqual(T.loadCustomColors(), { bg: '#fff1f2', accent: '#e11d48' });
+  });
+  test('seedCustomColors: poškozená uložená hodnota se nebere jako uložená (použije se seed)', () => {
+    for (const bad of ['null', '', '{}', '{', '"abc"', '{"bg":"zzz","accent":5}', '{"bg":"#102030"}']) {
+      setStorage(makeStorage({ [T.CUSTOM_THEME_STORAGE]: bad }));
+      assert.equal(T.hasSavedCustomColors(), false, bad);
+      assert.equal(T.seedCustomColors('dark').bg, T.THEMES.dark['--bg-body'], bad);
+    }
+  });
+  test('customColorsPreview: náhled dlaždice „Vlastní“ odpovídá výsledku kliknutí', () => {
+    const saved = T.loadCustomColors(); // nic uloženo → výchozí
+    for (const key of ['saas', 'dark', 'emerald']) {
+      const preview = T.customColorsPreview(key, saved);
+      assert.deepEqual(preview, T.colorsFromTheme(key), key + ': náhled = seed');
+      assert.deepEqual(T.seedCustomColors(key), preview, key + ': kliknutí dá totéž co náhled');
+      setStorage(makeStorage()); // další motiv zkoušíme znovu od prázdného úložiště
+    }
+  });
+  test('customColorsPreview: uložené barvy a aktivní „Vlastní“ se nepřepisují seedem', () => {
+    T.saveCustomColors({ bg: '#fff1f2', accent: '#e11d48' });
+    const saved = T.loadCustomColors();
+    assert.deepEqual(T.customColorsPreview('dark', saved), saved);
+    setStorage(makeStorage());
+    assert.deepEqual(T.customColorsPreview(T.CUSTOM_THEME_KEY, T.CUSTOM_DEFAULT), T.CUSTOM_DEFAULT, 'právě aktivní „Vlastní“ ukazuje svoje barvy');
   });
 });
 
@@ -224,7 +251,8 @@ describe('index.html: motiv před prvním vykreslením', () => {
   });
   test('poškozené nebo cizí hodnoty se zahodí a vezme se světlý motiv (nic nespadne)', () => {
     const bad = ['{', 'null', '5', '"abc"', '[]', '{}', '{"0":"#fff","1":"#000","2":"dark"}', '["#zzzzzz","#000000","dark"]', '["#000000","#ffffff","blue"]',
-      '[["#000000"],"#ffffff","dark"]', '["#000000","#ffffff","dark","x"]', '["red","blue","dark"]', '["#00000","#ffffff","dark"]'];
+      '[["#000000"],"#ffffff","dark"]', '["#000000","#ffffff","dark","x"]', '["red","blue","dark"]', '["#00000","#ffffff","dark"]',
+      '["#000000","red","dark"]', '["#000000","#12345","dark"]', '["#000000",5,"dark"]', '["#000000",null,"dark"]', '["#000000",["#ffffff"],"dark"]'];
     for (const vars of bad) {
       const r = run({ 'jomarid-books-theme': 'custom', 'jomarid-books-theme-vars': vars });
       assert.equal(r.props['--bg-body'], SAAS, vars);

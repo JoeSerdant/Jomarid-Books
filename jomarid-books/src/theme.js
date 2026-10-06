@@ -135,8 +135,9 @@ export const saveCustomColors = (colors) => {
   } catch { /* nevadí */ }
 };
 
+// Uložené jsou jen úplné a platné vlastní barvy (poškozená hodnota se bere jako neuložená, ať se použije seed).
 export const hasSavedCustomColors = () => {
-  try { return localStorage.getItem(CUSTOM_THEME_STORAGE) !== null; } catch { return false; }
+  try { const o = JSON.parse(localStorage.getItem(CUSTOM_THEME_STORAGE)); return !!o && !!normalizeHex(o.bg) && !!normalizeHex(o.accent); } catch { return false; }
 };
 
 // Proměnné motivu podle klíče (vestavěné i vlastní) + jestli je tmavý.
@@ -150,6 +151,14 @@ export const colorsFromTheme = (key) => {
   const vars = resolveTheme(key);
   return { bg: vars['--bg-body'], accent: readableAccent(vars['--bg-primary'], vars['--bg-body']) };
 };
+// První přepnutí na „Vlastní“: pokud ještě nejsou uložené žádné vlastní barvy, uloží se barvy právě používaného motivu.
+// Vrací aktuální vlastní barvy (už uložené se nikdy nepřepisují).
+export const seedCustomColors = (fromKey) => {
+  if (!hasSavedCustomColors()) saveCustomColors(colorsFromTheme(fromKey));
+  return loadCustomColors();
+};
+// Barvy, které „Vlastní“ dostane po kliknutí - podle nich se kreslí náhled dlaždice (aby odpovídal výsledku).
+export const customColorsPreview = (currentKey, saved) => (currentKey !== CUSTOM_THEME_KEY && !hasSavedCustomColors() ? colorsFromTheme(currentKey) : saved);
 export const DARK_THEMES = ['dark', 'emerald'];
 export const isDarkTheme = (key, vars) => (key === CUSTOM_THEME_KEY ? isDarkColor(vars['--bg-body']) : DARK_THEMES.includes(key));
 
