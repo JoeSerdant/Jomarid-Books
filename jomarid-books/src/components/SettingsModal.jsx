@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, User, ShieldCheck, Palette, Database, Check, Loader2, Download, BookOpen, RotateCcw, Bell, EyeOff, MessageCircle, UserCog, Gift, X } from 'lucide-react';
+import { ArrowLeft, User, ShieldCheck, Palette, Database, Check, Loader2, Download, BookOpen, RotateCcw, Bell, EyeOff, MessageCircle, UserCog, Gift, X, ClipboardCheck, AlertTriangle, Info, RefreshCw } from 'lucide-react';
 import { useAuth, useTheme } from '../contexts/AuthContext';
 import { supabase, verifyPassword, validateNewPassword, mapAuthError } from '../lib/supabase';
 import { BOOK_BADGES } from '../constants/badges';
+import { loadAccountNotices, countWarnings, LEVEL_WARN } from '../accountNotices';
 import {
   THEMES, FONT_FAMILIES, LINE_HEIGHTS, TEXT_WIDTHS, ALIGNMENTS, LETTER_SPACINGS, PAGE_MARGINS, PAGE_BREAKS, PAGE_ANIMATIONS, MOTION_OPTIONS,
   FONT_SIZE_RANGE, AUTO_ADVANCE_RANGE, WPM_RANGE, NIGHT_RANGE,
@@ -774,6 +775,7 @@ const TABS = [
   { id: 'profile', label: 'Profil', icon: User, needsUser: true },
   { id: 'security', label: 'Zabezpečení', icon: ShieldCheck, needsUser: true },
   { id: 'notifications', label: 'Oznámení', icon: Bell, needsUser: true },
+  { id: 'checks', label: 'Kontrola účtu', icon: ClipboardCheck, needsUser: true },
   { id: 'appearance', label: 'Vzhled', icon: Palette, needsUser: false },
   { id: 'reader', label: 'Čtečka', icon: BookOpen, needsUser: false },
   { id: 'data', label: 'Data a účet', icon: Database, needsUser: true },
@@ -873,9 +875,101 @@ const InboxTab = () => {
   );
 };
 
+// ---- Záložka: Kontrola účtu ----
+// Upozornění na to, co si může uživatel opravit sám (jméno, u nakladatelů i nedodělané knihy). Počítá se při otevření
+// Nastavení a při každém přepnutí záložky (po opravě jména tak upozornění hned zmizí), ručně jde spustit znovu.
+const useAccountNotices = (user, role, refreshKey) => {
+  const [state, setState] = useState({ status: 'loading', notices: [], partial: false, refreshing: false });
+  const userId = user?.id;
+  useEffect(() => {
+    if (!userId) return undefined;
+    let cancelled = false;
+    setState(s => ({ ...s, refreshing: true })); // staré výsledky zůstanou vidět, než dorazí nové
+    (async () => {
+      try {
+        const result = await loadAccountNotices(supabase, { user: { id: userId }, role });
+        if (!cancelled) setState({ status: 'ready', ...result, refreshing: false });
+      } catch {
+        if (!cancelled) setState(s => ({ ...s, status: 'error', refreshing: false }));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId, role, refreshKey]);
+  return state;
+};
+
+const ChecksTab = ({ state, role, onRecheck }) => {
+  const { status, notices, partial } = state;
+  const hasBooks = role === 'nakladatel' || role === 'správce';
+  const recheck = (
+    <button
+      type="button"
+      onClick={onRecheck}
+      disabled={state.refreshing}
+      style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
+      className="px-4 py-2.5 border rounded-lg font-black uppercase text-[11px] tracking-wider cursor-pointer inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-wait"
+    >
+      {state.refreshing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} Zkontrolovat znovu
+    </button>
+  );
+
+  if (status === 'loading' && notices.length === 0) return <div className="py-10 flex justify-center"><Loader2 className="animate-spin opacity-50" /></div>;
+  if (status === 'error') return <div className="space-y-3"><Notice type="error">Kontrolu se nepodařilo provést. Zkus to za chvíli znovu.</Notice>{recheck}</div>;
+
+  return (
+    <div className="space-y-3">
+      <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">
+        {hasBooks ? 'Rychlá kontrola tvého účtu a tvých knih.' : 'Rychlá kontrola tvého účtu.'} Ukazuje jen to, co můžeš opravit sám.
+      </p>
+      {notices.length === 0
+        ? <Notice type="success">Všechno je v pořádku, není co opravovat.</Notice>
+        : notices.map(n => {
+          const warn = n.level === LEVEL_WARN;
+          return (
+            <div
+              key={n.id}
+              data-testid={`notice-${n.id}`}
+              style={{ borderColor: warn ? 'rgba(245,158,11,0.55)' : 'var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}
+              className="border rounded-xl p-3 sm:p-4 flex gap-3"
+            >
+              <span style={{ color: warn ? '#f59e0b' : 'var(--text-muted)' }} className="shrink-0 mt-0.5" aria-hidden="true">
+                {warn ? <AlertTriangle size={18} /> : <Info size={18} />}
+              </span>
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <p className="text-sm font-bold m-0 leading-snug">
+                  <span className="sr-only">{warn ? 'Je potřeba opravit: ' : 'Tip: '}</span>{n.title}
+                </p>
+                <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">{n.detail}</p>
+                {n.items?.length > 0 && (
+                  <ul className="text-xs m-0 pl-4 space-y-0.5 list-disc">
+                    {n.items.map(t => <li key={t} className="break-words">{t}</li>)}
+                    {n.more > 0 && <li style={{ color: 'var(--text-muted)' }} className="list-none -ml-4">...a další ({n.more})</li>}
+                  </ul>
+                )}
+                {n.to && (
+                  <Link
+                    to={n.to}
+                    style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
+                    className="inline-block mt-1 px-3 py-1.5 border rounded-lg no-underline text-[11px] font-black uppercase tracking-wider"
+                  >
+                    {n.linkLabel || 'Opravit'}
+                  </Link>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      {partial && <Notice type="info">Část kontroly se nepodařilo načíst, výsledek proto nemusí být úplný.</Notice>}
+      <div>{recheck}</div>
+    </div>
+  );
+};
+
 export const SettingsPage = () => {
   const { user, role, loading } = useAuth();
   const { tab } = useParams();
+  const [recheck, setRecheck] = useState(0);
+  const accountNotices = useAccountNotices(user, role, `${tab}:${recheck}`);
   const navigate = useNavigate();
   const location = useLocation();
   const navRef = useRef(null);
@@ -893,6 +987,7 @@ export const SettingsPage = () => {
   // na /settings/security přeskočilo na Vzhled, protože "user" je na chvíli null).
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="animate-spin" /></div>;
 
+  const warnCount = countWarnings(accountNotices.notices);
   const visibleTabs = TABS.filter(t => !t.needsUser || user);
   const active = visibleTabs.find(t => t.id === tab);
   if (!active) return <Navigate to={`/settings/${visibleTabs[0].id}`} replace />;
@@ -938,6 +1033,11 @@ export const SettingsPage = () => {
                 className="shrink-0 flex items-center gap-2 px-3 py-2.5 rounded-xl border no-underline text-xs font-black uppercase tracking-wider whitespace-nowrap"
               >
                 <Icon size={15} /> {label}
+                {id === 'checks' && warnCount > 0 && (
+                  <span data-testid="checks-badge" style={{ backgroundColor: '#ef4444', color: '#fff' }} className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black leading-[18px] text-center">
+                    {warnCount}<span className="sr-only"> {warnCount === 1 ? 'věc k opravě' : 'věci k opravě'}</span>
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -952,6 +1052,7 @@ export const SettingsPage = () => {
           {active.id === 'profile' && <ProfileTab user={user} role={role} />}
           {active.id === 'security' && <SecurityTab user={user} />}
           {active.id === 'notifications' && <InboxTab />}
+          {active.id === 'checks' && <ChecksTab state={accountNotices} role={role} onRecheck={() => setRecheck(n => n + 1)} />}
           {active.id === 'appearance' && <AppearanceTab />}
           {active.id === 'reader' && <ReaderTab />}
           {active.id === 'data' && <DataTab user={user} role={role} />}
