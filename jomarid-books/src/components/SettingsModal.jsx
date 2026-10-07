@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, User, ShieldCheck, Palette, Database, Check, Loader2, Download, BookOpen, RotateCcw, Bell, EyeOff, MessageCircle, UserCog, Gift, X, ClipboardCheck, AlertTriangle, Info, RefreshCw } from 'lucide-react';
+import { ArrowLeft, User, ShieldCheck, Palette, Database, Check, Loader2, Download, BookOpen, RotateCcw, Bell, EyeOff, MessageCircle, UserCog, Gift, X, ClipboardCheck, AlertTriangle, Info, RefreshCw, Compass, Play } from 'lucide-react';
 import { useAuth, useTheme } from '../contexts/AuthContext';
 import { supabase, verifyPassword, validateNewPassword, mapAuthError } from '../lib/supabase';
 import { BOOK_BADGES } from '../constants/badges';
-import { loadAccountNotices, countWarnings, LEVEL_WARN } from '../accountNotices';
+import { loadAccountNotices, countWarnings, plural, LEVEL_WARN } from '../accountNotices';
+import { useTour } from '../tour/TourProvider';
+import { activeSteps } from '../tour/tourModel';
+import { readSeenVersion } from '../tour/tourSeen';
 import {
   THEMES, FONT_FAMILIES, LINE_HEIGHTS, TEXT_WIDTHS, ALIGNMENTS, LETTER_SPACINGS, PAGE_MARGINS, PAGE_BREAKS, PAGE_ANIMATIONS, MOTION_OPTIONS,
   FONT_SIZE_RANGE, AUTO_ADVANCE_RANGE, WPM_RANGE, NIGHT_RANGE,
@@ -776,6 +779,7 @@ const TABS = [
   { id: 'security', label: 'Zabezpečení', icon: ShieldCheck, needsUser: true },
   { id: 'notifications', label: 'Oznámení', icon: Bell, needsUser: true },
   { id: 'checks', label: 'Kontrola účtu', icon: ClipboardCheck, needsUser: true },
+  { id: 'tour', label: 'Prohlídka appky', icon: Compass, needsUser: true },
   { id: 'appearance', label: 'Vzhled', icon: Palette, needsUser: false },
   { id: 'reader', label: 'Čtečka', icon: BookOpen, needsUser: false },
   { id: 'data', label: 'Data a účet', icon: Database, needsUser: true },
@@ -965,6 +969,37 @@ const ChecksTab = ({ state, role, onRecheck }) => {
   );
 };
 
+// ---- Záložka: Prohlídka appky ----
+// Prohlídku vidí nový uživatel po prvním přihlášení sám; tady ji může kdykoli pustit znovu. Obsah upravuje správce.
+const TourTab = ({ user, role }) => {
+  const tour = useTour();
+  const config = tour?.config;
+  if (!config) return <div className="py-10 flex justify-center"><Loader2 className="animate-spin opacity-50" /></div>;
+
+  const steps = activeSteps(config, role);
+  const available = config.enabled && steps.length > 0;
+  const seen = readSeenVersion(user) >= config.version;
+
+  return (
+    <div className="space-y-4">
+      <Section title="Prohlídka appky" description="Krátká prohlídka ukáže, kde co najdeš. Po prvním přihlášení se spustí sama, tady ji můžeš pustit kdykoli znovu.">
+        {available ? (
+          <>
+            <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed" data-testid="tour-status">
+              {steps.length} {plural(steps.length, 'krok', 'kroky', 'kroků')} · {seen ? 'už zobrazena' : 'zatím nezobrazena'}
+            </p>
+            <ActionButton type="button" onClick={() => tour.start({ source: 'manual' })} data-testid="tour-start">
+              <Play size={13} /> Spustit prohlídku
+            </ActionButton>
+          </>
+        ) : (
+          <Notice type="info">Prohlídka teď není k dispozici.</Notice>
+        )}
+      </Section>
+    </div>
+  );
+};
+
 export const SettingsPage = () => {
   const { user, role, loading } = useAuth();
   const { tab } = useParams();
@@ -1015,6 +1050,7 @@ export const SettingsPage = () => {
         <nav
           ref={navRef}
           aria-label="Sekce nastavení"
+          data-tour="settings-tabs"
           className="relative shrink-0 flex md:flex-col gap-1 overflow-x-auto scrollbar-hide md:w-56 md:sticky md:top-24 -mx-1 px-1 md:mx-0 md:px-0"
         >
           {visibleTabs.map(({ id, label, icon: Icon }) => {
@@ -1024,6 +1060,7 @@ export const SettingsPage = () => {
                 key={id}
                 to={`/settings/${id}`}
                 replace
+                data-tour={id === 'checks' ? 'settings-checks' : undefined}
                 aria-current={isActive ? 'page' : undefined}
                 style={{
                   backgroundColor: isActive ? 'var(--bg-primary)' : 'var(--bg-card)',
@@ -1053,6 +1090,7 @@ export const SettingsPage = () => {
           {active.id === 'security' && <SecurityTab user={user} />}
           {active.id === 'notifications' && <InboxTab />}
           {active.id === 'checks' && <ChecksTab state={accountNotices} role={role} onRecheck={() => setRecheck(n => n + 1)} />}
+          {active.id === 'tour' && <TourTab user={user} role={role} />}
           {active.id === 'appearance' && <AppearanceTab />}
           {active.id === 'reader' && <ReaderTab />}
           {active.id === 'data' && <DataTab user={user} role={role} />}

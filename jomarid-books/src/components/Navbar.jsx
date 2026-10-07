@@ -159,6 +159,7 @@ export const Navbar = ({ onOpenSearch }) => {
             <div style={{ borderColor: 'var(--border-color)' }} className="col-span-2 row-start-2 sm:col-span-1 sm:col-start-2 sm:row-start-1 min-w-0 flex items-stretch sm:items-center justify-around sm:justify-start gap-1 sm:gap-2 border-t sm:border-t-0 py-1 sm:py-0">
               <Link 
                 to="/app" 
+                data-tour="nav-library"
                 style={{ color: 'var(--text-body)' }}
                 className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all"
               >
@@ -168,6 +169,7 @@ export const Navbar = ({ onOpenSearch }) => {
               
               <Link 
                 to="/stats" 
+                data-tour="nav-stats"
                 style={{ color: 'var(--text-body)' }}
                 className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all"
               >
@@ -177,6 +179,7 @@ export const Navbar = ({ onOpenSearch }) => {
 
               <Link 
                 to="/games" 
+                data-tour="nav-games"
                 style={{ color: 'var(--text-body)' }}
                 className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all text-purple-600 dark:text-purple-400"
               >
@@ -187,6 +190,7 @@ export const Navbar = ({ onOpenSearch }) => {
               {role === 'nakladatel' && (
                 <Link 
                   to="/publisher" 
+                  data-tour="nav-studio"
                   style={{ color: 'var(--text-body)' }}
                   className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all text-emerald-600 dark:text-emerald-400"
                 >
@@ -198,6 +202,7 @@ export const Navbar = ({ onOpenSearch }) => {
               {role === 'správce' && (
                 <Link 
                   to="/admin" 
+                  data-tour="nav-admin"
                   title={pending > 0 ? `Admin - ${pending} otevřených upozornění` : 'Admin'}
                   style={{ color: 'var(--text-body)' }}
                   className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all text-amber-600 dark:text-amber-400"
@@ -224,6 +229,7 @@ export const Navbar = ({ onOpenSearch }) => {
               }}
               className="shrink-0 flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl border text-xs font-black shadow-sm"
               title="Tvoje Jomarid Coins"
+              data-tour="nav-coins"
             >
               <Coins size={14} className="text-amber-500 fill-amber-500/20" />
               <span>{coins.toLocaleString()}</span>
@@ -233,6 +239,7 @@ export const Navbar = ({ onOpenSearch }) => {
           {user && (
             <button
               onClick={onOpenSearch}
+              data-tour="nav-search"
               style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
               className="p-2 border rounded-xl cursor-pointer hover:brightness-95 active:scale-95 transition-all flex items-center justify-center"
               title="Hledat knihy"
@@ -243,6 +250,7 @@ export const Navbar = ({ onOpenSearch }) => {
 
           <Link
             to="/settings"
+            data-tour="nav-settings"
             aria-current={onSettingsPage ? 'page' : undefined}
             style={{ backgroundColor: onSettingsPage ? 'var(--bg-primary)' : 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: onSettingsPage ? 'var(--text-primary)' : 'var(--text-body)' }}
             className="p-2 border rounded-xl cursor-pointer hover:brightness-95 active:scale-95 transition-all flex items-center justify-center no-underline"

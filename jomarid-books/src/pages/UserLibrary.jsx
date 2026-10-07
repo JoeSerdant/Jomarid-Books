@@ -333,7 +333,7 @@ export const UserLibrary = () => {
 
       {/* HLEDÁNÍ + ŘAZENÍ */}
       <div className="flex flex-col sm:flex-row gap-3">
-        <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-xl px-3.5 py-2.5 flex items-center gap-2.5 flex-1">
+        <div data-tour="library-search" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-xl px-3.5 py-2.5 flex items-center gap-2.5 flex-1">
           <Search size={15} style={{ color: 'var(--text-muted)' }} className="opacity-50 shrink-0" />
           <input
             type="text"

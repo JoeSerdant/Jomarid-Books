@@ -597,7 +597,7 @@ export const PublisherDashboard = () => {
 
       {notice && <Notice type={notice.type} onClose={() => setNotice(null)}>{notice.text}</Notice>}
 
-      <nav aria-label="Sekce panelu" className="flex gap-1 overflow-x-auto scrollbar-hide -mx-1 px-1">
+      <nav aria-label="Sekce panelu" data-tour="publisher-tabs" className="flex gap-1 overflow-x-auto scrollbar-hide -mx-1 px-1">
         {TABS.map(({ id, label, icon: Icon }) => {
           const active = tab === id;
           return (
