@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { clearLibraryState } from '../browse/browseStore';
 
 export const ThemeContext = createContext(null);
 export const AuthContext = createContext(null);
@@ -76,7 +77,7 @@ export function AuthProvider({ children }) {
 
    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
      if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
-     if (event === 'SIGNED_OUT') setRecoveryMode(false);
+     if (event === 'SIGNED_OUT') { setRecoveryMode(false); clearLibraryState(); }
      syncProfile(session?.user ?? null);
    });
 
@@ -90,6 +91,7 @@ export function AuthProvider({ children }) {
  };
 
  const logout = async () => {
+   clearLibraryState(); // hledání a filtry z knihovny nemají po odhlášení zůstat v kartě
    await supabase.auth.signOut();
  };
 

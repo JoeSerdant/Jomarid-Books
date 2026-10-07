@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="cs">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -33,6 +33,8 @@
       /* Pozadi bere promenne motivu z <html> (nastavuje je App). Drive tu bylo pevne bg-slate-50 na body,
          takze plocha mimo obsah (napr. pri oddaleni na mobilu) byla vzdy svetla, at byl motiv jakykoliv. */
       html { background-color: var(--bg-body, #f8fafc); }
+      /* Přilepená horní lišta nesmí zakrývat prvek, na který se doscrolluje (fokus klávesnicí, odkazy na kotvy). */
+      html { scroll-padding-top: calc(var(--navbar-h, 0px) + 8px); }
       body { font-family: 'Inter', system-ui, sans-serif; background-color: var(--bg-body, #f8fafc); color: var(--text-body, #0f172a); min-height: 100vh; min-height: 100dvh; }
       #root { min-height: 100vh; min-height: 100dvh; }
       /* Skryje posuvnik, ale prvek zustane scrollovatelny (zalozky admina, atd.). */

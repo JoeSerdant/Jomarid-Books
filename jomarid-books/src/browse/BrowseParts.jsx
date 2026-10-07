@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowUp, LayoutGrid, List } from 'lucide-react';
 import { coverGradient, coverInitials } from './browseModel.js';
 
-// Společné součásti procházení dlouhých seznamů: přepínač zobrazení, "Zobrazit dalších", tlačítko nahoru a obálka.
+// Společné součásti procházení dlouhých seznamů: přepínač zobrazení, "Zobrazit další", tlačítko nahoru a obálka.
 
 /** Přepínač způsobu zobrazení: mřížka obálek / seznam řádků. */
 export const ViewToggle = ({ value, onChange }) => (
@@ -19,7 +19,7 @@ export const ViewToggle = ({ value, onChange }) => (
           data-testid={`view-${key}`}
           onClick={() => onChange(key)}
           style={{ backgroundColor: active ? 'var(--bg-primary)' : 'transparent', color: active ? 'var(--text-primary)' : 'var(--text-muted)' }}
-          className="w-10 h-9 rounded-[10px] border-none cursor-pointer flex items-center justify-center transition-colors"
+          className="w-10 h-10 rounded-[10px] border-none cursor-pointer flex items-center justify-center transition-colors"
         >
           <Icon size={16} />
         </button>
@@ -28,36 +28,59 @@ export const ViewToggle = ({ value, onChange }) => (
   </div>
 );
 
+const num = (n) => Number(n).toLocaleString('cs-CZ');
+
 /**
  * Pod seznamem: neviditelný hlídač, který při přiblížení k oknu přidá další část, údaj "Zobrazeno X z Y" a tlačítko
- * pro ruční rozbalení (pro ovládání klávesnicí, čtečky obrazovky a prohlížeče bez IntersectionObserver).
- * paged = výsledek usePagedList. Když se vejde všechno do první části, nezobrazí se nic.
+ * pro ruční rozbalení (pro ovládání klávesnicí, čtečky obrazovky, prohlížeče bez IntersectionObserver a pro seznamy,
+ * které se už samy dál nerozbalují). paged = výsledek usePagedList. Když se vejde všechno do první části, nezobrazí
+ * se nic. onMore(početPřed) se zavolá po stisknutí tlačítka: volající tak může přesunout fokus na první novou položku
+ * (jinak by zůstal na tlačítku, které odjede o stovky položek dolů).
  */
-export const LoadMore = ({ paged, className = '' }) => {
+export const LoadMore = ({ paged, className = '', onMore }) => {
   if (paged.total <= paged.pageSize) return null;
+  const more = () => {
+    const before = paged.count;
+    paged.showMore();
+    if (onMore) onMore(before);
+  };
   return (
     <div className={`flex flex-col items-center gap-3 ${className}`}>
       {paged.hasMore && <div ref={paged.sentinelRef} aria-hidden="true" className="h-px w-full" />}
       <p role="status" data-testid="paged-count" style={{ color: 'var(--text-muted)' }} className="text-xs font-bold m-0 tabular-nums">
-        Zobrazeno {paged.count} z {paged.total}
+        Zobrazeno {num(paged.count)} z {num(paged.total)}
       </p>
+      {paged.autoStopped && (
+        <p data-testid="paged-hint" style={{ color: 'var(--text-muted)' }} className="text-xs m-0 text-center max-w-sm">
+          Dál se seznam sám nenačítá. Výběr zúžíš hledáním nebo filtrem, nebo zobraz další.
+        </p>
+      )}
       {paged.hasMore && (
         <button
           type="button"
           data-testid="paged-more"
-          onClick={paged.showMore}
+          onClick={more}
           style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
           className="px-6 py-3 border rounded-xl font-black text-[11px] uppercase tracking-wider cursor-pointer hover:brightness-95 active:scale-95 transition-all"
         >
-          Zobrazit dalších {paged.nextChunk}
+          Zobrazit další ({num(paged.nextChunk)})
         </button>
       )}
     </div>
   );
 };
 
-/** Plovoucí tlačítko zpět na začátek stránky; objeví se, až když je čtenář od začátku dál než pár obrazovek. */
-export const BackToTop = ({ threshold = 900 }) => {
+// Pohyb omezuje buď systém (prefers-reduced-motion), nebo volba v Nastavení -> Vzhled -> Pohyb (atribut na <html>).
+const reducedMotion = () => (
+  !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || document.documentElement.dataset.reduceMotion === '1'
+);
+
+/**
+ * Plovoucí tlačítko zpět na začátek stránky; objeví se, až když je čtenář od začátku dál než pár obrazovek.
+ * focusRef = prvek, na který se po skoku přesune fokus (tlačítko zmizí, fokus by jinak spadl na <body> a čtenář s
+ * klávesnicí by se ocitl na konci stránky).
+ */
+export const BackToTop = ({ threshold = 900, focusRef }) => {
   const [show, setShow] = useState(false);
   useEffect(() => {
     let frame = 0;
@@ -69,8 +92,8 @@ export const BackToTop = ({ threshold = 900 }) => {
   }, [threshold]);
   if (!show) return null;
   const goTop = () => {
-    const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    window.scrollTo({ top: 0, behavior: calm ? 'auto' : 'smooth' });
+    window.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' });
+    if (focusRef?.current) focusRef.current.focus({ preventScroll: true });
   };
   return (
     <button

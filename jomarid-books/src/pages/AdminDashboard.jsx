@@ -5,6 +5,7 @@ import { TourEditor, peekAdminTabRequest } from '../tour/TourEditor';
 import { useAuth } from '../contexts/AuthContext';
 import { usePagedList } from '../browse/usePagedList';
 import { LoadMore } from '../browse/BrowseParts';
+import { fetchAllByKey } from '../browse/libraryData';
 import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle, LayoutDashboard, UserCog, Loader2, CheckCircle2, X, ChevronLeft, ChevronRight, Ban, KeyRound, Trash2, ShieldCheck, Bell, Copy, Flag, Eye, EyeOff, Download } from 'lucide-react';
 
 // ============================================================================
@@ -1142,20 +1143,24 @@ export const AdminDashboard = () => {
   const refreshData = async () => {
     setGlobalLoading(true);
     try {
+      // Databáze vrací najednou jen omezený počet řádků (standardně 1000): knihy a účty se proto čtou po částech,
+      // jinak by správce při větším katalogu nebo víc než tisíci účtech neviděl všechno.
+      const readAll = (table, columns) => fetchAllByKey((after, limit) => {
+        let q = supabase.from(table).select(columns).order('id').limit(limit);
+        if (after != null) q = q.gt('id', after);
+        return q;
+      }, { key: 'id' });
+
       // 1. Načtení knih
-      const { data: b } = await supabase
-        .from('books')
-        .select('id, title, author, author_display, author_id, fake_likes, is_auto_assigned, price_coins, book_likes(count)');
+      const { data: b } = await readAll('books', 'id, title, author, author_display, author_id, fake_likes, is_auto_assigned, price_coins, book_likes(count)');
 
       // Skryté knihy zvlášť: kdyby sloupec is_hidden ještě neexistoval (starší databáze), jen se nezobrazí štítky.
-      const { data: hiddenRows, error: hiddenErr } = await supabase.from('books').select('id, is_hidden');
+      const { data: hiddenRows, error: hiddenErr } = await readAll('books', 'id, is_hidden');
       const hiddenMap = new Map((!hiddenErr && hiddenRows ? hiddenRows : []).map(r => [r.id, !!r.is_hidden]));
         
-      // 2. Načtení profilů
-      const { data: p } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
+      // 2. Načtení profilů (nejnovější účty první)
+      const { data: profileRows } = await readAll('profiles', '*');
+      const p = profileRows ? [...profileRows].sort((x, y) => new Date(y.created_at) - new Date(x.created_at)) : profileRows;
       
       const { count: logsTotal } = await supabase.from('system_logs').select('id', { count: 'exact', head: true });
       setLogCount(typeof logsTotal === 'number' ? logsTotal : 0);

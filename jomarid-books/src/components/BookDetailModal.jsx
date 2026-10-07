@@ -1,11 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { BookOpen, Coins, Flag, Heart, Loader2, MessageCircle, Star, X } from 'lucide-react';
 
+// Prvky, mezi kterými se v okně přechází klávesou Tab.
+const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
   const { user } = useAuth();
+  const titleId = useId();
+  const dialogRef = useRef(null);
+  const openerRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const [comments, setComments] = useState([]);
   const [loadingComments, setLoadingComments] = useState(true);
   const [newComment, setNewComment] = useState('');
@@ -39,6 +47,33 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
       });
     return () => { cancelled = true; };
   }, [book?.id]);
+
+  // Přístupnost okna: po otevření se fokus přesune dovnitř, Esc okno zavře, Tab z něj nevyleze a po zavření se fokus
+  // vrátí na prvek, kterým se okno otevřelo (jinak by klávesnice zůstala na stránce pod překryvem nebo spadla na <body>).
+  const bookId = book?.id;
+  useEffect(() => {
+    if (!bookId) return undefined;
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (dialogRef.current) dialogRef.current.focus({ preventScroll: true });
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); onCloseRef.current(); return; }
+      if (e.key !== 'Tab') return;
+      const box = dialogRef.current;
+      if (!box) return;
+      const items = [...box.querySelectorAll(FOCUSABLE)].filter((el) => el.getClientRects().length > 0);
+      if (items.length === 0) { e.preventDefault(); box.focus(); return; }
+      const active = document.activeElement;
+      if (e.shiftKey && (active === items[0] || active === box)) { e.preventDefault(); items[items.length - 1].focus(); }
+      else if (!e.shiftKey && active === items[items.length - 1]) { e.preventDefault(); items[0].focus(); }
+      else if (!box.contains(active)) { e.preventDefault(); items[0].focus(); }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      const opener = openerRef.current;
+      if (opener && document.contains(opener)) opener.focus({ preventScroll: true });
+    };
+  }, [bookId]);
 
   if (!book) return null;
 
@@ -98,15 +133,20 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[110] flex justify-center items-center p-4" onClick={onClose}>
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
         style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}
-        className="border rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-6 relative"
+        className="border rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-6 relative outline-none"
         onClick={(e) => e.stopPropagation()}
       >
-        <button onClick={onClose} className="absolute right-4 top-4 opacity-50 hover:opacity-100 cursor-pointer text-current bg-transparent border-none">
+        <button onClick={onClose} aria-label="Zavřít" title="Zavřít" className="absolute right-4 top-4 opacity-60 hover:opacity-100 cursor-pointer text-current bg-transparent border-none p-1">
           <X size={20} />
         </button>
 
-        <h2 className="text-xl font-black uppercase tracking-tight m-0 pr-8">{book.title}</h2>
+        <h2 id={titleId} className="text-xl font-black uppercase tracking-tight m-0 pr-8">{book.title}</h2>
         <p style={{ color: 'var(--text-muted)' }} className="text-xs font-bold opacity-70 mt-1">Autor: {book.authorId ? <Link to={`/autor/${book.authorId}`} style={{ color: 'inherit' }} className="font-black underline underline-offset-2">{book.author}</Link> : book.author}</p>
 
         <div className="flex flex-wrap items-center gap-2 mt-3">

@@ -748,7 +748,7 @@ export const PublisherDashboard = () => {
             </div>
             <div className="space-y-1">
               <label htmlFor="book-desc" style={mutedStyle} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Popis (zobrazí se v detailu knihy před koupí)</label>
-              <textarea id="book-desc" rows={3} value={descriptionInput} onChange={(e) => setDescriptionInput(e.target.value)} placeholder="Krátký popis, co čtenáře čeká..." style={inputStyle} className="w-full p-3 border rounded-xl font-bold outline-none text-sm resize-none" />
+              <textarea id="book-desc" rows={3} maxLength={2000} value={descriptionInput} onChange={(e) => setDescriptionInput(e.target.value)} placeholder="Krátký popis, co čtenáře čeká..." style={inputStyle} className="w-full p-3 border rounded-xl font-bold outline-none text-sm resize-none" />
             </div>
             <div className="space-y-1">
               <label htmlFor="book-text" style={mutedStyle} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Text knihy</label>

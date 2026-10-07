@@ -35,14 +35,31 @@ export const clampVisible = (wanted, total, pageSize) => {
   return Math.min(t, Math.max(p, whole(wanted)));
 };
 
+// Kolik částí se rozbalí samo (doscrollováním nebo při návratu na stránku). Dál už jen tlačítkem: kdo by sjížděl
+// tisíce položek v kuse, nafoukl by stránku na stovky tisíc prvků (paměť, pomalé psaní do hledání) a tak daleko
+// se stejně hledá spíš filtrem nebo hledáním. Při návratu na stránku by se jinak celý rozbalený seznam vykresloval
+// několik sekund.
+export const MAX_AUTO_PAGES = 10;
+
+/** Kolik položek se rozbalí samo (a nejvýš se obnoví z uloženého stavu). */
+export const autoLimit = (pageSize) => Math.max(1, whole(pageSize)) * MAX_AUTO_PAGES;
+
+/** Kolik položek rozbalit při obnovení uloženého stavu (0 = jen první část). */
+export const restoredVisible = (saved, pageSize) => Math.min(Math.max(0, whole(saved)), autoLimit(pageSize));
+
 /** Počet viditelných položek po stisknutí "Zobrazit dalších". */
 export const nextVisibleCount = (visible, total, pageSize) => clampVisible(whole(visible) + Math.max(1, whole(pageSize)), total, pageSize);
 
 /** Kolik položek přibude při příštím rozbalení (pro popisek tlačítka). */
 export const nextChunkSize = (visible, total, pageSize) => Math.max(0, Math.min(Math.max(1, whole(pageSize)), whole(total) - whole(visible)));
 
-/** "1 kniha", "3 knihy", "5 knih" */
-export const czCount = (n, one, few, many) => `${n} ${n === 1 ? one : n >= 2 && n <= 4 ? few : many}`;
+/** Počet se správným tvarem: "1 kniha", "3 knihy", "5 knih", "22 knihy", "25 knih", "112 knih". */
+export const czCount = (n, one, few, many) => {
+  const last = n % 10;
+  const lastTwo = n % 100;
+  const form = n === 1 ? one : last >= 2 && last <= 4 && !(lastTwo >= 12 && lastTwo <= 14) ? few : many;
+  return `${n} ${form}`;
+};
 
 // ---- generované obálky ----
 // Knihy nemají obrázek obálky. Místo stejně šedých dlaždic se z názvu odvodí barva, takže se knihy na první pohled

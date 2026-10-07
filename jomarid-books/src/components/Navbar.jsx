@@ -274,6 +274,8 @@ export const Navbar = ({ onOpenSearch }) => {
               
               <button
                 onClick={logout}
+                aria-label="Odhlásit se"
+                title="Odhlásit se"
                 style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
                 className="p-2 border rounded-xl cursor-pointer hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20 active:scale-95 transition-all flex items-center justify-center sm:gap-2 sm:px-3 sm:py-2"
               >

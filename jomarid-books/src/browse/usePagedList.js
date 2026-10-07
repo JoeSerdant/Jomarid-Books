@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { PAGE_SIZE, clampVisible, nextChunkSize, nextVisibleCount } from './browseModel.js';
+import { PAGE_SIZE, autoLimit as autoLimitFor, clampVisible, nextChunkSize, nextVisibleCount } from './browseModel.js';
 
 /**
  * Postupné zobrazování dlouhého seznamu: ukáže první část a další přidává, když čtenář doscrolluje ke konci
@@ -7,10 +7,11 @@ import { PAGE_SIZE, clampVisible, nextChunkSize, nextVisibleCount } from './brow
  *
  *  - resetKey: při jeho změně (filtry, řazení, způsob zobrazení) se začíná znovu od první části.
  *  - initialVisible: kolik položek bylo rozbaleno naposledy (obnovení po návratu na stránku); platí jen pro první resetKey.
+ *  - autoLimit: do kolika položek se seznam rozbaluje sám (výchozí deset částí); dál už jen tlačítkem (autoStopped).
  *  - sentinelRef patří na prvek hned pod seznam; když se přiblíží k oknu, přidá se další část. Je to funkce (ne objekt
  *    ref), protože prvek se může objevit později než samotný seznam (přepnutá záložka, seznam po prázdném výsledku).
  */
-export const usePagedList = (items, { pageSize = PAGE_SIZE.list, resetKey = '', initialVisible = 0, auto = true, lookahead = 700 } = {}) => {
+export const usePagedList = (items, { pageSize = PAGE_SIZE.list, resetKey = '', initialVisible = 0, auto = true, lookahead = 700, autoLimit = autoLimitFor(pageSize) } = {}) => {
   const total = items.length;
   const [state, setState] = useState({ key: resetKey, wanted: initialVisible });
   // Po změně resetKey se začíná znovu od první části. Děje se to přímo při vykreslování (React hned vykreslí znovu),
@@ -20,6 +21,9 @@ export const usePagedList = (items, { pageSize = PAGE_SIZE.list, resetKey = '', 
   const wanted = state.key === resetKey ? state.wanted : 0;
   const count = clampVisible(wanted, total, pageSize);
   const hasMore = count < total;
+  // Samočinné rozbalování končí na autoLimit; kdo chce víc, stiskne tlačítko (a tím se doscrollovaná stránka nenafoukne
+  // do statisíců prvků).
+  const autoStopped = hasMore && count >= autoLimit;
 
   // Vychází z nejnovějšího stavu, takže zbloudilé dvojí zavolání nikdy nezkrátí už rozbalený seznam.
   const showMore = useCallback(() => {
@@ -31,7 +35,7 @@ export const usePagedList = (items, { pageSize = PAGE_SIZE.list, resetKey = '', 
 
   const [sentinel, setSentinel] = useState(null);
   useEffect(() => {
-    if (!auto || !hasMore || !sentinel || typeof IntersectionObserver === 'undefined') return undefined;
+    if (!auto || !hasMore || autoStopped || !sentinel || typeof IntersectionObserver === 'undefined') return undefined;
     // Pozorovatel se po každém rozbalení zakládá znovu (count v závislostech): nově založený hned hlásí, jestli je
     // prvek v dohledu, takže se na vysokém okně rozbalují části tak dlouho, dokud nepřestane být konec vidět.
     const observer = new IntersectionObserver((entries) => {
@@ -39,8 +43,8 @@ export const usePagedList = (items, { pageSize = PAGE_SIZE.list, resetKey = '', 
     }, { rootMargin: `0px 0px ${lookahead}px 0px` });
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [auto, hasMore, count, showMore, lookahead, sentinel]);
+  }, [auto, hasMore, autoStopped, count, showMore, lookahead, sentinel]);
 
   const visible = useMemo(() => items.slice(0, count), [items, count]);
-  return { items: visible, count, total, hasMore, remaining: total - count, nextChunk: nextChunkSize(count, total, pageSize), pageSize, showMore, sentinelRef: setSentinel };
+  return { items: visible, count, total, hasMore, autoStopped, remaining: total - count, nextChunk: nextChunkSize(count, total, pageSize), pageSize, showMore, sentinelRef: setSentinel };
 };

@@ -18,10 +18,20 @@ export const writeViewMode = (mode, storage = local()) => {
   try { storage?.setItem(VIEW_KEY, normalizeViewMode(mode)); } catch { /* úložiště nedostupné: volba platí jen do zavření stránky */ }
 };
 
+/** Zapomene uložený stav knihovny (při odhlášení): hledaný text může být osobní a nemá zůstat v kartě. */
+export const clearLibraryState = ({ storage = session() } = {}) => {
+  try { storage?.removeItem(STATE_KEY); } catch { /* úložiště nedostupné: není co mazat */ }
+};
+
 export const readLibraryState = (userId, { storage = session(), now = Date.now() } = {}) => {
   try {
     const raw = storage?.getItem(STATE_KEY);
-    return raw ? normalizeLibraryState(JSON.parse(raw), { userId, now }) : null;
+    if (!raw) return null;
+    let state = null;
+    try { state = normalizeLibraryState(JSON.parse(raw), { userId, now }); } catch { state = null; }
+    // Propadlý, cizí nebo rozbitý stav se rovnou smaže: nikomu už nepomůže a platnost by jinak hlídala jen čtení.
+    if (!state && userId) clearLibraryState({ storage });
+    return state;
   } catch { return null; }
 };
 

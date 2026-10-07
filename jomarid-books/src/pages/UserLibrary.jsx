@@ -6,21 +6,26 @@ import { BookDetailModal } from '../components/BookDetailModal';
 import { LibraryBrowser } from '../browse/LibraryBrowser';
 import { BookCover, LoadMore } from '../browse/BrowseParts';
 import { usePagedList } from '../browse/usePagedList';
-import { loadLibrary } from '../browse/libraryData';
+import { isCancelledError, loadLibrary } from '../browse/libraryData';
 import { isInProgress } from '../browse/libraryModel';
 import { czCount } from '../browse/browseModel';
 import {
-  BookOpen, Coins, Heart, Loader2, LogOut, Sparkles, Star, ArrowLeft, Feather,
+  BookOpen, Coins, Heart, Library, Loader2, LogOut, Sparkles, Star, ArrowLeft, Feather,
 } from 'lucide-react';
 
 export const UserLibrary = () => {
   const { user, logout } = useAuth();
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false); // načtení knih selhalo: místo prázdné knihovny se ukáže "Zkusit znovu"
+  const [loadedCount, setLoadedCount] = useState(0); // kolik knih je už načteno (u velkého katalogu to chvíli trvá)
   const [submittingId, setSubmittingId] = useState(null);
   const [coins, setCoins] = useState(0);
   const [dailyBonus, setDailyBonus] = useState(null);
-  const [detailBook, setDetailBook] = useState(null);
+  // Otevřený detail si pamatuje jen id: knihu bere vždy z aktuálního seznamu, takže po nákupu, lajku nebo změně
+  // vlastnictví ukazuje čerstvé údaje (dřív zůstala v okně zastaralá kopie a nabízela koupit už vlastněnou knihu).
+  const [detailId, setDetailId] = useState(null);
+  const openDetail = useCallback((book) => setDetailId(book.id), []);
 
   // Výsledek z vyhledávání, který ještě nemám odemčený, sem přijde jako location.state.openBookId
   // a rovnou se otevře jeho detail (s tlačítkem Koupit).
@@ -29,23 +34,25 @@ export const UserLibrary = () => {
   useEffect(() => {
     const id = location.state?.openBookId;
     if (!id || loading) return;
-    const target = books.find(b => b.id === id);
-    if (target) setDetailBook(target);
+    if (books.some(b => b.id === id)) setDetailId(id);
     navigate(location.pathname, { replace: true, state: null });
   }, [location.state, loading, books]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Data se načítají podle id uživatele, ne podle objektu user: ten se v appce během chvilky vymění víckrát (obnovení
   // přihlášení, zápis do metadat účtu při prohlídce) a každá výměna by spustila stejné dotazy znovu a seznam by
-  // "vyskočil" na začátek. Spinner na celou stránku je jen při prvním načtení; další načtení (např. po nákupu, který
-  // se nepodařil, protože kniha už patřila čtenáři) proběhne tiše na pozadí.
+  // "vyskočil" na začátek. Načtení proběhne tedy jednou pro každého uživatele; při přepnutí účtu se stará data
+  // zahodí hned (ať se na chvíli neukazují knihy a mince předchozího účtu).
   const userId = user?.id;
-  const loadedOnce = useRef(false);
   const loadSeq = useRef(0);
+  // Po odchodu ze stránky se rozdělané načítání přeruší (mezi částmi), místo aby doběhlo na zbytečném pozadí.
+  useEffect(() => () => { loadSeq.current += 1; }, []);
 
   const loadLibraryData = useCallback(async () => {
     if (!userId) return;
     const seq = ++loadSeq.current;
-    if (!loadedOnce.current) setLoading(true);
+    setLoading(true);
+    setLoadError(false); setLoadedCount(0);
+    setBooks([]); setCoins(0); setDailyBonus(null); setDetailId(null);
     try {
       // Přihlašovací bonus se uděluje atomicky přes RPC (nejvýš jednou za kalendářní den).
       try {
@@ -67,11 +74,13 @@ export const UserLibrary = () => {
       }
 
       // Knihy po částech, počty lajků jedním číslem u knihy (viz browse/libraryData.js).
-      const { books: loadedBooks, coins: balance } = await loadLibrary(supabase, userId);
+      const { books: loadedBooks, coins: balance } = await loadLibrary(supabase, userId, {
+        isCancelled: () => seq !== loadSeq.current,
+        onProgress: (n) => { if (seq === loadSeq.current) setLoadedCount(n); },
+      });
       if (seq !== loadSeq.current) return; // mezitím začalo novější načtení, to platí
       if (balance !== null) setCoins(balance);
       setBooks(loadedBooks);
-      loadedOnce.current = true;
 
       // Pokud sem uživatel dorazil kvůli konkrétní knize (klik na homepage,
       // ať už jako právě přihlášený, nebo už dřív přihlášený), otevřít mu
@@ -80,12 +89,14 @@ export const UserLibrary = () => {
         const pendingBookId = sessionStorage.getItem('library_open_book_id');
         if (pendingBookId) {
           sessionStorage.removeItem('library_open_book_id');
-          const target = loadedBooks.find(b => b.id === pendingBookId);
-          if (target) setDetailBook(target);
+          if (loadedBooks.some(b => b.id === pendingBookId)) setDetailId(pendingBookId);
         }
       } catch (e) { /* storage unavailable, ignore */ }
     } catch (error) {
-      console.error("Chyba při načítání knihovny:", error.message);
+      if (!isCancelledError(error)) {
+        console.error("Chyba při načítání knihovny:", error.message);
+        if (seq === loadSeq.current) setLoadError(true);
+      }
     } finally {
       if (seq === loadSeq.current) setLoading(false);
     }
@@ -104,7 +115,6 @@ export const UserLibrary = () => {
 
       setCoins(data?.new_balance ?? (coins - book.priceCoins));
       setBooks(prev => prev.map(sb => sb.id === book.id ? { ...sb, hasAccess: true } : sb));
-      setDetailBook(prev => prev && prev.id === book.id ? { ...prev, hasAccess: true } : prev);
     } catch (err) {
       const msg = err.message || '';
       if (msg.includes('insufficient_coins')) {
@@ -121,7 +131,22 @@ export const UserLibrary = () => {
         alert(`Nemáš dost Jomarid Coinů. Tahle kniha stojí ${book.priceCoins}, ty máš ${realBalance}.`);
       } else if (msg.includes('already_owned')) {
         alert('Tuhle knihu už vlastníš.');
-        loadLibraryData();
+        // Opraví se jen tahle kniha (včetně rozečteného místa), nic se nenačítá znovu: načtení celé knihovny na pozadí
+        // by mohlo přepsat lajk nebo nákup, který čtenář mezitím stihl udělat.
+        try {
+          const { data: ub } = await supabase.from('user_books').select('book_id, is_read, updated_at, scroll_position')
+            .eq('user_id', user.id).eq('book_id', book.id).maybeSingle();
+          setBooks(prev => prev.map(sb => sb.id !== book.id ? sb : {
+            ...sb,
+            hasAccess: true,
+            isRead: ub?.is_read || false,
+            scrollPosition: ub?.scroll_position || 0,
+            lastOpened: ub?.updated_at ? new Date(ub.updated_at).getTime() || 0 : 0,
+          }));
+        } catch (refreshErr) {
+          console.error('Nepodařilo se obnovit údaje o knize:', refreshErr);
+          setBooks(prev => prev.map(sb => sb.id === book.id ? { ...sb, hasAccess: true } : sb));
+        }
       } else {
         alert('Nákup se nezdařil: ' + msg);
       }
@@ -132,25 +157,27 @@ export const UserLibrary = () => {
 
   // Stabilní funkce (useCallback), ať se při změně jedné knihy nevykreslují znovu všechny karty v seznamu.
   const toggleLike = useCallback(async (book) => {
-    if (!user) return;
+    if (!userId) return;
     const wasLiked = book.isLiked;
     setBooks(prev => prev.map(sb => sb.id === book.id ? { ...sb, isLiked: !wasLiked, likesCount: sb.likesCount + (wasLiked ? -1 : 1) } : sb));
     try {
       if (wasLiked) {
-        const { error } = await supabase.from('book_likes').delete().eq('user_id', user.id).eq('book_id', book.id);
+        const { error } = await supabase.from('book_likes').delete().eq('user_id', userId).eq('book_id', book.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from('book_likes').insert([{ user_id: user.id, book_id: book.id }]);
+        const { error } = await supabase.from('book_likes').insert([{ user_id: userId, book_id: book.id }]);
         if (error) throw error;
       }
     } catch (err) {
       setBooks(prev => prev.map(sb => sb.id === book.id ? { ...sb, isLiked: wasLiked, likesCount: sb.likesCount + (wasLiked ? 1 : -1) } : sb));
       console.error('Lajk se nepodařilo uložit:', err);
     }
-  }, [user]);
+  }, [userId]);
 
   // Kniha, kterou má smysl nabídnout k pokračování - vlastněná, rozečtená,
   // ale ne dočtená, naposledy otevřená jako první.
+  const detailBook = useMemo(() => (detailId ? books.find(b => b.id === detailId) || null : null), [books, detailId]);
+
   const continueBook = useMemo(() => {
     const candidates = books.filter(isInProgress);
     if (candidates.length === 0) return null;
@@ -161,6 +188,16 @@ export const UserLibrary = () => {
     <div className="flex flex-col items-center justify-center min-h-[60vh] animate-pulse">
       <Loader2 className="animate-spin mb-4" size={40} style={{ color: 'var(--bg-primary)' }} />
       <p className="text-sm font-black uppercase tracking-wider opacity-60">Otevírám tvůj čtenářský trezor...</p>
+      {loadedCount > 0 && <p style={{ color: 'var(--text-muted)' }} className="text-xs font-bold mt-2 m-0 tabular-nums">Načteno {loadedCount.toLocaleString('cs-CZ')} knih</p>}
+    </div>
+  );
+
+  if (loadError) return (
+    <div role="alert" className="max-w-md mx-auto px-4 py-20 flex flex-col items-center gap-4 text-center">
+      <Library size={36} style={{ color: 'var(--text-muted)' }} className="opacity-40" />
+      <p className="text-sm font-black uppercase tracking-wider m-0">Knihovnu se nepodařilo načíst</p>
+      <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0">Zkontroluj připojení k internetu a zkus to znovu. Tvoje knihy a mince jsou v pořádku, jen se teď nepodařilo je zobrazit.</p>
+      <button type="button" onClick={loadLibraryData} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="px-6 py-3 rounded-xl border-none font-black text-xs uppercase tracking-wider cursor-pointer">Zkusit znovu</button>
     </div>
   );
 
@@ -185,13 +222,13 @@ export const UserLibrary = () => {
           <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-2.5 sm:p-4 flex items-center gap-3 sm:gap-5">
             <BookCover title={continueBook.title} seed={continueBook.id} className="w-10 h-14 sm:w-16 sm:h-20 rounded-lg sm:rounded-xl shrink-0" textClass="text-base sm:text-2xl" />
             <div className="flex-1 min-w-0">
-              <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wide opacity-60 hidden sm:block">Pokračovat ve čtení</span>
+              <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wide hidden sm:block">Pokračovat ve čtení</span>
               <h3 className="font-black text-sm sm:text-base uppercase tracking-tight truncate m-0">{continueBook.title}</h3>
               <div className="flex items-center gap-2 mt-1.5 sm:mt-2 sm:max-w-sm">
                 <div style={{ backgroundColor: 'var(--bg-secondary)' }} className="flex-1 h-1.5 rounded-full overflow-hidden">
                   <div style={{ backgroundColor: 'var(--bg-primary)', width: `${Math.round(continueBook.scrollPosition)}%` }} className="h-full rounded-full" />
                 </div>
-                <span style={{ color: 'var(--text-muted)' }} className="text-[10px] opacity-70 shrink-0 tabular-nums">{Math.round(continueBook.scrollPosition)} %<span className="hidden sm:inline"> přečteno</span></span>
+                <span style={{ color: 'var(--text-muted)' }} className="text-[10px] shrink-0 tabular-nums">{Math.round(continueBook.scrollPosition)} %<span className="hidden sm:inline"> přečteno</span></span>
               </div>
             </div>
             <Link to={`/read/${continueBook.id}`} aria-label={`Pokračovat ve čtení: ${continueBook.title}`} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="no-underline shrink-0 px-3 sm:px-6 py-2.5 sm:py-3 rounded-xl font-black text-[11px] sm:text-xs uppercase tracking-wider hover:brightness-105 transition-all flex items-center justify-center gap-1.5 sm:gap-2">
@@ -209,20 +246,20 @@ export const UserLibrary = () => {
             <h4 className="font-black text-sm uppercase m-0 flex items-center gap-2">
               {coins.toLocaleString()} Jomarid Coins
             </h4>
-            <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 opacity-70">
+            <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0">
               {dailyBonus ? `+${dailyBonus} mincí za dnešní přihlášení! 🎉` : 'Kup si přístup ke knihám za mince, nebo si je vydělej odznáčky.'}
             </p>
           </div>
         </div>
 
         {/* Přehled (vlastníš / rozečteno / dočteno) je teď v přepínači knihovny jako počty u filtrů. */}
-        <LibraryBrowser key={user.id} books={books} coins={coins} userId={user.id} onOpenDetail={setDetailBook} onToggleLike={toggleLike} />
+        <LibraryBrowser key={user.id} books={books} coins={coins} userId={user.id} onOpenDetail={openDetail} onToggleLike={toggleLike} />
       </div>
 
       {/* Mimo kontejner s odstupy (space-y): jinak by překryv detailu dostal horní okraj a nezakrýval celé okno. */}
       <BookDetailModal
         book={detailBook}
-        onClose={() => setDetailBook(null)}
+        onClose={() => setDetailId(null)}
         onBuy={handleBuyLicense}
         buying={detailBook ? submittingId === detailBook.id : false}
         coins={coins}
