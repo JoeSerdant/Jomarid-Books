@@ -7,6 +7,9 @@ import assert from 'node:assert/strict';
 import * as M from '../tour/tourModel.js';
 import * as L from '../tour/tourLayout.js';
 import * as S from '../tour/tourSeen.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const DAY = 86400000;
 const NOW = Date.parse('2026-10-07T12:00:00Z');
@@ -41,6 +44,36 @@ describe('výchozí obsah', () => {
       assert.ok(typeof def.label === 'string' && def.label.length > 0, k);
       if (def.route) { assert.ok(def.route.startsWith('/'), k); assert.ok(def.route.startsWith(def.at || def.route), k); }
     }
+  });
+  test('pořadí a cíle výchozích kroků (změna je záměrná, ne náhodná)', () => {
+    const anchors = (key) => tour.sets[key].map((x) => x.anchor);
+    assert.deepEqual(anchors('reader'), ['none', 'nav-library', 'library-search', 'nav-stats', 'nav-games', 'nav-coins', 'nav-search', 'nav-settings', 'settings-tabs', 'none']);
+    assert.deepEqual(anchors('publisher'), ['none', 'nav-library', 'nav-studio', 'publisher-tabs', 'nav-stats', 'nav-coins', 'nav-settings', 'settings-checks', 'none']);
+    assert.deepEqual(anchors('admin'), ['none', 'nav-library', 'library-search', 'nav-stats', 'nav-games', 'nav-coins', 'nav-search', 'nav-admin', 'nav-settings', 'settings-tabs', 'none']);
+  });
+  test('texty o mincích a knihovně odpovídají tomu, co appka opravdu dělá', () => {
+    const text = (key, id) => tour.sets[key].find((x) => x.id === id).text;
+    for (const key of ['reader', 'publisher']) {
+      assert.ok(/odznak/.test(text(key, 'coins')) && /přihlášen/.test(text(key, 'coins')) && /hr/.test(text(key, 'coins')), key + ': zdroje mincí');
+      assert.ok(!/čtením|sériemi/.test(text(key, 'coins')), key + ': za čtení mince nejsou');
+      assert.ok(/Moje knihy/.test(text(key, 'library')), key + ': knihovna ukazuje celý katalog a filtr Moje knihy');
+    }
+    assert.ok(/prodej/.test(text('publisher', 'coins')));
+    assert.ok(/daruješ/.test(text('publisher', 'studio-tabs')) && !/nastavíš autorské/.test(text('publisher', 'studio-tabs')));
+  });
+  test('každý cíl prohlídky má v komponentách odpovídající data-tour (a naopak)', () => {
+    const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+    const files = [];
+    const walk = (dir) => { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const f = path.join(dir, e.name); if (e.isDirectory()) { if (!['tests', 'gameContent'].includes(e.name)) walk(f); } else if (/\.jsx$/.test(e.name)) files.push(f); } };
+    walk(SRC);
+    const source = files.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+    for (const key of M.ANCHOR_KEYS.filter((k) => k !== 'none')) {
+      const re = new RegExp(`data-tour=(?:"${key}"|\\{[^}]*'${key}'[^}]*\\})`);
+      assert.ok(re.test(source), `${key}: v komponentách chybí data-tour`);
+    }
+    const literal = [...source.matchAll(/data-tour="([a-z-]+)"/g)].map((m) => m[1]);
+    assert.ok(literal.length >= 8);
+    for (const k of literal) assert.ok(M.ANCHOR_KEYS.includes(k), `data-tour="${k}" není v ANCHORS`);
   });
   test('defaultTour vrací novou kopii (úprava jedné nezmění další)', () => {
     const a = M.defaultTour(); a.sets.reader[0].title = 'změněno';
@@ -102,6 +135,48 @@ describe('normalizeTour', () => {
     const noId = M.normalizeTour({ sets: { reader: [{ title: 'a' }, { title: 'b' }] } }).sets.reader;
     assert.deepEqual(noId.map((x) => x.id), ['reader-1', 'reader-2']);
   });
+  test('hranice čísel: nejvyšší povolené hodnoty projdou', () => {
+    assert.equal(M.normalizeTour({ version: 9999 }).version, 9999);
+    assert.equal(M.normalizeTour({ autoDays: 3650 }).autoDays, 3650);
+  });
+  test('id kroku: ořez mezer a délky, nesmysl se nahradí vlastním', () => {
+    const ids = M.normalizeTour({ sets: { reader: [
+      { id: '  mezery  ', title: 'a' }, { id: 'x'.repeat(100), title: 'b' }, { id: 5, title: 'c' }, { id: '   ', title: 'd' }, { title: 'e' },
+    ] } }).sets.reader.map((x) => x.id);
+    assert.equal(ids[0], 'mezery');
+    assert.equal(ids[1].length, 40);
+    assert.deepEqual(ids.slice(2), ['reader-3', 'reader-4', 'reader-5']);
+  });
+  test('isValidAutoDays a isBlankStep', () => {
+    for (const v of [0, 14, '14', ' 7 ', 3650]) assert.equal(M.isValidAutoDays(v), true, String(v));
+    for (const v of ['', ' ', -1, '-5', 2.5, '2.5', 3651, '99999', 'abc', null, undefined, NaN, {}]) assert.equal(M.isValidAutoDays(v), false, String(v));
+    assert.equal(M.isBlankStep({ title: '  ', text: '' }), true);
+    assert.equal(M.isBlankStep({ title: 'a', text: '' }), false);
+    assert.equal(M.isBlankStep({ text: 'x' }), false);
+    assert.equal(M.isBlankStep(null), true);
+  });
+  test('normalizeDraft: kroky a počet dní zůstanou, jak je správce napsal; nesmysly se pořád zahodí', () => {
+    const draft = M.normalizeDraft({ autoDays: '', version: 4, sets: { reader: [
+      { id: 'a', title: '  Titulek s mezerou na konci ', text: '', anchor: 'nav-games' }, { id: 'b' }, { id: 'c', title: 'x'.repeat(200), anchor: 'neexistuje' }, null, 5,
+    ] } });
+    assert.equal(draft.autoDays, '');
+    assert.equal(draft.version, 4);
+    assert.equal(draft.sets.reader.length, 3, 'prázdný krok zůstane, null a číslo ne');
+    assert.equal(draft.sets.reader[0].title, '  Titulek s mezerou na konci ');
+    assert.deepEqual([draft.sets.reader[1].title, draft.sets.reader[1].text, draft.sets.reader[1].anchor], ['', '', 'none']);
+    assert.equal(draft.sets.reader[2].title.length, M.TOUR_LIMITS.title);
+    assert.equal(draft.sets.reader[2].anchor, 'none');
+    assert.deepEqual(draft.sets.publisher, M.defaultSteps('publisher'), 'chybějící sada = výchozí');
+    // z návrhu se při uložení stane platná prohlídka bez prázdného kroku
+    assert.equal(M.normalizeTour(draft).sets.reader.length, 2);
+    assert.equal(M.normalizeTour(draft).autoDays, 14);
+  });
+  test('normalizeDraft: cokoli nesmyslného dá výchozí návrh a nepřekročí limity', () => {
+    for (const v of [null, 5, 'x', [], undefined]) assert.deepEqual(M.normalizeDraft(v), M.defaultTour(), String(v));
+    const many = M.normalizeDraft({ sets: { reader: Array.from({ length: 40 }, (_, i) => ({ id: 'a', title: 't' + i })) } });
+    assert.equal(many.sets.reader.length, M.TOUR_LIMITS.maxSteps);
+    assert.equal(new Set(many.sets.reader.map((x) => x.id)).size, many.sets.reader.length);
+  });
   test('activeSteps vynechá vypnuté kroky a řídí se rolí', () => {
     const t = M.normalizeTour({ sets: { reader: [{ title: 'A' }, { title: 'B', enabled: false }], publisher: [{ title: 'P' }], admin: [{ title: 'S' }] } });
     assert.deepEqual(M.activeSteps(t, 'uživatel').map((x) => x.title), ['A']);
@@ -137,6 +212,14 @@ describe('automatické spuštění', () => {
     assert.equal(go({ tour: M.normalizeTour({ sets: { reader: [{ title: 'A', enabled: false }] } }) }), false);
     assert.equal(go({ role: 'nakladatel', tour: M.normalizeTour({ sets: { reader: [] } }) }), true, 'sada čtenáře se nakladatele netýká');
     assert.equal(go({ tour: null }), false);
+  });
+  test('bez známé role (profil se nenačetl) se prohlídka sama nespustí', () => {
+    for (const role of [null, undefined, '']) assert.equal(go({ role }), false, String(role));
+    assert.equal(go({ role: 'nakladatel' }), true);
+  });
+  test('0 dní = jen ručně i pro účet založený před okamžikem', () => {
+    assert.equal(go({ tour: { ...tour, autoDays: 0 }, createdAt: new Date(NOW).toISOString() }), false);
+    assert.equal(go({ tour: { ...tour, autoDays: 1 }, createdAt: new Date(NOW).toISOString() }), true);
   });
   test('chybějící nebo nesmyslné datum vzniku účtu = ne nový', () => {
     for (const createdAt of [undefined, null, '', 'nesmysl']) assert.equal(go({ createdAt }), false, String(createdAt));
@@ -174,17 +257,21 @@ describe('přechod na stránku kroku', () => {
 describe('umístění karty', () => {
   const vp = { width: 1200, height: 800 };
   const card = { width: 340, height: 200 };
-  const inside = (p, c, v, m = 12) => p.left >= m - 1 && p.top >= m - 1 && p.left + c.width <= v.width - m + 1 && p.top + c.height <= v.height - m + 1;
+  // Skutečná výška karty po omezení maxHeight a její obdélník v okně.
+  const rectOf = (p, c, v) => ({ left: p.left, top: p.top, width: Math.min(c.width, v.width - 24), height: Math.min(c.height, p.maxHeight, v.height - 24) });
+  const overlaps = (a, b) => !(a.left >= b.left + b.width || a.left + a.width <= b.left || a.top >= b.top + b.height || a.top + a.height <= b.top);
+  const inside = (r, v, m = 12) => r.left >= m - 1 && r.top >= m - 1 && r.left + r.width <= v.width - m + 1 && r.top + r.height <= v.height - m + 1;
 
   test('bez prvku je karta uprostřed', () => {
     const p = L.computeCardPosition({ target: null, card, viewport: vp });
-    assert.deepEqual([p.placement, p.left, p.top], ['center', 430, 300]);
+    assert.deepEqual([p.placement, p.left, p.top, p.maxHeight], ['center', 430, 300, 776]);
   });
   test('pod prvkem, když je místo; vodorovně na jeho střed', () => {
     const p = L.computeCardPosition({ target: { top: 10, left: 500, width: 100, height: 40 }, card, viewport: vp });
     assert.equal(p.placement, 'below');
     assert.equal(p.top, 10 + 40 + 14);
     assert.equal(p.left, 500 + 50 - 170);
+    assert.equal(p.maxHeight, 800 - 12 - 64, 'výška karty smí být nejvýš volné místo pod prvkem');
   });
   test('nad prvkem, když dole není místo', () => {
     const p = L.computeCardPosition({ target: { top: 700, left: 500, width: 100, height: 40 }, card, viewport: vp });
@@ -196,6 +283,7 @@ describe('umístění karty', () => {
     const r = L.computeCardPosition({ target: tall, card, viewport: vp });
     assert.equal(r.placement, 'right');
     assert.equal(r.left, 100 + 200 + 14);
+    assert.equal(r.top, 800 / 2 - 100, 'svisle na střed prvku');
     const l = L.computeCardPosition({ target: { ...tall, left: 900 }, card, viewport: vp });
     assert.equal(l.placement, 'left');
     assert.equal(l.left, 900 - 14 - 340);
@@ -210,7 +298,7 @@ describe('umístění karty', () => {
     const q = L.computeCardPosition({ target: { top: 10, left: 0, width: 40, height: 40 }, card, viewport: vp });
     assert.equal(q.left, 12);
   });
-  test('telefon: dole, nebo nahoře, když je prvek dole', () => {
+  test('telefon (užší než 640 px): dole, nebo nahoře, když je prvek dole', () => {
     const phone = { width: 375, height: 700 };
     const c = { width: 340, height: 220 };
     const high = L.computeCardPosition({ target: { top: 60, left: 20, width: 80, height: 40 }, card: c, viewport: phone });
@@ -220,19 +308,57 @@ describe('umístění karty', () => {
     assert.equal(low.placement, 'dock-top');
     assert.equal(low.top, 12);
   });
+  test('hranice 640 px: od ní se karta řadí pod prvek, ne k okraji okna', () => {
+    const t = { top: 60, left: 20, width: 80, height: 40 };
+    assert.equal(L.computeCardPosition({ target: t, card, viewport: { width: 639, height: 700 } }).placement, 'dock-bottom');
+    assert.equal(L.computeCardPosition({ target: t, card, viewport: { width: 640, height: 700 } }).placement, 'below');
+  });
+  test('nízké okno (telefon na šířku, zvětšení): karta se zmenší na volné místo, text se v ní posouvá', () => {
+    const v = { width: 667, height: 375 };
+    const c = { width: 360, height: 300 };
+    const t = { top: 80, left: 30, width: 600, height: 50 }; // široký prvek pod lištou: vedle není kam
+    const p = L.computeCardPosition({ target: t, card: c, viewport: v });
+    assert.equal(p.placement, 'below');
+    assert.equal(p.maxHeight, 375 - 12 - (130 + 14));
+    assert.ok(p.maxHeight < c.height && p.maxHeight >= 140, 'zmenšená, ale použitelná');
+    assert.ok(!overlaps(rectOf(p, c, v), t), 'nezakrývá prvek');
+  });
+  test('zmenšení bere větší z volných míst (nad prvkem, když je ho nahoře víc)', () => {
+    const v = { width: 667, height: 375 };
+    const c = { width: 360, height: 330 };
+    const t = { top: 210, left: 30, width: 600, height: 50 };
+    const p = L.computeCardPosition({ target: t, card: c, viewport: v });
+    assert.equal(p.placement, 'above');
+    assert.equal(p.maxHeight, 210 - 14 - 12);
+  });
+  test('když není ani 140 px volných, karta jde uprostřed přes prvek (zůstane celá čitelná)', () => {
+    const v = { width: 667, height: 375 };
+    const p = L.computeCardPosition({ target: { top: 20, left: 30, width: 600, height: 335 }, card: { width: 360, height: 300 }, viewport: v });
+    assert.equal(p.placement, 'center-over');
+    assert.equal(p.maxHeight, 375 - 24);
+  });
   test('karta větší než okno se zmenší na okno, nikdy nevyčnívá', () => {
     const p = L.computeCardPosition({ target: null, card: { width: 2000, height: 3000 }, viewport: { width: 300, height: 400 } });
-    assert.deepEqual([p.left, p.top], [12, 12]);
+    assert.deepEqual([p.left, p.top, p.maxHeight], [12, 12, 376]);
   });
-  test('náhodné prvky a okna: karta vždy zůstane v okně', () => {
+  test('náhodné prvky a okna: karta vždy v okně a (mimo center-over) nikdy nezakrývá prvek', () => {
     const r = rng(42);
-    for (let i = 0; i < 3000; i++) {
-      const v = { width: 280 + Math.floor(r() * 1400), height: 360 + Math.floor(r() * 900) };
-      const c = { width: 200 + Math.floor(r() * 200), height: 100 + Math.floor(r() * 250) };
-      const t = { top: Math.floor(r() * v.height), left: Math.floor(r() * v.width), width: 10 + Math.floor(r() * 500), height: 10 + Math.floor(r() * 500) };
-      const p = L.computeCardPosition({ target: r() < 0.1 ? null : t, card: c, viewport: v });
-      assert.ok(inside(p, { width: Math.min(c.width, v.width - 24), height: Math.min(c.height, v.height - 24) }, v), JSON.stringify({ v, c, t, p }));
+    let shrunk = 0; let over = 0;
+    for (let i = 0; i < 6000; i++) {
+      const v = { width: 280 + Math.floor(r() * 1400), height: 300 + Math.floor(r() * 900) };
+      const c = { width: 200 + Math.floor(r() * 200), height: 100 + Math.floor(r() * 400) };
+      const t = { top: Math.floor(r() * v.height), left: Math.floor(r() * v.width), width: 10 + Math.floor(r() * 500), height: 10 + Math.floor(r() * 400) };
+      const withTarget = r() >= 0.1;
+      const p = L.computeCardPosition({ target: withTarget ? t : null, card: c, viewport: v });
+      const rect = rectOf(p, c, v);
+      const ctx = JSON.stringify({ v, c, t, p });
+      assert.ok(inside(rect, v), 'mimo okno ' + ctx);
+      assert.ok(p.maxHeight >= 0, ctx);
+      if (withTarget && p.placement !== 'center-over') assert.ok(!overlaps(rect, t), 'zakrývá prvek ' + ctx);
+      if (p.maxHeight < c.height && withTarget) shrunk++;
+      if (p.placement === 'center-over') over++;
     }
+    assert.ok(shrunk > 50 && over > 20, `test nepokrývá zmenšení (${shrunk}) a krajní případ (${over})`);
   });
   test('rámeček zvýraznění: okraj navíc, ořez na okno, mimo okno = žádný', () => {
     assert.deepEqual(L.computeSpotlight({ top: 100, left: 100, width: 50, height: 20 }, vp), { left: 94, top: 94, width: 62, height: 32 });
@@ -257,6 +383,15 @@ describe('zapamatování zhlédnutí', () => {
     assert.equal(S.readSeenVersion(user({ [S.SEEN_META_KEY]: 3 }), makeStorage()), 3);
     assert.equal(S.readSeenVersion(user({ [S.SEEN_META_KEY]: 1 }), makeStorage({ [S.seenStorageKey('u1')]: '4' })), 4);
   });
+  test('verze 1 (výchozí) se čte jako 1, ne jako 0', () => {
+    assert.equal(S.readSeenVersion(user({}), makeStorage({ [S.seenStorageKey('u1')]: '1' })), 1);
+    assert.equal(S.readSeenVersion(user({ [S.SEEN_META_KEY]: 1 }), makeStorage()), 1);
+    assert.equal(S.readSeenVersion(user({ [S.SEEN_META_KEY]: '1' }), makeStorage()), 1);
+  });
+  test('z úložiště a z metadat platí vyšší, i když je v úložišti nižší, ale pravdivé číslo', () => {
+    assert.equal(S.readSeenVersion(user({ [S.SEEN_META_KEY]: 3 }), makeStorage({ [S.seenStorageKey('u1')]: '1' })), 3);
+    assert.equal(S.readSeenVersion(user({ [S.SEEN_META_KEY]: 1 }), makeStorage({ [S.seenStorageKey('u1')]: '3' })), 3);
+  });
   test('každý uživatel má svůj záznam (jiný účet ve stejném prohlížeči prohlídku uvidí)', () => {
     const st = makeStorage({ [S.seenStorageKey('u1')]: '1' });
     assert.equal(S.readSeenVersion({ id: 'u2' }, st), 0);
@@ -274,6 +409,24 @@ describe('zapamatování zhlédnutí', () => {
     await S.markTourSeen({ client: { auth: { updateUser: async (a) => { calls.push(a); return { error: null }; } } }, user: user({}), version: 3, storage: st });
     assert.equal(st._m.get(S.seenStorageKey('u1')), '3');
     assert.deepEqual(calls, [{ data: { [S.SEEN_META_KEY]: 3 } }]);
+  });
+  test('markTourSeen nikdy nesníží už zapsanou verzi (ruční spuštění, chyba načtení nastavení)', async () => {
+    const st = makeStorage({ [S.seenStorageKey('u1')]: '3' }); const calls = [];
+    const client = { auth: { updateUser: async (a) => { calls.push(a); } } };
+    await S.markTourSeen({ client, user: user({}), version: 1, storage: st });
+    assert.equal(st._m.get(S.seenStorageKey('u1')), '3');
+    assert.deepEqual(calls, [{ data: { [S.SEEN_META_KEY]: 3 } }], 'do metadat jde nejvyšší známá verze');
+  });
+  test('markTourSeen nevolá síť, když metadata účtu už tu verzi mají', async () => {
+    const calls = [];
+    await S.markTourSeen({ client: { auth: { updateUser: async (a) => { calls.push(a); } } }, user: user({ [S.SEEN_META_KEY]: 2 }), version: 2, storage: makeStorage() });
+    assert.deepEqual(calls, []);
+  });
+  test('markTourSeen s neplatnou verzí nic nezapíše', async () => {
+    const st = makeStorage(); const calls = [];
+    for (const version of [0, -1, 'x', null, undefined, 1.5]) await S.markTourSeen({ client: { auth: { updateUser: async (a) => { calls.push(a); } } }, user: user({}), version, storage: st });
+    assert.equal(st._m.size, 0);
+    assert.deepEqual(calls, []);
   });
   test('markTourSeen nikdy nevyhodí chybu (chybná síť, blokované úložiště, chybějící klient, bez uživatele)', async () => {
     await assert.doesNotReject(S.markTourSeen({ client: { auth: { updateUser: async () => { throw new Error('síť'); } } }, user: user({}), version: 1, storage: makeStorage() }));

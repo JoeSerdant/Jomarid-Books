@@ -19,9 +19,17 @@ export const readSeenVersion = (user, storage) => {
   return Math.max(local, meta);
 };
 
-/** Zapíše, že uživatel viděl danou verzi. Nikdy nevyhodí chybu; když se něco nepovede, prohlídka se jen může ukázat znovu. */
+/**
+ * Zapíše, že uživatel viděl danou verzi (nikdy nesníží už zapsanou vyšší: i ruční spuštění nebo chyba načtení
+ * nastavení nesmí způsobit, že se prohlídka znovu ukáže). Nikdy nevyhodí chybu; co se nepovede, se příště zkusí znovu.
+ */
 export const markTourSeen = async ({ client, user, version, storage }) => {
   if (!user) return;
-  try { getStorage(storage)?.setItem(seenStorageKey(user.id), String(version)); } catch { /* blokované úložiště */ }
-  try { await client?.auth?.updateUser({ data: { [SEEN_META_KEY]: version } }); } catch { /* bez sítě - příště se zkusí znovu */ }
+  const value = Math.max(readSeenVersion(user, storage), toVersion(version));
+  if (value === 0) return;
+  try { getStorage(storage)?.setItem(seenStorageKey(user.id), String(value)); } catch { /* blokované úložiště */ }
+  // Metadata účtu se mění jen když je potřeba (každá změna vyvolá v appce událost přihlášení a znovunačtení dat).
+  const inMeta = user.user_metadata && typeof user.user_metadata === 'object' ? toVersion(user.user_metadata[SEEN_META_KEY]) : 0;
+  if (inMeta >= value) return;
+  try { await client?.auth?.updateUser({ data: { [SEEN_META_KEY]: value } }); } catch { /* bez sítě - příště se zkusí znovu */ }
 };

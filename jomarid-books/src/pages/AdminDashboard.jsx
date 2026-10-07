@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Button, Card } from '../components/ui';
-import { TourEditor } from '../tour/TourEditor';
+import { TourEditor, peekAdminTabRequest } from '../tour/TourEditor';
 import { useAuth } from '../contexts/AuthContext';
 import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle, LayoutDashboard, UserCog, Loader2, CheckCircle2, X, ChevronLeft, ChevronRight, Ban, KeyRound, Trash2, ShieldCheck, Bell, Copy, Flag, Eye, EyeOff, Download } from 'lucide-react';
 
@@ -1076,7 +1076,7 @@ export const AdminDashboard = () => {
   const [comments, setComments] = useState([]);
   
   // --- Stavy rozhraní (UX) ---
-  const [activeTab, setActiveTab] = useState('overview'); // overview | notifications | accounts | books | homepage | tour | users | logs
+  const [activeTab, setActiveTab] = useState(() => peekAdminTabRequest() || 'overview'); // po náhledu prohlídky rovnou záložka Prohlídka appky; overview | notifications | accounts | books | homepage | tour | users | logs
   const [pendingCount, setPendingCount] = useState(0); // otevrena upozorneni (odznak na zalozce)
   const [logCount, setLogCount] = useState(0); // pocet zaznamu v syslogu (karta v Prehledu)
   useEffect(() => {

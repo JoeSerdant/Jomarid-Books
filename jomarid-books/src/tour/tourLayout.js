@@ -1,43 +1,56 @@
 // Kam v okně umístit kartu prohlídky vůči zvýrazněnému prvku (čistá geometrie, jde testovat bez prohlížeče).
+//
+// Karta se nikdy nedostane mimo okno a pokud to jde, nezakrývá zvýrazněný prvek. Když se v okně nevejde celá
+// (telefon na šířku, zvětšené písmo), zmenší se na volné místo nad nebo pod prvkem (maxHeight) a její text se posouvá.
 
 const round = (n) => Math.round(n);
+const MIN_CARD_HEIGHT = 140; // užší než tohle by už karta byla k ničemu - radši přes prvek
 
 /**
  * @param {object} p
  * @param {{top:number,left:number,width:number,height:number}|null} p.target  zvýrazněný prvek (souřadnice v okně); null = bez prvku
- * @param {{width:number,height:number}} p.card      rozměry karty
+ * @param {{width:number,height:number}} p.card      přirozené rozměry karty (bez omezení výšky)
  * @param {{width:number,height:number}} p.viewport  rozměry okna
- * @returns {{top:number,left:number,placement:string}}
+ * @returns {{top:number,left:number,placement:string,maxHeight:number}}
  */
 export const computeCardPosition = ({ target, card, viewport, margin = 12, gap = 14 }) => {
   const vw = viewport.width;
   const vh = viewport.height;
   const cw = Math.min(card.width, Math.max(0, vw - 2 * margin));
-  const ch = Math.min(card.height, Math.max(0, vh - 2 * margin));
+  const fullMax = Math.max(0, vh - 2 * margin);
+  const ch = Math.min(card.height, fullMax);
   const clampX = (x) => Math.max(margin, Math.min(x, vw - cw - margin));
-  const clampY = (y) => Math.max(margin, Math.min(y, vh - ch - margin));
-  const pos = (left, top, placement) => ({ left: round(left), top: round(top), placement });
-  const center = (placement = 'center') => pos(clampX((vw - cw) / 2), clampY((vh - ch) / 2), placement);
+  const clampY = (y, h) => Math.max(margin, Math.min(y, vh - h - margin));
+  const out = (left, top, placement, maxHeight) => ({ left: round(left), top: round(top), placement, maxHeight: round(maxHeight) });
+  const center = (placement) => out(clampX((vw - cw) / 2), clampY((vh - ch) / 2, ch), placement, fullMax);
 
-  if (!target) return center();
+  if (!target) return center('center');
 
   const right = target.left + target.width;
   const bottom = target.top + target.height;
+  const narrow = vw < 640; // telefon: karta přes celou šířku, přilepená dole nebo nahoře
+  const cx = narrow ? clampX((vw - cw) / 2) : clampX(target.left + target.width / 2 - cw / 2);
 
-  // Telefon: karta je přilepená k dolnímu (nebo, když by tam zakrývala prvek, k hornímu) okraji.
-  if (vw < 640) {
-    const dockBottom = vh - ch - margin;
-    if (bottom + gap <= dockBottom) return pos(clampX((vw - cw) / 2), dockBottom, 'dock-bottom');
-    if (target.top - gap >= margin + ch) return pos(clampX((vw - cw) / 2), margin, 'dock-top');
-    return pos(clampX((vw - cw) / 2), dockBottom, 'dock-bottom');
+  // Volné místo pod a nad prvkem a kam by karta v tom případě přišla.
+  const spaceBelow = vh - margin - (bottom + gap);
+  const spaceAbove = target.top - gap - margin;
+  const below = (h) => out(cx, narrow ? vh - margin - h : bottom + gap, narrow ? 'dock-bottom' : 'below', spaceBelow);
+  const above = (h) => out(cx, narrow ? margin : target.top - gap - h, narrow ? 'dock-top' : 'above', spaceAbove);
+
+  // 1) Vejde se celá: pod prvek, jinak nad něj, na širokém okně i vedle něj.
+  if (spaceBelow >= ch) return below(ch);
+  if (spaceAbove >= ch) return above(ch);
+  if (!narrow) {
+    const cy = clampY(target.top + target.height / 2 - ch / 2, ch);
+    if (right + gap + cw <= vw - margin) return out(right + gap, cy, 'right', fullMax);
+    if (target.left - gap - cw >= margin) return out(target.left - gap - cw, cy, 'left', fullMax);
   }
 
-  const cx = clampX(target.left + target.width / 2 - cw / 2);
-  if (bottom + gap + ch <= vh - margin) return pos(cx, bottom + gap, 'below');
-  if (target.top - gap - ch >= margin) return pos(cx, target.top - gap - ch, 'above');
-  const cy = clampY(target.top + target.height / 2 - ch / 2);
-  if (right + gap + cw <= vw - margin) return pos(right + gap, cy, 'right');
-  if (target.left - gap - cw >= margin) return pos(target.left - gap - cw, cy, 'left');
+  // 2) Nevejde se: zmenšit na větší z volných míst, je-li aspoň trochu použitelné (obsah se v kartě posouvá).
+  const best = spaceBelow >= spaceAbove ? { space: spaceBelow, place: below } : { space: spaceAbove, place: above };
+  if (best.space >= Math.min(ch, MIN_CARD_HEIGHT)) return best.place(Math.min(ch, best.space));
+
+  // 3) Není kam: karta uprostřed přes prvek (ten zůstane aspoň zvýrazněný kolem).
   return center('center-over');
 };
 

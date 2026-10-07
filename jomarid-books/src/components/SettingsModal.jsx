@@ -988,7 +988,7 @@ const TourTab = ({ user, role }) => {
             <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed" data-testid="tour-status">
               {steps.length} {plural(steps.length, 'krok', 'kroky', 'kroků')} · {seen ? 'už zobrazena' : 'zatím nezobrazena'}
             </p>
-            <ActionButton type="button" onClick={() => tour.start({ source: 'manual' })} disabled={tour.running} data-testid="tour-start">
+            <ActionButton type="button" onClick={() => tour.start({ source: 'manual' })} data-testid="tour-start">
               <Play size={13} /> Spustit prohlídku
             </ActionButton>
           </>
@@ -1060,6 +1060,7 @@ export const SettingsPage = () => {
                 key={id}
                 to={`/settings/${id}`}
                 replace
+                data-tour={id === 'checks' ? 'settings-checks' : undefined}
                 aria-current={isActive ? 'page' : undefined}
                 style={{
                   backgroundColor: isActive ? 'var(--bg-primary)' : 'var(--bg-card)',

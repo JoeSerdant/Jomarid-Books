@@ -94,7 +94,7 @@ export default function App() {
         changeCustomColors: (c) => { saveCustomColors(c); setCustomColors(loadCustomColors()); setCurrentTheme(CUSTOM_THEME_KEY); writeStored('jomarid-books-theme', CUSTOM_THEME_KEY); },
       }}>
         <Router>
-          <TourProvider>
+          <TourProvider blocked={isSearchOpen}>
           <div style={{ background: 'var(--bg-body)', color: 'var(--text-body)' }} className="min-h-screen flex flex-col font-sans antialiased transition-all duration-200">
             <RecoveryRedirect />
             <Navbar onOpenSearch={() => setIsSearchOpen(true)} />
