@@ -6,6 +6,10 @@ import { canonicalizeGenres, orderLibrary, toLibraryBook } from './libraryModel.
 
 const FETCH_PAGE = 500;
 const MAX_PAGES = 100;
+const DEFAULT_RETRIES = 2;
+const DEFAULT_RETRY_DELAY_MS = 500;
+// Požadavek, který neodpoví, by jinak nechal načítání viset donekonečna (bez chyby a bez "Zkusit znovu").
+const REQUEST_TIMEOUT_MS = 15000;
 
 const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 
@@ -26,7 +30,7 @@ export const isTransient = (res) => {
 export const isEmbedProblem = (error) => !!error && (/^PGRST20[01]$/.test(String(error.code)) || String(error.code) === '42501' || /relationship/i.test(String(error.message)));
 
 // Dotaz se při přechodné chybě zopakuje (2x se čekáním), ať jedna zakopnutá část nezahodí všechno ostatní.
-const withRetry = async (run, { retries, retryDelayMs, isCancelled }) => {
+const withRetry = async (run, { retries = DEFAULT_RETRIES, retryDelayMs = DEFAULT_RETRY_DELAY_MS, isCancelled } = {}) => {
   let res = await run();
   for (let attempt = 0; attempt < retries && isTransient(res); attempt += 1) {
     await wait(retryDelayMs * (2 ** attempt));
@@ -46,7 +50,7 @@ const withRetry = async (run, { retries, retryDelayMs, isCancelled }) => {
  * databáze vrací najednou aspoň pageSize řádků (Supabase standardně 1000). Při chybě vrací { data: null, error }.
  */
 export const fetchAllByKey = async (buildQuery, {
-  key = 'id', pageSize = FETCH_PAGE, maxPages = MAX_PAGES, retries = 2, retryDelayMs = 300, isCancelled, onPage,
+  key = 'id', pageSize = FETCH_PAGE, maxPages = MAX_PAGES, retries = DEFAULT_RETRIES, retryDelayMs = DEFAULT_RETRY_DELAY_MS, isCancelled, onPage,
 } = {}) => {
   const rows = [];
   let after = null;
@@ -58,7 +62,13 @@ export const fetchAllByKey = async (buildQuery, {
     for (const row of chunk) rows.push(row);
     if (onPage) onPage(rows.length);
     if (chunk.length < pageSize) return { data: rows, error: null };
-    after = chunk[chunk.length - 1][key];
+    const last = chunk[chunk.length - 1][key];
+    // Klíč, který chybí ve výběru nebo se nepohnul (databáze podmínku "za klíčem" ignoruje), by načetl stále tutéž
+    // část dokola; to je chyba dotazu, ne něco, co má smysl zkoušet znovu.
+    if (last == null || last === after) {
+      return { data: null, error: { message: `Stránkování podle sloupce ${key} se zasekla.`, code: 'KEYSET_STUCK' } };
+    }
+    after = last;
   }
   console.warn(`Načítání se zastavilo po ${maxPages} částech, zbytek se nenačetl.`);
   return { data: rows, error: null };
@@ -68,12 +78,14 @@ export const fetchAllByKey = async (buildQuery, {
  * Totéž čtením po offsetu (.range): jen pro dotazy, které nemají jedinečný jednopolový klíč (záložní počítání lajků).
  * buildQuery(from, to) musí vracet dotaz se stabilním řazením, jinak by se části mohly překrývat.
  */
-export const fetchAllRows = async (buildQuery, { pageSize = FETCH_PAGE, maxPages = MAX_PAGES, isCancelled } = {}) => {
+export const fetchAllRows = async (buildQuery, {
+  pageSize = FETCH_PAGE, maxPages = MAX_PAGES, retries = DEFAULT_RETRIES, retryDelayMs = DEFAULT_RETRY_DELAY_MS, isCancelled,
+} = {}) => {
   const rows = [];
   for (let page = 0; page < maxPages; page += 1) {
     if (isCancelled?.()) return { data: null, error: CANCELLED };
     const from = page * pageSize;
-    const { data, error } = await buildQuery(from, from + pageSize - 1);
+    const { data, error } = await withRetry(() => buildQuery(from, from + pageSize - 1), { retries, retryDelayMs, isCancelled });
     if (error) return { data: null, error };
     const chunk = Array.isArray(data) ? data : [];
     for (const row of chunk) rows.push(row);
@@ -82,15 +94,29 @@ export const fetchAllRows = async (buildQuery, { pageSize = FETCH_PAGE, maxPages
   return { data: rows, error: null };
 };
 
+// Opakování řeší tahle vrstva (withRetry), takže vestavěné opakování klienta (supabase-js 2.x: 3x s čekáním 1+2+4 s při
+// výpadku sítě a stavu 503/520) se vypíná: obě vrstvy dohromady by se násobily (12 požadavků a ~22 s do chyby) a
+// čekání na chybovou obrazovku by bylo zbytečně dlouhé. Starší klient metodu retry nemá, tam se nic neděje.
+// Každý požadavek má navíc vlastní časový limit.
+const hardened = (q) => {
+  let out = typeof q.retry === 'function' ? q.retry(false) : q;
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' && typeof out.abortSignal === 'function') {
+    out = out.abortSignal(AbortSignal.timeout(REQUEST_TIMEOUT_MS));
+  }
+  return out;
+};
+
 const embeddedLikes = (row) => Number(Array.isArray(row.book_likes) ? row.book_likes[0]?.count : 0) || 0;
 
-// Dotaz seřazený podle klíče s limitem a podmínkou "za posledním klíčem" (viz fetchAllByKey). Každá část dostane nový
-// objekt client.from(...): supabase-js skládá dotaz přímo do sdílené adresy, takže by se podmínky z předchozích částí
-// nasčítaly.
-const keyset = (from, select, key, filter) => (after, limit) => {
+/**
+ * Dotaz seřazený podle klíče s limitem a podmínkou "za posledním klíčem" pro fetchAllByKey (s vypnutým vestavěným
+ * opakováním a s časovým limitem, viz hardened). from() vrátí nový client.from(...): supabase-js skládá dotaz přímo
+ * do sdílené adresy, takže by se podmínky z předchozích částí nasčítaly. filter(q) doplní podmínky (např. .eq).
+ */
+export const keysetQuery = (from, select, key, filter = (q) => q) => (after, limit) => {
   let q = filter(from().select(select)).order(key).limit(limit);
   if (after != null) q = q.gt(key, after);
-  return q;
+  return hardened(q);
 };
 
 /**
@@ -98,28 +124,34 @@ const keyset = (from, select, key, filter) => (after, limit) => {
  * likes = { count(řádek knihy), liked(id knihy) } (počet skutečných lajků a zda dal lajk on) a coins (nebo null).
  *
  * Selhání čtení knih nebo licencí čtenáře se vyhazuje (špatné vlastnictví by bylo horší než chyba s tlačítkem
- * "Zkusit znovu"); chybějící vlastní lajky a zůstatek se berou jako prázdné. Možnosti: isCancelled() přeruší
+ * "Zkusit znovu"); stejně tak zůstatek, který se po opakování pořád nepodařilo přečíst kvůli výpadku (jinak by se
+ * ukázalo "0 mincí" a u každé placené knihy "Chybí N"). Chybějící vlastní lajky se berou jako prázdné a zůstatek
+ * nedostupný z jiného důvodu (např. oprávnění) jako null. Možnosti: isCancelled() přeruší
  * načítání mezi částmi (vyhodí chybu, kterou pozná isCancelledError), onProgress(n) hlásí, kolik knih už je načteno.
  */
 export const loadCatalog = async (client, userId, { isCancelled, onProgress, retries, retryDelayMs } = {}) => {
   const opts = { isCancelled, retries, retryDelayMs };
   const readBooks = (select) => fetchAllByKey(
-    keyset(() => client.from('books'), select, 'id', (q) => q),
+    keysetQuery(() => client.from('books'), select, 'id', (q) => q),
     { ...opts, key: 'id', onPage: onProgress },
   );
 
   const [booksFirst, userBooksRes, likedRes, profileRes] = await Promise.all([
     readBooks('*, book_likes(count)'),
     fetchAllByKey(
-      keyset(() => client.from('user_books'), 'book_id, is_read, status, updated_at, scroll_position', 'book_id', (q) => q.eq('user_id', userId)),
+      keysetQuery(() => client.from('user_books'), 'book_id, is_read, status, updated_at, scroll_position', 'book_id', (q) => q.eq('user_id', userId)),
       { ...opts, key: 'book_id' },
     ),
-    fetchAllByKey(keyset(() => client.from('book_likes'), 'book_id', 'book_id', (q) => q.eq('user_id', userId)), { ...opts, key: 'book_id' }),
-    client.from('profiles').select('coins').eq('id', userId).maybeSingle(),
+    fetchAllByKey(keysetQuery(() => client.from('book_likes'), 'book_id', 'book_id', (q) => q.eq('user_id', userId)), { ...opts, key: 'book_id' }),
+    withRetry(() => hardened(client.from('profiles').select('coins').eq('id', userId)).maybeSingle(), opts),
   ]);
 
-  for (const res of [booksFirst, userBooksRes, likedRes]) if (isCancelledError(res.error)) throw res.error;
+  for (const res of [booksFirst, userBooksRes, likedRes, profileRes]) if (isCancelledError(res.error)) throw res.error;
   if (userBooksRes.error) throw userBooksRes.error;
+  if (profileRes.error) {
+    if (isTransient(profileRes)) throw profileRes.error;
+    console.warn('Zůstatek se nepodařilo načíst:', profileRes.error.message);
+  }
   if (likedRes.error) console.warn('Vlastní lajky se nepodařilo načíst:', likedRes.error.message);
 
   // Kdyby databáze počítání lajků přímo u knihy neuměla, vrátí se starý postup: knihy zvlášť a lajky zvlášť.
@@ -131,8 +163,9 @@ export const loadCatalog = async (client, userId, { isCancelled, onProgress, ret
     booksRes = await readBooks('*');
     if (booksRes.error) throw booksRes.error;
     // Do výběru stačí book_id (řadí se podle book_id a user_id, ale id čtenářů se nestahují).
-    const allLikes = await fetchAllRows((from, to) => client.from('book_likes').select('book_id').order('book_id').order('user_id').range(from, to), { isCancelled });
-    if (isCancelledError(allLikes.error)) throw allLikes.error;
+    const allLikes = await fetchAllRows((from, to) => hardened(client.from('book_likes').select('book_id').order('book_id').order('user_id').range(from, to)), opts);
+    // Bez počtů by všechny knihy ukazovaly 0 lajků a řazení podle oblíbenosti by nedávalo smysl: radši chyba s opakováním.
+    if (allLikes.error) throw allLikes.error;
     likeCounts = new Map();
     for (const l of allLikes.data || []) likeCounts.set(l.book_id, (likeCounts.get(l.book_id) || 0) + 1);
   }
@@ -142,7 +175,7 @@ export const loadCatalog = async (client, userId, { isCancelled, onProgress, ret
     rows: booksRes.data || [],
     userBooks: userBooksRes.data || [],
     likes: { count: (row) => (likeCounts ? likeCounts.get(row.id) || 0 : embeddedLikes(row)), liked: (id) => liked.has(id) },
-    coins: profileRes?.data ? profileRes.data.coins || 0 : null,
+    coins: profileRes.data ? profileRes.data.coins || 0 : null,
   };
 };
 

@@ -33,10 +33,11 @@ export const UserLibrary = () => {
   const navigate = useNavigate();
   useEffect(() => {
     const id = location.state?.openBookId;
-    if (!id || loading) return;
+    // Při chybě načtení (prázdný seznam) se úmysl nesmí zahodit: po "Zkusit znovu" se kniha otevře.
+    if (!id || loading || loadError) return;
     if (books.some(b => b.id === id)) setDetailId(id);
     navigate(location.pathname, { replace: true, state: null });
-  }, [location.state, loading, books]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.state, loading, loadError, books]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Data se načítají podle id uživatele, ne podle objektu user: ten se v appce během chvilky vymění víckrát (obnovení
   // přihlášení, zápis do metadat účtu při prohlídce) a každá výměna by spustila stejné dotazy znovu a seznam by
@@ -185,9 +186,9 @@ export const UserLibrary = () => {
   }, [books]);
 
   if (loading) return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] animate-pulse">
+    <div role="status" className="flex flex-col items-center justify-center min-h-[60vh]">
       <Loader2 className="animate-spin mb-4" size={40} style={{ color: 'var(--bg-primary)' }} />
-      <p className="text-sm font-black uppercase tracking-wider opacity-60">Otevírám tvůj čtenářský trezor...</p>
+      <p className="text-sm font-black uppercase tracking-wider">Otevírám tvůj čtenářský trezor...</p>
       {loadedCount > 0 && <p style={{ color: 'var(--text-muted)' }} className="text-xs font-bold mt-2 m-0 tabular-nums">Načteno {loadedCount.toLocaleString('cs-CZ')} knih</p>}
     </div>
   );

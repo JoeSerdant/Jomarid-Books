@@ -5,7 +5,7 @@ import { TourEditor, peekAdminTabRequest } from '../tour/TourEditor';
 import { useAuth } from '../contexts/AuthContext';
 import { usePagedList } from '../browse/usePagedList';
 import { LoadMore } from '../browse/BrowseParts';
-import { fetchAllByKey } from '../browse/libraryData';
+import { fetchAllByKey, keysetQuery } from '../browse/libraryData';
 import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle, LayoutDashboard, UserCog, Loader2, CheckCircle2, X, ChevronLeft, ChevronRight, Ban, KeyRound, Trash2, ShieldCheck, Bell, Copy, Flag, Eye, EyeOff, Download } from 'lucide-react';
 
 // ============================================================================
@@ -14,6 +14,10 @@ import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search,
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('cs-CZ') : '-');
 const formatDateTime = (iso) => (iso ? new Date(iso).toLocaleString('cs-CZ', { dateStyle: 'short', timeStyle: 'short' }) : '-');
 const formatNumber = (n) => Number(n || 0).toLocaleString('cs-CZ');
+
+// Databáze vrací najednou jen omezený počet řádků (standardně 1000): všechna čtení správce, která musí být úplná
+// (knihy, účty, licence), jdou po částech podle sloupce id. Vybírané sloupce musí obsahovat id.
+const readAllRows = (table, columns, filter) => fetchAllByKey(keysetQuery(() => supabase.from(table), columns, 'id', filter), { key: 'id' });
 
 const relativeTime = (iso) => {
   if (!iso) return 'nikdy';
@@ -1093,6 +1097,8 @@ export const AdminDashboard = () => {
   const [bulkGrantOpen, setBulkGrantOpen] = useState(false); // potvrzení hromadného rozdání knihy
   const [globalLoading, setGlobalLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  // Neúplné načtení (výpadek, přetížená databáze): zůstanou předchozí seznamy a ukáže se upozornění, ne prázdný přehled.
+  const [loadProblem, setLoadProblem] = useState(false);
   
   // --- Filtry & Vyhledávání ---
   const [searchBook, setSearchBook] = useState('');
@@ -1143,24 +1149,26 @@ export const AdminDashboard = () => {
   const refreshData = async () => {
     setGlobalLoading(true);
     try {
-      // Databáze vrací najednou jen omezený počet řádků (standardně 1000): knihy a účty se proto čtou po částech,
-      // jinak by správce při větším katalogu nebo víc než tisíci účtech neviděl všechno.
-      const readAll = (table, columns) => fetchAllByKey((after, limit) => {
-        let q = supabase.from(table).select(columns).order('id').limit(limit);
-        if (after != null) q = q.gt('id', after);
-        return q;
-      }, { key: 'id' });
+      // 1. Knihy, 2. skryté knihy a 3. profily se čtou současně (jsou na sobě nezávislé).
+      const [booksRes, hiddenRes, profilesRes] = await Promise.all([
+        readAllRows('books', 'id, title, author, author_display, author_id, fake_likes, is_auto_assigned, price_coins, book_likes(count)'),
+        readAllRows('books', 'id, is_hidden'),
+        readAllRows('profiles', '*'),
+      ]);
+      const { data: b, error: booksErr } = booksRes;
 
-      // 1. Načtení knih
-      const { data: b } = await readAll('books', 'id, title, author, author_display, author_id, fake_likes, is_auto_assigned, price_coins, book_likes(count)');
-
-      // Skryté knihy zvlášť: kdyby sloupec is_hidden ještě neexistoval (starší databáze), jen se nezobrazí štítky.
-      const { data: hiddenRows, error: hiddenErr } = await readAll('books', 'id, is_hidden');
+      // Skryté knihy zvlášť: kdyby sloupec is_hidden ještě neexistoval (starší databáze, kód 42703), jen se nezobrazí
+      // štítky. Jiná chyba (výpadek) je ale neúplné načtení: jinak by se skryté knihy tvářily jako viditelné.
+      const { data: hiddenRows, error: hiddenErr } = hiddenRes;
+      const hiddenFailed = !!hiddenErr && hiddenErr.code !== '42703';
       const hiddenMap = new Map((!hiddenErr && hiddenRows ? hiddenRows : []).map(r => [r.id, !!r.is_hidden]));
         
-      // 2. Načtení profilů (nejnovější účty první)
-      const { data: profileRows } = await readAll('profiles', '*');
+      // Profily (nejnovější účty první)
+      const { data: profileRows, error: profilesErr } = profilesRes;
       const p = profileRows ? [...profileRows].sort((x, y) => new Date(y.created_at) - new Date(x.created_at)) : profileRows;
+      const booksOk = !booksErr && !hiddenFailed;
+      const profilesOk = !profilesErr;
+      setLoadProblem(!booksOk || !profilesOk);
       
       const { count: logsTotal } = await supabase.from('system_logs').select('id', { count: 'exact', head: true });
       setLogCount(typeof logsTotal === 'number' ? logsTotal : 0);
@@ -1223,9 +1231,9 @@ export const AdminDashboard = () => {
         bookTitle: b?.find(k => k.id === cm.book_id)?.title || `Kniha ID: ${cm.book_id?.substring(0, 6)}...`
       })) || [];
 
-      setBooks(booksWithLikes); 
-      setProfiles(p || []); 
-      setComments(mapovaneKomentare);
+      // Seznam, který se nenačetl celý, se nepřepisuje: radši zastaralý než zdánlivě prázdný.
+      if (booksOk) { setBooks(booksWithLikes); setComments(mapovaneKomentare); }
+      if (profilesOk) setProfiles(p || []);
     } catch (err) {
       console.error("Chyba v refreshData:", err);
     } finally {
@@ -1567,13 +1575,16 @@ export const AdminDashboard = () => {
     setActionLoading(false);
   };
 
+  const incompleteListsAlert = () => alert('Seznam knih nebo účtů se nepodařilo načíst celý, hromadná akce by pracovala s neúplnými daty. Obnov data tlačítkem Sync Data a zkus to znovu.');
+
   const assignAllBooksToUser = async () => {
     if (!activeUser || books.length === 0) return;
+    if (loadProblem) return incompleteListsAlert();
     if (!confirm(`Opravdu chcete uživateli ${activeUser.email} okamžitě odemknout ÚPLNĚ VŠECHNY knihy?`)) return;
 
     setActionLoading(true);
     try {
-      const { data: existingUserBooks, error: fetchError } = await supabase.from('user_books').select('book_id, id, status').eq('user_id', activeUser.id);
+      const { data: existingUserBooks, error: fetchError } = await readAllRows('user_books', 'book_id, id, status', (q) => q.eq('user_id', activeUser.id));
       if (fetchError) throw fetchError;
       
       const existingBookIds = existingUserBooks?.map(ub => ub.book_id) || [];
@@ -1605,6 +1616,7 @@ export const AdminDashboard = () => {
     if (!selectedBookId) return alert('Nejprve zvolte knihu z rozevíracího seznamu.');
     const selectedBook = books.find(b => b.id === selectedBookId);
     if (!selectedBook) return;
+    if (loadProblem) return incompleteListsAlert();
     if (profiles.length === 0) return alert('V systému nejsou žádní uživatelé.');
     setBulkGrantOpen(true);
   };
@@ -1615,7 +1627,7 @@ export const AdminDashboard = () => {
     setBulkGrantOpen(false);
     setActionLoading(true);
     try {
-      const { data: alreadyHasBook, error: fetchError } = await supabase.from('user_books').select('user_id, id, status').eq('book_id', selectedBookId);
+      const { data: alreadyHasBook, error: fetchError } = await readAllRows('user_books', 'user_id, id, status', (q) => q.eq('book_id', selectedBookId));
       if (fetchError) throw fetchError;
       
       const userIdsWithBook = alreadyHasBook?.map(ub => ub.user_id) || [];
@@ -1668,6 +1680,13 @@ export const AdminDashboard = () => {
           </Button>
         </div>
       </div>
+
+      {loadProblem && (
+        <div role="alert" className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-solid px-4 py-3 text-sm font-semibold" style={{ borderColor: '#d97706', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }}>
+          <span>Knihy nebo účty se nepodařilo načíst celé (výpadek spojení nebo přetížená databáze). Zobrazená čísla a seznamy mohou být neúplné nebo zastaralé.</span>
+          <Button onClick={refreshData} disabled={globalLoading || actionLoading} variant="secondary" className="px-4 py-2 text-xs font-black uppercase tracking-wider border rounded-lg cursor-pointer disabled:opacity-50">Zkusit znovu</Button>
+        </div>
+      )}
 
       {/* STATISTICKÉ UKAZATELE */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

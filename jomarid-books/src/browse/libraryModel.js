@@ -251,14 +251,15 @@ export const TOP_GENRES = 12;
 export const MAX_GENRE_OPTIONS = 500;
 
 /**
- * Žánry rozdělené na tlačítka (nejčastějších TOP_GENRES, vybraný žánr je mezi nimi vždy) a zbytek pro rozbalovátko.
- * Obojí je abecedně; rozbalovátko je omezené, ať ho nenafoukne jediný nakladatel s tisíci žánry.
+ * Žánry rozdělené na tlačítka (nejčastějších TOP_GENRES) a zbytek pro rozbalovátko. Obojí je abecedně; rozbalovátko je
+ * omezené, ať ho nenafoukne jediný nakladatel s tisíci žánry. Žánr vybraný z rozbalovátka v něm zůstává (rozbalovátko
+ * ho ukazuje jako vybraný): kdyby se přesouval mezi tlačítka, seznam voleb by se při každém výběru změnil a ve
+ * rozbalovátku by nešlo šipkami procházet (prohlížeče mění výběr už při každé šipce) ani by ho nečetla odečítačka.
  */
 export const splitGenres = (genres, selected, top = TOP_GENRES) => {
   const all = withSelectedGenre(genres, selected);
   const byCount = [...all].sort((a, b) => b.count - a.count || collator.compare(a.genre, b.genre));
   const keep = new Set(byCount.slice(0, top).map((g) => g.genre));
-  if (selected && selected !== 'all') keep.add(selected);
   return { chips: all.filter((g) => keep.has(g.genre)), rest: all.filter((g) => !keep.has(g.genre)).slice(0, MAX_GENRE_OPTIONS) };
 };
 

@@ -274,12 +274,13 @@ export const Navbar = ({ onOpenSearch }) => {
               
               <button
                 onClick={logout}
-                aria-label="Odhlásit se"
                 title="Odhlásit se"
                 style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
                 className="p-2 border rounded-xl cursor-pointer hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20 active:scale-95 transition-all flex items-center justify-center sm:gap-2 sm:px-3 sm:py-2"
               >
                 <LogOut size={14} />
+                {/* Pod 640 px je vidět jen ikona, takže název čtou čtečky ze skrytého textu; od 640 px je název viditelné "Ven". */}
+                <span className="sr-only sm:hidden">Odhlásit se</span>
                 <span className="text-[10px] font-black uppercase tracking-wider hidden sm:inline">Ven</span>
               </button>
             </div>

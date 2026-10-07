@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { BookOpen, Coins, Flag, Heart, Loader2, MessageCircle, Star, X } from 'lucide-react';
+import { fmtRating } from '../browse/libraryModel';
 
 // Prvky, mezi kterými se v okně přechází klávesou Tab.
 const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -25,6 +26,17 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
   const [reportBusy, setReportBusy] = useState(false);
   const [reportError, setReportError] = useState('');
   const [reported, setReported] = useState({});
+  // Text pro čtečky: výsledek akcí, po kterých se tlačítko vymění nebo zmizí (koupě, komentář, nahlášení).
+  const [announcement, setAnnouncement] = useState('');
+  const hasAccess = !!book?.hasAccess;
+  const prevAccess = useRef({ id: book?.id, has: hasAccess });
+
+  useEffect(() => {
+    const prev = prevAccess.current;
+    if (prev.id !== book?.id) setAnnouncement('');
+    else if (!prev.has && hasAccess) setAnnouncement('Kniha je odemčená, můžeš ji číst.');
+    prevAccess.current = { id: book?.id, has: hasAccess };
+  }, [book?.id, hasAccess]);
 
   useEffect(() => {
     if (!book) return;
@@ -70,10 +82,22 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
+      // Zpět na prvek, kterým se okno otevřelo. Ten ale mohl mezitím zmizet (po koupi se "Koupit" změní na "Číst")
+      // nebo je to obálka, kterou čtečky ani klávesnice nevidí (aria-hidden): pak se fokus vrátí na název té knihy.
       const opener = openerRef.current;
-      if (opener && document.contains(opener)) opener.focus({ preventScroll: true });
+      const usable = opener && opener !== document.body && document.contains(opener) && !opener.closest('[aria-hidden="true"]');
+      if (usable) { opener.focus({ preventScroll: true }); return; }
+      const card = [...document.querySelectorAll('[data-book-id]')].find((el) => el.dataset.bookId === bookId);
+      card?.querySelector('[data-title-button]')?.focus({ preventScroll: true });
     };
   }, [bookId]);
+
+  // Tlačítko, na kterém fokus byl, se může po akci zablokovat nebo zmizet (koupě, přidání či smazání komentáře,
+  // odeslání nahlášení); fokus by pak spadl na <body> mimo okno. Zůstane tedy v okně.
+  useEffect(() => {
+    const box = dialogRef.current;
+    if (box && !box.contains(document.activeElement)) box.focus({ preventScroll: true });
+  });
 
   if (!book) return null;
 
@@ -94,6 +118,7 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
       if (error) throw error;
       setComments(prev => [data, ...prev]);
       setNewComment('');
+      setAnnouncement('Komentář byl přidán.');
     } catch (err) {
       setCommentError(err.message.includes('duplicate') ? 'Na tuhle knihu už komentář máš.' : 'Nepodařilo se uložit.');
     } finally {
@@ -105,6 +130,7 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
     try {
       await supabase.from('book_comments').delete().eq('id', commentId);
       setComments(prev => prev.filter(c => c.id !== commentId));
+      setAnnouncement('Komentář byl smazán.');
     } catch (err) {
       console.error('Nepodařilo se smazat komentář:', err);
     }
@@ -128,6 +154,7 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
     }
     setReported(prev => ({ ...prev, [commentId]: true }));
     setReportingId(null);
+    setAnnouncement('Komentář byl nahlášen správci.');
   };
 
   return (
@@ -142,17 +169,18 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
         className="border rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-6 relative outline-none"
         onClick={(e) => e.stopPropagation()}
       >
-        <button onClick={onClose} aria-label="Zavřít" title="Zavřít" className="absolute right-4 top-4 opacity-60 hover:opacity-100 cursor-pointer text-current bg-transparent border-none p-1">
+        <button onClick={onClose} aria-label="Zavřít" title="Zavřít" className="absolute right-4 top-4 cursor-pointer text-current bg-transparent border-none p-1">
           <X size={20} />
         </button>
+        <p role="status" className="sr-only">{announcement}</p>
 
         <h2 id={titleId} className="text-xl font-black uppercase tracking-tight m-0 pr-8">{book.title}</h2>
-        <p style={{ color: 'var(--text-muted)' }} className="text-xs font-bold opacity-70 mt-1">Autor: {book.authorId ? <Link to={`/autor/${book.authorId}`} style={{ color: 'inherit' }} className="font-black underline underline-offset-2">{book.author}</Link> : book.author}</p>
+        <p style={{ color: 'var(--text-muted)' }} className="text-xs font-bold mt-1">Autor: {book.authorId ? <Link to={`/autor/${book.authorId}`} style={{ color: 'inherit' }} className="font-black underline underline-offset-2">{book.author}</Link> : book.author}</p>
 
         <div className="flex flex-wrap items-center gap-2 mt-3">
           {book.avgRating > 0 && (
             <span style={{ borderColor: 'var(--border-color)' }} className="border px-2 py-1 rounded-lg text-[10px] font-black flex items-center gap-1">
-              <Star size={11} className="fill-amber-400 text-amber-400" /> {book.avgRating.toFixed(1)} ({book.ratingsCount})
+              <Star size={11} className="fill-amber-400 text-amber-400" /> {fmtRating(book.avgRating)} ({book.ratingsCount})
             </span>
           )}
           <span style={{ borderColor: 'var(--border-color)' }} className="border px-2 py-1 rounded-lg text-[10px] font-black flex items-center gap-1">
@@ -169,10 +197,8 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
 
         <div className="mt-5">
           {book.hasAccess ? (
-            <Link to={`/read/${book.id}`} className="no-underline">
-              <button style={{ backgroundColor: 'var(--text-body)', color: 'var(--bg-body)' }} className="w-full py-3 rounded-xl font-black text-xs uppercase tracking-wider border-none cursor-pointer flex items-center justify-center gap-1.5">
-                <BookOpen size={14} /> {book.isRead ? 'Číst znovu' : 'Číst'}
-              </button>
+            <Link to={`/read/${book.id}`} style={{ backgroundColor: 'var(--text-body)', color: 'var(--bg-body)' }} className="w-full py-3 rounded-xl font-black text-xs uppercase tracking-wider cursor-pointer flex items-center justify-center gap-1.5 no-underline">
+              <BookOpen size={14} /> {book.isRead ? 'Číst znovu' : 'Číst'}
             </Link>
           ) : (
             <button
@@ -220,15 +246,15 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
               </div>
               <div className="flex items-center justify-between">
                 {commentError && <span className="text-red-500 text-[10px]">{commentError}</span>}
-                <span style={{ color: 'var(--text-muted)' }} className="text-[9px] opacity-50 ml-auto">{newComment.length}/100</span>
+                <span style={{ color: 'var(--text-muted)' }} className="text-[9px] ml-auto">{newComment.length}/100</span>
               </div>
             </div>
           )}
 
           {loadingComments ? (
-            <p style={{ color: 'var(--text-muted)' }} className="text-xs opacity-50 text-center py-3">Načítám...</p>
+            <p style={{ color: 'var(--text-muted)' }} className="text-xs text-center py-3">Načítám...</p>
           ) : comments.length === 0 ? (
-            <p style={{ color: 'var(--text-muted)' }} className="text-xs opacity-50 text-center py-3">Zatím žádné komentáře. Buď první!</p>
+            <p style={{ color: 'var(--text-muted)' }} className="text-xs text-center py-3">Zatím žádné komentáře. Buď první!</p>
           ) : (
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {comments.map(c => (
@@ -239,13 +265,13 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
                       <span style={{ color: 'var(--text-body)' }} className="text-xs break-words">{c.content}</span>
                     </div>
                     {c.user_id === user?.id ? (
-                      <button onClick={() => handleDeleteComment(c.id)} aria-label="Smazat svůj komentář" className="bg-transparent border-none cursor-pointer p-0.5 text-red-400 opacity-60 hover:opacity-100 shrink-0">
+                      <button onClick={() => handleDeleteComment(c.id)} aria-label="Smazat svůj komentář" className="bg-transparent border-none cursor-pointer p-0.5 text-red-500 hover:opacity-70 shrink-0">
                         <X size={12} />
                       </button>
                     ) : reported[c.id] ? (
-                      <span style={{ color: 'var(--text-muted)' }} className="text-[9px] font-bold uppercase shrink-0 opacity-70">Nahlášeno</span>
+                      <span style={{ color: 'var(--text-muted)' }} className="text-[9px] font-bold uppercase shrink-0">Nahlášeno</span>
                     ) : user && (
-                      <button onClick={() => { setReportingId(prev => (prev === c.id ? null : c.id)); setReportError(''); }} aria-label="Nahlásit komentář" aria-expanded={reportingId === c.id} title="Nahlásit komentář" style={{ color: 'var(--text-muted)' }} className="bg-transparent border-none cursor-pointer p-1 opacity-50 hover:opacity-100 shrink-0">
+                      <button onClick={() => { setReportingId(prev => (prev === c.id ? null : c.id)); setReportError(''); }} aria-label="Nahlásit komentář" aria-expanded={reportingId === c.id} title="Nahlásit komentář" style={{ color: 'var(--text-muted)' }} className="bg-transparent border-none cursor-pointer p-1 hover:opacity-70 shrink-0">
                         <Flag size={12} />
                       </button>
                     )}

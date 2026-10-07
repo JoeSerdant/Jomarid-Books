@@ -3,10 +3,12 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { loadCatalog } from '../browse/libraryData';
+import { RECENT_SEARCH_KEY } from '../browse/browseStore';
+import { canonicalizeGenres, cleanGenres } from '../browse/libraryModel';
 import { ChevronRight, Loader2, Search, X, SlidersHorizontal, Star, Heart, RotateCcw, History, Library, Globe } from 'lucide-react';
 
 const PREFS_KEY = 'jomarid-search-prefs';
-const RECENT_KEY = 'jomarid-search-recent';
+const RECENT_KEY = RECENT_SEARCH_KEY;
 const PAGE_SIZE = 20;
 const DAY_MS = 86400000;
 
@@ -55,13 +57,13 @@ const likeInfoFromRows = (rows, userId) => {
 export const buildSearchItems = (books, userBooks, likes, userId) => {
   const ubMap = new Map(userBooks.map(ub => [ub.book_id, ub]));
   const likeInfo = Array.isArray(likes) ? likeInfoFromRows(likes, userId) : likes;
-  return books.map(b => {
+  const items = books.map(b => {
     const ub = ubMap.get(b.id);
     const isOwn = !!b.author_id && b.author_id === userId;
     // Stejná definice přístupu jako v UserLibrary/ReaderPage: vlastník, automaticky
     // přiřazená kniha, nebo aktivní licence.
     const owned = isOwn || !!b.is_auto_assigned || ub?.status === 'active';
-    const genres = Array.isArray(b.genres) ? b.genres : [];
+    const genres = cleanGenres(b.genres);
     const authorName = b.author_display || b.author || '';
     const price = b.is_auto_assigned ? 0 : (parseInt(b.price_coins, 10) || 0);
     const progress = ub ? Math.round(parseFloat(ub.scroll_position) || 0) : 0;
@@ -76,6 +78,8 @@ export const buildSearchItems = (books, userBooks, likes, userId) => {
       f: { title: fold(b.title), author: fold(`${authorName} ${b.author || ''}`), genres: fold(genres.join(' ')), description: fold(b.description) },
     };
   });
+  // Stejné čištění a sjednocení zápisů jako v knihovně (Sci-Fi / sci-fi / SCI-FI je jeden žánr, ne tři tlačítka).
+  return canonicalizeGenres(items);
 };
 
 const relevance = (it, tokens, fields) => {

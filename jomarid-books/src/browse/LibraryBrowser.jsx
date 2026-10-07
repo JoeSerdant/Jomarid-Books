@@ -69,7 +69,7 @@ const StateBadge = ({ book, mini }) => {
 const TitleButton = ({ book, onOpen, className }) => {
   const state = bookStateText(book);
   return (
-    <button type="button" onClick={() => onOpen(book)} style={{ color: 'var(--text-body)' }} className={`text-left p-0 border-none bg-transparent cursor-pointer font-black uppercase tracking-tight leading-snug line-clamp-2 break-words hover:opacity-70 ${className}`}>
+    <button type="button" data-title-button onClick={() => onOpen(book)} style={{ color: 'var(--text-body)' }} className={`text-left p-0 border-none bg-transparent cursor-pointer font-black uppercase tracking-tight leading-snug line-clamp-2 break-words hover:opacity-70 ${className}`}>
       {book.title}
       {state && <span className="sr-only">. {state}</span>}
     </button>
@@ -103,7 +103,7 @@ const ActionButton = ({ book, action, onOpen, compact }) => {
 const BookCard = memo(function BookCard({ book, coins, onOpen, onLike }) {
   const action = bookAction(book, coins);
   return (
-    <article data-testid="library-card" style={card} className="h-full border rounded-2xl overflow-hidden flex flex-col hover:shadow-lg transition-shadow">
+    <article data-testid="library-card" data-book-id={book.id} style={card} className="h-full border rounded-2xl overflow-hidden flex flex-col hover:shadow-lg transition-shadow">
       <div className="relative">
         {/* Obálka je klepací plocha pro myš a prst; pro klávesnici a čtečky slouží tlačítko s názvem (jinak by byly dva ovladače téhož). */}
         <button type="button" tabIndex={-1} aria-hidden="true" onClick={() => onOpen(book)} className="block w-full p-0 border-none bg-transparent cursor-pointer">
@@ -134,7 +134,7 @@ const BookCard = memo(function BookCard({ book, coins, onOpen, onLike }) {
 const BookRow = memo(function BookRow({ book, coins, onOpen, onLike }) {
   const action = bookAction(book, coins);
   return (
-    <article data-testid="library-row" style={card} className="border rounded-2xl p-2.5 flex gap-3 hover:shadow-md transition-shadow">
+    <article data-testid="library-row" data-book-id={book.id} style={card} className="border rounded-2xl p-2.5 flex gap-3 hover:shadow-md transition-shadow">
       <button type="button" tabIndex={-1} aria-hidden="true" onClick={() => onOpen(book)} className="shrink-0 self-start p-0 border-none bg-transparent cursor-pointer rounded-lg overflow-hidden">
         <BookCover title={book.title} seed={book.id} className="w-14 h-[74px] rounded-lg" textClass="text-lg">
           <StateBadge book={book} mini />
@@ -194,6 +194,7 @@ export const LibraryBrowser = ({ books, coins, userId, onOpenDetail, onToggleLik
   const filtered = useMemo(() => filterBooks(sorted, { status, genre, query: deferredQuery }), [sorted, status, genre, deferredQuery]);
   // Nejčastější žánry jako tlačítka, zbytek v rozbalovátku; vybraný žánr zůstane mezi tlačítky i bez knih, ať jde zrušit.
   const { chips: genreChips, rest: moreGenres } = useMemo(() => splitGenres(genres, genre), [genres, genre]);
+  const moreActive = genre !== 'all' && moreGenres.some((g) => g.genre === genre); // vybraný žánr je v rozbalovátku
 
   const paged = usePagedList(filtered, {
     pageSize: PAGE_SIZE[view],
@@ -258,7 +259,7 @@ export const LibraryBrowser = ({ books, coins, userId, onOpenDetail, onToggleLik
 
   return (
     <>
-      <section ref={rootRef} tabIndex={-1} aria-label="Procházení knihovny" className="space-y-3 outline-none">
+      <section ref={rootRef} tabIndex={-1} aria-label="Procházení knihovny" className="space-y-3 focus:outline-none">
         <div className="flex flex-col lg:flex-row lg:items-center gap-3">
           <div role="group" aria-label="Které knihy zobrazit" className="flex gap-2 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 lg:shrink-0 lg:overflow-visible">
             {STATUS_FILTERS.map((f) => {
@@ -280,28 +281,30 @@ export const LibraryBrowser = ({ books, coins, userId, onOpenDetail, onToggleLik
           </div>
 
           <div className="flex gap-3 lg:flex-1 min-w-0">
-            <div data-tour="library-search" style={card} className={`border rounded-xl px-3.5 py-2.5 flex items-center gap-2.5 flex-1 min-w-0 ${focusRing}`}>
+            {/* label: klepnutí kamkoli do rámečku (i na lupu a okraje) zaostří do pole, ne jen na řádek textu */}
+            <label data-tour="library-search" style={card} className={`border rounded-xl px-3.5 py-2.5 flex items-center gap-2.5 flex-1 min-w-0 cursor-text ${focusRing}`}>
               <Search size={15} style={{ color: 'var(--text-muted)' }} className="opacity-50 shrink-0" />
               <input
                 ref={searchRef}
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                // Enter schová klávesnici na telefonu, ať jsou vidět výsledky (výběr se mění už při psaní).
-                onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                // Enter schová klávesnici na telefonu, ať jsou vidět výsledky (výběr se mění už při psaní). S myší a
+                // klávesnicí pole zůstane zaostřené, jinak by fokus spadl na <body>.
+                onKeyDown={(e) => { if (e.key === 'Enter' && window.matchMedia?.('(pointer: coarse)').matches) e.currentTarget.blur(); }}
                 placeholder="Hledat podle názvu nebo autora..."
                 aria-label="Hledat v knihovně"
                 autoComplete="off"
                 enterKeyHint="search"
                 style={{ color: 'var(--text-body)' }}
-                className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm font-medium placeholder:opacity-60"
+                className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm font-medium placeholder:opacity-100 placeholder:text-[color:var(--text-muted)]"
               />
               {query && (
                 <button type="button" aria-label="Smazat hledání" onClick={clearSearch} className="bg-transparent border-none cursor-pointer p-1.5 -mr-1.5 opacity-60 hover:opacity-100" style={{ color: 'var(--text-body)' }}>
                   <X size={14} />
                 </button>
               )}
-            </div>
+            </label>
             <ViewToggle value={view} onChange={chooseView} />
           </div>
         </div>
@@ -316,11 +319,11 @@ export const LibraryBrowser = ({ books, coins, userId, onOpenDetail, onToggleLik
             ))}
             {moreGenres.length > 0 && (
               <select
-                value=""
-                onChange={(e) => { if (e.target.value) setGenre(e.target.value); }}
+                value={moreActive ? genre : ''}
+                onChange={(e) => setGenre(e.target.value || 'all')}
                 aria-label={`Další žánry (${moreGenres.length})`}
                 data-testid="more-genres"
-                style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' }}
+                style={{ backgroundColor: moreActive ? 'var(--text-body)' : 'var(--bg-secondary)', color: moreActive ? 'var(--bg-body)' : 'var(--text-muted)' }}
                 className="shrink-0 px-3 py-2 rounded-full font-black text-[10px] uppercase border-none cursor-pointer max-w-[11rem]"
               >
                 <option value="">Další žánry ({moreGenres.length})</option>

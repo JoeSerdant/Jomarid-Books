@@ -34,7 +34,11 @@
          takze plocha mimo obsah (napr. pri oddaleni na mobilu) byla vzdy svetla, at byl motiv jakykoliv. */
       html { background-color: var(--bg-body, #f8fafc); }
       /* Přilepená horní lišta nesmí zakrývat prvek, na který se doscrolluje (fokus klávesnicí, odkazy na kotvy). */
-      html { scroll-padding-top: calc(var(--navbar-h, 0px) + 8px); }
+      html { scroll-padding-top: calc(var(--navbar-h, 0px) + 8px); scroll-padding-bottom: 4.5rem; /* ať prvek v ohnisku nezakryje tlačítko "nahoru" */ }
+      /* Prvky samotné horní lišty se při fokusu nesmí posouvat o výšku lišty (stránka by při Tabu skákala stovky pixelů). */
+      html:has(nav :focus) { scroll-padding-top: 0; }
+      /* Vysoký kontrast Windows: stisknuté přepínače (filtry knihovny) by jinak vypadaly stejně jako nestisknuté. */
+      @media (forced-colors: active) { [aria-pressed="true"] { outline: 2px solid Highlight; outline-offset: -2px; } }
       body { font-family: 'Inter', system-ui, sans-serif; background-color: var(--bg-body, #f8fafc); color: var(--text-body, #0f172a); min-height: 100vh; min-height: 100dvh; }
       #root { min-height: 100vh; min-height: 100dvh; }
       /* Skryje posuvnik, ale prvek zustane scrollovatelny (zalozky admina, atd.). */

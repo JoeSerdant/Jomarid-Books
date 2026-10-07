@@ -6,6 +6,7 @@ import { normalizeLibraryState, serializeLibraryState } from './libraryModel.js'
 
 const VIEW_KEY = 'jomarid.library.view'; // způsob zobrazení: trvalá volba čtenáře (localStorage)
 const STATE_KEY = 'jomarid.library.state'; // filtry a poloha: jen v rámci karty (sessionStorage)
+export const RECENT_SEARCH_KEY = 'jomarid-search-recent'; // poslední hledané výrazy ve vyhledávacím okně (localStorage)
 
 const local = () => { try { return window.localStorage; } catch { return null; } };
 const session = () => { try { return window.sessionStorage; } catch { return null; } };
@@ -21,6 +22,15 @@ export const writeViewMode = (mode, storage = local()) => {
 /** Zapomene uložený stav knihovny (při odhlášení): hledaný text může být osobní a nemá zůstat v kartě. */
 export const clearLibraryState = ({ storage = session() } = {}) => {
   try { storage?.removeItem(STATE_KEY); } catch { /* úložiště nedostupné: není co mazat */ }
+};
+
+/**
+ * Zapomene všechno osobní, co si procházení pamatuje: stav knihovny (včetně hledaného textu) i poslední hledané
+ * výrazy z vyhledávacího okna. Volá se po odhlášení, ať to další člověk na sdíleném počítači nevidí.
+ */
+export const clearPersonalBrowseState = ({ sessionStore = session(), localStore = local() } = {}) => {
+  clearLibraryState({ storage: sessionStore });
+  try { localStore?.removeItem(RECENT_SEARCH_KEY); } catch { /* úložiště nedostupné: není co mazat */ }
 };
 
 export const readLibraryState = (userId, { storage = session(), now = Date.now() } = {}) => {

@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { clearLibraryState } from '../browse/browseStore';
+import { clearPersonalBrowseState } from '../browse/browseStore';
 
 export const ThemeContext = createContext(null);
 export const AuthContext = createContext(null);
@@ -77,7 +77,7 @@ export function AuthProvider({ children }) {
 
    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
      if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
-     if (event === 'SIGNED_OUT') { setRecoveryMode(false); clearLibraryState(); }
+     if (event === 'SIGNED_OUT') { setRecoveryMode(false); clearPersonalBrowseState(); }
      syncProfile(session?.user ?? null);
    });
 
@@ -91,9 +91,15 @@ export function AuthProvider({ children }) {
  };
 
  const logout = async () => {
-   clearLibraryState(); // hledání a filtry z knihovny nemají po odhlášení zůstat v kartě
+   clearPersonalBrowseState(); // hledání a filtry z knihovny nemají po odhlášení zůstat v kartě
    await supabase.auth.signOut();
  };
+
+ // Knihovna si při odpojení ještě dopíše rozdělaný stav (poslední posun stránky), a to by přepsalo předchozí mazání.
+ // Efekt rodiče se spouští až po úklidu potomků, takže tohle mazání je poslední a platí.
+ useEffect(() => {
+   if (!user && !loading) clearPersonalBrowseState();
+ }, [user, loading]);
 
  return (
    <AuthContext.Provider value={{ user, role, loading, login, logout, username, mustChangePassword: mustChange, recoveryMode: recoveryMode || mustChange, clearRecovery: () => { setRecoveryMode(false); setMustChange(false); }, refreshProfile: () => syncProfile(user) }}>

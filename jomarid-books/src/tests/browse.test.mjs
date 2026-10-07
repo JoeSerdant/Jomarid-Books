@@ -356,6 +356,10 @@ describe('převod řádku z databáze na knihu', () => {
     const out2 = L.canonicalizeGenres(same);
     assert.equal(out2[0], same[0], 'kniha, která už má správné zápisy, zůstane stejný objekt');
     assert.equal(out2[1], same[1]);
+    // diakritika váží víc než velké písmeno: "román" (s diakritikou) porazí "Roman" (bez ní), ať jsou v jakémkoli pořadí
+    for (const order of [['Roman', 'román'], ['román', 'Roman']]) {
+      assert.deepEqual(L.canonicalizeGenres(order.map((g, i) => mk(String(i), [g]))).map((b) => b.genres[0]), ['román', 'román'], order.join(' / '));
+    }
     assert.equal(books[0].genres[0], 'Sci-Fi', 'původní knihy se nemění');
     assert.deepEqual(L.canonicalizeGenres([]), []);
   });
@@ -567,7 +571,7 @@ describe('zapamatovaný stav knihovny', () => {
     assert.equal(L.sanitizeRestoredState(null, books), null);
   });
 
-  test('žánry: nejčastějších dvanáct má tlačítko, zbytek je v rozbalovátku, vybraný žánr je vždy mezi tlačítky', () => {
+  test('žánry: nejčastějších dvanáct má tlačítko, zbytek je v rozbalovátku, vybraný žánr se mezi nimi nepřesouvá', () => {
     // nejčastější žánry jsou abecedně poslední (číslo 39 má nejvíc knih), ať se pořadí podle četnosti liší od abecedního
     const many = Array.from({ length: 40 }, (_, i) => ({ genre: 'Žánr ' + String(i).padStart(2, '0'), count: i + 1 }));
     const { chips, rest } = L.splitGenres(many, 'all');
@@ -576,12 +580,17 @@ describe('zapamatovaný stav knihovny', () => {
     assert.equal(rest.length, 28);
     assert.equal(chips.length + rest.length, 40);
     assert.ok(rest.every((g) => !chips.includes(g)));
-    // vybraný žánr z rozbalovátka se přesune mezi tlačítka
+    // vybraný žánr z rozbalovátka v něm zůstává a nic se nepřeskládá: seznam voleb se výběrem nesmí změnit, jinak by
+    // šipkami nešlo procházet (prohlížeče mění výběr už při každé šipce)
     const sel = L.splitGenres(many, 'Žánr 00'); // nejméně častý žánr vybraný z rozbalovátka
-    assert.equal(sel.chips.length, 13);
-    assert.ok(sel.chips.some((g) => g.genre === 'Žánr 00'));
-    assert.equal(sel.chips[0].genre, 'Žánr 00', 'mezi tlačítky abecedně');
-    assert.ok(!sel.rest.some((g) => g.genre === 'Žánr 00'));
+    assert.deepEqual(sel, { chips, rest });
+    assert.ok(sel.rest.some((g) => g.genre === 'Žánr 00'));
+    assert.ok(!sel.chips.some((g) => g.genre === 'Žánr 00'));
+    for (const g of rest) assert.deepEqual(L.splitGenres(many, g.genre), { chips, rest }, `výběr ${g.genre} nemění rozdělení`);
+    // vybraný žánr, který v aktuálním výběru nemá žádnou knihu, je v rozbalovátku s nulou
+    const empty = L.splitGenres(many, 'Fantasy');
+    assert.deepEqual(empty.rest.find((g) => g.genre === 'Fantasy'), { genre: 'Fantasy', count: 0 });
+    assert.equal(empty.chips.length, 12);
     // vybraný žánr, který už nemá žádnou knihu, je mezi tlačítky s nulou
     const none = L.splitGenres(many.slice(0, 5), 'Fantasy');
     assert.deepEqual(none.chips.find((g) => g.genre === 'Fantasy'), { genre: 'Fantasy', count: 0 });
@@ -631,9 +640,9 @@ const EMBED_ERROR = { code: 'PGRST200', message: 'Could not find a relationship 
 const makeClient = (tables, { cap = Infinity, failEmbedded = null, failTables = [], faults = null } = {}) => {
   const log = [];
   const from = (table) => {
-    const q = { select: null, filters: [], gts: [], order: [], range: null, limit: null, single: false };
+    const q = { select: null, filters: [], gts: [], order: [], dirs: [], range: null, limit: null, single: false, retry: true, signal: null };
     const exec = () => {
-      const entry = { table, select: q.select, range: q.range, limit: q.limit, order: [...q.order], filters: [...q.filters], gts: [...q.gts] };
+      const entry = { table, select: q.select, range: q.range, limit: q.limit, order: [...q.order], dirs: [...q.dirs], filters: [...q.filters], gts: [...q.gts], retry: q.retry, signal: q.signal };
       log.push(entry);
       const nth = log.filter((l) => l.table === table).length; // pořadí dotazu na tuhle tabulku, od 1
       const fault = faults && faults(table, nth, entry);
@@ -642,7 +651,7 @@ const makeClient = (tables, { cap = Infinity, failEmbedded = null, failTables = 
       const embedded = table === 'books' && /book_likes\(count\)/.test(q.select || '');
       if (embedded && failEmbedded) return { data: null, error: failEmbedded === true ? EMBED_ERROR : failEmbedded, status: 400 };
       let rows = (tables[table] || []).filter((r) => q.filters.every(([c, v]) => r[c] === v) && q.gts.every(([c, v]) => r[c] > v));
-      rows = [...rows].sort((a, b) => { for (const c of q.order) { if (a[c] < b[c]) return -1; if (a[c] > b[c]) return 1; } return 0; });
+      rows = [...rows].sort((a, b) => { for (const [i, c] of q.order.entries()) { const d = q.dirs[i] ? 1 : -1; if (a[c] < b[c]) return -d; if (a[c] > b[c]) return d; } return 0; });
       if (embedded) rows = rows.map((r) => ({ ...r, book_likes: [{ count: (tables.book_likes || []).filter((l) => l.book_id === r.id).length }] }));
       if (q.single) return { data: rows[0] ?? null, error: null, status: 200 };
       if (q.range) rows = rows.slice(q.range[0], q.range[1] + 1);
@@ -653,7 +662,9 @@ const makeClient = (tables, { cap = Infinity, failEmbedded = null, failTables = 
       select(cols) { q.select = cols; return builder; },
       eq(c, v) { q.filters.push([c, v]); return builder; },
       gt(c, v) { q.gts.push([c, v]); return builder; },
-      order(c) { q.order.push(c); return builder; },
+      order(c, opts) { q.order.push(c); q.dirs.push(opts?.ascending !== false); return builder; },
+      retry(on) { q.retry = on; return builder; },
+      abortSignal(signal) { q.signal = signal; return builder; },
       range(a, b) { q.range = [a, b]; return builder; },
       limit(n) { q.limit = n; return builder; },
       maybeSingle() { q.single = true; return builder; },
@@ -780,6 +791,36 @@ describe('načítání po částech', () => {
     assert.equal(none.error.message, 'x');
   });
 
+  test('opakování čeká stále déle (zdvojnásobuje) a po výpadku se na chybu čeká jen pár sekund', async () => {
+    const realSetTimeout = globalThis.setTimeout;
+    const waits = [];
+    globalThis.setTimeout = (fn, ms, ...rest) => { waits.push(ms); return realSetTimeout(fn, 0, ...rest); };
+    try {
+      const down = () => keyPager(5, { fail: () => ({ data: null, error: { message: 'x' }, status: 503 }) }).build;
+      await D.fetchAllByKey(down(), { pageSize: 10, retries: 3, retryDelayMs: 100 });
+      assert.deepEqual(waits, [100, 200, 400]);
+      waits.length = 0;
+      const res = await D.fetchAllByKey(down(), { pageSize: 10 });
+      assert.equal(res.error.message, 'x');
+      assert.equal(waits.length, 2, 'standardně dvě opakování');
+      assert.equal(waits[1], waits[0] * 2);
+      assert.ok(waits[0] > 0 && waits.reduce((a, b) => a + b, 0) <= 3000, `celkové čekání ${waits.join('+')} ms`);
+    } finally { globalThis.setTimeout = realSetTimeout; }
+  });
+
+  test('fetchAllByKey: klíč, který chybí nebo se nepohne, je chyba (ne stokrát dokola stejná část)', async () => {
+    let calls = 0;
+    const noKey = await D.fetchAllByKey(async () => { calls += 1; return { data: Array.from({ length: 10 }, () => ({ jiny: 1 })), error: null }; }, { pageSize: 10 });
+    assert.equal(noKey.data, null);
+    assert.equal(noKey.error.code, 'KEYSET_STUCK');
+    assert.equal(calls, 1);
+    calls = 0;
+    const ignored = await D.fetchAllByKey(async () => { calls += 1; return { data: Array.from({ length: 10 }, (_, i) => ({ id: String(i) })), error: null }; }, { pageSize: 10 }); // databáze podmínku "za klíčem" ignoruje
+    assert.equal(ignored.error.code, 'KEYSET_STUCK');
+    assert.equal(calls, 2, 'druhá část se stejným posledním klíčem se pozná hned');
+    assert.equal(D.isTransient(ignored), false, 'takovou chybu nemá smysl opakovat');
+  });
+
   test('fetchAllByKey: přerušení zastaví načítání, i při čekání na opakování', async () => {
     const p = keyPager(100);
     let stop = false;
@@ -888,13 +929,13 @@ describe('načtení knihovny z databáze', () => {
     }
     const warn = console.warn; console.warn = () => {};
     try {
-      for (const faults of [
-        (t) => (t === 'books' ? { data: null, error: { message: 'TypeError: Failed to fetch' }, status: 0 } : null),
-        (t) => (t === 'books' ? { data: null, error: { message: 'Bad gateway' }, status: 502 } : null),
-        (t) => (t === 'books' ? { data: null, error: { code: '42703', message: 'sloupec neexistuje' }, status: 400 } : null),
+      for (const [message, error, status] of [
+        ['TypeError: Failed to fetch', { message: 'TypeError: Failed to fetch' }, 0],
+        ['Bad gateway', { message: 'Bad gateway' }, 502],
+        ['sloupec neexistuje', { code: '42703', message: 'sloupec neexistuje' }, 400],
       ]) {
-        const client = makeClient(db, { faults });
-        await assert.rejects(() => D.loadLibrary(client, USER, FAST));
+        const client = makeClient(db, { faults: (t) => (t === 'books' ? { data: null, error, status } : null) });
+        await assert.rejects(() => D.loadLibrary(client, USER, FAST), { message });
         assert.ok(!client.log.some((l) => l.table === 'books' && l.select === '*'), 'knihy se nečetly znovu bez vložených počtů');
         assert.ok(!client.log.some((l) => l.table === 'book_likes' && !l.filters.some(([c]) => c === 'user_id')), 'lajky všech čtenářů se nestahovaly');
       }
@@ -918,11 +959,63 @@ describe('načtení knihovny z databáze', () => {
       assert.equal(noLikes.books.length, 20);
       assert.ok(noLikes.books.every((b) => b.isLiked === false));
     } finally { console.warn = warn; }
-    const { books, coins } = await D.loadLibrary(makeClient(db, { failTables: ['profiles'] }), USER, FAST);
-    assert.equal(books.length, 20);
-    assert.equal(coins, null);
+    const warn2 = console.warn; console.warn = () => {};
+    try {
+      const { books, coins } = await D.loadLibrary(makeClient(db, { failTables: ['profiles'] }), USER, FAST); // chyba dotazu (ne výpadek): bez zůstatku
+      assert.equal(books.length, 20);
+      assert.equal(coins, null);
+    } finally { console.warn = warn2; }
     const none = await D.loadLibrary(makeClient({ ...db, profiles: [] }), USER, FAST);
     assert.equal(none.coins, null);
+  });
+
+  test('zůstatek: přechodná chyba se zopakuje, trvalý výpadek je chyba (ne tiché "0 mincí" a "Chybí N" u každé knihy)', async () => {
+    const db = dbFixture(20);
+    const flaky = makeClient(db, { faults: (t, n) => (t === 'profiles' && n === 1 ? { data: null, error: { message: 'bad gateway' }, status: 502 } : null) });
+    assert.equal((await D.loadLibrary(flaky, USER, FAST)).coins, 321, 'po jednom zakopnutí platí skutečný zůstatek');
+    assert.equal(flaky.log.filter((l) => l.table === 'profiles').length, 2);
+    for (const status of [0, 500, 503]) {
+      const down = makeClient(db, { faults: (t) => (t === 'profiles' ? { data: null, error: { message: 'výpadek' }, status } : null) });
+      await assert.rejects(() => D.loadLibrary(down, USER, FAST), { message: 'výpadek' }, `status ${status}`);
+      assert.equal(down.log.filter((l) => l.table === 'profiles').length, 3, `status ${status}: původní pokus a dvě opakování`);
+      await assert.rejects(() => D.loadCatalog(down, USER, FAST), { message: 'výpadek' }, `status ${status}: stejné pro vyhledávání`);
+    }
+  });
+
+  test('záložní počítání lajků: výpadek se opakuje a po vyčerpání je to chyba (jinak by všechny knihy měly 0 lajků)', async () => {
+    const db = dbFixture(30);
+    const unfiltered = (l) => l.table === 'book_likes' && !l.filters.some(([c]) => c === 'user_id');
+    const flaky = makeClient(db, { failEmbedded: true, faults: (t, n, e) => (unfiltered(e) && n === 1 ? { data: null, error: { message: 'timeout' }, status: 504 } : null) });
+    const ok = await D.loadLibrary(flaky, USER, FAST);
+    assert.equal(ok.books.length, 30);
+    assert.ok(ok.books.some((b) => b.likesCount > 0));
+    const down = makeClient(db, { failEmbedded: true, faults: (t, n, e) => (unfiltered(e) ? { data: null, error: { message: 'výpadek' }, status: 503 } : null) });
+    await assert.rejects(() => D.loadLibrary(down, USER, FAST), { message: 'výpadek' });
+    assert.equal(down.log.filter(unfiltered).length, 3);
+  });
+
+  test('přerušení v kterémkoli čtení (knihy, licence, lajky čtenáře, zůstatek) zastaví celé načtení', async () => {
+    const db = dbFixture(10);
+    for (const table of ['books', 'user_books', 'book_likes', 'profiles']) {
+      const client = makeClient(db, { faults: (t) => (t === table ? { data: null, error: { cancelled: true, message: 'zrušeno' } } : null) });
+      await assert.rejects(() => D.loadLibrary(client, USER, FAST), (e) => D.isCancelledError(e), table);
+    }
+    const unfiltered = (e) => e.table === 'book_likes' && !e.filters.some(([c]) => c === 'user_id');
+    const fb = makeClient(db, { failEmbedded: true, faults: (t, n, e) => (unfiltered(e) ? { data: null, error: { cancelled: true, message: 'zrušeno' } } : null) });
+    await assert.rejects(() => D.loadLibrary(fb, USER, FAST), (e) => D.isCancelledError(e), 'záložní lajky');
+  });
+
+  test('jedna vrstva opakování a časový limit: vestavěné opakování klienta je u všech čtení vypnuté, každé má vlastní limit, řazení je vzestupné', async () => {
+    for (const failEmbedded of [null, true]) {
+      const client = makeClient(dbFixture(30), { failEmbedded });
+      await D.loadLibrary(client, USER);
+      assert.ok(client.log.length >= 4);
+      for (const l of client.log) {
+        assert.equal(l.retry, false, `${l.table}: vestavěné opakování klienta se vypíná (dvě vrstvy by se násobily)`);
+        assert.ok(l.signal && typeof l.signal.aborted === 'boolean', `${l.table}: požadavek má časový limit`);
+        assert.ok(l.dirs.every((asc) => asc === true), `${l.table}: klíčové stránkování vyžaduje vzestupné řazení`);
+      }
+    }
   });
 
   test('chyba při čtení knih se vyhodí (i po záložním pokusu)', async () => {
@@ -1056,6 +1149,15 @@ describe('zapamatování v úložišti', () => {
     const s6 = fresh(); S.clearLibraryState({ storage: s6 }); assert.equal(s6.m.size, 0);
     assert.doesNotThrow(() => S.clearLibraryState({ storage: null }));
     assert.doesNotThrow(() => S.clearLibraryState({ storage: { removeItem() { throw new Error('x'); } } }));
+    // odhlášení maže i poslední hledané výrazy z vyhledávacího okna (localStorage), a to jen je a stav knihovny
+    const sess = fakeStorage(); sess.setItem('jomarid.library.state', '{"x":1}'); sess.setItem('jine', '1');
+    const loc = fakeStorage(); loc.setItem(S.RECENT_SEARCH_KEY, '["Noční hlídka"]'); loc.setItem('jomarid-search-prefs', '{}'); loc.setItem('jomarid.library.view', 'list');
+    S.clearPersonalBrowseState({ sessionStore: sess, localStore: loc });
+    assert.deepEqual([...sess.m.keys()], ['jine'], 'stav knihovny pryč, cizí klíč zůstane');
+    assert.deepEqual([...loc.m.keys()].sort(), ['jomarid-search-prefs', 'jomarid.library.view'], 'poslední hledání pryč, nastavení a způsob zobrazení zůstanou');
+    assert.equal(S.RECENT_SEARCH_KEY, 'jomarid-search-recent', 'stejný klíč, jaký používá vyhledávací okno');
+    assert.doesNotThrow(() => S.clearPersonalBrowseState({ sessionStore: null, localStore: null }));
+    assert.doesNotThrow(() => S.clearPersonalBrowseState({ sessionStore: { removeItem() { throw new Error('x'); } }, localStore: { removeItem() { throw new Error('y'); } } }));
   });
 
   test('rozbitá data, nedostupné úložiště a chybějící uživatel nic nerozbijí', () => {
