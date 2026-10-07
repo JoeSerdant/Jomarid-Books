@@ -518,7 +518,7 @@ export const UserStats = () => {
         {stats.level}
       </div>
       <div className="flex-1 space-y-1 text-left">
-        <div className="flex justify-between text-[10px] font-black uppercase tracking-wider opacity-60" style={{ color: 'var(--text-body)' }}>
+        <div className="flex justify-between text-[0.625rem] font-black uppercase tracking-wider opacity-60" style={{ color: 'var(--text-body)' }}>
           <span>Úroveň čtenáře</span>
           <span>{stats.xp} / {stats.xpNeededForNext} XP</span>
         </div>
@@ -543,7 +543,7 @@ export const UserStats = () => {
             </div>
             <div className="p-3 bg-amber-500/10 text-amber-600 rounded-xl"><Flame size={24} className={stats.streak > 0 ? "fill-amber-500" : ""} /></div>
           </div>
-          <div style={{ borderColor: 'var(--border-color)' }} className="mt-2 pt-2 border-t text-left text-[10px] space-y-0.5">
+          <div style={{ borderColor: 'var(--border-color)' }} className="mt-2 pt-2 border-t text-left text-[0.625rem] space-y-0.5">
             <div className={`flex justify-between ${stats.streak < 10 ? 'font-black text-amber-600' : 'opacity-60'}`}><span>0-9 dní série:</span><span>streak * 10 XP</span></div>
             <div className={`flex justify-between ${stats.streak >= 10 && stats.streak < 50 ? 'font-black text-indigo-500' : 'opacity-60'}`}><span>10-49 dní 🔥:</span><span>streak * 25 XP</span></div>
             <div className={`flex justify-between ${stats.streak >= 50 ? 'font-black text-emerald-500 animate-pulse' : 'opacity-60'}`}><span>50+ dní 👑:</span><span>streak * 50 XP</span></div>
@@ -564,7 +564,7 @@ export const UserStats = () => {
               <div className="w-full bg-black/5 h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--bg-secondary)' }}>
                 <div className="h-full rounded-full transition-all duration-500" style={{ width: `${progressPercent}%`, backgroundColor: 'var(--bg-primary)' }}></div>
               </div>
-              <div style={{ color: 'var(--text-muted)' }} className="flex justify-between text-[10px] font-black uppercase opacity-80">
+              <div style={{ color: 'var(--text-muted)' }} className="flex justify-between text-[0.625rem] font-black uppercase opacity-80">
                 <span>{progressPercent}% splněno</span><span>{stats.daysRemainingInMonth === 0 ? "Poslední den!" : `Zbývá ${stats.daysRemainingInMonth} dní`}</span>
               </div>
             </div>
@@ -574,10 +574,10 @@ export const UserStats = () => {
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2 w-full">
                   <input type="number" min={stats.goalLocked ? stats.monthlyGoal : 1} max="500" disabled={stats.goalLockedCompletely} value={newGoalInput} onChange={(e) => setNewGoalInput(e.target.value)} style={{ backgroundColor: 'var(--bg-body)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }} className="w-16 px-2 py-1 border rounded-md outline-none text-sm font-bold text-center disabled:opacity-50" />
-                  <button disabled={stats.goalLockedCompletely} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} onClick={handleSaveGoal} className="px-2 py-1 rounded font-black uppercase text-[10px] cursor-pointer border-none shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">Uložit</button>
+                  <button disabled={stats.goalLockedCompletely} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} onClick={handleSaveGoal} className="px-2 py-1 rounded font-black uppercase text-[0.625rem] cursor-pointer border-none shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">Uložit</button>
                   <button style={{ color: 'var(--text-muted)' }} onClick={() => { setIsEditingGoal(false); setGoalError(''); }} className="px-1 py-1 font-bold cursor-pointer bg-transparent border-none">Zrušit</button>
                 </div>
-                <span style={{ color: 'var(--text-muted)' }} className="text-[10px] opacity-70">
+                <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] opacity-70">
                   {stats.goalLockedCompletely ? (
                     `Cíl už nejde měnit - dosáhl jsi ${stats.goalProgress} z ${stats.monthlyGoal} (aspoň polovina). Zas příští měsíc.`
                   ) : (() => {
@@ -590,7 +590,7 @@ export const UserStats = () => {
                     return `Teď máš ${cur}% XP tempa (nejvyšší splněný cíl: ${stats.highestGoalCompleted}). Po dosažení poloviny cíle už nejde měnit.`;
                   })()}
                 </span>
-                {goalError && <span className="text-red-500 text-[10px]">{goalError}</span>}
+                {goalError && <span className="text-red-500 text-[0.625rem]">{goalError}</span>}
               </div>
             ) : (
               <div className="flex items-center justify-between">
@@ -599,7 +599,7 @@ export const UserStats = () => {
                   {stats.goalLockedCompletely && <Lock size={12} className="text-red-500" title={`Uzamčeno - dosaženo ${stats.goalProgress} z ${stats.monthlyGoal}`} />}
                   {stats.goalLocked && !stats.goalLockedCompletely && <Lock size={12} className="text-amber-500" title="Tento měsíc lze cíl už jen zvýšit" />}
                 </span>
-                <button onClick={() => { setIsEditingGoal(true); setNewGoalInput(stats.monthlyGoal.toString()); }} style={{ color: stats.goalLockedCompletely ? 'var(--text-muted)' : 'var(--text-badge)' }} className="font-black uppercase tracking-wider p-0 bg-transparent border-none cursor-pointer text-[10px]">
+                <button onClick={() => { setIsEditingGoal(true); setNewGoalInput(stats.monthlyGoal.toString()); }} style={{ color: stats.goalLockedCompletely ? 'var(--text-muted)' : 'var(--text-badge)' }} className="font-black uppercase tracking-wider p-0 bg-transparent border-none cursor-pointer text-[0.625rem]">
                   {stats.goalLockedCompletely ? 'Uzamčeno' : stats.goalLocked ? 'Zvýšit Cíl' : 'Změnit Cíl'}
                 </button>
               </div>
@@ -690,7 +690,7 @@ export const UserStats = () => {
       <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 shadow-sm mb-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
           <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider m-0 flex items-center gap-1.5"><Users size={16} style={{ color: 'var(--bg-primary)' }} /> Globální Síň Slávy Jomarid Books</h3>
-          {!stats.showInLeaderboard && <span className="text-[10px] font-bold bg-red-500/10 text-red-400 px-2.5 py-1 rounded-md uppercase">Režim inkognito 🔒</span>}
+          {!stats.showInLeaderboard && <span className="text-[0.625rem] font-bold bg-red-500/10 text-red-400 px-2.5 py-1 rounded-md uppercase">Režim inkognito 🔒</span>}
         </div>
         <div className="flex flex-wrap gap-2 mb-6 border-b pb-4" style={{ borderColor: 'var(--border-color)' }}>
           {categories.map(cat => (
@@ -717,11 +717,11 @@ export const UserStats = () => {
                         <FeaturedIcon size={12} />
                       </span>
                     )}
-                    <span className="text-sm tracking-wide truncate max-w-[200px] sm:max-w-[350px]">{row.email} {row.isMe && <span className="text-[10px] bg-[var(--bg-primary)] text-[var(--text-primary)] px-1.5 py-0.5 rounded ml-1 uppercase font-black">Ty</span>}</span>
+                    <span className="text-sm tracking-wide truncate max-w-[200px] sm:max-w-[350px]">{row.email} {row.isMe && <span className="text-[0.625rem] bg-[var(--bg-primary)] text-[var(--text-primary)] px-1.5 py-0.5 rounded ml-1 uppercase font-black">Ty</span>}</span>
                   </div>
                   <div className="text-right font-black text-sm flex items-center gap-1">
                     <span>{row[activeTab].toLocaleString()}</span>
-                    <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-bold uppercase opacity-60">{cat?.suffix}</span>
+                    <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase opacity-60">{cat?.suffix}</span>
                   </div>
                 </div>
               );

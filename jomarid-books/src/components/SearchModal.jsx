@@ -194,13 +194,13 @@ const fieldStyle = { backgroundColor: 'var(--bg-secondary)', borderColor: 'var(-
 const Chip = ({ active, onClick, children, ...rest }) => (
   <button type="button" onClick={onClick} aria-pressed={active} {...rest}
     style={active ? { backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', borderColor: 'var(--bg-primary)' } : fieldStyle}
-    className="px-2.5 py-1 rounded-full border text-[11px] font-bold cursor-pointer whitespace-nowrap">
+    className="px-2.5 py-1 rounded-full border text-[0.6875rem] font-bold cursor-pointer whitespace-nowrap">
     {children}
   </button>
 );
 const Group = ({ label, children }) => (
   <div className="min-w-0">
-    <p style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider m-0 mb-1.5">{label}</p>
+    <p style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider m-0 mb-1.5">{label}</p>
     {children}
   </div>
 );
@@ -339,7 +339,7 @@ export const SearchModal = ({ isOpen, onClose }) => {
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider mr-0.5">Hledat v:</span>
+            <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider mr-0.5">Hledat v:</span>
             {FIELD_OPTIONS.map(([v, label]) => (
               <Chip key={v} active={prefs.fields.includes(v)} onClick={() => { const next = toggleIn(prefs.fields, v); if (next.length) patch({ fields: next }); }} title={prefs.fields.length === 1 && prefs.fields[0] === v ? 'Aspoň jedno pole musí zůstat zapnuté' : undefined}>{label}</Chip>
             ))}
@@ -440,10 +440,10 @@ export const SearchModal = ({ isOpen, onClose }) => {
                 <div className="mb-3 flex items-center gap-1.5 flex-wrap" data-testid="recent">
                   <History size={12} className="opacity-50" />
                   {recent.map(r => <Chip key={r} active={false} onClick={() => setQuery(r)}>{r}</Chip>)}
-                  <button type="button" onClick={() => { setRecent([]); try { localStorage.removeItem(RECENT_KEY); } catch { /* nevadí */ } }} style={{ color: 'var(--text-muted)' }} className="bg-transparent border-none cursor-pointer text-[10px] font-bold underline">smazat</button>
+                  <button type="button" onClick={() => { setRecent([]); try { localStorage.removeItem(RECENT_KEY); } catch { /* nevadí */ } }} style={{ color: 'var(--text-muted)' }} className="bg-transparent border-none cursor-pointer text-[0.625rem] font-bold underline">smazat</button>
                 </div>
               )}
-              <p style={{ color: 'var(--text-muted)' }} className="text-[11px] font-bold m-0 mb-1.5" aria-live="polite">{results.length === 1 ? '1 výsledek' : results.length >= 2 && results.length <= 4 ? `${results.length} výsledky` : `${results.length} výsledků`}</p>
+              <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] font-bold m-0 mb-1.5" aria-live="polite">{results.length === 1 ? '1 výsledek' : results.length >= 2 && results.length <= 4 ? `${results.length} výsledky` : `${results.length} výsledků`}</p>
               {results.length === 0 ? (
                 <div className="text-center py-6">
                   <p className="text-sm font-medium opacity-70 m-0">{prefs.scope === 'mine' && mineCount === 0 && !query && !activeFilterCount ? 'Zatím nemáš žádné knihy - zkus Celý katalog.' : 'Nic neodpovídá zadání.'}</p>
@@ -461,9 +461,9 @@ export const SearchModal = ({ isOpen, onClose }) => {
                         className="p-2.5 flex justify-between items-center gap-3 rounded-xl no-underline text-current">
                         <div className="min-w-0 flex-1">
                           <h4 className="font-bold text-sm m-0 break-words"><Highlight text={it.title} tokens={tokens} /></h4>
-                          <p style={{ color: 'var(--text-muted)' }} className="text-[11px] uppercase font-semibold mt-0.5 m-0 break-words"><Highlight text={it.authorName} tokens={tokens} /></p>
-                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1.5 text-[11px] font-bold">
-                            {it.genres.slice(0, 3).map(g => <span key={g} style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' }} className="px-1.5 py-0.5 rounded-full text-[10px]">{g}</span>)}
+                          <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] uppercase font-semibold mt-0.5 m-0 break-words"><Highlight text={it.authorName} tokens={tokens} /></p>
+                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1.5 text-[0.6875rem] font-bold">
+                            {it.genres.slice(0, 3).map(g => <span key={g} style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' }} className="px-1.5 py-0.5 rounded-full text-[0.625rem]">{g}</span>)}
                             {it.ratingsCount > 0 && <span className="inline-flex items-center gap-0.5"><Star size={11} className="text-amber-500 fill-amber-500" /> {it.rating.toFixed(1).replace('.', ',')} <span style={{ color: 'var(--text-muted)' }} className="font-medium">({it.ratingsCount})</span></span>}
                             {it.likes > 0 && <span className="inline-flex items-center gap-0.5" style={{ color: it.liked ? '#ef4444' : 'var(--text-muted)' }}><Heart size={11} className={it.liked ? 'fill-current' : ''} /> {it.likes}</span>}
                             {it.isOwn ? <span className="text-emerald-500">Tvoje kniha</span>
@@ -482,7 +482,7 @@ export const SearchModal = ({ isOpen, onClose }) => {
               {results.length > visible.length && (
                 <button type="button" onClick={() => setLimit(l => l + PAGE_SIZE)} style={fieldStyle} className="mt-3 w-full py-2.5 border rounded-lg cursor-pointer text-xs font-black uppercase">Zobrazit dalších {Math.min(PAGE_SIZE, results.length - visible.length)}</button>
               )}
-              <p style={{ color: 'var(--text-muted)' }} className="hidden sm:block text-[10px] text-center opacity-50 mt-3 m-0">↑ ↓ výběr · Enter otevřít · Esc zavřít</p>
+              <p style={{ color: 'var(--text-muted)' }} className="hidden sm:block text-[0.625rem] text-center opacity-50 mt-3 m-0">↑ ↓ výběr · Enter otevřít · Esc zavřít</p>
             </>
           )}
         </div>

@@ -245,7 +245,7 @@ export const GameLauncher = ({ game }) => {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-16 text-center animate-in fade-in duration-300">
-      <Link to="/games" className="text-[10px] font-black uppercase tracking-wider no-underline opacity-50 hover:opacity-100 transition-all inline-flex items-center gap-1 mb-6" style={{ color: 'var(--text-body)' }}>
+      <Link to="/games" className="text-[0.625rem] font-black uppercase tracking-wider no-underline opacity-50 hover:opacity-100 transition-all inline-flex items-center gap-1 mb-6" style={{ color: 'var(--text-body)' }}>
         ← Všechny hry
       </Link>
       <div 
@@ -286,7 +286,7 @@ export const GameLauncher = ({ game }) => {
             <button
               onClick={() => window.location.reload()}
               style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
-              className="px-4 py-2 rounded-lg text-[11px] font-black uppercase tracking-wider cursor-pointer border"
+              className="px-4 py-2 rounded-lg text-[0.6875rem] font-black uppercase tracking-wider cursor-pointer border"
             >
               Obnovit stránku
             </button>
@@ -319,11 +319,11 @@ export const GameLauncher = ({ game }) => {
             )}
           </button>
           {!claimedToday && !checkingStatus && !hasPlayedEnough && (
-            <span style={{ color: 'var(--text-muted)' }} className="text-[10px] opacity-60">
+            <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] opacity-60">
               Odměna se odemkne po chvilce hraní - zkus to po zavření hry znovu.
             </span>
           )}
-          <span style={{ color: 'var(--text-muted)' }} className="text-[10px] opacity-60 flex items-center gap-1">
+          <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] opacity-60 flex items-center gap-1">
             <Coins size={11} /> Aktuální zůstatek: {coins} Jomarid Coins
           </span>
         </div>

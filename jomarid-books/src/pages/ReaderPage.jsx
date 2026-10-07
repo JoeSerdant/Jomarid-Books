@@ -958,13 +958,13 @@ export const ReaderPage = () => {
       {!focusMode && (
         <div className="shrink-0 px-3 sm:px-4 pt-2 sm:pt-4 pb-1 sm:pb-2 max-w-[100vw]">
           <div className="border-b pb-2 sm:pb-4 text-center max-w-2xl mx-auto" style={{ borderColor: 'var(--border-color)' }}>
-            <Link to="/app" className="text-[10px] font-black uppercase tracking-wider no-underline opacity-50 hover:opacity-100 transition-all hidden sm:inline-flex items-center gap-1 mb-3" style={{ color: readingText }}>
+            <Link to="/app" className="text-[0.625rem] font-black uppercase tracking-wider no-underline opacity-50 hover:opacity-100 transition-all hidden sm:inline-flex items-center gap-1 mb-3" style={{ color: readingText }}>
               ← Zpět do knihovny
             </Link>
             <h1 style={{ color: readingText }} className="text-base sm:text-3xl font-black uppercase tracking-tight m-0 truncate">{book.title}</h1>
             <p className="hidden sm:block text-xs uppercase font-bold mt-1 opacity-60 m-0" style={{ color: 'var(--text-muted)' }}>Autor: {book.author_display || book.author}</p>
             {prefs.showMeta && (
-              <p style={{ color: 'var(--text-muted)' }} className="text-[11px] mt-1 sm:mt-2 opacity-70 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+              <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] mt-1 sm:mt-2 opacity-70 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
                 <span className="flex items-center gap-1"><Clock size={11} /> zbývá ~{remainingMinutes} min</span>
                 <span>Strana {currentPage} / {totalLabel}</span>
               </p>
@@ -975,7 +975,7 @@ export const ReaderPage = () => {
             <button
               onClick={() => setShowSettings(v => !v)}
               style={{ borderColor: 'var(--border-color)', backgroundColor: showSettings ? 'var(--bg-primary)' : 'var(--bg-card)', color: showSettings ? 'var(--text-primary)' : 'var(--text-body)' }}
-              className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
+              className="border rounded-xl px-3 py-1.5 text-[0.625rem] font-black uppercase cursor-pointer flex items-center gap-1.5"
             >
               <Settings2 size={12} /><span className="hidden sm:inline"> Vzhled</span><span className="sr-only sm:hidden">Vzhled</span>
             </button>
@@ -984,7 +984,7 @@ export const ReaderPage = () => {
               <button
                 onClick={() => setShowToc(v => !v)}
                 style={{ borderColor: 'var(--border-color)', backgroundColor: showToc ? 'var(--bg-primary)' : 'var(--bg-card)', color: showToc ? 'var(--text-primary)' : 'var(--text-body)' }}
-                className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
+                className="border rounded-xl px-3 py-1.5 text-[0.625rem] font-black uppercase cursor-pointer flex items-center gap-1.5"
               >
                 <List size={12} /><span className="hidden sm:inline"> Obsah</span><span className="sr-only sm:hidden">Obsah</span>
               </button>
@@ -993,7 +993,7 @@ export const ReaderPage = () => {
             <button
               onClick={() => setAutoAdvance(v => !v)}
               style={{ borderColor: 'var(--border-color)', backgroundColor: autoAdvance ? 'var(--bg-primary)' : 'var(--bg-card)', color: autoAdvance ? 'var(--text-primary)' : 'var(--text-body)' }}
-              className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
+              className="border rounded-xl px-3 py-1.5 text-[0.625rem] font-black uppercase cursor-pointer flex items-center gap-1.5"
               title="Automatické listování"
             >
               {autoAdvance ? <Pause size={12} /> : <Play size={12} />}<span className="hidden sm:inline"> Auto</span><span className="sr-only sm:hidden">Auto</span>
@@ -1002,7 +1002,7 @@ export const ReaderPage = () => {
             <button
               onClick={() => setFocusMode(true)}
               style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)', color: 'var(--text-body)' }}
-              className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
+              className="border rounded-xl px-3 py-1.5 text-[0.625rem] font-black uppercase cursor-pointer flex items-center gap-1.5"
               title="Fokus režim (F)"
             >
               <Maximize2 size={12} /><span className="hidden sm:inline"> Fokus</span><span className="sr-only sm:hidden">Fokus</span>
@@ -1011,7 +1011,7 @@ export const ReaderPage = () => {
             <button
               onClick={handleAddBookmark}
               style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)', color: 'var(--text-body)' }}
-              className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
+              className="border rounded-xl px-3 py-1.5 text-[0.625rem] font-black uppercase cursor-pointer flex items-center gap-1.5"
               title="Uložit místo (B)"
             >
               <BookMarked size={12} /><span className="hidden sm:inline"> Místo</span><span className="sr-only sm:hidden">Místo</span>
@@ -1019,7 +1019,7 @@ export const ReaderPage = () => {
             <button
               onClick={() => setShowBookmarks(v => !v)}
               style={{ borderColor: 'var(--border-color)', backgroundColor: showBookmarks ? 'var(--bg-primary)' : 'var(--bg-card)', color: showBookmarks ? 'var(--text-primary)' : 'var(--text-body)' }}
-              className="border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase cursor-pointer flex items-center gap-1.5"
+              className="border rounded-xl px-3 py-1.5 text-[0.625rem] font-black uppercase cursor-pointer flex items-center gap-1.5"
             >
               Záložky {bookmarks.length > 0 && `(${bookmarks.length})`}
             </button>
@@ -1028,8 +1028,8 @@ export const ReaderPage = () => {
               <div style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }} className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-80 max-w-[92vw] border rounded-xl shadow-lg z-20 p-4 space-y-4">
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider">Velikost písma</span>
-                    <span style={{ color: 'var(--text-body)' }} className="text-[10px] font-bold">{fontSize}px</span>
+                    <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider">Velikost písma</span>
+                    <span style={{ color: 'var(--text-body)' }} className="text-[0.625rem] font-bold">{fontSize}px</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <button onClick={() => setFontSize(f => Math.max(14, f - 1))} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="w-8 h-8 shrink-0 rounded-lg border-none cursor-pointer font-black text-xs">A-</button>
@@ -1039,10 +1039,10 @@ export const ReaderPage = () => {
                 </div>
 
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block mb-2">Písmo</span>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-2">Písmo</span>
                   <div className="flex gap-1.5">
                     {Object.entries(FONT_FAMILIES).map(([key, val]) => (
-                      <button key={key} onClick={() => setFontFamilyKey(key)} style={{ backgroundColor: fontFamilyKey === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: fontFamilyKey === key ? 'var(--text-primary)' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[10px] font-bold">
+                      <button key={key} onClick={() => setFontFamilyKey(key)} style={{ backgroundColor: fontFamilyKey === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: fontFamilyKey === key ? 'var(--text-primary)' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-bold">
                         {val.label}
                       </button>
                     ))}
@@ -1050,10 +1050,10 @@ export const ReaderPage = () => {
                 </div>
 
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block mb-2">Řádkování</span>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-2">Řádkování</span>
                   <div className="flex gap-1.5">
                     {Object.entries(LINE_HEIGHTS).map(([key, val]) => (
-                      <button key={key} onClick={() => setLineHeightKey(key)} style={{ backgroundColor: lineHeightKey === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: lineHeightKey === key ? 'var(--text-primary)' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[10px] font-bold">
+                      <button key={key} onClick={() => setLineHeightKey(key)} style={{ backgroundColor: lineHeightKey === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: lineHeightKey === key ? 'var(--text-primary)' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-bold">
                         {val.label}
                       </button>
                     ))}
@@ -1061,20 +1061,20 @@ export const ReaderPage = () => {
                 </div>
 
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block mb-2">Šířka stránky</span>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-2">Šířka stránky</span>
                   <div className="flex gap-1.5">
                     {Object.entries(TEXT_WIDTHS).map(([key, val]) => (
-                      <button key={key} onClick={() => setTextWidthKey(key)} style={{ backgroundColor: textWidthKey === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: textWidthKey === key ? 'var(--text-primary)' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[10px] font-bold">
+                      <button key={key} onClick={() => setTextWidthKey(key)} style={{ backgroundColor: textWidthKey === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: textWidthKey === key ? 'var(--text-primary)' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-bold">
                         {val.label}
                       </button>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block mb-2">Zarovnání textu</span>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-2">Zarovnání textu</span>
                   <div className="flex gap-1.5">
                     {Object.entries(ALIGNMENTS).map(([key, val]) => (
-                      <button key={key} onClick={() => setPref('align', key)} style={{ backgroundColor: prefs.align === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: prefs.align === key ? 'var(--text-primary)' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[10px] font-bold">
+                      <button key={key} onClick={() => setPref('align', key)} style={{ backgroundColor: prefs.align === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: prefs.align === key ? 'var(--text-primary)' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-bold">
                         {val.label}
                       </button>
                     ))}
@@ -1082,10 +1082,10 @@ export const ReaderPage = () => {
                 </div>
 
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block mb-2">Zalamování stránek</span>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-2">Zalamování stránek</span>
                   <div className="flex gap-1.5">
                     {Object.entries(PAGE_BREAKS).map(([key, val]) => (
-                      <button key={key} onClick={() => setPref('pageBreak', key)} style={{ backgroundColor: prefs.pageBreak === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: prefs.pageBreak === key ? 'var(--text-primary)' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[10px] font-bold">
+                      <button key={key} onClick={() => setPref('pageBreak', key)} style={{ backgroundColor: prefs.pageBreak === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: prefs.pageBreak === key ? 'var(--text-primary)' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-bold">
                         {val.label}
                       </button>
                     ))}
@@ -1093,14 +1093,14 @@ export const ReaderPage = () => {
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider">Papírový režim</span>
-                  <button onClick={() => setPaperMode(v => !v)} style={{ backgroundColor: paperMode ? '#8b6f3e' : 'var(--bg-secondary)', color: paperMode ? 'white' : 'var(--text-body)' }} className="px-3 py-1.5 rounded-lg border-none cursor-pointer text-[10px] font-bold">
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider">Papírový režim</span>
+                  <button onClick={() => setPaperMode(v => !v)} style={{ backgroundColor: paperMode ? '#8b6f3e' : 'var(--bg-secondary)', color: paperMode ? 'white' : 'var(--text-body)' }} className="px-3 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-bold">
                     {paperMode ? 'Zapnuto' : 'Vypnuto'}
                   </button>
                 </div>
 
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block mb-2">Rychlost auto-listování (s/stránku)</span>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-2">Rychlost auto-listování (s/stránku)</span>
                   <input type="range" min={8} max={60} value={autoAdvanceSeconds} onChange={e => setAutoAdvanceSeconds(Number(e.target.value))} className="w-full" style={{ accentColor: 'var(--bg-primary)' }} />
                 </div>
               </div>
@@ -1125,12 +1125,12 @@ export const ReaderPage = () => {
             {showBookmarks && (
               <div style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }} className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 max-w-[92vw] border rounded-xl shadow-lg z-20 p-2 max-h-64 overflow-y-auto">
                 {bookmarks.length === 0 ? (
-                  <p style={{ color: 'var(--text-muted)' }} className="text-[11px] text-center py-3 opacity-60">Zatím žádné záložky.</p>
+                  <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] text-center py-3 opacity-60">Zatím žádné záložky.</p>
                 ) : bookmarks.map(bm => (
                   <div key={bm.id} className="flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-[var(--bg-secondary)]">
                     <button onClick={() => jumpToBookmark(bm)} className="flex-1 text-left bg-transparent border-none cursor-pointer p-0 min-w-0" style={{ color: 'var(--text-body)' }}>
                       <span className="text-xs font-bold block truncate">{bm.label}</span>
-                      <span style={{ color: 'var(--text-muted)' }} className="text-[10px] opacity-60">{Math.round(bm.scroll_position)} % knihy</span>
+                      <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] opacity-60">{Math.round(bm.scroll_position)} % knihy</span>
                     </button>
                     <button onClick={() => deleteBookmark(bm.id)} className="bg-transparent border-none cursor-pointer p-1 text-red-400 opacity-60 hover:opacity-100 shrink-0">
                       <X size={12} />
@@ -1266,7 +1266,7 @@ export const ReaderPage = () => {
             <div onClick={e => e.stopPropagation()} style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl shadow-xl w-full sm:w-96 max-w-full p-5 space-y-3">
               <div className="flex items-center gap-2">
                 <Highlighter size={15} style={{ color: 'var(--bg-primary)' }} />
-                <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider">Zvýrazněná pasáž</span>
+                <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider">Zvýrazněná pasáž</span>
               </div>
               <p style={{ color: 'var(--text-body)', backgroundColor: HIGHLIGHT_COLORS[activeHighlight.color]?.bg }} className="text-sm p-2 rounded-lg italic max-h-32 overflow-y-auto">
                 „{book.content.slice(activeHighlight.start_offset, activeHighlight.end_offset)}"
@@ -1280,11 +1280,11 @@ export const ReaderPage = () => {
                 className="w-full p-2.5 border rounded-lg text-xs font-medium outline-none resize-none"
               />
               <div className="flex items-center gap-2">
-                <button onClick={() => deleteHighlight(activeHighlight.id)} className="px-3 py-2 rounded-lg border-none cursor-pointer text-[10px] font-black uppercase flex items-center gap-1.5 text-red-500" style={{ backgroundColor: 'rgba(239,68,68,0.1)' }}>
+                <button onClick={() => deleteHighlight(activeHighlight.id)} className="px-3 py-2 rounded-lg border-none cursor-pointer text-[0.625rem] font-black uppercase flex items-center gap-1.5 text-red-500" style={{ backgroundColor: 'rgba(239,68,68,0.1)' }}>
                   <Trash2 size={12} /> Smazat
                 </button>
-                <button onClick={() => setActiveHighlight(null)} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="flex-1 py-2 rounded-lg border-none cursor-pointer text-[10px] font-black uppercase">Zrušit</button>
-                <button onClick={saveNote} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="flex-1 py-2 rounded-lg border-none cursor-pointer text-[10px] font-black uppercase">Uložit</button>
+                <button onClick={() => setActiveHighlight(null)} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="flex-1 py-2 rounded-lg border-none cursor-pointer text-[0.625rem] font-black uppercase">Zrušit</button>
+                <button onClick={saveNote} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="flex-1 py-2 rounded-lg border-none cursor-pointer text-[0.625rem] font-black uppercase">Uložit</button>
               </div>
             </div>
           </div>
@@ -1320,7 +1320,7 @@ export const ReaderPage = () => {
       {!focusMode && (
         <div className={`shrink-0 px-4 pb-3 max-w-2xl mx-auto w-full ${isLastPage ? '' : 'hidden sm:block'}`}>
           <div style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }} className="border rounded-xl p-3 flex items-center justify-center gap-3 flex-wrap">
-            <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider opacity-70">Ohodnotit knihu:</span>
+            <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider opacity-70">Ohodnotit knihu:</span>
             <div className="flex gap-1">
               {[1, 2, 3, 4, 5].map(n => (
                 <button key={n} onClick={() => handleRate(n)} disabled={savingRating} className="bg-transparent border-none cursor-pointer p-0.5 disabled:cursor-not-allowed">
@@ -1329,10 +1329,10 @@ export const ReaderPage = () => {
               ))}
             </div>
             {book.ratings_count > 0 && (
-              <span style={{ color: 'var(--text-muted)' }} className="text-[10px] opacity-60">({parseFloat(book.avg_rating || 0).toFixed(1)} ⭐, {book.ratings_count})</span>
+              <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] opacity-60">({parseFloat(book.avg_rating || 0).toFixed(1)} ⭐, {book.ratings_count})</span>
             )}
           </div>
-          <p style={{ color: 'var(--text-muted)' }} className="hidden sm:block text-center text-[10px] opacity-40 mt-2">
+          <p style={{ color: 'var(--text-muted)' }} className="hidden sm:block text-center text-[0.625rem] opacity-40 mt-2">
             Ťukni do krajů pro listování · vyber text pro zvýraznění · mezerník/šipky · B záložka · F fokus
           </p>
         </div>

@@ -76,9 +76,9 @@ const mapAdminError = (err) => {
 
 const StatCard = ({ label, value, hint }) => (
   <div style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }} className="border rounded-xl p-4 min-w-0">
-    <p style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider m-0 opacity-80">{label}</p>
+    <p style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider m-0 opacity-80">{label}</p>
     <p className="text-2xl font-black m-0 mt-1 tabular-nums">{value}</p>
-    {hint && <p style={{ color: 'var(--text-muted)' }} className="text-[11px] m-0 mt-1 opacity-80">{hint}</p>}
+    {hint && <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] m-0 mt-1 opacity-80">{hint}</p>}
   </div>
 );
 
@@ -90,7 +90,7 @@ const PILL_TONES = {
   accent: { backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' },
 };
 const Pill = ({ tone = 'muted', children }) => (
-  <span style={PILL_TONES[tone]} className="inline-block text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full whitespace-nowrap">{children}</span>
+  <span style={PILL_TONES[tone]} className="inline-block text-[0.625rem] font-black uppercase tracking-wide px-2 py-0.5 rounded-full whitespace-nowrap">{children}</span>
 );
 
 const InlineMessage = ({ type = 'info', children }) => {
@@ -124,7 +124,7 @@ export const TypedConfirm = ({ open, title, description, expected, confirmLabel 
         <h3 className="text-sm font-black uppercase tracking-wider m-0 text-red-500">{title}</h3>
         <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">{description}</p>
         <label className="block">
-          <span className="text-[10px] font-black uppercase tracking-wider block mb-1 opacity-80">Pro potvrzení napiš: <span className="normal-case tracking-normal select-all">{expected}</span></span>
+          <span className="text-[0.625rem] font-black uppercase tracking-wider block mb-1 opacity-80">Pro potvrzení napiš: <span className="normal-case tracking-normal select-all">{expected}</span></span>
           <input
             type="text"
             autoFocus
@@ -137,8 +137,8 @@ export const TypedConfirm = ({ open, title, description, expected, confirmLabel 
         </label>
         {error && <InlineMessage type="error">{error}</InlineMessage>}
         <div className="flex justify-end gap-2 pt-1">
-          <button type="button" onClick={onCancel} disabled={busy} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="px-4 py-2 rounded-lg border-none cursor-pointer text-[11px] font-black uppercase tracking-wider disabled:opacity-50">Zrušit</button>
-          <button type="button" onClick={onConfirm} disabled={!matches || busy} style={{ backgroundColor: '#dc2626', color: '#fff' }} className="px-4 py-2 rounded-lg border-none cursor-pointer text-[11px] font-black uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-2">
+          <button type="button" onClick={onCancel} disabled={busy} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="px-4 py-2 rounded-lg border-none cursor-pointer text-[0.6875rem] font-black uppercase tracking-wider disabled:opacity-50">Zrušit</button>
+          <button type="button" onClick={onConfirm} disabled={!matches || busy} style={{ backgroundColor: '#dc2626', color: '#fff' }} className="px-4 py-2 rounded-lg border-none cursor-pointer text-[0.6875rem] font-black uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-2">
             {busy && <Loader2 size={13} className="animate-spin" />}{confirmLabel}
           </button>
         </div>
@@ -154,7 +154,7 @@ const MiniBars = ({ title, points, valueKey, color }) => {
   return (
     <div style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }} className="border rounded-xl p-3">
       <div className="flex items-baseline justify-between mb-2">
-        <p className="text-[10px] font-black uppercase tracking-wider m-0 opacity-80">{title}</p>
+        <p className="text-[0.625rem] font-black uppercase tracking-wider m-0 opacity-80">{title}</p>
         <p className="text-sm font-black m-0 tabular-nums">{formatNumber(total)}</p>
       </div>
       <div className="flex items-end gap-[3px] h-16" role="img" aria-label={`${title}: ${total} za posledních 14 dní`}>
@@ -167,7 +167,7 @@ const MiniBars = ({ title, points, valueKey, color }) => {
           />
         ))}
       </div>
-      <p style={{ color: 'var(--text-muted)' }} className="text-[10px] m-0 mt-1 opacity-70">posledních 14 dní</p>
+      <p style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] m-0 mt-1 opacity-70">posledních 14 dní</p>
     </div>
   );
 };
@@ -260,12 +260,12 @@ export const OverviewTab = ({ onOpenAccounts, onOpenBooks }) => {
             <table className="w-full text-xs border-collapse min-w-[520px]">
               <thead>
                 <tr style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }} className="text-left border-b">
-                  <th className="py-2 pr-3 font-black uppercase text-[10px]">Zdroj</th>
-                  <th className="py-2 px-2 font-black uppercase text-[10px] text-right">Získáno 30 d</th>
-                  <th className="py-2 px-2 font-black uppercase text-[10px] text-right">Utraceno 30 d</th>
-                  <th className="py-2 px-2 font-black uppercase text-[10px] text-right">Získáno celkem</th>
-                  <th className="py-2 px-2 font-black uppercase text-[10px] text-right">Utraceno celkem</th>
-                  <th className="py-2 pl-2 font-black uppercase text-[10px] text-right">Počet</th>
+                  <th className="py-2 pr-3 font-black uppercase text-[0.625rem]">Zdroj</th>
+                  <th className="py-2 px-2 font-black uppercase text-[0.625rem] text-right">Získáno 30 d</th>
+                  <th className="py-2 px-2 font-black uppercase text-[0.625rem] text-right">Utraceno 30 d</th>
+                  <th className="py-2 px-2 font-black uppercase text-[0.625rem] text-right">Získáno celkem</th>
+                  <th className="py-2 px-2 font-black uppercase text-[0.625rem] text-right">Utraceno celkem</th>
+                  <th className="py-2 pl-2 font-black uppercase text-[0.625rem] text-right">Počet</th>
                 </tr>
               </thead>
               <tbody>
@@ -293,14 +293,14 @@ export const OverviewTab = ({ onOpenAccounts, onOpenBooks }) => {
               {reading.top_books.map(b => <li key={b.id}><span className="font-bold">{b.title}</span> <span style={{ color: 'var(--text-muted)' }} className="text-xs">· {b.reads}×</span></li>)}
             </ol>
           )}
-          <p style={{ color: 'var(--text-muted)' }} className="text-[11px] m-0 mt-3 opacity-70">Knih v katalogu: {books.total} ({books.paid} placených, {books.auto_assigned} zdarma pro všechny)</p>
+          <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] m-0 mt-3 opacity-70">Knih v katalogu: {books.total} ({books.paid} placených, {books.auto_assigned} zdarma pro všechny)</p>
         </Card>
         <Card>
           <h3 className="text-sm font-black uppercase tracking-wider mb-3">Nejvíc mincí</h3>
           <ol className="m-0 pl-5 space-y-1.5 text-sm">
             {coins.top_holders.map((h, i) => <li key={`${h.email}-${i}`} className="break-all"><span className="font-bold">{h.email}</span> <span style={{ color: 'var(--text-muted)' }} className="text-xs">· {formatNumber(h.coins)}</span></li>)}
           </ol>
-          <p style={{ color: 'var(--text-muted)' }} className="text-[11px] m-0 mt-3 opacity-70">Hodnoty mimo běžný řád (např. testovací účty) tu snadno poznáš.</p>
+          <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] m-0 mt-3 opacity-70">Hodnoty mimo běžný řád (např. testovací účty) tu snadno poznáš.</p>
         </Card>
       </div>
     </div>
@@ -318,7 +318,7 @@ const selectClass = 'p-2.5 border rounded-lg text-xs font-bold outline-none curs
 const SmallButton = ({ tone = 'ghost', busy = false, disabled, children, ...props }) => {
   const style = tone === 'danger' ? { backgroundColor: '#dc2626', color: '#fff' } : tone === 'primary' ? { backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' } : { backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' };
   return (
-    <button {...props} disabled={disabled || busy} style={style} className="px-3 py-2 rounded-lg border-none cursor-pointer text-[11px] font-black uppercase tracking-wider inline-flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
+    <button {...props} disabled={disabled || busy} style={style} className="px-3 py-2 rounded-lg border-none cursor-pointer text-[0.6875rem] font-black uppercase tracking-wider inline-flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
       {busy && <Loader2 size={12} className="animate-spin" />}{children}
     </button>
   );
@@ -425,7 +425,7 @@ const AccountDetail = ({ userId, currentUserId, onClose, onChanged }) => {
                 {[['Přečteno', stats.books_read], ['Zvýraznění', stats.highlights], ['Komentáře', stats.comments], ['Hodnocení', stats.ratings], ['Odemčené', stats.books_active], ['Vydané', stats.published_books]].map(([label, value]) => (
                   <div key={label} style={{ backgroundColor: 'var(--bg-secondary)' }} className="rounded-lg py-2">
                     <p className="text-lg font-black m-0 tabular-nums">{value}</p>
-                    <p style={{ color: 'var(--text-muted)' }} className="text-[10px] font-bold uppercase m-0">{label}</p>
+                    <p style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase m-0">{label}</p>
                   </div>
                 ))}
               </div>
@@ -440,7 +440,7 @@ const AccountDetail = ({ userId, currentUserId, onClose, onChanged }) => {
                 {profile && 'username' in profile && (
                   <div className="flex items-end gap-2 flex-wrap">
                     <label className="block flex-1 min-w-[140px]">
-                      <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block mb-1">Uživatelské jméno</span>
+                      <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-1">Uživatelské jméno</span>
                       <input aria-label="Uživatelské jméno" value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} maxLength={20} autoCapitalize="none" spellCheck={false} disabled={busy} style={selectStyle} className="w-full p-2.5 border rounded-lg text-xs font-bold outline-none disabled:opacity-50" />
                     </label>
                     <SmallButton busy={busy} disabled={nameDraft.trim() === (profile.username || '') || nameDraft.trim().length < 3} onClick={() => run(() => supabase.rpc('admin_set_username', { p_user: userId, p_username: nameDraft.trim() }), 'Jméno přejmenováno.')}>
@@ -451,7 +451,7 @@ const AccountDetail = ({ userId, currentUserId, onClose, onChanged }) => {
 
                 <div className="flex items-end gap-2 flex-wrap">
                   <label className="block flex-1 min-w-[140px]">
-                    <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block mb-1">Role</span>
+                    <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-1">Role</span>
                     <select aria-label="Role" value={roleDraft} onChange={(e) => setRoleDraft(e.target.value)} disabled={isSelf || !profile || busy} style={selectStyle} className={`${selectClass} w-full disabled:opacity-50`}>
                       {!profile && <option value="">-</option>}
                       {Object.entries(ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -476,10 +476,10 @@ const AccountDetail = ({ userId, currentUserId, onClose, onChanged }) => {
                     </span>
                   )}
                 </div>
-                {isAdminTarget && !isSelf && <p style={{ color: 'var(--text-muted)' }} className="text-[11px] m-0 opacity-80">Účet správce nejde blokovat ani mazat - nejdřív mu změň roli.</p>}
+                {isAdminTarget && !isSelf && <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] m-0 opacity-80">Účet správce nejde blokovat ani mazat - nejdřív mu změň roli.</p>}
 
                 <div style={{ borderColor: 'rgba(239,68,68,0.35)' }} className="border rounded-lg p-3 space-y-2">
-                  <p className="text-[11px] font-black uppercase tracking-wider text-red-500 m-0">Nebezpečná zóna</p>
+                  <p className="text-[0.6875rem] font-black uppercase tracking-wider text-red-500 m-0">Nebezpečná zóna</p>
                   <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">Nevratně smaže účet i všechna jeho data (rozečtené knihy, záložky, zvýraznění, hodnocení, komentáře, mince).</p>
                   {hasBooks && <p className="text-xs font-bold text-amber-600 m-0">Účet má vydané knihy ({stats.published_books}) - napřed je smaž nebo předej jinému autorovi.</p>}
                   <SmallButton tone="danger" disabled={isSelf || isAdminTarget || hasBooks} onClick={() => { setDeleteError(''); setDeleteOpen(true); }}><Trash2 size={13} /> Smazat účet</SmallButton>
@@ -680,7 +680,7 @@ export const NotificationsTab = ({ onCountChange, currentUserId, onOpenAccount }
           {NOTIF_FILTERS.map(([value, label]) => (
             <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}
               style={filter === value ? { backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' } : { backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }}
-              className="px-3 py-1.5 rounded-lg border-none cursor-pointer text-[11px] font-black uppercase tracking-wider">{label}</button>
+              className="px-3 py-1.5 rounded-lg border-none cursor-pointer text-[0.6875rem] font-black uppercase tracking-wider">{label}</button>
           ))}
         </div>
         <div className="flex gap-2">
@@ -707,7 +707,7 @@ export const NotificationsTab = ({ onCountChange, currentUserId, onOpenAccount }
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h4 className="text-sm font-black uppercase tracking-tight m-0 flex items-center gap-2">{isReport ? <Flag size={15} /> : <KeyRound size={15} />} {n.title}</h4>
-                <p style={{ color: 'var(--text-muted)' }} className="text-[11px] m-0 mt-1 opacity-80">{relativeTime(n.created_at)} · {formatDateTime(n.created_at)}{n.handled_at ? ` · vyřízeno ${formatDateTime(n.handled_at)}` : ''}</p>
+                <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] m-0 mt-1 opacity-80">{relativeTime(n.created_at)} · {formatDateTime(n.created_at)}{n.handled_at ? ` · vyřízeno ${formatDateTime(n.handled_at)}` : ''}</p>
               </div>
               <Pill tone={statusTone}>{statusLabel}</Pill>
             </div>
@@ -730,7 +730,7 @@ export const NotificationsTab = ({ onCountChange, currentUserId, onOpenAccount }
             )}
 
             {n.body && <p style={{ backgroundColor: 'var(--bg-secondary)' }} className="text-sm m-0 rounded-lg px-3 py-2 leading-relaxed whitespace-pre-wrap break-words">„{n.body}“</p>}
-            {isPassword && <p style={{ color: 'var(--text-muted)' }} className="text-[11px] m-0 leading-relaxed opacity-90">{n.payload?.logged_in ? 'Žádost poslal přihlášený uživatel z Nastavení.' : 'Žádost poslal nepřihlášený člověk (zapomenuté heslo).'} E-mail i jméno sedí, ale to samo nedokazuje, že žádá majitel účtu - ověř to mimo aplikaci.</p>}
+            {isPassword && <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] m-0 leading-relaxed opacity-90">{n.payload?.logged_in ? 'Žádost poslal přihlášený uživatel z Nastavení.' : 'Žádost poslal nepřihlášený člověk (zapomenuté heslo).'} E-mail i jméno sedí, ale to samo nedokazuje, že žádá majitel účtu - ověř to mimo aplikaci.</p>}
 
             <div className="flex flex-wrap gap-2">
               {u && onOpenAccount && <SmallButton onClick={() => onOpenAccount(u)}><UserCog size={13} /> Otevřít účet</SmallButton>}
@@ -896,14 +896,14 @@ export const LogsTab = ({ download = downloadTextFile }) => {
     <div data-testid="logs-panel" style={{ backgroundColor: '#020617', borderColor: '#0f172a' }} className="text-emerald-400 font-mono p-4 sm:p-5 border border-solid shadow-2xl rounded-2xl space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-black uppercase tracking-widest pb-3 border-b border-solid border-slate-900">
         <span className="flex items-center gap-1.5 text-slate-400"><Terminal size={14} /> Systémový log</span>
-        <span className="flex items-center gap-1.5 text-[10px] text-slate-500 normal-case tracking-normal font-bold"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> živě</span>
+        <span className="flex items-center gap-1.5 text-[0.625rem] text-slate-500 normal-case tracking-normal font-bold"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> živě</span>
       </div>
 
       <div className="space-y-3">
         <div role="group" aria-label="Typ záznamu" className="flex flex-wrap gap-1.5">
           {['all', ...LOG_TYPES].map(t => (
             <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)}
-              className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider cursor-pointer ${type === t ? 'bg-emerald-400 text-slate-950 border-emerald-400' : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-emerald-400'}`}>
+              className={`px-2.5 py-1.5 rounded-lg border text-[0.625rem] font-black uppercase tracking-wider cursor-pointer ${type === t ? 'bg-emerald-400 text-slate-950 border-emerald-400' : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-emerald-400'}`}>
               {t === 'all' ? 'Vše' : t}
             </button>
           ))}
@@ -916,18 +916,18 @@ export const LogsTab = ({ download = downloadTextFile }) => {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 font-bold">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[0.6875rem] text-slate-500 font-bold">
         <span data-testid="logs-count">{rows === null ? 'Načítám...' : `Zobrazeno ${rows.length}${typeof total === 'number' ? ` z ${total}` : ''}${filtered ? ' (podle filtru)' : ''}`}</span>
         <span className="flex gap-2">
-          <button type="button" onClick={load} className="inline-flex items-center gap-1 bg-slate-900 border border-slate-800 text-slate-300 rounded-lg px-2.5 py-1.5 cursor-pointer text-[10px] font-black uppercase tracking-wider hover:text-emerald-400"><RefreshCw size={11} /> Obnovit</button>
-          <button type="button" onClick={exportCsv} disabled={exporting || !rows || rows.length === 0} className="inline-flex items-center gap-1 bg-slate-900 border border-slate-800 text-slate-300 rounded-lg px-2.5 py-1.5 cursor-pointer text-[10px] font-black uppercase tracking-wider hover:text-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed">
+          <button type="button" onClick={load} className="inline-flex items-center gap-1 bg-slate-900 border border-slate-800 text-slate-300 rounded-lg px-2.5 py-1.5 cursor-pointer text-[0.625rem] font-black uppercase tracking-wider hover:text-emerald-400"><RefreshCw size={11} /> Obnovit</button>
+          <button type="button" onClick={exportCsv} disabled={exporting || !rows || rows.length === 0} className="inline-flex items-center gap-1 bg-slate-900 border border-slate-800 text-slate-300 rounded-lg px-2.5 py-1.5 cursor-pointer text-[0.625rem] font-black uppercase tracking-wider hover:text-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed">
             {exporting ? <Loader2 size={11} className="animate-spin" /> : <Download size={11} />} Export CSV
           </button>
         </span>
       </div>
 
-      {msg && <p role={msg.type === 'error' ? 'alert' : 'status'} className={`text-[11px] font-bold m-0 ${msg.type === 'error' ? 'text-red-400' : 'text-emerald-300'}`}>{msg.text}</p>}
-      {error && <p role="alert" className="text-[11px] font-bold m-0 text-red-400">{error}</p>}
+      {msg && <p role={msg.type === 'error' ? 'alert' : 'status'} className={`text-[0.6875rem] font-bold m-0 ${msg.type === 'error' ? 'text-red-400' : 'text-emerald-300'}`}>{msg.text}</p>}
+      {error && <p role="alert" className="text-[0.6875rem] font-bold m-0 text-red-400">{error}</p>}
 
       <div className="max-h-[500px] overflow-y-auto space-y-1.5 pr-2 text-xs">
         {rows === null ? (
@@ -941,13 +941,13 @@ export const LogsTab = ({ download = downloadTextFile }) => {
                 <span className={`inline-block w-20 uppercase font-black ${LOG_TYPE_COLORS[log.log_type] || 'text-slate-400'}`}>[{log.log_type || 'INFO'}]</span>
                 <span className="text-slate-200">{log.message}</span>
               </span>
-              <span className="text-[10px] text-slate-500 shrink-0 font-sans sm:font-mono">{log.created_at ? new Date(log.created_at).toLocaleString('cs-CZ') : 'Nyní'}</span>
+              <span className="text-[0.625rem] text-slate-500 shrink-0 font-sans sm:font-mono">{log.created_at ? new Date(log.created_at).toLocaleString('cs-CZ') : 'Nyní'}</span>
             </div>
           ))
         )}
         {hasMore && rows && rows.length > 0 && (
           <div className="pt-2 text-center">
-            <button type="button" onClick={loadMore} disabled={loadingMore} className="inline-flex items-center gap-1.5 bg-slate-900 border border-slate-800 text-slate-300 rounded-lg px-4 py-2 cursor-pointer text-[10px] font-black uppercase tracking-wider hover:text-emerald-400 disabled:opacity-50">
+            <button type="button" onClick={loadMore} disabled={loadingMore} className="inline-flex items-center gap-1.5 bg-slate-900 border border-slate-800 text-slate-300 rounded-lg px-4 py-2 cursor-pointer text-[0.625rem] font-black uppercase tracking-wider hover:text-emerald-400 disabled:opacity-50">
               {loadingMore && <Loader2 size={11} className="animate-spin" />} Načíst starší
             </button>
           </div>
@@ -1693,21 +1693,21 @@ export const AdminDashboard = () => {
         <Card className="flex items-center gap-4 py-4 relative overflow-hidden">
           <div className="p-3 rounded-xl bg-blue-500/10 text-blue-500"><Database size={22}/></div>
           <div>
-            <h4 style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider opacity-60">Katalog Titulů</h4>
+            <h4 style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider opacity-60">Katalog Titulů</h4>
             <p className="text-xl font-black">{books.length} Knih v DB</p>
           </div>
         </Card>
         <Card style={{ backgroundColor: 'var(--bg-secondary)' }} className="flex items-center gap-4 py-4">
           <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-500"><Users size={22}/></div>
           <div>
-            <h4 style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider opacity-60">Komunita</h4>
+            <h4 style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider opacity-60">Komunita</h4>
             <p className="text-xl font-black">{profiles.length} Čtenářů</p>
           </div>
         </Card>
         <Card className="flex items-center gap-4 py-4">
           <div className="p-3 rounded-xl bg-purple-500/10 text-purple-500"><Terminal size={22}/></div>
           <div>
-            <h4 style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider opacity-60">Live Stream Log</h4>
+            <h4 style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider opacity-60">Live Stream Log</h4>
             <p className="text-xl font-black">{logCount} Záznamů</p>
           </div>
         </Card>
@@ -1736,7 +1736,7 @@ export const AdminDashboard = () => {
             className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-3 border-t border-x rounded-t-xl transition-all cursor-pointer -mb-[1px]`}
           >
             {tab.icon} {tab.label}
-            {tab.badge > 0 && <span data-testid="tab-badge" className="min-w-[18px] h-[18px] px-1.5 rounded-full bg-red-500 text-white text-[10px] font-black leading-[18px] text-center">{tab.badge}</span>}
+            {tab.badge > 0 && <span data-testid="tab-badge" className="min-w-[18px] h-[18px] px-1.5 rounded-full bg-red-500 text-white text-[0.625rem] font-black leading-[18px] text-center">{tab.badge}</span>}
           </button>
         ))}
       </div>
@@ -1793,7 +1793,7 @@ export const AdminDashboard = () => {
                     onClick={() => handleResolveAuthorId(b.id)}
                     disabled={!resolveAuthorSelections[b.id]}
                     style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
-                    className="px-4 py-2 rounded-lg font-black uppercase text-[10px] border-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                    className="px-4 py-2 rounded-lg font-black uppercase text-[0.625rem] border-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                   >
                     Přiřadit
                   </button>
@@ -1829,7 +1829,7 @@ export const AdminDashboard = () => {
                 />
                 
                 <div className="space-y-1">
-                  <label style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Umělá Prestiž (Počet Fake Lajků)</label>
+                  <label style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Umělá Prestiž (Počet Fake Lajků)</label>
                   <input 
                     type="number" 
                     placeholder="Počet lajků..." 
@@ -1841,7 +1841,7 @@ export const AdminDashboard = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70 flex items-center gap-1"><Coins size={11} /> Cena licence (Jomarid Coins)</label>
+                  <label style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70 flex items-center gap-1"><Coins size={11} /> Cena licence (Jomarid Coins)</label>
                   <input 
                     type="number" 
                     placeholder="Cena v mincích..." 
@@ -1854,7 +1854,7 @@ export const AdminDashboard = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Žánry (oddělené čárkou)</label>
+                  <label style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Žánry (oddělené čárkou)</label>
                   <input 
                     type="text" 
                     placeholder="např. Sci-Fi, Dobrodružství" 
@@ -1866,7 +1866,7 @@ export const AdminDashboard = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Popis (pro nákupní/detailní obrazovku)</label>
+                  <label style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Popis (pro nákupní/detailní obrazovku)</label>
                   <textarea
                     placeholder="Krátký popis, co čtenáře čeká - zobrazí se v detailu knihy před koupí..."
                     value={descriptionInput}
@@ -1885,13 +1885,13 @@ export const AdminDashboard = () => {
                     onChange={(e) => setIsAutoAssigned(e.target.checked)}
                     className="w-4 h-4 rounded text-indigo-600 focus:ring-0 cursor-pointer"
                   />
-                  <label htmlFor="is_auto_assigned" className="text-[10px] font-black uppercase tracking-wide cursor-pointer select-none flex items-center gap-1.5">
+                  <label htmlFor="is_auto_assigned" className="text-[0.625rem] font-black uppercase tracking-wide cursor-pointer select-none flex items-center gap-1.5">
                     <Sparkles size={12} className="text-yellow-500 fill-current" /> Automatická kniha (Přiřadit všem zdarma)
                   </label>
                 </div>
 
                 <div className="space-y-1">
-                  <label style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Obsah a Text knihy</label>
+                  <label style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Obsah a Text knihy</label>
                   <textarea 
                     placeholder="Sem vložte čistý text knihy, kapitoly nebo markdown..." 
                     value={content} 
@@ -1949,17 +1949,17 @@ export const AdminDashboard = () => {
                         <span className="text-sm font-black block truncate flex items-center gap-1.5">
                           {b.title}
                           {b.isHidden && (
-                            <span data-testid="hidden-badge" className="bg-slate-500/20 text-slate-500 font-black px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide flex items-center gap-0.5">
+                            <span data-testid="hidden-badge" className="bg-slate-500/20 text-slate-500 font-black px-1.5 py-0.5 rounded text-[0.5625rem] uppercase tracking-wide flex items-center gap-0.5">
                               <EyeOff size={10} /> Skrytá
                             </span>
                           )}
                           {b.is_auto_assigned && (
-                            <span className="bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 font-black px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide flex items-center gap-0.5">
+                            <span className="bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 font-black px-1.5 py-0.5 rounded text-[0.5625rem] uppercase tracking-wide flex items-center gap-0.5">
                               <Sparkles size={10} className="fill-current" /> Auto
                             </span>
                           )}
                           {!b.is_auto_assigned && (
-                            <span className="bg-amber-500/20 text-amber-500 font-black px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide flex items-center gap-0.5">
+                            <span className="bg-amber-500/20 text-amber-500 font-black px-1.5 py-0.5 rounded text-[0.5625rem] uppercase tracking-wide flex items-center gap-0.5">
                               <Coins size={10} /> {b.price_coins ?? 150}
                             </span>
                           )}
@@ -1967,7 +1967,7 @@ export const AdminDashboard = () => {
                         <span style={{ color: 'var(--text-muted)' }} className="opacity-70 font-medium">Autor: {b.authorDisplay}</span>
                       </span>
                       
-                      <div style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--bg-secondary)' }} className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] shrink-0 font-black shadow-sm">
+                      <div style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--bg-secondary)' }} className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[0.625rem] shrink-0 font-black shadow-sm">
                         <Heart size={10} className="fill-current" />
                         <span>{b.likesCount}</span>
                       </div>
@@ -2056,7 +2056,7 @@ export const AdminDashboard = () => {
             </h3>
             <div className="space-y-3">
               <div className="space-y-1">
-                <label style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Nadpis (hero)</label>
+                <label style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Nadpis (hero)</label>
                 <input
                   type="text"
                   value={hpHeadline}
@@ -2066,7 +2066,7 @@ export const AdminDashboard = () => {
                 />
               </div>
               <div className="space-y-1">
-                <label style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Podtext</label>
+                <label style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Podtext</label>
                 <textarea
                   value={hpSubtitle}
                   onChange={e => setHpSubtitle(e.target.value)}
@@ -2098,12 +2098,12 @@ export const AdminDashboard = () => {
                       className="w-4 h-4 cursor-pointer shrink-0"
                     />
                     <span className="text-xs font-bold truncate">{b.title}</span>
-                    <span style={{ color: 'var(--text-muted)' }} className="text-[10px] opacity-60 shrink-0 ml-auto">{b.authorDisplay}</span>
+                    <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] opacity-60 shrink-0 ml-auto">{b.authorDisplay}</span>
                   </label>
                 ))
               )}
             </div>
-            <p style={{ color: 'var(--text-muted)' }} className="text-[10px] mt-2 opacity-60">{hpFeaturedBookIds.length} vybráno</p>
+            <p style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] mt-2 opacity-60">{hpFeaturedBookIds.length} vybráno</p>
           </Card>
 
           <Card>
@@ -2112,7 +2112,7 @@ export const AdminDashboard = () => {
             </h3>
             <div className="space-y-3">
               <div className="space-y-1">
-                <label style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Ukázkový text</label>
+                <label style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Ukázkový text</label>
                 <textarea
                   value={hpFontQuote}
                   onChange={e => setHpFontQuote(e.target.value)}
@@ -2122,7 +2122,7 @@ export const AdminDashboard = () => {
                 />
               </div>
               <div className="space-y-1">
-                <label style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Odkud je ukázka (zobrazí se pod textem)</label>
+                <label style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Odkud je ukázka (zobrazí se pod textem)</label>
                 <input
                   type="text"
                   value={hpFontAttribution}
@@ -2225,7 +2225,7 @@ export const AdminDashboard = () => {
                         <td className="p-3 truncate max-w-[200px]">
                           <div className="truncate text-sm font-black">{p.email}</div>
                           {p.fake_xp > 0 && (
-                            <div className="text-[10px] font-black flex items-center gap-1 mt-0.5" style={{ color: 'var(--bg-primary)' }}>
+                            <div className="text-[0.625rem] font-black flex items-center gap-1 mt-0.5" style={{ color: 'var(--bg-primary)' }}>
                               <Award size={10}/> {p.fake_xp >= 1000000 ? "Level 100 (Max)" : `+${p.fake_xp} Admin XP`}
                             </div>
                           )}
@@ -2233,7 +2233,7 @@ export const AdminDashboard = () => {
                         <td className="p-3 align-middle">
                           <span 
                             style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }} 
-                            className={`text-[9px] px-2.5 py-0.5 rounded-full uppercase border border-solid font-black shadow-sm tracking-wider`}
+                            className={`text-[0.5625rem] px-2.5 py-0.5 rounded-full uppercase border border-solid font-black shadow-sm tracking-wider`}
                           >
                             {p.role || 'uživatel'}
                           </span>
@@ -2242,7 +2242,7 @@ export const AdminDashboard = () => {
                           <Button 
                             variant={activeUser?.id === p.id ? "success" : "secondary"} 
                             onClick={() => { setActiveUser(p); setUserFakeXpInput(p.fake_xp || 0); }} 
-                            className="text-[10px] px-2.5 py-1 uppercase flex items-center gap-1 font-black"
+                            className="text-[0.625rem] px-2.5 py-1 uppercase flex items-center gap-1 font-black"
                           >
                             <Plus size={10}/> Vybrat
                           </Button>
@@ -2280,7 +2280,7 @@ export const AdminDashboard = () => {
               
               <div className="space-y-4">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-wider block opacity-70">1. Vyberte knihu z registru</label>
+                  <label className="text-[0.625rem] font-black uppercase tracking-wider block opacity-70">1. Vyberte knihu z registru</label>
                   
                   {/* Vyhledávací a filtrovací pole pro rychlé prohledávání registru knih */}
                   <div className="flex gap-2 items-center p-2 mb-1.5 rounded-lg border border-solid bg-[var(--bg-primary)]" style={{ borderColor: 'var(--border-color)' }}>
@@ -2315,16 +2315,16 @@ export const AdminDashboard = () => {
                 {selectedBookId && currentSelectedBook && (
                   <div style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-color)' }} className="p-3 rounded-xl border border-solid flex items-center justify-between gap-4 animate-in fade-in duration-150">
                     <div>
-                      <span className="text-[10px] font-black uppercase tracking-wider block flex items-center gap-1">
+                      <span className="text-[0.625rem] font-black uppercase tracking-wider block flex items-center gap-1">
                         <Sparkles size={11} className="text-yellow-500 fill-current"/> Auto-Assign globální příznak
                       </span>
-                      <span className="text-[9px] opacity-50 block font-bold">Přidělí se automaticky každému čtenáři</span>
+                      <span className="text-[0.5625rem] opacity-50 block font-bold">Přidělí se automaticky každému čtenáři</span>
                     </div>
                     <Button
                       variant={currentSelectedBook.is_auto_assigned ? "success" : "secondary"}
                       onClick={() => toggleBookAutoAssign(currentSelectedBook.id, currentSelectedBook.is_auto_assigned)}
                       disabled={actionLoading}
-                      className="text-[10px] px-3 py-1.5 font-black uppercase tracking-wider shrink-0"
+                      className="text-[0.625rem] px-3 py-1.5 font-black uppercase tracking-wider shrink-0"
                     >
                       {currentSelectedBook.is_auto_assigned ? "✨ Aktivní" : "Vypnuto"}
                     </Button>
@@ -2347,7 +2347,7 @@ export const AdminDashboard = () => {
                     </div>
                     
                     <div style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-color)' }} className="p-3 rounded-xl space-y-2 border border-solid">
-                      <label style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider opacity-80 block">
+                      <label style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider opacity-80 block">
                         Modifikátor bonusových XP (Úroveň Profilu)
                       </label>
                       <div className="flex gap-2">
@@ -2363,16 +2363,16 @@ export const AdminDashboard = () => {
                           onClick={handleSaveFakeXp}
                           disabled={actionLoading}
                           style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
-                          className="px-3 font-black text-[10px] uppercase rounded-lg border border-solid cursor-pointer hover:opacity-80 transition-opacity shrink-0 active:scale-95 duration-100"
+                          className="px-3 font-black text-[0.625rem] uppercase rounded-lg border border-solid cursor-pointer hover:opacity-80 transition-opacity shrink-0 active:scale-95 duration-100"
                         >
                           Uložit XP
                         </button>
                       </div>
-                      <span className="text-[9px] opacity-40 font-bold block">* Zadejte hodnotu ≥ 1 000 000 pro okamžitý skok na Level 100.</span>
+                      <span className="text-[0.5625rem] opacity-40 font-bold block">* Zadejte hodnotu ≥ 1 000 000 pro okamžitý skok na Level 100.</span>
                     </div>
 
                     <div style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-color)' }} className="p-3 rounded-xl space-y-2 border border-solid">
-                      <label style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider opacity-80 flex items-center gap-1">
+                      <label style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider opacity-80 flex items-center gap-1">
                         <Coins size={11} /> Připsat / odečíst Jomarid Coins (funguje i na tvůj vlastní účet)
                       </label>
                       <div className="flex gap-2">
@@ -2396,30 +2396,30 @@ export const AdminDashboard = () => {
                           onClick={handleGrantCoins}
                           disabled={actionLoading || !coinGrantInput}
                           style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
-                          className="px-3 font-black text-[10px] uppercase rounded-lg border border-solid cursor-pointer hover:opacity-80 transition-opacity shrink-0 active:scale-95 duration-100 disabled:opacity-40"
+                          className="px-3 font-black text-[0.625rem] uppercase rounded-lg border border-solid cursor-pointer hover:opacity-80 transition-opacity shrink-0 active:scale-95 duration-100 disabled:opacity-40"
                         >
                           Připsat
                         </button>
                       </div>
-                      <span className="text-[9px] opacity-40 font-bold block">* Zůstatek {activeUser.coins ?? 0} 🪙. Záporné číslo strhne mince (nejníž na 0), loguje se to do coin_transactions.</span>
+                      <span className="text-[0.5625rem] opacity-40 font-bold block">* Zůstatek {activeUser.coins ?? 0} 🪙. Záporné číslo strhne mince (nejníž na 0), loguje se to do coin_transactions.</span>
                     </div>
 
                     <div style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-color)' }} className="p-3 rounded-xl space-y-2 border border-solid">
-                      <label style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider opacity-80 flex items-center gap-1">
+                      <label style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider opacity-80 flex items-center gap-1">
                         <Award size={11} /> Herní postup (jen pro přehled)
                       </label>
-                      <div className="grid grid-cols-2 gap-2 text-[11px] font-bold">
+                      <div className="grid grid-cols-2 gap-2 text-[0.6875rem] font-bold">
                         <span style={{ color: 'var(--text-muted)' }}>Odznaky: <span style={{ color: 'var(--text-body)' }}>{(activeUser.unlocked_badges || []).length} / 100</span></span>
                         <span style={{ color: 'var(--text-muted)' }}>Nejvyšší splněný cíl: <span style={{ color: 'var(--text-body)' }}>{activeUser.highest_goal_completed ?? 25}</span></span>
                         <span style={{ color: 'var(--text-muted)' }} className="col-span-2">Vlajkový odznak: <span style={{ color: 'var(--text-body)' }}>{activeUser.featured_badge || '—'}</span></span>
                       </div>
                       <div className="flex items-center justify-between pt-1">
-                        <span className="text-[11px] font-bold" style={{ color: 'var(--text-muted)' }}>Streak Freeze: <span style={{ color: 'var(--text-body)' }}>{activeUser.streak_freezes ?? 0}</span></span>
+                        <span className="text-[0.6875rem] font-bold" style={{ color: 'var(--text-muted)' }}>Streak Freeze: <span style={{ color: 'var(--text-body)' }}>{activeUser.streak_freezes ?? 0}</span></span>
                         <button
                           onClick={handleGrantStreakFreeze}
                           disabled={actionLoading}
                           style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
-                          className="px-3 py-1.5 font-black text-[10px] uppercase rounded-lg border border-solid cursor-pointer hover:opacity-80 transition-opacity active:scale-95 duration-100 disabled:opacity-40"
+                          className="px-3 py-1.5 font-black text-[0.625rem] uppercase rounded-lg border border-solid cursor-pointer hover:opacity-80 transition-opacity active:scale-95 duration-100 disabled:opacity-40"
                         >
                           +1 Freeze
                         </button>

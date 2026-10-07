@@ -192,7 +192,7 @@ export const TourOverlay = ({ steps, index, onIndex, onClose }) => {
 
   const ghost = { backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' };
   const primary = { backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', borderColor: 'transparent' };
-  const btn = 'min-h-[44px] px-4 border rounded-lg font-black uppercase text-[11px] tracking-wider cursor-pointer';
+  const btn = 'min-h-[44px] px-4 border rounded-lg font-black uppercase text-[0.6875rem] tracking-wider cursor-pointer';
 
   return createPortal(
     <div data-testid="tour-root" className="fixed inset-0" style={{ zIndex: 1100 }}>
@@ -224,7 +224,7 @@ export const TourOverlay = ({ steps, index, onIndex, onClose }) => {
       >
         {/* Text se v případě potřeby posouvá, tlačítka pod ním zůstávají vidět. */}
         <div ref={bodyRef} tabIndex={-1} data-testid="tour-body" style={{ overscrollBehavior: 'contain' }} className="min-h-0 overflow-y-auto p-4 sm:p-5 pb-2 sm:pb-2 outline-none">
-          <p id={counterId} style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider m-0">Krok {index + 1} z {steps.length}</p>
+          <p id={counterId} style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider m-0">Krok {index + 1} z {steps.length}</p>
           {step.title && <h2 id={titleId} className="text-base font-black m-0 mt-1 leading-snug break-words">{step.title}</h2>}
           {step.text && <p id={textId} className="text-sm m-0 mt-2 leading-relaxed whitespace-pre-line break-words">{step.text}</p>}
         </div>
@@ -243,7 +243,7 @@ export const TourOverlay = ({ steps, index, onIndex, onClose }) => {
             </div>
             {isLast
               ? <span />
-              : <button type="button" data-testid="tour-skip" onClick={() => api.current.close()} style={{ color: 'var(--text-muted)' }} className="min-h-[44px] px-2 bg-transparent border-none font-black uppercase text-[11px] tracking-wider cursor-pointer">Přeskočit</button>}
+              : <button type="button" data-testid="tour-skip" onClick={() => api.current.close()} style={{ color: 'var(--text-muted)' }} className="min-h-[44px] px-2 bg-transparent border-none font-black uppercase text-[0.6875rem] tracking-wider cursor-pointer">Přeskočit</button>}
           </div>
         </div>
         {/* Čtečky obrazovky tak ohlásí změnu kroku i při listování šipkami, kdy se zaměření nemění. */}

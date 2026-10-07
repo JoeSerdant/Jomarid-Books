@@ -9,7 +9,7 @@
          neukazal svetly zablesk. App pak doplni vsechny promenne motivu. Hodnoty musi
          odpovidat src/theme.js (vlastni motiv: kopie v klici jomarid-books-theme-vars). */
       (function () {
-        var themes = { saas: ["#f8fafc", "#0f172a", "light"], dark: ["#020617", "#f1f5f9", "dark"], emerald: ["#2d1a10", "#f4ebd9", "dark"] };
+        var themes = { saas: ["#f8fafc", "#0f172a", "light"], dark: ["#020617", "#f1f5f9", "dark"], emerald: ["#2d1a10", "#f4ebd9", "dark"], sepia: ["#f3e9d2", "#131311", "light"], ocean: ["#06222b", "#ebedee", "dark"], contrast: ["#000000", "#ffffff", "dark"] };
         try {
           var key = localStorage.getItem("jomarid-books-theme"), t;
           if (key === "custom") { try { t = JSON.parse(localStorage.getItem("jomarid-books-theme-vars")); } catch (e) {} }
@@ -21,6 +21,15 @@
           r.style.setProperty("--text-body", t[1]);
           r.style.colorScheme = t[2];
           document.querySelector('meta[name="theme-color"]').setAttribute("content", t[0]);
+        } catch (e) {}
+        /* Velikost a hustota rozhraní (Nastavení -> Vzhled): použijí se hned, ať se stránka po načtení nepřeskládá. */
+        try {
+          var scales = { s: 90, l: 112.5, xl: 125 }, dens = { compact: 0.8, comfy: 1.2 };
+          var own = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
+          var sk = localStorage.getItem("jomarid-ui-scale"), dk = localStorage.getItem("jomarid-ui-density");
+          var sc = own(scales, sk) ? scales[sk] : 0, dn = own(dens, dk) ? dens[dk] : 0;
+          if (sc) document.documentElement.style.setProperty("font-size", sc + "%");
+          if (dn) document.documentElement.style.setProperty("--d", String(dn));
         } catch (e) {}
       })();
     </script>
