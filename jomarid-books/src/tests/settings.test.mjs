@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import * as T from '../theme.js';
 import * as S from '../settings/settingsSync.js';
 import * as store from '../browse/browseStore.js';
-import { APP_VERSION, APP_VERSION_LABEL } from '../appInfo.js';
+import { APP_VERSION, APP_VERSION_LABEL, APP_VERSION_SHORT } from '../appInfo.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const makeStorage = (init = {}) => {
@@ -410,10 +410,14 @@ describe('synchronizace nastavení: řadič', () => {
 });
 
 describe('verze aplikace', () => {
-  test('verze v appInfo.js odpovídá package.json a popisku', () => {
+  test('verze v appInfo.js odpovídá package.json (i v package-lock.json) a popisek z ní vychází', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+    const lock = JSON.parse(fs.readFileSync(path.join(ROOT, 'package-lock.json'), 'utf8'));
     assert.equal(APP_VERSION, pkg.version);
-    assert.equal(APP_VERSION, '1.0.0');
-    assert.equal(APP_VERSION_LABEL, 'Verze ' + APP_VERSION.split('.').slice(0, 2).join('.'));
+    assert.equal(lock.version, pkg.version);
+    assert.equal(lock.packages[''].version, pkg.version);
+    assert.match(APP_VERSION, /^\d+\.\d+\.\d+$/);
+    assert.ok(APP_VERSION.startsWith(APP_VERSION_SHORT + '.'));
+    assert.equal(APP_VERSION_LABEL, 'Verze ' + APP_VERSION_SHORT);
   });
 });

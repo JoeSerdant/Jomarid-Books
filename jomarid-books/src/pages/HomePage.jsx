@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { BOOK_BADGES } from '../constants/badges';
 import { calculateXpMultiplier, calculateLevelAndProgress, getLevelVisuals, calculateGoalMultiplier } from '../constants/leveling';
 import { FaqItem } from '../components/FaqItem';
-import { APP_VERSION_LABEL } from '../appInfo';
+import { APP_VERSION_LABEL, APP_VERSION_SHORT } from '../appInfo';
 import {
   Book, BookOpen, ChevronRight, Coins, Flame, Library, Phone,
   ShieldCheck, Sparkles, Zap, Footprints, Scroll,
@@ -928,7 +928,7 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
 
       <div className="max-w-6xl mx-auto px-4 pb-2 space-y-3">
         <VersionBanner />
-        <SupportNote />
+        <SupportNote account />
       </div>
 
       <Footer />
@@ -941,17 +941,17 @@ const VersionBanner = () => (
   <div style={{ backgroundColor: 'var(--bg-badge)', borderColor: 'var(--border-color)' }} className="border rounded-xl px-4 py-3 flex items-center gap-2.5 text-xs">
     <Sparkles size={15} style={{ color: 'var(--text-badge)' }} className="shrink-0" />
     <p style={{ color: 'var(--text-badge)' }} className="m-0 font-semibold">
-      Jomarid Books je ve verzi 1.0! Díky, že čteš s námi.
+      Jomarid Books je ve verzi {APP_VERSION_SHORT}! Díky, že čteš s námi.
     </p>
   </div>
 );
 
-// Kam se obrátit, kdyby se něco nechovalo, jak má.
-const SupportNote = () => (
+// Kam se obrátit, kdyby se něco nechovalo, jak má. Zmínka o účtu jen pro přihlášené (host žádný postup ani mince nemá).
+const SupportNote = ({ account = false }) => (
   <div style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }} className="border rounded-xl px-4 py-3 flex items-center gap-2.5 text-xs">
     <MessageCircle size={15} style={{ color: 'var(--text-muted)' }} className="shrink-0" />
     <p style={{ color: 'var(--text-muted)' }} className="m-0">
-      Tvůj postup ve čtení a mince jsou uložené u tvého účtu. Kdyby se něco nechovalo, jak má, napiš nám na kontaktní e-mail dole, rádi to opravíme.
+      {account && 'Tvůj postup ve čtení a mince jsou uložené u tvého účtu. '}Kdyby se něco nechovalo, jak má, napiš nám na kontaktní e-mail dole, rádi to opravíme.
     </p>
   </div>
 );
