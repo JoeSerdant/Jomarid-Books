@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import * as T from '../theme.js';
 import * as S from '../settings/settingsSync.js';
 import * as store from '../browse/browseStore.js';
+import { APP_VERSION, APP_VERSION_LABEL, APP_VERSION_SHORT } from '../appInfo.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const makeStorage = (init = {}) => {
@@ -405,5 +406,18 @@ describe('synchronizace nastavení: řadič', () => {
     const before = client.calls.length;
     await sync.flush();
     assert.equal(client.calls.length, before);
+  });
+});
+
+describe('verze aplikace', () => {
+  test('verze v appInfo.js odpovídá package.json (i v package-lock.json) a popisek z ní vychází', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+    const lock = JSON.parse(fs.readFileSync(path.join(ROOT, 'package-lock.json'), 'utf8'));
+    assert.equal(APP_VERSION, pkg.version);
+    assert.equal(lock.version, pkg.version);
+    assert.equal(lock.packages[''].version, pkg.version);
+    assert.match(APP_VERSION, /^\d+\.\d+\.\d+$/);
+    assert.ok(APP_VERSION.startsWith(APP_VERSION_SHORT + '.'));
+    assert.equal(APP_VERSION_LABEL, 'Verze ' + APP_VERSION_SHORT);
   });
 });
