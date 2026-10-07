@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import * as T from '../theme.js';
 import * as S from '../settings/settingsSync.js';
 import * as store from '../browse/browseStore.js';
+import { APP_VERSION, APP_VERSION_LABEL } from '../appInfo.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const makeStorage = (init = {}) => {
@@ -405,5 +406,14 @@ describe('synchronizace nastavení: řadič', () => {
     const before = client.calls.length;
     await sync.flush();
     assert.equal(client.calls.length, before);
+  });
+});
+
+describe('verze aplikace', () => {
+  test('verze v appInfo.js odpovídá package.json a popisku', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+    assert.equal(APP_VERSION, pkg.version);
+    assert.equal(APP_VERSION, '1.0.0');
+    assert.equal(APP_VERSION_LABEL, 'Verze ' + APP_VERSION.split('.').slice(0, 2).join('.'));
   });
 });

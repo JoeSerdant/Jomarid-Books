@@ -18,6 +18,7 @@ import {
 import { readLibraryPrefs, writeLibraryPref } from '../browse/browseStore';
 import { SORT_OPTIONS, STATUS_FILTERS } from '../browse/libraryModel';
 import { useSyncStatus } from '../settings/settingsSyncStore';
+import { APP_VERSION_LABEL } from '../appInfo';
 
 // ---- Sdílené stavební prvky nastavení ----
 const Section = ({ title, description, danger = false, children }) => (
@@ -1199,6 +1200,7 @@ export const SettingsPage = () => {
           {active.id === 'data' && <DataTab user={user} role={role} />}
         </section>
       </div>
+      <p style={{ color: 'var(--text-muted)' }} className="text-xs text-center m-0 mt-6">Jomarid Books · {APP_VERSION_LABEL}</p>
     </div>
   );
 };

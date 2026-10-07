@@ -5,12 +5,12 @@ import { supabase } from '../lib/supabase';
 import { BOOK_BADGES } from '../constants/badges';
 import { calculateXpMultiplier, calculateLevelAndProgress, getLevelVisuals, calculateGoalMultiplier } from '../constants/leveling';
 import { FaqItem } from '../components/FaqItem';
+import { APP_VERSION_LABEL } from '../appInfo';
 import {
   Book, BookOpen, ChevronRight, Coins, Flame, Library, Phone,
   ShieldCheck, Sparkles, Zap, Footprints, Scroll,
   Rocket, Swords, Building2, Target, Crown, ArrowRight, Feather, Calendar, Gamepad2,
   Type, Bookmark, Star, MessageCircle, Trophy, Loader2, TrendingUp, BarChart3,
-  FlaskConical, AlertTriangle,
 } from 'lucide-react';
 
 // ============================================================================
@@ -276,7 +276,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
     <div style={{ color: 'var(--text-body)' }} className="font-sans">
 
       <div className="max-w-6xl mx-auto px-4 pt-6">
-        <BetaBanner />
+        <VersionBanner />
       </div>
 
       {/* ============================================================
@@ -713,7 +713,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
 
 
       <div className="max-w-6xl mx-auto px-4 pb-2">
-        <DevDisclaimer />
+        <SupportNote />
       </div>
 
       <Footer />
@@ -927,8 +927,8 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
 
 
       <div className="max-w-6xl mx-auto px-4 pb-2 space-y-3">
-        <BetaBanner />
-        <DevDisclaimer />
+        <VersionBanner />
+        <SupportNote />
       </div>
 
       <Footer />
@@ -936,26 +936,22 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
   );
 };
 
-// ============================================================================
-// DOČASNÉ UPOZORNĚNÍ - appka je v otevřeném beta testování. Zvlášť od
-// odškrtávacího upozornění na možné problémy níž, aby šlo každé v budoucnu
-// snadno odebrat samostatně (beta štítek zmizí jako první, jakmile appka
-// vyjde z bety; upozornění na nestabilitu může zůstat o něco déle).
-// ============================================================================
-const BetaBanner = () => (
+// Oznámení verze 1.0 (úvodní stránka).
+const VersionBanner = () => (
   <div style={{ backgroundColor: 'var(--bg-badge)', borderColor: 'var(--border-color)' }} className="border rounded-xl px-4 py-3 flex items-center gap-2.5 text-xs">
-    <FlaskConical size={15} style={{ color: 'var(--text-badge)' }} className="shrink-0" />
+    <Sparkles size={15} style={{ color: 'var(--text-badge)' }} className="shrink-0" />
     <p style={{ color: 'var(--text-badge)' }} className="m-0 font-semibold">
-      Jomarid Books je v otevřeném beta testování - appka se pořád aktivně vyvíjí.
+      Jomarid Books je ve verzi 1.0! Díky, že čteš s námi.
     </p>
   </div>
 );
 
-const DevDisclaimer = () => (
+// Kam se obrátit, kdyby se něco nechovalo, jak má.
+const SupportNote = () => (
   <div style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }} className="border rounded-xl px-4 py-3 flex items-center gap-2.5 text-xs">
-    <AlertTriangle size={15} style={{ color: 'var(--text-muted)' }} className="shrink-0 opacity-70" />
-    <p style={{ color: 'var(--text-muted)' }} className="m-0 opacity-80">
-      Během vývoje se může stát, že při přestavbě appky dojde ke ztrátě dat, a některé věci se mohou dočasně rozbít nebo fungovat jinak, než mají.
+    <MessageCircle size={15} style={{ color: 'var(--text-muted)' }} className="shrink-0" />
+    <p style={{ color: 'var(--text-muted)' }} className="m-0">
+      Tvůj postup ve čtení a mince jsou uložené u tvého účtu. Kdyby se něco nechovalo, jak má, napiš nám na kontaktní e-mail dole, rádi to opravíme.
     </p>
   </div>
 );
@@ -966,6 +962,8 @@ const Footer = () => (
       <span className="font-semibold">© {new Date().getFullYear()} Jomarid Books</span>
       <span className="hidden sm:inline opacity-40">·</span>
       <span>Digitální čítárna s postupem</span>
+      <span className="hidden sm:inline opacity-40">·</span>
+      <span>{APP_VERSION_LABEL}</span>
     </div>
     <a
       href="mailto:wwsigmamango@gmail.com"
