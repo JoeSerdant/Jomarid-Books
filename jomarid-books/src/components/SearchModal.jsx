@@ -2,10 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { loadCatalog } from '../browse/libraryData';
+import { RECENT_SEARCH_KEY } from '../browse/browseStore';
+import { canonicalizeGenres, cleanGenres } from '../browse/libraryModel';
 import { ChevronRight, Loader2, Search, X, SlidersHorizontal, Star, Heart, RotateCcw, History, Library, Globe } from 'lucide-react';
 
 const PREFS_KEY = 'jomarid-search-prefs';
-const RECENT_KEY = 'jomarid-search-recent';
+const RECENT_KEY = RECENT_SEARCH_KEY;
 const PAGE_SIZE = 20;
 const DAY_MS = 86400000;
 
@@ -38,22 +41,29 @@ const DATE_SORTS = ['newest', 'oldest'];
 export const fold = (s) => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 const cs = (a, b) => String(a).localeCompare(String(b), 'cs');
 
-// Z řádků z databáze udělá jednotný tvar, nad kterým se hledá a filtruje.
-export const buildSearchItems = (books, userBooks, likes, userId) => {
-  const ubMap = new Map(userBooks.map(ub => [ub.book_id, ub]));
+// Lajky pro buildSearchItems: buď seznam všech lajků (řádky book_likes), nebo hotové { count(kniha), liked(id) } z
+// načtení katalogu (loadCatalog), které nestahuje lajky všech čtenářů.
+const likeInfoFromRows = (rows, userId) => {
   const likeCount = new Map();
   const mine = new Set();
-  likes.forEach(l => {
+  rows.forEach(l => {
     likeCount.set(l.book_id, (likeCount.get(l.book_id) || 0) + 1);
     if (l.user_id === userId) mine.add(l.book_id);
   });
-  return books.map(b => {
+  return { count: (b) => likeCount.get(b.id) || 0, liked: (id) => mine.has(id) };
+};
+
+// Z řádků z databáze udělá jednotný tvar, nad kterým se hledá a filtruje.
+export const buildSearchItems = (books, userBooks, likes, userId) => {
+  const ubMap = new Map(userBooks.map(ub => [ub.book_id, ub]));
+  const likeInfo = Array.isArray(likes) ? likeInfoFromRows(likes, userId) : likes;
+  const items = books.map(b => {
     const ub = ubMap.get(b.id);
     const isOwn = !!b.author_id && b.author_id === userId;
     // Stejná definice přístupu jako v UserLibrary/ReaderPage: vlastník, automaticky
     // přiřazená kniha, nebo aktivní licence.
     const owned = isOwn || !!b.is_auto_assigned || ub?.status === 'active';
-    const genres = Array.isArray(b.genres) ? b.genres : [];
+    const genres = cleanGenres(b.genres);
     const authorName = b.author_display || b.author || '';
     const price = b.is_auto_assigned ? 0 : (parseInt(b.price_coins, 10) || 0);
     const progress = ub ? Math.round(parseFloat(ub.scroll_position) || 0) : 0;
@@ -61,13 +71,15 @@ export const buildSearchItems = (books, userBooks, likes, userId) => {
     return {
       id: b.id, title: b.title || '', authorName, description: b.description || '', genres,
       price, owned, isOwn, read, progress, inProgress: owned && !read && progress > 0,
-      liked: mine.has(b.id), likes: (likeCount.get(b.id) || 0) + (parseInt(b.fake_likes, 10) || 0),
+      liked: likeInfo.liked(b.id), likes: likeInfo.count(b) + (parseInt(b.fake_likes, 10) || 0),
       rating: parseFloat(b.avg_rating) || 0, ratingsCount: parseInt(b.ratings_count, 10) || 0,
       createdAt: b.created_at ? new Date(b.created_at).getTime() : null,
       lastReadAt: ub?.updated_at ? new Date(ub.updated_at).getTime() : 0,
       f: { title: fold(b.title), author: fold(`${authorName} ${b.author || ''}`), genres: fold(genres.join(' ')), description: fold(b.description) },
     };
   });
+  // Stejné čištění a sjednocení zápisů jako v knihovně (Sci-Fi / sci-fi / SCI-FI je jeden žánr, ne tři tlačítka).
+  return canonicalizeGenres(items);
 };
 
 const relevance = (it, tokens, fields) => {
@@ -222,16 +234,11 @@ export const SearchModal = ({ isOpen, onClose }) => {
     let cancelled = false;
     setLoading(true);
     setError('');
-    Promise.all([
-      supabase.from('books').select('*'),
-      supabase.from('user_books').select('book_id, status, is_read, scroll_position, updated_at').eq('user_id', user.id),
-      supabase.from('book_likes').select('book_id, user_id'),
-      supabase.from('profiles').select('coins').eq('id', user.id).maybeSingle(),
-    ]).then(([booksRes, ubRes, likesRes, profRes]) => {
+    // Knihy po částech (databáze vrací najednou jen omezený počet řádků) a počty lajků jedním číslem u knihy.
+    loadCatalog(supabase, user.id, { isCancelled: () => cancelled }).then(({ rows, userBooks, likes, coins: balance }) => {
       if (cancelled) return;
-      if (booksRes.error) throw booksRes.error;
-      setItems(buildSearchItems(booksRes.data || [], ubRes.data || [], likesRes.data || [], user.id));
-      setCoins(parseInt(profRes.data?.coins, 10) || 0);
+      setItems(buildSearchItems(rows, userBooks, likes, user.id));
+      setCoins(parseInt(balance, 10) || 0);
       setLoading(false);
     }).catch(err => {
       if (cancelled) return;

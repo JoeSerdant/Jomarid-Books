@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { usePagedList } from '../browse/usePagedList';
+import { LoadMore } from '../browse/BrowseParts';
 import {
   BarChart3, BookOpen, Check, Coins, Eye, EyeOff, Feather, Gift, Heart, Loader2, MessageSquare, Pencil,
   PlusCircle, Search, ShieldCheck, Star, Trash2, TrendingDown, TrendingUp, Users, Wallet, X,
@@ -480,6 +482,8 @@ export const PublisherDashboard = () => {
       .filter(b => (statusFilter === 'public' ? !b.hidden : statusFilter === 'hidden' ? b.hidden : statusFilter === 'free' ? b.price === 0 : true))
       .sort(SORTS[sortKey].fn);
   }, [books, query, statusFilter, sortKey]);
+  // Řádky knih jsou vysoké (statistiky), proto se ukazují po dvaceti a další přibývají při doscrollování.
+  const pagedBooks = usePagedList(visibleBooks, { pageSize: 20, resetKey: `${query}|${statusFilter}|${sortKey}` });
 
   const topBooks = useMemo(() => [...books].filter(b => b.earned_period > 0).sort((a, b) => b.earned_period - a.earned_period).slice(0, 5), [books]);
 
@@ -712,9 +716,12 @@ export const PublisherDashboard = () => {
           ) : visibleBooks.length === 0 ? (
             <Card className="text-center py-8"><p className="text-xs font-bold opacity-60 m-0">Nic neodpovídá hledání nebo filtru.</p></Card>
           ) : (
-            <div className="space-y-3">
-              {visibleBooks.map(b => <BookRow key={b.id} book={b} busy={busyBookId === b.id} onDetail={(x) => setDetailBookId(x.id)} onEdit={startEditBook} onToggleHidden={toggleHidden} />)}
-            </div>
+            <>
+              <div className="space-y-3">
+                {pagedBooks.items.map(b => <BookRow key={b.id} book={b} busy={busyBookId === b.id} onDetail={(x) => setDetailBookId(x.id)} onEdit={startEditBook} onToggleHidden={toggleHidden} />)}
+              </div>
+              <LoadMore paged={pagedBooks} />
+            </>
           )}
         </div>
       )}
@@ -741,7 +748,7 @@ export const PublisherDashboard = () => {
             </div>
             <div className="space-y-1">
               <label htmlFor="book-desc" style={mutedStyle} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Popis (zobrazí se v detailu knihy před koupí)</label>
-              <textarea id="book-desc" rows={3} value={descriptionInput} onChange={(e) => setDescriptionInput(e.target.value)} placeholder="Krátký popis, co čtenáře čeká..." style={inputStyle} className="w-full p-3 border rounded-xl font-bold outline-none text-sm resize-none" />
+              <textarea id="book-desc" rows={3} maxLength={2000} value={descriptionInput} onChange={(e) => setDescriptionInput(e.target.value)} placeholder="Krátký popis, co čtenáře čeká..." style={inputStyle} className="w-full p-3 border rounded-xl font-bold outline-none text-sm resize-none" />
             </div>
             <div className="space-y-1">
               <label htmlFor="book-text" style={mutedStyle} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Text knihy</label>

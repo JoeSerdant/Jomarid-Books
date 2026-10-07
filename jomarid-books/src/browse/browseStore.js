@@ -1,0 +1,51 @@
+// Zapamatování stavu procházení v úložišti prohlížeče. Úložiště může být nedostupné (anonymní okno, zakázaná data,
+// plné), proto je každé čtení i zápis v try/catch a appka bez něj funguje, jen si nic nepamatuje.
+
+import { normalizeViewMode } from './browseModel.js';
+import { normalizeLibraryState, serializeLibraryState } from './libraryModel.js';
+
+const VIEW_KEY = 'jomarid.library.view'; // způsob zobrazení: trvalá volba čtenáře (localStorage)
+const STATE_KEY = 'jomarid.library.state'; // filtry a poloha: jen v rámci karty (sessionStorage)
+export const RECENT_SEARCH_KEY = 'jomarid-search-recent'; // poslední hledané výrazy ve vyhledávacím okně (localStorage)
+
+const local = () => { try { return window.localStorage; } catch { return null; } };
+const session = () => { try { return window.sessionStorage; } catch { return null; } };
+
+export const readViewMode = (storage = local()) => {
+  try { return normalizeViewMode(storage?.getItem(VIEW_KEY)); } catch { return 'grid'; }
+};
+
+export const writeViewMode = (mode, storage = local()) => {
+  try { storage?.setItem(VIEW_KEY, normalizeViewMode(mode)); } catch { /* úložiště nedostupné: volba platí jen do zavření stránky */ }
+};
+
+/** Zapomene uložený stav knihovny (při odhlášení): hledaný text může být osobní a nemá zůstat v kartě. */
+export const clearLibraryState = ({ storage = session() } = {}) => {
+  try { storage?.removeItem(STATE_KEY); } catch { /* úložiště nedostupné: není co mazat */ }
+};
+
+/**
+ * Zapomene všechno osobní, co si procházení pamatuje: stav knihovny (včetně hledaného textu) i poslední hledané
+ * výrazy z vyhledávacího okna. Volá se po odhlášení, ať to další člověk na sdíleném počítači nevidí.
+ */
+export const clearPersonalBrowseState = ({ sessionStore = session(), localStore = local() } = {}) => {
+  clearLibraryState({ storage: sessionStore });
+  try { localStore?.removeItem(RECENT_SEARCH_KEY); } catch { /* úložiště nedostupné: není co mazat */ }
+};
+
+export const readLibraryState = (userId, { storage = session(), now = Date.now() } = {}) => {
+  try {
+    const raw = storage?.getItem(STATE_KEY);
+    if (!raw) return null;
+    let state = null;
+    try { state = normalizeLibraryState(JSON.parse(raw), { userId, now }); } catch { state = null; }
+    // Propadlý, cizí nebo rozbitý stav se rovnou smaže: nikomu už nepomůže a platnost by jinak hlídala jen čtení.
+    if (!state && userId) clearLibraryState({ storage });
+    return state;
+  } catch { return null; }
+};
+
+export const writeLibraryState = (userId, state, { storage = session(), now = Date.now() } = {}) => {
+  if (!userId) return;
+  try { storage?.setItem(STATE_KEY, JSON.stringify(serializeLibraryState(userId, state, now))); } catch { /* viz výše */ }
+};
