@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Button, Card } from '../components/ui';
+import { TourEditor, peekAdminTabRequest } from '../tour/TourEditor';
 import { useAuth } from '../contexts/AuthContext';
 import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle, LayoutDashboard, UserCog, Loader2, CheckCircle2, X, ChevronLeft, ChevronRight, Ban, KeyRound, Trash2, ShieldCheck, Bell, Copy, Flag, Eye, EyeOff, Download } from 'lucide-react';
 
@@ -1075,7 +1076,7 @@ export const AdminDashboard = () => {
   const [comments, setComments] = useState([]);
   
   // --- Stavy rozhraní (UX) ---
-  const [activeTab, setActiveTab] = useState('overview'); // overview | notifications | accounts | books | homepage | users | logs
+  const [activeTab, setActiveTab] = useState(() => peekAdminTabRequest() || 'overview'); // po náhledu prohlídky rovnou záložka Prohlídka appky; overview | notifications | accounts | books | homepage | tour | users | logs
   const [pendingCount, setPendingCount] = useState(0); // otevrena upozorneni (odznak na zalozce)
   const [logCount, setLogCount] = useState(0); // pocet zaznamu v syslogu (karta v Prehledu)
   useEffect(() => {
@@ -1692,6 +1693,7 @@ export const AdminDashboard = () => {
           { id: 'accounts', label: 'Účty', icon: <UserCog size={14} /> },
           { id: 'books', label: 'Knihovna & Editace', icon: <Database size={14} /> },
           { id: 'homepage', label: 'Domovská stránka', icon: <Layout size={14} /> },
+          { id: 'tour', label: 'Prohlídka appky', icon: <Sparkles size={14} /> },
           { id: 'users', label: 'Licence & odměny', icon: <Users size={14} /> },
           { id: 'logs', label: 'Systémový Syslog', icon: <Terminal size={14} /> }
         ].map(tab => (
@@ -2141,6 +2143,9 @@ export const AdminDashboard = () => {
           </button>
         </div>
       )}
+
+      {/* 2c. ZÁLOŽKA: PROHLÍDKA APPKY */}
+      {activeTab === 'tour' && <TourEditor />}
 
       {/* 3. ZÁLOŽKA: UŽIVATELÉ A LICENCE */}
       {activeTab === 'users' && (

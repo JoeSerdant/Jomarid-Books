@@ -4,6 +4,7 @@ import { resolveTheme, isDarkTheme, saveCustomColors, loadCustomColors, seedCust
 import { ThemeContext, AuthProvider, ProtectedAdminRoute, ProtectedUserRoute, useAuth } from './contexts/AuthContext';
 import { Navbar } from './components/Navbar';
 import { SettingsPage } from './components/SettingsModal';
+import { TourProvider } from './tour/TourProvider';
 import { SearchModal } from './components/SearchModal';
 import { HomePage } from './pages/HomePage';
 import { LoginPage, ResetPasswordPage } from './pages/LoginPage';
@@ -93,6 +94,7 @@ export default function App() {
         changeCustomColors: (c) => { saveCustomColors(c); setCustomColors(loadCustomColors()); setCurrentTheme(CUSTOM_THEME_KEY); writeStored('jomarid-books-theme', CUSTOM_THEME_KEY); },
       }}>
         <Router>
+          <TourProvider blocked={isSearchOpen}>
           <div style={{ background: 'var(--bg-body)', color: 'var(--text-body)' }} className="min-h-screen flex flex-col font-sans antialiased transition-all duration-200">
             <RecoveryRedirect />
             <Navbar onOpenSearch={() => setIsSearchOpen(true)} />
@@ -130,6 +132,7 @@ export default function App() {
 
             <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
           </div>
+          </TourProvider>
         </Router>
       </ThemeContext.Provider>
     </AuthProvider>
