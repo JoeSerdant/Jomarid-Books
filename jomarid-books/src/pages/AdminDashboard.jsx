@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase';
 import { Button, Card } from '../components/ui';
 import { TourEditor, peekAdminTabRequest } from '../tour/TourEditor';
 import { useAuth } from '../contexts/AuthContext';
+import { usePagedList } from '../browse/usePagedList';
+import { LoadMore } from '../browse/BrowseParts';
 import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle, LayoutDashboard, UserCog, Loader2, CheckCircle2, X, ChevronLeft, ChevronRight, Ban, KeyRound, Trash2, ShieldCheck, Bell, Copy, Flag, Eye, EyeOff, Download } from 'lucide-react';
 
 // ============================================================================
@@ -1239,6 +1241,8 @@ export const AdminDashboard = () => {
       (b.authorDisplay && b.authorDisplay.toLowerCase().includes(searchBook.toLowerCase()))
     );
   }, [books, searchBook]);
+  // Inventář titulů se vykresluje po částech, ať katalog s tisíci knihami nezpomalí celou administraci.
+  const pagedBooks = usePagedList(filteredBooks, { pageSize: 50, resetKey: searchBook });
 
   const filteredProfiles = useMemo(() => {
     return profiles.filter(p => {
@@ -1915,7 +1919,7 @@ export const AdminDashboard = () => {
                 {filteredBooks.length === 0 ? (
                   <p className="text-xs font-bold text-center py-8 italic opacity-50">Žádné knihy neodpovídají vyhledávacímu dotazu.</p>
                 ) : (
-                  filteredBooks.map(b => (
+                  pagedBooks.items.map(b => (
                     <div key={b.id} style={{ backgroundColor: 'var(--bg-secondary)' }} className="flex justify-between items-center p-3 rounded-xl text-xs font-bold gap-4 hover:opacity-95 transition-opacity">
                       <span className="truncate flex-1">
                         <span className="text-sm font-black block truncate flex items-center gap-1.5">
@@ -1982,6 +1986,7 @@ export const AdminDashboard = () => {
                     </div>
                   ))
                 )}
+                <LoadMore paged={pagedBooks} className="py-2" />
               </div>
             </Card>
           </div>
