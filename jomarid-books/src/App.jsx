@@ -1,6 +1,8 @@
 import { Component, lazy, Suspense, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { resolveTheme, isDarkTheme, saveCustomColors, loadCustomColors, seedCustomColors, CUSTOM_THEME_KEY, initMotionPref } from './theme';
+import { resolveTheme, withAccent, loadAccent, saveAccent, applyUiPrefs, applyMotionPref, isDarkTheme, saveCustomColors, loadCustomColors, seedCustomColors, CUSTOM_THEME_KEY, THEME_KEY, initMotionPref } from './theme';
+import { SettingsSyncRunner } from './settings/SettingsSyncRunner';
+import { SETTINGS_APPLIED, notifySettingsChanged } from './settings/settingsEvents';
 import { ThemeContext, AuthProvider, ProtectedAdminRoute, ProtectedUserRoute, useAuth } from './contexts/AuthContext';
 import { Navbar } from './components/Navbar';
 import { SettingsPage } from './components/SettingsModal';
@@ -67,32 +69,50 @@ const writeStored = (key, value) => { try { localStorage.setItem(key, value); } 
 
 export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [currentTheme, setCurrentTheme] = useState(() => readStored('jomarid-books-theme') || 'saas');
+  const [currentTheme, setCurrentTheme] = useState(() => readStored(THEME_KEY) || 'saas');
   const [customColors, setCustomColors] = useState(loadCustomColors); // jen pro motiv „Vlastní“
+  const [accent, setAccent] = useState(loadAccent); // akcentní barva hotových motivů
 
   useEffect(() => initMotionPref(), []); // omezení pohybu (Nastavení -> Vzhled, nebo nastavení zařízení)
+  useEffect(() => { applyUiPrefs(); }, []); // velikost a hustota rozhraní (index.html je použije ještě před vykreslením)
+
+  // Po stažení nastavení z účtu (nové zařízení, změna na jiném zařízení) si appka všechno přečte znovu.
+  useEffect(() => {
+    const reread = () => {
+      setCurrentTheme(readStored(THEME_KEY) || 'saas');
+      setCustomColors(loadCustomColors());
+      setAccent(loadAccent());
+      applyUiPrefs();
+      applyMotionPref();
+    };
+    window.addEventListener(SETTINGS_APPLIED, reread);
+    return () => window.removeEventListener(SETTINGS_APPLIED, reread);
+  }, []);
 
   useEffect(() => {
-    const vars = resolveTheme(currentTheme);
+    const base = resolveTheme(currentTheme);
+    const vars = currentTheme === CUSTOM_THEME_KEY ? base : withAccent(base, accent);
     // Promenne patri na <html>, ne na <body>: pozadi <html> je to, co vidi uzivatel mimo obsah
     // (oddaleni na mobilu, pretazeni). Na body by ho <html> nevidelo a zustalo by svetle.
     const root = document.documentElement;
     Object.keys(vars).forEach(k => root.style.setProperty(k, vars[k]));
     root.style.colorScheme = isDarkTheme(currentTheme, vars) ? 'dark' : 'light';
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', vars['--bg-body']);
-  }, [currentTheme, customColors]);
+  }, [currentTheme, customColors, accent]);
 
   return (
     <AuthProvider>
       <ThemeContext.Provider value={{
-        currentTheme, customColors,
+        currentTheme, customColors, accent,
+        changeAccent: (a) => { saveAccent(a); setAccent(loadAccent()); },
         changeTheme: (t) => {
           // První přepnutí na „Vlastní“ začne od barev, které uživatel právě vidí, ne od výchozí tyrkysové.
           if (t === CUSTOM_THEME_KEY) setCustomColors(seedCustomColors(currentTheme));
-          setCurrentTheme(t); writeStored('jomarid-books-theme', t);
+          setCurrentTheme(t); writeStored(THEME_KEY, t); notifySettingsChanged();
         },
-        changeCustomColors: (c) => { saveCustomColors(c); setCustomColors(loadCustomColors()); setCurrentTheme(CUSTOM_THEME_KEY); writeStored('jomarid-books-theme', CUSTOM_THEME_KEY); },
+        changeCustomColors: (c) => { saveCustomColors(c); setCustomColors(loadCustomColors()); setCurrentTheme(CUSTOM_THEME_KEY); writeStored(THEME_KEY, CUSTOM_THEME_KEY); notifySettingsChanged(); },
       }}>
+        <SettingsSyncRunner />
         <Router>
           <TourProvider blocked={isSearchOpen}>
           <div style={{ background: 'var(--bg-body)', color: 'var(--text-body)' }} className="min-h-screen flex flex-col font-sans antialiased transition-all duration-200">

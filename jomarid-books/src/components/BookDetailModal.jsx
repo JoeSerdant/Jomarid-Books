@@ -179,15 +179,15 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
 
         <div className="flex flex-wrap items-center gap-2 mt-3">
           {book.avgRating > 0 && (
-            <span style={{ borderColor: 'var(--border-color)' }} className="border px-2 py-1 rounded-lg text-[10px] font-black flex items-center gap-1">
+            <span style={{ borderColor: 'var(--border-color)' }} className="border px-2 py-1 rounded-lg text-[0.625rem] font-black flex items-center gap-1">
               <Star size={11} className="fill-amber-400 text-amber-400" /> {fmtRating(book.avgRating)} ({book.ratingsCount})
             </span>
           )}
-          <span style={{ borderColor: 'var(--border-color)' }} className="border px-2 py-1 rounded-lg text-[10px] font-black flex items-center gap-1">
+          <span style={{ borderColor: 'var(--border-color)' }} className="border px-2 py-1 rounded-lg text-[0.625rem] font-black flex items-center gap-1">
             <Heart size={11} className="fill-red-500 text-red-500" /> {book.likesCount}
           </span>
           {book.genres.map(g => (
-            <span key={g} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' }} className="text-[9px] font-bold uppercase px-2 py-1 rounded">{g}</span>
+            <span key={g} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' }} className="text-[0.5625rem] font-bold uppercase px-2 py-1 rounded">{g}</span>
           ))}
         </div>
 
@@ -219,7 +219,7 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
         </div>
 
         <div style={{ borderColor: 'var(--border-color)' }} className="border-t mt-6 pt-5">
-          <h3 style={{ color: 'var(--text-muted)' }} className="text-[11px] font-black uppercase tracking-wider mb-3 flex items-center gap-1.5">
+          <h3 style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] font-black uppercase tracking-wider mb-3 flex items-center gap-1.5">
             <MessageCircle size={13} /> Komentáře {comments.length > 0 && `(${comments.length})`}
           </h3>
 
@@ -239,14 +239,14 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
                   onClick={handlePostComment}
                   disabled={postingComment || !newComment.trim()}
                   style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
-                  className="px-3 py-2.5 rounded-lg text-[10px] font-black uppercase cursor-pointer border-none disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                  className="px-3 py-2.5 rounded-lg text-[0.625rem] font-black uppercase cursor-pointer border-none disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                 >
                   {postingComment ? <Loader2 size={12} className="animate-spin" /> : 'Přidat'}
                 </button>
               </div>
               <div className="flex items-center justify-between">
-                {commentError && <span className="text-red-500 text-[10px]">{commentError}</span>}
-                <span style={{ color: 'var(--text-muted)' }} className="text-[9px] ml-auto">{newComment.length}/100</span>
+                {commentError && <span className="text-red-500 text-[0.625rem]">{commentError}</span>}
+                <span style={{ color: 'var(--text-muted)' }} className="text-[0.5625rem] ml-auto">{newComment.length}/100</span>
               </div>
             </div>
           )}
@@ -261,7 +261,7 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
                 <div key={c.id} style={{ backgroundColor: 'var(--bg-secondary)' }} className="p-2.5 rounded-lg">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <span style={{ color: 'var(--text-badge)' }} className="text-[10px] font-black uppercase block">{c.author_name}</span>
+                      <span style={{ color: 'var(--text-badge)' }} className="text-[0.625rem] font-black uppercase block">{c.author_name}</span>
                       <span style={{ color: 'var(--text-body)' }} className="text-xs break-words">{c.content}</span>
                     </div>
                     {c.user_id === user?.id ? (
@@ -269,7 +269,7 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
                         <X size={12} />
                       </button>
                     ) : reported[c.id] ? (
-                      <span style={{ color: 'var(--text-muted)' }} className="text-[9px] font-bold uppercase shrink-0">Nahlášeno</span>
+                      <span style={{ color: 'var(--text-muted)' }} className="text-[0.5625rem] font-bold uppercase shrink-0">Nahlášeno</span>
                     ) : user && (
                       <button onClick={() => { setReportingId(prev => (prev === c.id ? null : c.id)); setReportError(''); }} aria-label="Nahlásit komentář" aria-expanded={reportingId === c.id} title="Nahlásit komentář" style={{ color: 'var(--text-muted)' }} className="bg-transparent border-none cursor-pointer p-1 hover:opacity-70 shrink-0">
                         <Flag size={12} />
@@ -278,15 +278,15 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
                   </div>
                   {reportingId === c.id && (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <select aria-label="Důvod nahlášení" value={reportReason} onChange={(e) => setReportReason(e.target.value)} disabled={reportBusy} style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="border rounded-lg px-2 py-1 text-[11px] font-bold outline-none">
+                      <select aria-label="Důvod nahlášení" value={reportReason} onChange={(e) => setReportReason(e.target.value)} disabled={reportBusy} style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="border rounded-lg px-2 py-1 text-[0.6875rem] font-bold outline-none">
                         <option value="spam">Spam</option>
                         <option value="abuse">Urážky</option>
                         <option value="inappropriate">Nevhodný obsah</option>
                         <option value="other">Jiný důvod</option>
                       </select>
-                      <button onClick={() => handleReport(c.id)} disabled={reportBusy} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="border-none rounded-lg px-3 py-1 text-[10px] font-black uppercase cursor-pointer disabled:opacity-50">{reportBusy ? 'Odesílám...' : 'Odeslat'}</button>
-                      <button onClick={() => { setReportingId(null); setReportError(''); }} disabled={reportBusy} style={{ color: 'var(--text-muted)' }} className="bg-transparent border-none text-[10px] font-bold underline cursor-pointer p-0">Zrušit</button>
-                      {reportError && <span role="alert" className="text-red-500 text-[10px] basis-full">{reportError}</span>}
+                      <button onClick={() => handleReport(c.id)} disabled={reportBusy} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="border-none rounded-lg px-3 py-1 text-[0.625rem] font-black uppercase cursor-pointer disabled:opacity-50">{reportBusy ? 'Odesílám...' : 'Odeslat'}</button>
+                      <button onClick={() => { setReportingId(null); setReportError(''); }} disabled={reportBusy} style={{ color: 'var(--text-muted)' }} className="bg-transparent border-none text-[0.625rem] font-bold underline cursor-pointer p-0">Zrušit</button>
+                      {reportError && <span role="alert" className="text-red-500 text-[0.625rem] basis-full">{reportError}</span>}
                     </div>
                   )}
                 </div>

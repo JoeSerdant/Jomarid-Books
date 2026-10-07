@@ -1,3 +1,5 @@
+import { notifySettingsChanged } from './settings/settingsEvents.js';
+
 export const THEMES = {
  saas: {
    '--bg-body': '#f8fafc',       
@@ -83,6 +85,21 @@ const ensureContrast = (fg, bg, min) => {
   for (let t = 0.05; t <= 1.0001; t += 0.05) { const c = mix(fg, target, t); if (contrast(c, bg) >= min) return c; }
   return target;
 };
+// Barva čitelná na všech plochách najednou. Posouvá se vždy ke stejnému konci (podle první plochy, tedy pozadí stránky),
+// jinak by u středně světlých barev karta a pozadí táhly text opačnými směry. Nejde-li min dosáhnout všude, vyhrává
+// nejlepší dosažitelný nejhorší kontrast.
+const ensureContrastAll = (fg, surfaces, min) => {
+  const target = bestOn(surfaces[0]);
+  let best = fg;
+  let bestScore = -1;
+  for (let t = 0; t <= 1.0001; t += 0.05) {
+    const c = t === 0 ? fg : mix(fg, target, t);
+    const score = Math.min(...surfaces.map((surface) => Math.min(contrast(c, surface), min)));
+    if (score >= min) return c;
+    if (score > bestScore + 1e-9) { best = c; bestScore = score; }
+  }
+  return best;
+};
 const bestOn = (bg) => (contrast('#ffffff', bg) >= contrast('#000000', bg) ? '#ffffff' : '#000000');
 
 export const isDarkColor = (hex) => bestOn(hex) === '#ffffff';
@@ -96,13 +113,14 @@ export const deriveTheme = (bgIn, accentIn) => {
   const secondary = dark ? mix(bg, '#ffffff', 0.11) : mix(bg, '#ffffff', 0.7);
   const badge = mix(bg, accent, dark ? 0.28 : 0.14);
   const [r, g, b] = toRgb(bg);
+  const muted = ensureContrastAll(mix(text, bg, 0.38), [bg, card, secondary], 4.5);
   return {
     '--bg-body': bg,
     '--text-body': text,
     '--bg-card': card,
     '--border-color': dark ? mix(bg, '#ffffff', 0.14) : mix(bg, '#000000', 0.11),
     '--bg-navbar': `rgba(${r}, ${g}, ${b}, 0.85)`,
-    '--text-muted': ensureContrast(mix(text, bg, 0.38), bg, 4.5),
+    '--text-muted': muted,
     '--bg-primary': accent,
     '--text-primary': bestOn(accent),
     '--bg-secondary': secondary,
@@ -133,6 +151,7 @@ export const saveCustomColors = (colors) => {
     localStorage.setItem(CUSTOM_THEME_STORAGE, JSON.stringify({ bg: vars['--bg-body'], accent: vars['--bg-primary'] }));
     localStorage.setItem(CUSTOM_VARS_STORAGE, JSON.stringify([vars['--bg-body'], vars['--text-body'], isDarkColor(vars['--bg-body']) ? 'dark' : 'light']));
   } catch { /* nevadí */ }
+  notifySettingsChanged();
 };
 
 // Uložené jsou jen úplné a platné vlastní barvy (poškozená hodnota se bere jako neuložená, ať se použije seed).
@@ -143,7 +162,7 @@ export const hasSavedCustomColors = () => {
 // Proměnné motivu podle klíče (vestavěné i vlastní) + jestli je tmavý.
 export const resolveTheme = (key) => {
   if (key === CUSTOM_THEME_KEY) { const c = loadCustomColors(); return deriveTheme(c.bg, c.accent); }
-  return THEMES[key] || THEMES.saas;
+  return typeof key === 'string' && Object.prototype.hasOwnProperty.call(THEMES, key) ? THEMES[key] : THEMES.saas; // ne zděděné (constructor, __proto__)
 };
 // Dvě barvy vlastního motivu odvozené z právě používaného motivu. První přepnutí na „Vlastní“ tak nezačne od výchozí
 // tyrkysové, ale od toho, co uživatel zrovna vidí (zvýraznění se podle potřeby jen dorovná, aby bylo na pozadí vidět).
@@ -159,7 +178,65 @@ export const seedCustomColors = (fromKey) => {
 };
 // Barvy, které „Vlastní“ dostane po kliknutí - podle nich se kreslí náhled dlaždice (aby odpovídal výsledku).
 export const customColorsPreview = (currentKey, saved) => (currentKey !== CUSTOM_THEME_KEY && !hasSavedCustomColors() ? colorsFromTheme(currentKey) : saved);
-export const DARK_THEMES = ['dark', 'emerald'];
+// --- Další hotové motivy (dopočítané stejně jako „Vlastní“, takže čitelnost je zaručená) ---
+Object.assign(THEMES, {
+  sepia: deriveTheme('#f3e9d2', '#9a3412'),
+  ocean: deriveTheme('#06222b', '#22d3ee'),
+  // Vysoký kontrast: čistě černé pozadí, bílé okraje a žlutá akcentní barva
+  contrast: { ...deriveTheme('#000000', '#ffd60a'), '--text-body': '#ffffff', '--border-color': '#ffffff', '--text-muted': '#e6e6e6', '--bg-card': '#0a0a0a', '--bg-secondary': '#171717' },
+});
+export const THEME_KEY = 'jomarid-books-theme';
+export const THEME_LABELS = { saas: 'Světlý', dark: 'Tmavý', emerald: 'Dřevo a zeleň', sepia: 'Sépiový', ocean: 'Oceán', contrast: 'Vysoký kontrast', [CUSTOM_THEME_KEY]: 'Vlastní' };
+export const DARK_THEMES = ['dark', 'emerald', 'ocean', 'contrast'];
+
+// --- Akcentní barva hotových motivů ---
+// Přebije jen zvýraznění (tlačítka, štítky); ostatní barvy motivu zůstanou. Barva se vždy dorovná tak, aby byla na
+// pozadí vidět a text na ní byl čitelný, takže jde zvolit libovolná z nabídky v libovolném motivu.
+export const ACCENT_KEY = 'jomarid-accent';
+const own = (obj, key) => typeof key === 'string' && Object.prototype.hasOwnProperty.call(obj, key); // ne zděděné (__proto__, toString)
+export const ACCENTS = {
+  default: { label: 'Podle motivu', color: null },
+  blue: { label: 'Modrá', color: '#2563eb' },
+  teal: { label: 'Tyrkysová', color: '#0d9488' },
+  green: { label: 'Zelená', color: '#16a34a' },
+  amber: { label: 'Jantarová', color: '#d97706' },
+  rose: { label: 'Růžová', color: '#e11d48' },
+  violet: { label: 'Fialová', color: '#7c3aed' },
+};
+export const withAccent = (vars, key) => {
+  const base = own(ACCENTS, key) ? ACCENTS[key].color : null;
+  if (!base) return vars;
+  const bg = vars['--bg-body'];
+  const accent = readableAccent(base, bg);
+  const badge = mix(bg, accent, isDarkColor(bg) ? 0.28 : 0.14);
+  return { ...vars, '--bg-primary': accent, '--text-primary': bestOn(accent), '--bg-badge': badge, '--text-badge': ensureContrast(accent, badge, 4.5) };
+};
+export const loadAccent = () => { try { const v = localStorage.getItem(ACCENT_KEY); return own(ACCENTS, v) ? v : 'default'; } catch { return 'default'; } };
+export const saveAccent = (key) => { try { localStorage.setItem(ACCENT_KEY, own(ACCENTS, key) ? key : 'default'); } catch { /* nevadí */ } notifySettingsChanged(); };
+
+// --- Velikost a hustota rozhraní (platí v celé appce; čtečka má vlastní velikost písma) ---
+// Velikost mění základní velikost písma stránky (všechno v rem se přepočítá), hustota násobí vnější a vnitřní mezery
+// (padding, margin, gap) přes proměnnou --d, kterou čte konfigurace Tailwindu (vite.config.js).
+export const UI_SCALE_KEY = 'jomarid-ui-scale';
+export const UI_DENSITY_KEY = 'jomarid-ui-density';
+export const UI_SCALES = { s: { label: 'Menší', value: 0.9 }, m: { label: 'Standardní', value: 1 }, l: { label: 'Větší', value: 1.125 }, xl: { label: 'Největší', value: 1.25 } };
+export const UI_DENSITIES = { compact: { label: 'Kompaktní', value: 0.8 }, normal: { label: 'Standardní', value: 1 }, comfy: { label: 'Pohodlné', value: 1.2 } };
+const loadChoice = (storageKey, options, fallback) => { try { const v = localStorage.getItem(storageKey); return own(options, v) ? v : fallback; } catch { return fallback; } };
+export const loadUiScale = () => loadChoice(UI_SCALE_KEY, UI_SCALES, 'm');
+export const loadUiDensity = () => loadChoice(UI_DENSITY_KEY, UI_DENSITIES, 'normal');
+export const applyUiPrefs = (root = document.documentElement) => {
+  const scale = UI_SCALES[loadUiScale()].value;
+  const density = UI_DENSITIES[loadUiDensity()].value;
+  if (scale === 1) root.style.removeProperty('font-size'); else root.style.setProperty('font-size', `${Math.round(scale * 1000) / 10}%`);
+  if (density === 1) root.style.removeProperty('--d'); else root.style.setProperty('--d', String(density));
+};
+const saveChoice = (storageKey, options, key) => {
+  try { localStorage.setItem(storageKey, own(options, key) ? key : ''); } catch { /* nevadí */ }
+  if (typeof document !== 'undefined') applyUiPrefs();
+  notifySettingsChanged();
+};
+export const saveUiScale = (key) => saveChoice(UI_SCALE_KEY, UI_SCALES, key);
+export const saveUiDensity = (key) => saveChoice(UI_DENSITY_KEY, UI_DENSITIES, key);
 export const isDarkTheme = (key, vars) => (key === CUSTOM_THEME_KEY ? isDarkColor(vars['--bg-body']) : DARK_THEMES.includes(key));
 
 // Sdílené volby čtečky - používá je ReaderPage i Nastavení, aby se seznamy
@@ -247,11 +324,13 @@ export const saveReaderPref = (name, value) => {
   const stored = BOOLEAN_PREFS.includes(name) ? (value ? '1' : '0') : String(value);
   try { localStorage.setItem(READER_STORAGE[name], stored); } catch { /* úložiště nemusí být dostupné */ }
   notifyReaderPrefs();
+  notifySettingsChanged();
 };
 
 export const resetReaderPrefs = () => {
   Object.values(READER_STORAGE).forEach(k => { try { localStorage.removeItem(k); } catch { /* nevadí */ } });
   notifyReaderPrefs();
+  notifySettingsChanged();
 };
 
 // Jedno místo, které z voleb udělá CSS textu. Stejné použije viditelná stránka, skrytý měřicí uzel
@@ -291,7 +370,7 @@ export const applyMotionPref = () => {
   document.documentElement.dataset.reduceMotion = reduce ? '1' : '0';
   return reduce;
 };
-export const saveMotionPref = (value) => { try { localStorage.setItem(MOTION_KEY, value); } catch { /* nevadí */ } applyMotionPref(); };
+export const saveMotionPref = (value) => { try { localStorage.setItem(MOTION_KEY, value); } catch { /* nevadí */ } applyMotionPref(); notifySettingsChanged(); };
 export const initMotionPref = () => {
   applyMotionPref();
   const mq = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;

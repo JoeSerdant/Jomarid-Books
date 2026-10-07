@@ -159,7 +159,7 @@ export const BadgesSection = ({ stats }) => {
                 backgroundColor: isActive ? 'var(--bg-primary)' : 'var(--bg-badge)',
                 color: isActive ? 'var(--text-primary)' : 'var(--text-badge)'
               }}
-              className="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider border-none cursor-pointer transition-all shadow-sm"
+              className="px-3 py-1.5 rounded-lg text-[0.6875rem] font-black uppercase tracking-wider border-none cursor-pointer transition-all shadow-sm"
             >
               {cat.label}
             </button>
@@ -205,12 +205,12 @@ export const BadgesSection = ({ stats }) => {
                       {badge.title}
                     </span>
                     {isUnlocked && (
-                      <span className="text-[9px] bg-amber-500/20 text-amber-500 px-1 py-0.5 rounded font-bold flex items-center gap-0.5">
+                      <span className="text-[0.5625rem] bg-amber-500/20 text-amber-500 px-1 py-0.5 rounded font-bold flex items-center gap-0.5">
                         +{badge.rewardCoins} <Coins size={9} />
                       </span>
                     )}
                   </div>
-                  <span style={{ color: 'var(--text-body)' }} className="text-[11px] opacity-75 mt-0.5 leading-tight line-clamp-2">
+                  <span style={{ color: 'var(--text-body)' }} className="text-[0.6875rem] opacity-75 mt-0.5 leading-tight line-clamp-2">
                     {badge.description}
                   </span>
                 </div>

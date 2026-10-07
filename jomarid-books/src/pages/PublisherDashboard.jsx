@@ -73,13 +73,13 @@ const Notice = ({ type = 'info', children, onClose }) => {
 };
 
 const Delta = ({ current, previous }) => {
-  if (!previous && !current) return <span style={mutedStyle} className="text-[10px] font-bold">beze změny</span>;
-  if (!previous) return <span className="text-[10px] font-black text-emerald-500 flex items-center gap-0.5"><TrendingUp size={11} /> nové</span>;
+  if (!previous && !current) return <span style={mutedStyle} className="text-[0.625rem] font-bold">beze změny</span>;
+  if (!previous) return <span className="text-[0.625rem] font-black text-emerald-500 flex items-center gap-0.5"><TrendingUp size={11} /> nové</span>;
   const change = Math.round(((current - previous) / previous) * 100);
-  if (change === 0) return <span style={mutedStyle} className="text-[10px] font-bold">stejně jako předtím</span>;
+  if (change === 0) return <span style={mutedStyle} className="text-[0.625rem] font-bold">stejně jako předtím</span>;
   const up = change > 0;
   return (
-    <span className={`text-[10px] font-black flex items-center gap-0.5 ${up ? 'text-emerald-500' : 'text-red-500'}`}>
+    <span className={`text-[0.625rem] font-black flex items-center gap-0.5 ${up ? 'text-emerald-500' : 'text-red-500'}`}>
       {up ? <TrendingUp size={11} /> : <TrendingDown size={11} />} {up ? '+' : ''}{change} % oproti předchozímu období
     </span>
   );
@@ -89,10 +89,10 @@ const Kpi = ({ icon: Icon, label, value, sub, children, testId }) => (
   <Card className="flex flex-col gap-1.5 min-w-0" data-testid={testId}>
     <div className="flex items-center gap-2">
       <span style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--bg-primary)' }} className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"><Icon size={16} /></span>
-      <p style={mutedStyle} className="text-[10px] font-black uppercase tracking-wider m-0 opacity-70 leading-tight">{label}</p>
+      <p style={mutedStyle} className="text-[0.625rem] font-black uppercase tracking-wider m-0 opacity-70 leading-tight">{label}</p>
     </div>
     <p className="text-2xl font-black m-0 leading-none tabular-nums break-words">{value}</p>
-    {sub && <p style={mutedStyle} className="text-[11px] m-0 opacity-80 leading-snug">{sub}</p>}
+    {sub && <p style={mutedStyle} className="text-[0.6875rem] m-0 opacity-80 leading-snug">{sub}</p>}
     {children}
   </Card>
 );
@@ -104,7 +104,7 @@ const Pills = ({ options, value, onChange, ariaLabel }) => (
       return (
         <button key={v} type="button" role="radio" aria-checked={active} onClick={() => onChange(v)}
           style={active ? primaryBtn : ghostBtn}
-          className="px-3 py-1.5 rounded-lg border text-[11px] font-black uppercase tracking-wide cursor-pointer">{l}</button>
+          className="px-3 py-1.5 rounded-lg border text-[0.6875rem] font-black uppercase tracking-wide cursor-pointer">{l}</button>
       );
     })}
   </div>
@@ -140,7 +140,7 @@ const DailyChart = ({ daily, height = 150, testId }) => {
 
   return (
     <div data-testid={testId}>
-      <p aria-live="polite" style={mutedStyle} className="text-[11px] font-bold m-0 mb-2 min-h-[16px]">
+      <p aria-live="polite" style={mutedStyle} className="text-[0.6875rem] font-bold m-0 mb-2 min-h-[16px]">
         {p ? `${fmtDay(p.day)}: ${fmt(p.sales)} ${plural(p.sales, 'prodej', 'prodeje', 'prodejů')}, ${coinsText(p.coins)}`
           : total > 0 ? `Za celé období: ${fmt(sales)} ${plural(sales, 'prodej', 'prodeje', 'prodejů')}, ${coinsText(total)}. Dotkni se grafu nebo po něm přejeď prstem pro detail dne.`
             : 'V tomhle období zatím žádný prodej.'}
@@ -155,7 +155,7 @@ const DailyChart = ({ daily, height = 150, testId }) => {
           </div>
         ))}
       </div>
-      <div style={mutedStyle} className="flex justify-between text-[10px] font-bold mt-1 opacity-70">
+      <div style={mutedStyle} className="flex justify-between text-[0.625rem] font-bold mt-1 opacity-70">
         <span>{n ? fmtDay(daily[0].day) : ''}</span>
         <span>{n ? fmtDay(daily[n - 1].day) : ''}</span>
       </div>
@@ -177,12 +177,12 @@ const Badge = ({ children, tone = 'muted' }) => {
   const style = tone === 'warn' ? { backgroundColor: 'rgba(245,158,11,0.15)', color: '#d97706' }
     : tone === 'good' ? { backgroundColor: 'rgba(16,185,129,0.14)', color: '#10b981' }
       : { backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' };
-  return <span style={style} className="text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full whitespace-nowrap">{children}</span>;
+  return <span style={style} className="text-[0.625rem] font-black uppercase tracking-wide px-2 py-0.5 rounded-full whitespace-nowrap">{children}</span>;
 };
 
 const MiniStat = ({ label, value }) => (
   <div style={{ backgroundColor: 'var(--bg-secondary)' }} className="rounded-lg px-2.5 py-2 min-w-0">
-    <p style={mutedStyle} className="text-[9px] font-black uppercase tracking-wider m-0 opacity-70 truncate">{label}</p>
+    <p style={mutedStyle} className="text-[0.5625rem] font-black uppercase tracking-wider m-0 opacity-70 truncate">{label}</p>
     <p className="text-sm font-black m-0 tabular-nums truncate">{value}</p>
   </div>
 );
@@ -223,7 +223,7 @@ const BookRow = ({ book, busy, onDetail, onEdit, onToggleHidden }) => (
       <MiniStat label="Lajky" value={fmt(book.likes)} />
     </div>
     {book.sales_legacy > 0 && (
-      <p style={mutedStyle} className="text-[11px] m-0 opacity-80">Z {fmt(book.sales)} prodejů je {fmt(book.sales_legacy)} starších (z doby před výplatami), za které coiny nepřišly.</p>
+      <p style={mutedStyle} className="text-[0.6875rem] m-0 opacity-80">Z {fmt(book.sales)} prodejů je {fmt(book.sales_legacy)} starších (z doby před výplatami), za které coiny nepřišly.</p>
     )}
   </Card>
 );
@@ -331,7 +331,7 @@ const BookDetail = ({ book, onClose, onChanged, onNotice, userId }) => {
               <section className="space-y-2">
                 <h4 className="text-xs font-black uppercase tracking-wider m-0">Prodeje za posledních {detail.days} dní</h4>
                 <DailyChart daily={detail.daily} height={110} testId="detail-chart" />
-                <p style={mutedStyle} className="text-[11px] m-0 opacity-80">
+                <p style={mutedStyle} className="text-[0.6875rem] m-0 opacity-80">
                   První výplata: {fmtDate(detail.first_sale_at)} · poslední: {fmtDate(detail.last_sale_at)}
                 </p>
               </section>
@@ -354,27 +354,27 @@ const BookDetail = ({ book, onClose, onChanged, onNotice, userId }) => {
             <h4 className="text-xs font-black uppercase tracking-wider m-0">Správa knihy</h4>
 
             <div className="space-y-1.5">
-              <label htmlFor="price-input" style={mutedStyle} className="text-[10px] font-black uppercase tracking-wider block opacity-80">Cena (coiny)</label>
+              <label htmlFor="price-input" style={mutedStyle} className="text-[0.625rem] font-black uppercase tracking-wider block opacity-80">Cena (coiny)</label>
               <div className="flex gap-2">
                 <input id="price-input" type="number" min={0} max={100000} value={priceInput} onChange={(e) => setPriceInput(e.target.value)} style={inputStyle}
                   className="w-32 p-2.5 border rounded-lg text-sm font-bold outline-none" />
                 <button type="button" onClick={savePrice} disabled={!priceChanged || savingPrice} style={primaryBtn}
-                  className="px-4 rounded-lg border-none font-black uppercase text-[11px] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5">
+                  className="px-4 rounded-lg border-none font-black uppercase text-[0.6875rem] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5">
                   {savingPrice ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Uložit cenu
                 </button>
               </div>
-              <p style={mutedStyle} className="text-[11px] m-0 opacity-80">Nová cena platí pro další nákupy. Kdo už knihu má, nic nedoplácí ani nedostává zpět.</p>
+              <p style={mutedStyle} className="text-[0.6875rem] m-0 opacity-80">Nová cena platí pro další nákupy. Kdo už knihu má, nic nedoplácí ani nedostává zpět.</p>
             </div>
 
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-bold m-0">{book.hidden ? 'Kniha je skrytá' : 'Kniha je v prodeji'}</p>
-                <p style={mutedStyle} className="text-[11px] m-0 mt-0.5 opacity-80">
+                <p style={mutedStyle} className="text-[0.6875rem] m-0 mt-0.5 opacity-80">
                   {book.hidden ? 'Nové čtenáře se v katalogu neukazuje a nejde koupit. Kdo ji vlastní, čte ji dál.' : 'Stažení z prodeje je vratné: kniha zmizí z katalogu, ale kdo ji vlastní, čte ji dál.'}
                 </p>
               </div>
               <button type="button" onClick={toggleHidden} disabled={busy} style={ghostBtn}
-                className="shrink-0 px-3 py-2 rounded-lg border font-black uppercase text-[11px] cursor-pointer flex items-center gap-1.5 disabled:opacity-50">
+                className="shrink-0 px-3 py-2 rounded-lg border font-black uppercase text-[0.6875rem] cursor-pointer flex items-center gap-1.5 disabled:opacity-50">
                 {book.hidden ? <><Eye size={13} /> Zveřejnit</> : <><EyeOff size={13} /> Stáhnout z prodeje</>}
               </button>
             </div>
@@ -390,7 +390,7 @@ const BookDetail = ({ book, onClose, onChanged, onNotice, userId }) => {
                     className="w-full p-2.5 border rounded-lg text-sm font-bold outline-none" />
                   <button type="button" onClick={remove} disabled={busy || confirmText.trim() !== book.title.trim()}
                     style={{ backgroundColor: '#dc2626', color: '#fff' }}
-                    className="px-4 py-2 rounded-lg border-none font-black uppercase text-[11px] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">Smazat natrvalo</button>
+                    className="px-4 py-2 rounded-lg border-none font-black uppercase text-[0.6875rem] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">Smazat natrvalo</button>
                 </>
               )}
             </div>
@@ -606,7 +606,7 @@ export const PublisherDashboard = () => {
           const active = tab === id;
           return (
             <button key={id} type="button" onClick={() => setTab(id)} aria-current={active ? 'page' : undefined} style={active ? primaryBtn : ghostBtn}
-              className="shrink-0 flex items-center gap-2 px-3.5 py-2.5 rounded-xl border cursor-pointer text-[11px] font-black uppercase tracking-wider whitespace-nowrap">
+              className="shrink-0 flex items-center gap-2 px-3.5 py-2.5 rounded-xl border cursor-pointer text-[0.6875rem] font-black uppercase tracking-wider whitespace-nowrap">
               <Icon size={14} /> {label}
             </button>
           );
@@ -706,7 +706,7 @@ export const PublisherDashboard = () => {
               {Object.entries(SORTS).map(([k, s]) => <option key={k} value={k}>{s.label}</option>)}
             </select>
           </div>
-          <p style={mutedStyle} className="text-[11px] font-bold m-0 opacity-70">{visibleBooks.length} z {books.length} {plural(books.length, 'knihy', 'knih', 'knih')}</p>
+          <p style={mutedStyle} className="text-[0.6875rem] font-bold m-0 opacity-70">{visibleBooks.length} z {books.length} {plural(books.length, 'knihy', 'knih', 'knih')}</p>
 
           {books.length === 0 ? (
             <Card className="text-center py-10">
@@ -734,27 +734,27 @@ export const PublisherDashboard = () => {
           </h3>
           <form onSubmit={saveBook} className="space-y-4">
             <div className="space-y-1">
-              <label htmlFor="book-title" style={mutedStyle} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Název</label>
+              <label htmlFor="book-title" style={mutedStyle} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Název</label>
               <input id="book-title" type="text" value={title} onChange={(e) => setTitle(e.target.value)} required style={inputStyle} className="w-full p-3.5 border rounded-xl font-bold outline-none text-sm" />
             </div>
             <div className="space-y-1">
-              <label htmlFor="book-price" style={mutedStyle} className="text-[10px] font-black uppercase tracking-wider pl-1 opacity-70 flex items-center gap-1"><Coins size={11} /> Cena licence (coiny)</label>
+              <label htmlFor="book-price" style={mutedStyle} className="text-[0.625rem] font-black uppercase tracking-wider pl-1 opacity-70 flex items-center gap-1"><Coins size={11} /> Cena licence (coiny)</label>
               <input id="book-price" type="number" min={0} max={100000} value={priceCoins} onChange={(e) => setPriceCoins(Math.max(0, parseInt(e.target.value, 10) || 0))} style={inputStyle} className="w-full p-3 border rounded-xl font-bold outline-none text-sm" />
-              <p style={mutedStyle} className="text-[11px] m-0 pl-1 opacity-80">Z každého prodeje ti připadne cena knihy. Orientačně: krátké knihy kolem 150, střední 250-300, velké okolo 500. 0 = zdarma.</p>
+              <p style={mutedStyle} className="text-[0.6875rem] m-0 pl-1 opacity-80">Z každého prodeje ti připadne cena knihy. Orientačně: krátké knihy kolem 150, střední 250-300, velké okolo 500. 0 = zdarma.</p>
             </div>
             <div className="space-y-1">
-              <label htmlFor="book-genres" style={mutedStyle} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Žánry (oddělené čárkou)</label>
+              <label htmlFor="book-genres" style={mutedStyle} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Žánry (oddělené čárkou)</label>
               <input id="book-genres" type="text" placeholder="např. Sci-Fi, Dobrodružství" value={genresInput} onChange={(e) => setGenresInput(e.target.value)} style={inputStyle} className="w-full p-3 border rounded-xl font-bold outline-none text-sm" />
             </div>
             <div className="space-y-1">
-              <label htmlFor="book-desc" style={mutedStyle} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Popis (zobrazí se v detailu knihy před koupí)</label>
+              <label htmlFor="book-desc" style={mutedStyle} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Popis (zobrazí se v detailu knihy před koupí)</label>
               <textarea id="book-desc" rows={3} maxLength={2000} value={descriptionInput} onChange={(e) => setDescriptionInput(e.target.value)} placeholder="Krátký popis, co čtenáře čeká..." style={inputStyle} className="w-full p-3 border rounded-xl font-bold outline-none text-sm resize-none" />
             </div>
             <div className="space-y-1">
-              <label htmlFor="book-text" style={mutedStyle} className="text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70">Text knihy</label>
+              <label htmlFor="book-text" style={mutedStyle} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Text knihy</label>
               <textarea id="book-text" rows={8} value={bookContent} onChange={(e) => setBookContent(e.target.value)} required
                 placeholder={editingBookId ? 'Text knihy (ponech, nebo přepiš celý)...' : 'Sem vlož kompletní text knihy...'} style={inputStyle} className="w-full p-3.5 border rounded-xl font-bold outline-none resize-y text-sm" />
-              {textStats.words > 0 && <p data-testid="text-stats" style={mutedStyle} className="text-[11px] m-0 pl-1 opacity-80">{fmt(textStats.words)} slov · {fmt(textStats.chars)} znaků · čtení asi {fmt(textStats.minutes)} min</p>}
+              {textStats.words > 0 && <p data-testid="text-stats" style={mutedStyle} className="text-[0.6875rem] m-0 pl-1 opacity-80">{fmt(textStats.words)} slov · {fmt(textStats.chars)} znaků · čtení asi {fmt(textStats.minutes)} min</p>}
             </div>
             {!editingBookId && (
               <label className="flex items-start gap-3 cursor-pointer">

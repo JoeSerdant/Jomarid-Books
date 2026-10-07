@@ -153,7 +153,7 @@ export const LoginPage = () => {
           {mode === 'signup' && (
             <div>
               <input type="text" placeholder="Uživatelské jméno (nepovinné)" value={username} onChange={e => setUsername(e.target.value)} autoComplete="off" autoCapitalize="none" spellCheck={false} maxLength={20} aria-describedby="signup-username-hint" style={INPUT_STYLE} className={INPUT_CLASS} />
-              <p id="signup-username-hint" aria-live="polite" style={{ color: nameCheck === 'available' ? '#10b981' : (nameCheck === 'idle' || nameCheck === 'checking' || nameCheck === 'error') ? 'var(--text-muted)' : '#ef4444' }} className="text-[11px] font-bold m-0 mt-1.5 px-1 leading-snug">{NAME_HINTS[nameCheck]}</p>
+              <p id="signup-username-hint" aria-live="polite" style={{ color: nameCheck === 'available' ? '#10b981' : (nameCheck === 'idle' || nameCheck === 'checking' || nameCheck === 'error') ? 'var(--text-muted)' : '#ef4444' }} className="text-[0.6875rem] font-bold m-0 mt-1.5 px-1 leading-snug">{NAME_HINTS[nameCheck]}</p>
             </div>
           )}
 
