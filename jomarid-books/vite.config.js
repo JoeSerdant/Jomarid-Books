@@ -3,6 +3,10 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from 'tailwindcss';
 import autoprefixer from 'autoprefixer';
 
+const scaledSpacing = (spacing) => Object.fromEntries(
+  Object.entries(spacing).map(([key, value]) => [key, key === '0' || key === 'px' ? value : `calc(${value} * var(--d, 1))`]),
+);
+
 export default defineConfig({
   plugins: [react()],
 
@@ -12,7 +16,17 @@ export default defineConfig({
   css: {
     postcss: {
       plugins: [
-        tailwindcss({ content: ['./index.html', './src/**/*.{js,jsx}'] }),
+        tailwindcss({
+          content: ['./index.html', './src/**/*.{js,jsx}'],
+          // Hustota rozhraní (Nastavení -> Vzhled): vnější a vnitřní mezery se násobí proměnnou --d (výchozí 1, kompaktní
+          // 0,8, pohodlné 1,2). Šířky a výšky (w-*, h-*) se neškálují, ikony a ovladače zůstávají stejně velké.
+          theme: {
+            padding: ({ theme }) => scaledSpacing(theme('spacing')),
+            margin: ({ theme }) => ({ auto: 'auto', ...scaledSpacing(theme('spacing')) }),
+            gap: ({ theme }) => scaledSpacing(theme('spacing')),
+            space: ({ theme }) => scaledSpacing(theme('spacing')),
+          },
+        }),
         autoprefixer(),
       ],
     },

@@ -13,7 +13,11 @@ import {
   FONT_SIZE_RANGE, AUTO_ADVANCE_RANGE, WPM_RANGE, NIGHT_RANGE,
   loadReaderPrefs, saveReaderPref, resetReaderPrefs, readerTypography, loadMotionPref, saveMotionPref,
   CUSTOM_THEME_KEY, CUSTOM_PRESETS, ACCENT_MIN_CONTRAST, resolveTheme, deriveTheme, completeHex, normalizeHex, readableAccent, customColorsPreview, contrast,
+  ACCENTS, THEME_LABELS, UI_SCALES, UI_DENSITIES, loadUiScale, loadUiDensity, saveUiScale, saveUiDensity, withAccent,
 } from '../theme';
+import { readLibraryPrefs, writeLibraryPref } from '../browse/browseStore';
+import { SORT_OPTIONS, STATUS_FILTERS } from '../browse/libraryModel';
+import { useSyncStatus } from '../settings/settingsSyncStore';
 
 // ---- Sdílené stavební prvky nastavení ----
 const Section = ({ title, description, danger = false, children }) => (
@@ -28,7 +32,7 @@ const Section = ({ title, description, danger = false, children }) => (
 
 const Field = ({ label, children }) => (
   <label className="block">
-    <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wider block mb-1 opacity-80">{label}</span>
+    <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-1 opacity-80">{label}</span>
     {children}
   </label>
 );
@@ -61,7 +65,7 @@ const ActionButton = ({ variant = 'primary', busy = false, disabled, children, .
       {...props}
       disabled={disabled || busy}
       style={style}
-      className="px-4 py-2.5 rounded-lg border-none font-black uppercase text-[11px] tracking-wider cursor-pointer inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+      className="px-4 py-2.5 rounded-lg border-none font-black uppercase text-[0.6875rem] tracking-wider cursor-pointer inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
     >
       {busy && <Loader2 size={13} className="animate-spin" />}
       {children}
@@ -413,12 +417,7 @@ const SecurityTab = ({ user }) => {
 };
 
 // ---- Záložka: Vzhled ----
-const THEME_OPTIONS = [
-  { key: 'saas', label: 'Světlý' },
-  { key: 'dark', label: 'Tmavý' },
-  { key: 'emerald', label: 'Dřevo a zeleň' },
-  { key: CUSTOM_THEME_KEY, label: 'Vlastní' },
-];
+const THEME_OPTIONS = [...Object.keys(THEMES), CUSTOM_THEME_KEY].map((key) => ({ key, label: THEME_LABELS[key] }));
 
 // Jedna barva: nativní výběr barvy + zápis hex kódu (platí se až když je kód úplný).
 const ColorField = ({ label, value, onChange }) => {
@@ -457,8 +456,8 @@ const Segmented = ({ options, value, onChange, ariaLabel }) => (
           role="radio"
           aria-checked={active}
           onClick={() => onChange(key)}
-          style={{ backgroundColor: active ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: active ? 'var(--text-primary)' : 'var(--text-body)' }}
-          className="flex-1 py-2 rounded-lg border-none cursor-pointer text-xs font-bold"
+          style={{ backgroundColor: active ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: active ? 'var(--text-primary)' : 'var(--text-body)', borderColor: active ? 'var(--bg-primary)' : 'var(--border-color)' }}
+          className="flex-1 py-2 rounded-lg border border-solid cursor-pointer text-xs font-bold"
         >
           {opt.label}
         </button>
@@ -490,18 +489,59 @@ const RangeRow = ({ label, valueLabel, min, max, step = 1, value, onChange, hint
 
 const Label = ({ children }) => <span className="text-xs font-bold block mb-1.5">{children}</span>;
 
+// Kam se nastavení ukládají: k účtu (platí na všech zařízeních), nebo jen do tohoto zařízení.
+const SYNC_TEXT = {
+  off: 'Nastavení se ukládají jen v tomto zařízení. Po přihlášení se budou ukládat k tvému účtu a platit na všech tvých zařízeních.',
+  syncing: 'Ukládám nastavení k tvému účtu...',
+  synced: 'Nastavení se ukládají k tvému účtu a platí na všech tvých zařízeních.',
+  unavailable: 'Ukládání nastavení k účtu zatím není dostupné. Nastavení platí jen v tomto zařízení.',
+  error: 'Nastavení se teď nepodařilo uložit k účtu. Platí v tomto zařízení a odešle se při dalším pokusu.',
+};
+const SyncNote = () => {
+  const status = useSyncStatus();
+  const warn = status === 'error'; // chybějící tabulka (unavailable) není porucha, jen informace
+  return (
+    <p role="status" style={{ color: warn ? '#d97706' : 'var(--text-muted)' }} className="text-xs font-semibold m-0 flex items-start gap-1.5 leading-relaxed">
+      {warn ? <AlertTriangle size={13} className="shrink-0 mt-0.5" /> : <Info size={13} className="shrink-0 mt-0.5" />}
+      <span>{SYNC_TEXT[status] || SYNC_TEXT.off}</span>
+    </p>
+  );
+};
+
+const SelectField = ({ label, value, onChange, children }) => (
+  <label className="block">
+    <Label>{label}</Label>
+    <select
+      value={value} onChange={e => onChange(e.target.value)}
+      style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
+      className="w-full px-3 py-2.5 rounded-lg border text-sm font-medium cursor-pointer"
+    >{children}</select>
+  </label>
+);
+
+const toOptions = (list) => Object.fromEntries(list.map((o) => [o.key, { label: o.label }]));
+const VIEW_OPTIONS = { grid: { label: 'Mřížka' }, list: { label: 'Seznam' } };
+const STATUS_OPTIONS = toOptions(STATUS_FILTERS);
+
 const AppearanceTab = () => {
-  const { currentTheme, changeTheme, customColors, changeCustomColors } = useTheme();
+  const { currentTheme, changeTheme, customColors, changeCustomColors, accent, changeAccent } = useTheme();
   const [motion, setMotion] = useState(loadMotionPref);
+  const [scale, setScale] = useState(loadUiScale);
+  const [density, setDensity] = useState(loadUiDensity);
+  const [lib, setLib] = useState(() => readLibraryPrefs());
+  const setLibPref = (name, value) => { writeLibraryPref(name, value); setLib(readLibraryPrefs()); };
+  const isCustom = currentTheme === CUSTOM_THEME_KEY;
 
   return (
     <div className="space-y-4">
-      <Section title="Vzhled aplikace" description="Platí v celé appce - od knihovny přes čtečku až po minihry.">
+      <SyncNote />
+
+      <Section title="Motiv" description="Platí v celé appce - od knihovny přes čtečku až po minihry.">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {THEME_OPTIONS.map(({ key, label }) => {
             // Náhled „Vlastní“ ukazuje barvy, které dostane po kliknutí (poprvé barvy právě používaného motivu).
             const preview = customColorsPreview(currentTheme, customColors);
-            const t = key === CUSTOM_THEME_KEY ? deriveTheme(preview.bg, preview.accent) : resolveTheme(key);
+            const t = key === CUSTOM_THEME_KEY ? deriveTheme(preview.bg, preview.accent) : withAccent(resolveTheme(key), accent);
             const active = currentTheme === key;
             return (
               <button
@@ -516,13 +556,13 @@ const AppearanceTab = () => {
                   <span style={{ backgroundColor: t['--bg-primary'] }} className="absolute left-1.5 top-1.5 h-2 w-8 rounded-full" />
                   <span style={{ backgroundColor: t['--border-color'] }} className="absolute left-1.5 bottom-1.5 h-1.5 w-12 rounded-full" />
                 </span>
-                <span className="text-[11px] font-black block leading-tight">{label}</span>
+                <span className="text-[0.6875rem] font-black block leading-tight">{label}</span>
                 {active && <Check size={13} style={{ color: t['--bg-primary'] }} className="absolute right-2 top-2" />}
               </button>
             );
           })}
         </div>
-        {currentTheme === CUSTOM_THEME_KEY && (
+        {isCustom && (
           <div className="space-y-3 pt-1">
             <div className="flex flex-wrap gap-4">
               <ColorField label="Pozadí" value={customColors.bg} onChange={bg => changeCustomColors({ ...customColors, bg })} />
@@ -535,7 +575,7 @@ const AppearanceTab = () => {
                   <button
                     key={p.label} type="button" onClick={() => changeCustomColors({ bg: p.bg, accent: p.accent })}
                     style={{ backgroundColor: p.bg, color: deriveTheme(p.bg, p.accent)['--text-body'], borderColor: p.accent }}
-                    className="px-2.5 py-1 rounded-full border-2 text-[11px] font-bold cursor-pointer"
+                    className="px-2.5 py-1 rounded-full border-2 text-[0.6875rem] font-bold cursor-pointer"
                   >{p.label}</button>
                 ))}
               </div>
@@ -550,16 +590,79 @@ const AppearanceTab = () => {
                 </ActionButton>
               </div>
             )}
-            <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 opacity-80 leading-relaxed">
+            <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">
               Ostatní barvy (karty, okraje, text) se dopočítají samy a text se vždy upraví tak, aby byl čitelný.
             </p>
           </div>
         )}
       </Section>
 
+      <Section title="Akcentní barva" description="Barva tlačítek a štítků. Vždy se upraví tak, aby byla na pozadí motivu dobře vidět a text na ní byl čitelný.">
+        {isCustom ? (
+          <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">U vlastního motivu se zvýraznění nastavuje barvami výše.</p>
+        ) : (
+          <div role="radiogroup" aria-label="Akcentní barva" className="flex flex-wrap gap-2">
+            {Object.entries(ACCENTS).map(([key, a]) => {
+              const base = resolveTheme(currentTheme);
+              const shown = withAccent(base, key);
+              const active = accent === key;
+              return (
+                <button
+                  key={key} type="button" role="radio" aria-checked={active} onClick={() => changeAccent(key)}
+                  style={{ backgroundColor: 'var(--bg-secondary)', borderColor: active ? 'var(--text-body)' : 'var(--border-color)', color: 'var(--text-body)' }}
+                  className="flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full border-2 cursor-pointer text-xs font-bold"
+                >
+                  <span style={{ backgroundColor: shown['--bg-primary'], color: shown['--text-primary'] }} className="w-6 h-6 rounded-full flex items-center justify-center shrink-0">
+                    {active && <Check size={13} />}
+                  </span>
+                  {a.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </Section>
+
+      <Section title="Velikost a hustota" description="Platí v celé appce. Čtečka má vlastní velikost písma (záložka Čtečka).">
+        <div className="space-y-4">
+          <div>
+            <Label>Velikost textu a prvků</Label>
+            <Segmented ariaLabel="Velikost textu a prvků" options={UI_SCALES} value={scale} onChange={v => { saveUiScale(v); setScale(loadUiScale()); }} />
+          </div>
+          <div>
+            <Label>Rozestupy</Label>
+            <Segmented ariaLabel="Rozestupy" options={UI_DENSITIES} value={density} onChange={v => { saveUiDensity(v); setDensity(loadUiDensity()); }} />
+            <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 mt-1.5 leading-relaxed">
+              Kompaktní se vejde víc obsahu na obrazovku, pohodlné nechá víc vzduchu kolem tlačítek.
+            </p>
+          </div>
+        </div>
+      </Section>
+
+      <Section title="Knihovna" description="Jak se knihovna otevře. Pohled i řazení můžeš v knihovně kdykoli změnit, tady je jen výchozí volba.">
+        <div className="space-y-4">
+          <div>
+            <Label>Výchozí pohled</Label>
+            <Segmented ariaLabel="Výchozí pohled knihovny" options={VIEW_OPTIONS} value={lib.view} onChange={v => setLibPref('view', v)} />
+          </div>
+          <SelectField label="Výchozí řazení" value={lib.sort} onChange={v => setLibPref('sort', v)}>
+            {SORT_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+          </SelectField>
+          <div>
+            <Label>Výchozí filtr</Label>
+            <Segmented ariaLabel="Výchozí filtr knihovny" options={STATUS_OPTIONS} value={lib.status} onChange={v => setLibPref('status', v)} />
+          </div>
+          <ToggleRow
+            title="Pamatovat si polohu a filtry"
+            description="Po návratu ze čtečky se knihovna vrátí na místo, kde jsi skončil, a ke stejnému hledání a filtrům. Když je vypnuté, knihovna se otevře vždy od začátku s výchozími volbami."
+            checked={lib.remember} onChange={v => setLibPref('remember', v)}
+          />
+        </div>
+      </Section>
+
       <Section title="Pohyb a animace" description="Omezení vypne přechody a animace v celé aplikaci (včetně otáčení stránek ve čtečce). Hodí se při nevolnosti z pohybu i na slabších telefonech.">
         <Segmented ariaLabel="Pohyb a animace" options={MOTION_OPTIONS} value={motion} onChange={v => { saveMotionPref(v); setMotion(v); }} />
-        <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 opacity-80">
+        <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0">
           {motion === 'system' ? 'Řídí se nastavením zařízení („omezit pohyb“).' : motion === 'reduce' ? 'Animace jsou vypnuté.' : 'Animace jsou zapnuté bez ohledu na nastavení zařízení.'}
         </p>
       </Section>
@@ -864,9 +967,9 @@ const InboxTab = () => {
                   className="border rounded-xl p-3 flex items-start gap-3">
                   <span style={{ backgroundColor: 'var(--bg-card)', color: 'var(--bg-primary)' }} className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"><Icon size={15} /></span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-black m-0 break-words">{n.title}{isNew && <span style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="ml-2 align-middle px-1.5 py-0.5 rounded text-[9px] font-black uppercase">Nové</span>}</p>
+                    <p className="text-sm font-black m-0 break-words">{n.title}{isNew && <span style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="ml-2 align-middle px-1.5 py-0.5 rounded text-[0.5625rem] font-black uppercase">Nové</span>}</p>
                     {n.body && <p style={{ color: 'var(--text-body)' }} className="text-xs m-0 mt-1 leading-relaxed break-words">{n.body}</p>}
-                    <p style={{ color: 'var(--text-muted)' }} className="text-[11px] m-0 mt-1 opacity-80">{timeAgo(n.created_at)}</p>
+                    <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] m-0 mt-1 opacity-80">{timeAgo(n.created_at)}</p>
                   </div>
                   <button type="button" onClick={() => removeOne(n.id)} disabled={busy} aria-label={`Smazat oznámení: ${n.title}`} title="Smazat" style={{ color: 'var(--text-muted)' }} className="bg-transparent border-none cursor-pointer w-8 h-8 -m-1 flex items-center justify-center shrink-0 opacity-60 hover:opacity-100 disabled:opacity-30"><X size={14} /></button>
                 </li>
@@ -911,7 +1014,7 @@ const ChecksTab = ({ state, role, onRecheck }) => {
       onClick={onRecheck}
       disabled={state.refreshing}
       style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
-      className="px-4 py-2.5 border rounded-lg font-black uppercase text-[11px] tracking-wider cursor-pointer inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-wait"
+      className="px-4 py-2.5 border rounded-lg font-black uppercase text-[0.6875rem] tracking-wider cursor-pointer inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-wait"
     >
       {state.refreshing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} Zkontrolovat znovu
     </button>
@@ -954,7 +1057,7 @@ const ChecksTab = ({ state, role, onRecheck }) => {
                   <Link
                     to={n.to}
                     style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
-                    className="inline-block mt-1 px-3 py-1.5 border rounded-lg no-underline text-[11px] font-black uppercase tracking-wider"
+                    className="inline-block mt-1 px-3 py-1.5 border rounded-lg no-underline text-[0.6875rem] font-black uppercase tracking-wider"
                   >
                     {n.linkLabel || 'Opravit'}
                   </Link>
@@ -1071,7 +1174,7 @@ export const SettingsPage = () => {
               >
                 <Icon size={15} /> {label}
                 {id === 'checks' && warnCount > 0 && (
-                  <span data-testid="checks-badge" style={{ backgroundColor: '#ef4444', color: '#fff' }} className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black leading-[18px] text-center">
+                  <span data-testid="checks-badge" style={{ backgroundColor: '#ef4444', color: '#fff' }} className="min-w-[18px] h-[18px] px-1 rounded-full text-[0.625rem] font-black leading-[18px] text-center">
                     {warnCount}<span className="sr-only"> {warnCount === 1 ? 'věc k opravě' : 'věci k opravě'}</span>
                   </span>
                 )}

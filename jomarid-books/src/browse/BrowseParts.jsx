@@ -61,7 +61,7 @@ export const LoadMore = ({ paged, className = '', onMore }) => {
           data-testid="paged-more"
           onClick={more}
           style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
-          className="px-6 py-3 border rounded-xl font-black text-[11px] uppercase tracking-wider cursor-pointer hover:brightness-95 active:scale-95 transition-all"
+          className="px-6 py-3 border rounded-xl font-black text-[0.6875rem] uppercase tracking-wider cursor-pointer hover:brightness-95 active:scale-95 transition-all"
         >
           Zobrazit další ({num(paged.nextChunk)})
         </button>

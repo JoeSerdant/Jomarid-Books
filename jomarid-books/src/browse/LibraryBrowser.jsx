@@ -7,7 +7,7 @@ import {
   SORT_OPTIONS, STATUS_FILTERS, bookAction, bookStateText, filterBooks, fmtRating, genreCounts, isInProgress, sanitizeRestoredState,
   sortBooks, splitGenres, statusCounts,
 } from './libraryModel.js';
-import { readLibraryState, readViewMode, writeLibraryState, writeViewMode } from './browseStore.js';
+import { readLibraryPrefs, readLibraryState, writeLibraryState, writeViewMode } from './browseStore.js';
 import { usePagedList } from './usePagedList.js';
 import { BackToTop, BookCover, LoadMore, ViewToggle } from './BrowseParts.jsx';
 
@@ -33,7 +33,7 @@ const LikeButton = ({ book, onLike, className = '' }) => (
     aria-pressed={book.isLiked}
     aria-label={`Líbí se mi: ${book.title} (${book.likesCount})`}
     style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }}
-    className={`border px-2.5 h-8 rounded-lg text-[11px] font-black flex items-center gap-1 cursor-pointer ${className}`}
+    className={`border px-2.5 h-8 rounded-lg text-[0.6875rem] font-black flex items-center gap-1 cursor-pointer ${className}`}
   >
     <Heart size={11} className={book.isLiked ? 'fill-red-500 text-red-500' : 'text-red-500'} />
     <span className="tabular-nums">{book.likesCount}</span>
@@ -56,7 +56,7 @@ const StateBadge = ({ book, mini }) => {
         <Check size={11} />
       </span>
     ) : (
-      <span className="absolute bottom-2 left-2 h-6 px-2 rounded-full bg-black/50 text-white text-[10px] font-black uppercase flex items-center gap-1">
+      <span className="absolute bottom-2 left-2 h-6 px-2 rounded-full bg-black/50 text-white text-[0.625rem] font-black uppercase flex items-center gap-1">
         <Check size={12} className="text-emerald-300" /> Dočteno
       </span>
     );
@@ -79,7 +79,7 @@ const TitleButton = ({ book, onOpen, className }) => {
 // Hlavní tlačítko u knihy: čtení je odkaz na čtečku, nákup otevře detail (tam je potvrzení).
 const ActionButton = ({ book, action, onOpen, compact }) => {
   const size = compact ? 'px-3 py-2.5 min-w-[5.5rem]' : 'w-full py-2.5 sm:py-3';
-  const base = `${size} rounded-xl font-black text-[10px] uppercase tracking-wider border-none cursor-pointer flex items-center justify-center gap-1 no-underline`;
+  const base = `${size} rounded-xl font-black text-[0.625rem] uppercase tracking-wider border-none cursor-pointer flex items-center justify-center gap-1 no-underline`;
   const text = compact ? action.short : action.label;
   if (action.kind === 'read') {
     return (
@@ -109,7 +109,7 @@ const BookCard = memo(function BookCard({ book, coins, onOpen, onLike }) {
         <button type="button" tabIndex={-1} aria-hidden="true" onClick={() => onOpen(book)} className="block w-full p-0 border-none bg-transparent cursor-pointer">
           <BookCover title={book.title} seed={book.id} className="aspect-[3/4] w-full">
             {book.avgRating > 0 && (
-              <span style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)', color: 'var(--text-body)' }} className="absolute top-2 left-2 border px-2 h-7 rounded-lg text-[11px] font-black flex items-center gap-1">
+              <span style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)', color: 'var(--text-body)' }} className="absolute top-2 left-2 border px-2 h-7 rounded-lg text-[0.6875rem] font-black flex items-center gap-1">
                 <Star size={11} className="fill-amber-400 text-amber-400" />
                 <span className="tabular-nums">{fmtRating(book.avgRating)}</span>
               </span>
@@ -121,8 +121,8 @@ const BookCard = memo(function BookCard({ book, coins, onOpen, onLike }) {
         <LikeButton book={book} onLike={onLike} className="absolute top-2 right-2" />
       </div>
       <div className="p-2.5 sm:p-3 flex flex-col gap-0.5 flex-1">
-        <TitleButton book={book} onOpen={onOpen} className="text-[12px] sm:text-sm" />
-        <p style={{ color: 'var(--text-muted)' }} className="text-[11px] sm:text-xs font-bold m-0 truncate">{book.author}</p>
+        <TitleButton book={book} onOpen={onOpen} className="text-[0.75rem] sm:text-sm" />
+        <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] sm:text-xs font-bold m-0 truncate">{book.author}</p>
         <div className="mt-auto pt-2">
           <ActionButton book={book} action={action} onOpen={onOpen} />
         </div>
@@ -142,10 +142,10 @@ const BookRow = memo(function BookRow({ book, coins, onOpen, onLike }) {
         </BookCover>
       </button>
       <div className="min-w-0 flex-1 flex flex-col">
-        <TitleButton book={book} onOpen={onOpen} className="w-full text-[12px] sm:text-[13px]" />
-        <p style={{ color: 'var(--text-muted)' }} className="text-[11px] sm:text-xs font-bold m-0 mt-0.5 truncate">{book.author}</p>
+        <TitleButton book={book} onOpen={onOpen} className="w-full text-[0.75rem] sm:text-[0.8125rem]" />
+        <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] sm:text-xs font-bold m-0 mt-0.5 truncate">{book.author}</p>
         <div className="flex items-center justify-between gap-2 mt-auto pt-2">
-          <div className="flex items-center gap-x-3 min-w-0 text-[11px] font-bold">
+          <div className="flex items-center gap-x-3 min-w-0 text-[0.6875rem] font-bold">
             {book.avgRating > 0 && (
               <span className="inline-flex items-center gap-1 shrink-0 max-[359px]:hidden">
                 <Star size={11} className="fill-amber-400 text-amber-400" /> <span className="tabular-nums">{fmtRating(book.avgRating)}</span>
@@ -169,7 +169,7 @@ const Chip = ({ active, onClick, children }) => (
     aria-pressed={active}
     onClick={onClick}
     style={{ backgroundColor: active ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: active ? 'var(--text-primary)' : 'var(--text-muted)' }}
-    className="shrink-0 px-3 py-2 rounded-full font-black text-[10px] uppercase border-none cursor-pointer transition-all flex items-center gap-1.5"
+    className="shrink-0 px-3 py-2 rounded-full font-black text-[0.625rem] uppercase border-none cursor-pointer transition-all flex items-center gap-1.5"
   >
     {children}
   </button>
@@ -177,13 +177,15 @@ const Chip = ({ active, onClick, children }) => (
 
 export const LibraryBrowser = ({ books, coins, userId, onOpenDetail, onToggleLike }) => {
   const tour = useTour();
+  // Výchozí chování z Nastavení (pohled, řazení, filtr, pamatování stavu).
+  const [prefs] = useState(() => readLibraryPrefs());
   // Stav z předchozí návštěvy (návrat z čtečky, obnovení stránky); platí jen pro tohoto uživatele a jen pár hodin.
-  const [initial] = useState(() => sanitizeRestoredState(readLibraryState(userId), books));
-  const [view, setView] = useState(() => readViewMode());
-  const [status, setStatus] = useState(initial?.status ?? 'all');
+  const [initial] = useState(() => (prefs.remember ? sanitizeRestoredState(readLibraryState(userId), books) : null));
+  const [view, setView] = useState(prefs.view);
+  const [status, setStatus] = useState(initial?.status ?? prefs.status);
   const [genre, setGenre] = useState(initial?.genre ?? 'all');
   const [query, setQuery] = useState(initial?.query ?? '');
-  const [sort, setSort] = useState(initial?.sort ?? 'smart');
+  const [sort, setSort] = useState(initial?.sort ?? prefs.sort);
   // Pole s hledáním se přepíše hned, těžší výpočty seznamu a žánrů za ním mohou na pomalém telefonu o chvilku zaostat.
   const deferredQuery = useDeferredValue(query);
 
@@ -213,8 +215,8 @@ export const LibraryBrowser = ({ books, coins, userId, onOpenDetail, onToggleLik
   const save = useCallback(() => {
     window.clearTimeout(saveTimer.current);
     saveTimer.current = 0;
-    writeLibraryState(userId, { ...latest.current, scrollY: scrollY.current });
-  }, [userId]);
+    if (prefs.remember) writeLibraryState(userId, { ...latest.current, scrollY: scrollY.current });
+  }, [userId, prefs.remember]);
   useEffect(() => { save(); }, [save, sort, status, genre, query, paged.count]);
   useEffect(() => {
     const onScroll = () => {
@@ -272,7 +274,7 @@ export const LibraryBrowser = ({ books, coins, userId, onOpenDetail, onToggleLik
                   data-testid={`status-${f.key}`}
                   onClick={() => setStatus(f.key)}
                   style={{ backgroundColor: active ? 'var(--text-body)' : 'var(--bg-secondary)', color: active ? 'var(--bg-body)' : 'var(--text-body)', borderColor: 'var(--border-color)' }}
-                  className="shrink-0 px-3.5 py-2.5 border rounded-xl font-black text-[11px] uppercase tracking-wide cursor-pointer transition-all flex items-center gap-2"
+                  className="shrink-0 px-3.5 py-2.5 border rounded-xl font-black text-[0.6875rem] uppercase tracking-wide cursor-pointer transition-all flex items-center gap-2"
                 >
                   {f.label} <span className="tabular-nums font-bold">{counts[f.key]}</span>
                 </button>
@@ -324,7 +326,7 @@ export const LibraryBrowser = ({ books, coins, userId, onOpenDetail, onToggleLik
                 aria-label={`Další žánry (${moreGenres.length})`}
                 data-testid="more-genres"
                 style={{ backgroundColor: moreActive ? 'var(--text-body)' : 'var(--bg-secondary)', color: moreActive ? 'var(--bg-body)' : 'var(--text-muted)' }}
-                className="shrink-0 px-3 py-2 rounded-full font-black text-[10px] uppercase border-none cursor-pointer max-w-[11rem]"
+                className="shrink-0 px-3 py-2 rounded-full font-black text-[0.625rem] uppercase border-none cursor-pointer max-w-[11rem]"
               >
                 <option value="">Další žánry ({moreGenres.length})</option>
                 {moreGenres.map((g) => <option key={g.genre} value={g.genre}>{g.genre} ({g.count})</option>)}
@@ -337,7 +339,7 @@ export const LibraryBrowser = ({ books, coins, userId, onOpenDetail, onToggleLik
           <p role="status" data-testid="library-summary" style={{ color: 'var(--text-muted)' }} className="text-xs font-bold m-0 whitespace-nowrap">{summary}</p>
           <div className="flex items-center gap-1 min-w-0">
             {hasFilters && (
-              <button type="button" data-testid="reset-filters" onClick={resetFilters} style={{ color: 'var(--text-body)' }} className="bg-transparent border-none cursor-pointer text-[11px] font-black uppercase tracking-wide underline underline-offset-2 hover:opacity-70 p-2 shrink-0">
+              <button type="button" data-testid="reset-filters" onClick={resetFilters} style={{ color: 'var(--text-body)' }} className="bg-transparent border-none cursor-pointer text-[0.6875rem] font-black uppercase tracking-wide underline underline-offset-2 hover:opacity-70 p-2 shrink-0">
                 Zrušit filtry
               </button>
             )}
@@ -365,7 +367,7 @@ export const LibraryBrowser = ({ books, coins, userId, onOpenDetail, onToggleLik
               {total === 0 ? 'V katalogu zatím nejsou žádné knihy.' : query.trim() ? `Nic neodpovídá hledání "${query.trim()}".` : 'V tomhle výběru zatím nic není.'}
             </p>
             {hasFilters && (
-              <button type="button" onClick={resetFilters} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="px-5 py-2.5 rounded-xl border-none font-black text-[11px] uppercase tracking-wider cursor-pointer">
+              <button type="button" onClick={resetFilters} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="px-5 py-2.5 rounded-xl border-none font-black text-[0.6875rem] uppercase tracking-wider cursor-pointer">
                 Zrušit filtry
               </button>
             )}

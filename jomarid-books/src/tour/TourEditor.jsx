@@ -36,9 +36,9 @@ const readStoredDraft = () => {
 };
 
 const inputStyle = { backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' };
-const labelCls = 'text-[10px] font-black uppercase tracking-wider block pl-1 opacity-70';
+const labelCls = 'text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70';
 const iconBtn = 'p-2 border rounded-lg cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center';
-const smallBtn = 'px-3 py-2 border rounded-lg font-black uppercase text-[10px] tracking-wider cursor-pointer flex items-center gap-1.5';
+const smallBtn = 'px-3 py-2 border rounded-lg font-black uppercase text-[0.625rem] tracking-wider cursor-pointer flex items-center gap-1.5';
 
 const newId = () => `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
@@ -102,7 +102,7 @@ export const TourEditor = () => {
     return (
       <Card>
         <p role="alert" className="text-xs font-bold m-0 mb-3">Uloženou prohlídku se nepodařilo načíst. Dokud se to nepovede, upravovat ji nejde (uložením by se přepsala výchozí).</p>
-        <button type="button" onClick={load} style={inputStyle} className="px-4 py-2 border rounded-lg font-black uppercase text-[11px] tracking-wider cursor-pointer">Zkusit znovu</button>
+        <button type="button" onClick={load} style={inputStyle} className="px-4 py-2 border rounded-lg font-black uppercase text-[0.6875rem] tracking-wider cursor-pointer">Zkusit znovu</button>
       </Card>
     );
   }
@@ -185,8 +185,8 @@ export const TourEditor = () => {
               aria-invalid={!daysValid} aria-describedby="tour-auto-days-help"
               onChange={(e) => setField({ autoDays: e.target.value })} style={{ ...inputStyle, borderColor: daysValid ? inputStyle.borderColor : '#ef4444' }} className="w-32 p-2.5 border rounded-lg text-sm font-bold outline-none"
             />
-            {!daysValid && <p data-testid="tour-days-error" style={{ color: '#ef4444' }} className="text-[11px] font-bold m-0 pl-1">Zadej celé číslo od 0 do {TOUR_LIMITS.maxAutoDays}, jinak se uložit nedá.</p>}
-            <p id="tour-auto-days-help" style={{ color: 'var(--text-muted)' }} className="text-[10px] m-0 pl-1 opacity-70 leading-relaxed">
+            {!daysValid && <p data-testid="tour-days-error" style={{ color: '#ef4444' }} className="text-[0.6875rem] font-bold m-0 pl-1">Zadej celé číslo od 0 do {TOUR_LIMITS.maxAutoDays}, jinak se uložit nedá.</p>}
+            <p id="tour-auto-days-help" style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] m-0 pl-1 opacity-70 leading-relaxed">
               0 = jen ručně v Nastavení. Starší účty, které prohlídku nikdy neviděly, ji samy nedostanou, aby se nepřipomínala dlouholetým čtenářům.
             </p>
           </div>
@@ -195,7 +195,7 @@ export const TourEditor = () => {
             <button type="button" onClick={() => setField({ version: Math.min(TOUR_LIMITS.maxVersion, normalizedDraft.version + 1) })} style={inputStyle} className={smallBtn}>
               <RotateCcw size={12} /> Zobrazit znovu všem
             </button>
-            <span style={{ color: 'var(--text-muted)' }} className="text-[10px] opacity-70">Zvýšením verze (a uložením) uvidí prohlídku znovu i ti, kdo ji už viděli.</span>
+            <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] opacity-70">Zvýšením verze (a uložením) uvidí prohlídku znovu i ti, kdo ji už viděli.</span>
           </div>
         </div>
       </Card>
@@ -213,7 +213,7 @@ export const TourEditor = () => {
             <button
               key={k} type="button" onClick={() => setSetKey(k)} aria-pressed={setKey === k} data-testid={`tour-set-${k}`}
               style={setKey === k ? { backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', borderColor: 'transparent' } : { backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
-              className="px-4 py-2 border rounded-xl font-black uppercase text-[11px] tracking-wider cursor-pointer"
+              className="px-4 py-2 border rounded-xl font-black uppercase text-[0.6875rem] tracking-wider cursor-pointer"
             >
               {SET_LABELS[k]} <span className="opacity-70">({draft.sets[k].filter((st) => !isBlankStep(st)).length})</span>
             </button>
@@ -225,8 +225,8 @@ export const TourEditor = () => {
           {steps.map((st, i) => (
             <div key={st.id} data-testid="tour-step-editor" style={{ borderColor: 'var(--border-color)', opacity: st.enabled ? 1 : 0.65 }} className="border rounded-xl p-3 space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-black uppercase tracking-wider">Krok {i + 1}</span>
-                <label className="flex items-center gap-1.5 text-[11px] font-bold cursor-pointer">
+                <span className="text-[0.6875rem] font-black uppercase tracking-wider">Krok {i + 1}</span>
+                <label className="flex items-center gap-1.5 text-[0.6875rem] font-bold cursor-pointer">
                   <input type="checkbox" checked={st.enabled !== false} onChange={(e) => patchStep(i, { enabled: e.target.checked })} className="w-4 h-4 cursor-pointer" aria-label={`Zobrazit krok ${i + 1}`} /> Zobrazit
                 </label>
                 <span className="flex-1" />
@@ -234,7 +234,7 @@ export const TourEditor = () => {
                 <button type="button" onClick={() => move(i, 1)} disabled={i === steps.length - 1} aria-label={`Posunout krok ${i + 1} dolů`} style={inputStyle} className={iconBtn}><ArrowDown size={14} /></button>
                 <button type="button" onClick={() => remove(i)} aria-label={`Smazat krok ${i + 1}`} style={inputStyle} className={`${iconBtn} hover:text-red-500`}><Trash2 size={14} /></button>
               </div>
-              {isBlankStep(st) && <p data-testid="tour-blank-note" style={{ color: '#d97706' }} className="text-[11px] font-bold m-0">Prázdný krok se neuloží a v prohlídce se neukáže. Doplň titulek nebo text.</p>}
+              {isBlankStep(st) && <p data-testid="tour-blank-note" style={{ color: '#d97706' }} className="text-[0.6875rem] font-bold m-0">Prázdný krok se neuloží a v prohlídce se neukáže. Doplň titulek nebo text.</p>}
               <div className="space-y-1">
                 <label style={{ color: 'var(--text-muted)' }} className={labelCls}>Titulek <span className="normal-case opacity-70">({(st.title || '').length}/{TOUR_LIMITS.title})</span></label>
                 <input
@@ -257,20 +257,20 @@ export const TourEditor = () => {
                 >
                   {ANCHOR_KEYS.map((k) => <option key={k} value={k}>{ANCHORS[k].label}</option>)}
                 </select>
-                {ANCHORS[st.anchor]?.route && <p style={{ color: 'var(--text-muted)' }} className="text-[10px] m-0 pl-1 opacity-70">Prohlídka na tuhle stránku sama přejde ({ANCHORS[st.anchor].route}).</p>}
+                {ANCHORS[st.anchor]?.route && <p style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] m-0 pl-1 opacity-70">Prohlídka na tuhle stránku sama přejde ({ANCHORS[st.anchor].route}).</p>}
               </div>
             </div>
           ))}
         </div>
 
         <div className="flex flex-wrap gap-2 mt-4">
-          <button type="button" onClick={add} disabled={steps.length >= TOUR_LIMITS.maxSteps} data-testid="tour-add-step" style={inputStyle} className="px-4 py-2.5 border rounded-lg font-black uppercase text-[11px] tracking-wider cursor-pointer flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
+          <button type="button" onClick={add} disabled={steps.length >= TOUR_LIMITS.maxSteps} data-testid="tour-add-step" style={inputStyle} className="px-4 py-2.5 border rounded-lg font-black uppercase text-[0.6875rem] tracking-wider cursor-pointer flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
             <Plus size={13} /> Přidat krok
           </button>
-          <button type="button" onClick={resetSteps} style={inputStyle} className="px-4 py-2.5 border rounded-lg font-black uppercase text-[11px] tracking-wider cursor-pointer flex items-center gap-1.5">
+          <button type="button" onClick={resetSteps} style={inputStyle} className="px-4 py-2.5 border rounded-lg font-black uppercase text-[0.6875rem] tracking-wider cursor-pointer flex items-center gap-1.5">
             <RotateCcw size={13} /> Obnovit výchozí kroky
           </button>
-          <span style={{ color: 'var(--text-muted)' }} className="text-[10px] opacity-70 self-center">{steps.length}/{TOUR_LIMITS.maxSteps} kroků</span>
+          <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] opacity-70 self-center">{steps.length}/{TOUR_LIMITS.maxSteps} kroků</span>
         </div>
       </Card>
 

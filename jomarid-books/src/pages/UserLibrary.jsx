@@ -208,7 +208,7 @@ export const UserLibrary = () => {
         {/* Na telefonu je hlavička jen nadpis: odznak a odhlášení by zabíraly místo knihám (odhlášení je v horní liště). */}
         <div className="flex justify-between items-end gap-3 border-b pb-2 sm:pb-6" style={{ borderColor: 'var(--border-color)' }}>
           <div className="min-w-0">
-            <span className="bg-amber-500/10 text-amber-500 text-[10px] font-black uppercase px-2.5 py-1 rounded-full border border-amber-500/20 hidden sm:inline-flex items-center gap-1 mb-2">
+            <span className="bg-amber-500/10 text-amber-500 text-[0.625rem] font-black uppercase px-2.5 py-1 rounded-full border border-amber-500/20 hidden sm:inline-flex items-center gap-1 mb-2">
               <Sparkles size={10} /> Prémiová knihovna
             </span>
             <h2 className="text-2xl sm:text-4xl font-black uppercase tracking-tight m-0">Tvoje Knihovna</h2>
@@ -223,16 +223,16 @@ export const UserLibrary = () => {
           <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-2.5 sm:p-4 flex items-center gap-3 sm:gap-5">
             <BookCover title={continueBook.title} seed={continueBook.id} className="w-10 h-14 sm:w-16 sm:h-20 rounded-lg sm:rounded-xl shrink-0" textClass="text-base sm:text-2xl" />
             <div className="flex-1 min-w-0">
-              <span style={{ color: 'var(--text-muted)' }} className="text-[10px] font-black uppercase tracking-wide hidden sm:block">Pokračovat ve čtení</span>
+              <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wide hidden sm:block">Pokračovat ve čtení</span>
               <h3 className="font-black text-sm sm:text-base uppercase tracking-tight truncate m-0">{continueBook.title}</h3>
               <div className="flex items-center gap-2 mt-1.5 sm:mt-2 sm:max-w-sm">
                 <div style={{ backgroundColor: 'var(--bg-secondary)' }} className="flex-1 h-1.5 rounded-full overflow-hidden">
                   <div style={{ backgroundColor: 'var(--bg-primary)', width: `${Math.round(continueBook.scrollPosition)}%` }} className="h-full rounded-full" />
                 </div>
-                <span style={{ color: 'var(--text-muted)' }} className="text-[10px] shrink-0 tabular-nums">{Math.round(continueBook.scrollPosition)} %<span className="hidden sm:inline"> přečteno</span></span>
+                <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] shrink-0 tabular-nums">{Math.round(continueBook.scrollPosition)} %<span className="hidden sm:inline"> přečteno</span></span>
               </div>
             </div>
-            <Link to={`/read/${continueBook.id}`} aria-label={`Pokračovat ve čtení: ${continueBook.title}`} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="no-underline shrink-0 px-3 sm:px-6 py-2.5 sm:py-3 rounded-xl font-black text-[11px] sm:text-xs uppercase tracking-wider hover:brightness-105 transition-all flex items-center justify-center gap-1.5 sm:gap-2">
+            <Link to={`/read/${continueBook.id}`} aria-label={`Pokračovat ve čtení: ${continueBook.title}`} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="no-underline shrink-0 px-3 sm:px-6 py-2.5 sm:py-3 rounded-xl font-black text-[0.6875rem] sm:text-xs uppercase tracking-wider hover:brightness-105 transition-all flex items-center justify-center gap-1.5 sm:gap-2">
               <BookOpen size={14} /> <span className="max-[359px]:hidden">Pokračovat</span>
             </Link>
           </div>
@@ -320,7 +320,7 @@ export const AuthorPage = () => {
           <section style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl shadow-sm p-4 sm:p-5 mb-5 flex flex-wrap items-center gap-x-6 gap-y-3">
             <span style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--bg-primary)' }} className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"><Feather size={22} /></span>
             <div className="min-w-0 flex-1">
-              <p style={{ color: 'var(--text-muted)' }} className="text-[11px] font-black uppercase tracking-wider m-0">{a.pen_name ? 'Autor · krycí jméno' : 'Autor'}</p>
+              <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] font-black uppercase tracking-wider m-0">{a.pen_name ? 'Autor · krycí jméno' : 'Autor'}</p>
               <p className="text-sm font-bold m-0 mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
                 <span data-testid="author-books-count">{czCount(a.books_count, 'kniha', 'knihy', 'knih')}</span>
                 {a.ratings_count > 0
@@ -328,7 +328,7 @@ export const AuthorPage = () => {
                   : <span style={{ color: 'var(--text-muted)' }} className="font-semibold">zatím bez hodnocení</span>}
               </p>
             </div>
-            {a.is_self && <Link to="/publisher" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider no-underline">Spravovat moje knihy</Link>}
+            {a.is_self && <Link to="/publisher" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="px-4 py-2 rounded-xl text-[0.6875rem] font-black uppercase tracking-wider no-underline">Spravovat moje knihy</Link>}
           </section>
 
           {a.books.length === 0 ? (
@@ -341,7 +341,7 @@ export const AuthorPage = () => {
                     <button type="button" data-testid="author-book" onClick={() => navigate('/app', { state: { openBookId: b.id } })} style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="w-full text-left border rounded-2xl p-4 cursor-pointer hover:brightness-95 active:scale-[0.99] transition-all flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm font-black break-words">{b.title}</span>
-                        {b.genres?.length > 0 && <span className="flex flex-wrap gap-1 mt-1.5">{b.genres.map(g => <span key={g} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' }} className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase">{g}</span>)}</span>}
+                        {b.genres?.length > 0 && <span className="flex flex-wrap gap-1 mt-1.5">{b.genres.map(g => <span key={g} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' }} className="px-2 py-0.5 rounded-md text-[0.625rem] font-black uppercase">{g}</span>)}</span>}
                         {b.description && <span style={{ color: 'var(--text-muted)' }} className="block text-xs mt-2 leading-relaxed line-clamp-2 break-words">{b.description}</span>}
                       </span>
                       <span className="flex sm:flex-col items-center sm:items-end gap-x-4 gap-y-1 text-xs font-bold shrink-0">
