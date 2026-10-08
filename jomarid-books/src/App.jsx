@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { resolveTheme, withAccent, loadAccent, saveAccent, applyUiPrefs, applyMotionPref, isDarkTheme, saveCustomColors, loadCustomColors, seedCustomColors, CUSTOM_THEME_KEY, THEME_KEY, initMotionPref } from './theme';
+import { resolveTheme, withAccent, loadAccent, saveAccent, applyUiPrefs, applyMotionPref, isDarkTheme, saveCustomColors, loadCustomColors, seedCustomColors, CUSTOM_THEME_KEY, EXPERIMENTAL_THEME_KEY, usesCustomColors, applyThemeStyle, THEME_KEY, initMotionPref } from './theme';
 import { SettingsSyncRunner } from './settings/SettingsSyncRunner';
 import { SETTINGS_APPLIED, notifySettingsChanged } from './settings/settingsEvents';
 import { ThemeContext, AuthProvider, ProtectedAdminRoute, ProtectedUserRoute, useAuth } from './contexts/AuthContext';
@@ -91,13 +91,14 @@ export default function App() {
 
   useEffect(() => {
     const base = resolveTheme(currentTheme);
-    const vars = currentTheme === CUSTOM_THEME_KEY ? base : withAccent(base, accent);
+    const vars = usesCustomColors(currentTheme) ? base : withAccent(base, accent);
     // Promenne patri na <html>, ne na <body>: pozadi <html> je to, co vidi uzivatel mimo obsah
     // (oddaleni na mobilu, pretazeni). Na body by ho <html> nevidelo a zustalo by svetle.
     const root = document.documentElement;
     Object.keys(vars).forEach(k => root.style.setProperty(k, vars[k]));
     root.style.colorScheme = isDarkTheme(currentTheme, vars) ? 'dark' : 'light';
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', vars['--bg-body']);
+    applyThemeStyle(currentTheme, root); // „Experimentální vlastní“ zapíná kreslený styl
   }, [currentTheme, customColors, accent]);
 
   return (
@@ -107,10 +108,11 @@ export default function App() {
         changeAccent: (a) => { saveAccent(a); setAccent(loadAccent()); },
         changeTheme: (t) => {
           // První přepnutí na „Vlastní“ začne od barev, které uživatel právě vidí, ne od výchozí tyrkysové.
-          if (t === CUSTOM_THEME_KEY) setCustomColors(seedCustomColors(currentTheme));
+          if (usesCustomColors(t)) setCustomColors(seedCustomColors(currentTheme));
           setCurrentTheme(t); writeStored(THEME_KEY, t); notifySettingsChanged();
         },
-        changeCustomColors: (c) => { saveCustomColors(c); setCustomColors(loadCustomColors()); setCurrentTheme(CUSTOM_THEME_KEY); writeStored(THEME_KEY, CUSTOM_THEME_KEY); notifySettingsChanged(); },
+        // Úprava barev nechá motiv, ve kterém je uživatel („Vlastní“ nebo „Experimentální vlastní“), jinak přepne na „Vlastní“.
+        changeCustomColors: (c) => { const keep = currentTheme === EXPERIMENTAL_THEME_KEY ? EXPERIMENTAL_THEME_KEY : CUSTOM_THEME_KEY; saveCustomColors(c); setCustomColors(loadCustomColors()); setCurrentTheme(keep); writeStored(THEME_KEY, keep); notifySettingsChanged(); },
       }}>
         <SettingsSyncRunner />
         <Router>

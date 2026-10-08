@@ -21,7 +21,9 @@
         var themes = { saas: ["#f8fafc", "#0f172a", "light"], dark: ["#020617", "#f1f5f9", "dark"], emerald: ["#2d1a10", "#f4ebd9", "dark"], sepia: ["#f3e9d2", "#131311", "light"], ocean: ["#06222b", "#ebedee", "dark"], contrast: ["#000000", "#ffffff", "dark"] };
         try {
           var key = localStorage.getItem("jomarid-books-theme"), t;
-          if (key === "custom") { try { t = JSON.parse(localStorage.getItem("jomarid-books-theme-vars")); } catch (e) {} }
+          if (key === "custom" || key === "experimental") { try { t = JSON.parse(localStorage.getItem("jomarid-books-theme-vars")); } catch (e) {} }
+          /* "Experimentální vlastní" = vlastní barvy + kreslený styl (pravidla v src/sketchy.css); zapne se hned, ať se styl nepřepne až po načtení. */
+          if (key === "experimental") document.documentElement.setAttribute("data-style", "sketchy");
           /* Ulozene hodnoty musi mit presny tvar [pozadi, text, "light"|"dark"]; cokoli jineho se zahodi a vezme se vestaveny motiv. */
           var ok = function (v) { return !!v && v.length === 3 && typeof v[0] === "string" && typeof v[1] === "string" && /^#[0-9a-f]{6}$/i.test(v[0]) && /^#[0-9a-f]{6}$/i.test(v[1]) && (v[2] === "light" || v[2] === "dark"); };
           if (!ok(t)) t = ok(themes[key]) ? themes[key] : themes.saas;
