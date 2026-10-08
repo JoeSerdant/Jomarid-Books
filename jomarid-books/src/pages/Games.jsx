@@ -225,11 +225,12 @@ export const GameLauncher = ({ game }) => {
     // neubírá výška. Hra se v iframu přizpůsobí zbylé ploše, takže to platí pro všechny hry, i budoucí.
     // Třídy jsou napsané celé (ne skládané): Tailwind je při sestavení hledá v textu a sestavené by nepoznal.
     return (
-      <div style={{ position: 'fixed', inset: 0, zIndex: 999, backgroundColor: '#000' }} className="flex flex-col [@media(orientation:landscape)_and_(max-height:500px)]:flex-row-reverse">
+      // Výřez displeje (--sat nahoře, --sar vpravo) se přičítá k velikosti pruhu, ne odebírá z místa pro tlačítko.
+      <div style={{ position: 'fixed', inset: 0, zIndex: 999, backgroundColor: '#000', '--sat': 'env(safe-area-inset-top,0px)', '--sar': 'env(safe-area-inset-right,0px)' }} className="flex flex-col [@media(orientation:landscape)_and_(max-height:500px)]:flex-row-reverse">
         <div
           data-testid="game-bar"
-          style={{ backgroundColor: '#05050f', paddingTop: 'env(safe-area-inset-top,0px)', paddingRight: 'env(safe-area-inset-right,0px)', borderColor: 'rgba(255,255,255,0.12)' }}
-          className="shrink-0 flex items-center justify-between gap-2 px-3 h-11 border-b [@media(orientation:landscape)_and_(max-height:500px)]:flex-col [@media(orientation:landscape)_and_(max-height:500px)]:justify-start [@media(orientation:landscape)_and_(max-height:500px)]:w-12 [@media(orientation:landscape)_and_(max-height:500px)]:h-auto [@media(orientation:landscape)_and_(max-height:500px)]:px-1 [@media(orientation:landscape)_and_(max-height:500px)]:py-2 [@media(orientation:landscape)_and_(max-height:500px)]:border-b-0 [@media(orientation:landscape)_and_(max-height:500px)]:border-l"
+          style={{ backgroundColor: '#05050f', paddingTop: 'var(--sat)', paddingRight: 'var(--sar)', borderColor: 'rgba(255,255,255,0.12)' }}
+          className="shrink-0 flex items-center justify-between gap-2 px-3 h-[calc(2.75rem+var(--sat))] border-b [@media(orientation:landscape)_and_(max-height:500px)]:flex-col [@media(orientation:landscape)_and_(max-height:500px)]:justify-start [@media(orientation:landscape)_and_(max-height:500px)]:w-[calc(3rem+var(--sar))] [@media(orientation:landscape)_and_(max-height:500px)]:h-auto [@media(orientation:landscape)_and_(max-height:500px)]:px-1 [@media(orientation:landscape)_and_(max-height:500px)]:pt-2 [@media(orientation:landscape)_and_(max-height:500px)]:border-b-0 [@media(orientation:landscape)_and_(max-height:500px)]:border-l"
         >
           <span style={{ color: 'rgba(255,255,255,0.7)' }} className="text-[0.6875rem] font-black uppercase tracking-wider truncate [@media(orientation:landscape)_and_(max-height:500px)]:hidden">{game.title}</span>
           <button
