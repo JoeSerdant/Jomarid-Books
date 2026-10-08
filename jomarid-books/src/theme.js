@@ -51,6 +51,18 @@ export const THEMES = {
 export const CUSTOM_THEME_KEY = 'custom';
 export const CUSTOM_THEME_STORAGE = 'jomarid-books-theme-custom'; // {"bg":"#rrggbb","accent":"#rrggbb"}
 export const CUSTOM_VARS_STORAGE = 'jomarid-books-theme-vars';    // odvozené proměnné, čte je index.html před vykreslením
+// „Experimentální vlastní“: stejné vlastní barvy jako motiv „Vlastní“ (pozadí a zvýraznění si volí uživatel), ale v kresleném,
+// hravém stylu (nepravidelné rohy, ručně psané písmo, odsazené stíny). Styl se zapíná atributem data-style na <html>;
+// pravidla jsou v src/sketchy.css.
+export const EXPERIMENTAL_THEME_KEY = 'experimental';
+export const STYLE_ATTR = 'data-style';
+export const STYLE_SKETCHY = 'sketchy';
+export const usesCustomColors = (key) => key === CUSTOM_THEME_KEY || key === EXPERIMENTAL_THEME_KEY;
+export const themeStyle = (key) => (key === EXPERIMENTAL_THEME_KEY ? STYLE_SKETCHY : null);
+export const applyThemeStyle = (key, root = document.documentElement) => {
+  const style = themeStyle(key);
+  if (style) root.setAttribute(STYLE_ATTR, style); else root.removeAttribute(STYLE_ATTR);
+};
 export const CUSTOM_DEFAULT = { bg: '#1e293b', accent: '#14b8a6' };
 export const CUSTOM_PRESETS = [
   { label: 'Půlnoc', bg: '#0b1020', accent: '#60a5fa' },
@@ -161,7 +173,7 @@ export const hasSavedCustomColors = () => {
 
 // Proměnné motivu podle klíče (vestavěné i vlastní) + jestli je tmavý.
 export const resolveTheme = (key) => {
-  if (key === CUSTOM_THEME_KEY) { const c = loadCustomColors(); return deriveTheme(c.bg, c.accent); }
+  if (usesCustomColors(key)) { const c = loadCustomColors(); return deriveTheme(c.bg, c.accent); }
   return typeof key === 'string' && Object.prototype.hasOwnProperty.call(THEMES, key) ? THEMES[key] : THEMES.saas; // ne zděděné (constructor, __proto__)
 };
 // Dvě barvy vlastního motivu odvozené z právě používaného motivu. První přepnutí na „Vlastní“ tak nezačne od výchozí
@@ -177,7 +189,7 @@ export const seedCustomColors = (fromKey) => {
   return loadCustomColors();
 };
 // Barvy, které „Vlastní“ dostane po kliknutí - podle nich se kreslí náhled dlaždice (aby odpovídal výsledku).
-export const customColorsPreview = (currentKey, saved) => (currentKey !== CUSTOM_THEME_KEY && !hasSavedCustomColors() ? colorsFromTheme(currentKey) : saved);
+export const customColorsPreview = (currentKey, saved) => (!usesCustomColors(currentKey) && !hasSavedCustomColors() ? colorsFromTheme(currentKey) : saved);
 // --- Další hotové motivy (dopočítané stejně jako „Vlastní“, takže čitelnost je zaručená) ---
 Object.assign(THEMES, {
   sepia: deriveTheme('#f3e9d2', '#9a3412'),
@@ -186,7 +198,7 @@ Object.assign(THEMES, {
   contrast: { ...deriveTheme('#000000', '#ffd60a'), '--text-body': '#ffffff', '--border-color': '#ffffff', '--text-muted': '#e6e6e6', '--bg-card': '#0a0a0a', '--bg-secondary': '#171717' },
 });
 export const THEME_KEY = 'jomarid-books-theme';
-export const THEME_LABELS = { saas: 'Světlý', dark: 'Tmavý', emerald: 'Dřevo a zeleň', sepia: 'Sépiový', ocean: 'Oceán', contrast: 'Vysoký kontrast', [CUSTOM_THEME_KEY]: 'Vlastní' };
+export const THEME_LABELS = { saas: 'Světlý', dark: 'Tmavý', emerald: 'Dřevo a zeleň', sepia: 'Sépiový', ocean: 'Oceán', contrast: 'Vysoký kontrast', [CUSTOM_THEME_KEY]: 'Vlastní', [EXPERIMENTAL_THEME_KEY]: 'Experimentální vlastní' };
 export const DARK_THEMES = ['dark', 'emerald', 'ocean', 'contrast'];
 
 // --- Akcentní barva hotových motivů ---
@@ -237,7 +249,7 @@ const saveChoice = (storageKey, options, key) => {
 };
 export const saveUiScale = (key) => saveChoice(UI_SCALE_KEY, UI_SCALES, key);
 export const saveUiDensity = (key) => saveChoice(UI_DENSITY_KEY, UI_DENSITIES, key);
-export const isDarkTheme = (key, vars) => (key === CUSTOM_THEME_KEY ? isDarkColor(vars['--bg-body']) : DARK_THEMES.includes(key));
+export const isDarkTheme = (key, vars) => (usesCustomColors(key) ? isDarkColor(vars['--bg-body']) : DARK_THEMES.includes(key));
 
 // Sdílené volby čtečky - používá je ReaderPage i Nastavení, aby se seznamy
 // voleb a klíče v localStorage nikdy nerozjely (stejný princip jako leveling.js).
@@ -341,7 +353,7 @@ export const readerTypography = (prefs) => {
   const margin = PAGE_MARGINS[prefs.margin] || PAGE_MARGINS.normal;
   const hy = prefs.hyphens ? 'auto' : 'manual';
   return {
-    className: fam.className,
+    className: `${fam.className} reader-font`, // reader-font: kreslený styl (src/sketchy.css) písmo knihy nikdy nemění
     lang: 'cs', // dělení slov a zalamování podle češtiny
     padX: margin.x,
     padY: margin.y,

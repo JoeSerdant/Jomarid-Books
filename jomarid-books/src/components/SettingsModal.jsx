@@ -12,7 +12,7 @@ import {
   THEMES, FONT_FAMILIES, LINE_HEIGHTS, TEXT_WIDTHS, ALIGNMENTS, LETTER_SPACINGS, PAGE_MARGINS, PAGE_BREAKS, PAGE_ANIMATIONS, MOTION_OPTIONS,
   FONT_SIZE_RANGE, AUTO_ADVANCE_RANGE, WPM_RANGE, NIGHT_RANGE,
   loadReaderPrefs, saveReaderPref, resetReaderPrefs, readerTypography, loadMotionPref, saveMotionPref,
-  CUSTOM_THEME_KEY, CUSTOM_PRESETS, ACCENT_MIN_CONTRAST, resolveTheme, deriveTheme, completeHex, normalizeHex, readableAccent, customColorsPreview, contrast,
+  CUSTOM_THEME_KEY, EXPERIMENTAL_THEME_KEY, usesCustomColors, CUSTOM_PRESETS, ACCENT_MIN_CONTRAST, resolveTheme, deriveTheme, completeHex, normalizeHex, readableAccent, customColorsPreview, contrast,
   ACCENTS, THEME_LABELS, UI_SCALES, UI_DENSITIES, loadUiScale, loadUiDensity, saveUiScale, saveUiDensity, withAccent,
 } from '../theme';
 import { readLibraryPrefs, writeLibraryPref } from '../browse/browseStore';
@@ -420,7 +420,7 @@ const SecurityTab = ({ user }) => {
 };
 
 // ---- Záložka: Vzhled ----
-const THEME_OPTIONS = [...Object.keys(THEMES), CUSTOM_THEME_KEY].map((key) => ({ key, label: THEME_LABELS[key] }));
+const THEME_OPTIONS = [...Object.keys(THEMES), CUSTOM_THEME_KEY, EXPERIMENTAL_THEME_KEY].map((key) => ({ key, label: THEME_LABELS[key] }));
 
 // Jedna barva: nativní výběr barvy + zápis hex kódu (platí se až když je kód úplný).
 const ColorField = ({ label, value, onChange }) => {
@@ -533,7 +533,7 @@ const AppearanceTab = () => {
   const [density, setDensity] = useState(loadUiDensity);
   const [lib, setLib] = useState(() => readLibraryPrefs());
   const setLibPref = (name, value) => { writeLibraryPref(name, value); setLib(readLibraryPrefs()); };
-  const isCustom = currentTheme === CUSTOM_THEME_KEY;
+  const isCustom = usesCustomColors(currentTheme);
 
   return (
     <div className="space-y-4">
@@ -544,7 +544,7 @@ const AppearanceTab = () => {
           {THEME_OPTIONS.map(({ key, label }) => {
             // Náhled „Vlastní“ ukazuje barvy, které dostane po kliknutí (poprvé barvy právě používaného motivu).
             const preview = customColorsPreview(currentTheme, customColors);
-            const t = key === CUSTOM_THEME_KEY ? deriveTheme(preview.bg, preview.accent) : withAccent(resolveTheme(key), accent);
+            const t = usesCustomColors(key) ? deriveTheme(preview.bg, preview.accent) : withAccent(resolveTheme(key), accent);
             const active = currentTheme === key;
             return (
               <button
@@ -553,7 +553,7 @@ const AppearanceTab = () => {
                 onClick={() => changeTheme(key)}
                 aria-pressed={active}
                 style={{ backgroundColor: t['--bg-body'], borderColor: active ? t['--bg-primary'] : t['--border-color'], color: t['--text-body'] }}
-                className={`relative rounded-xl border-2 p-2.5 cursor-pointer text-left ${active ? 'shadow-md' : ''}`}
+                className={`relative rounded-xl border-2 p-2.5 cursor-pointer text-left ${key === EXPERIMENTAL_THEME_KEY ? 'theme-tile-sketchy' : ''} ${active ? 'shadow-md' : ''}`}
               >
                 <span style={{ backgroundColor: t['--bg-card'], borderColor: t['--border-color'] }} className="block h-9 rounded-md border mb-2 relative">
                   <span style={{ backgroundColor: t['--bg-primary'] }} className="absolute left-1.5 top-1.5 h-2 w-8 rounded-full" />
@@ -596,13 +596,18 @@ const AppearanceTab = () => {
             <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">
               Ostatní barvy (karty, okraje, text) se dopočítají samy a text se vždy upraví tak, aby byl čitelný.
             </p>
+            {currentTheme === EXPERIMENTAL_THEME_KEY && (
+              <p data-testid="experimental-note" style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">
+                Experimentální vlastní má stejné barvy jako „Vlastní“ (změna se projeví v obou), jen vypadá hravěji: kreslené rohy, ručně psané písmo a odsazené stíny. Text knih ve čtečce se tím nemění.
+              </p>
+            )}
           </div>
         )}
       </Section>
 
       <Section title="Akcentní barva" description="Barva tlačítek a štítků. Vždy se upraví tak, aby byla na pozadí motivu dobře vidět a text na ní byl čitelný.">
         {isCustom ? (
-          <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">U vlastního motivu se zvýraznění nastavuje barvami výše.</p>
+          <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">U vlastních motivů se zvýraznění nastavuje barvami výše.</p>
         ) : (
           <div role="radiogroup" aria-label="Akcentní barva" className="flex flex-wrap gap-2">
             {Object.entries(ACCENTS).map(([key, a]) => {
