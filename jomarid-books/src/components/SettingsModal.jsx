@@ -66,7 +66,7 @@ const ActionButton = ({ variant = 'primary', busy = false, disabled, children, .
       {...props}
       disabled={disabled || busy}
       style={style}
-      className="px-4 py-2.5 rounded-lg border-none font-black uppercase text-[0.6875rem] tracking-wider cursor-pointer inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+      className="px-4 py-2.5 min-h-[2.5rem] rounded-lg border-none font-black uppercase text-[0.6875rem] tracking-wider cursor-pointer inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
     >
       {busy && <Loader2 size={13} className="animate-spin" />}
       {children}
@@ -447,7 +447,7 @@ const ColorField = ({ label, value, onChange }) => {
 };
 
 const Segmented = ({ options, value, onChange, ariaLabel }) => (
-  <div role="radiogroup" aria-label={ariaLabel} className="flex gap-1.5">
+  <div role="radiogroup" aria-label={ariaLabel} className="flex flex-wrap gap-1.5">
     {Object.entries(options).map(([key, opt]) => {
       const active = value === key;
       return (
@@ -458,7 +458,7 @@ const Segmented = ({ options, value, onChange, ariaLabel }) => (
           aria-checked={active}
           onClick={() => onChange(key)}
           style={{ backgroundColor: active ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: active ? 'var(--text-primary)' : 'var(--text-body)', borderColor: active ? 'var(--bg-primary)' : 'var(--border-color)' }}
-          className="flex-1 py-2 rounded-lg border border-solid cursor-pointer text-xs font-bold"
+          className="flex-auto min-w-[4.5rem] px-2 py-2 rounded-lg border border-solid cursor-pointer text-xs font-bold"
         >
           {opt.label}
         </button>
@@ -919,8 +919,9 @@ const InboxTab = () => {
       return;
     }
     setError('');
-    setItems(data || []);
-    if (markRead && (data || []).some(n => !n.read_at)) {
+    const list = Array.isArray(data) ? data : []; // jiná odpověď než seznam (chyba funkce) nesmí shodit stránku
+    setItems(list);
+    if (markRead && list.some(n => !n.read_at)) {
       const { error: markError } = await supabase.rpc('mark_notifications_read');
       if (!markError) announceUnread(0);
     }

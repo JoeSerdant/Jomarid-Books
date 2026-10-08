@@ -46,6 +46,9 @@
       html { scroll-padding-top: calc(var(--navbar-h, 0px) + 8px); scroll-padding-bottom: 4.5rem; /* ať prvek v ohnisku nezakryje tlačítko "nahoru" */ }
       /* Prvky samotné horní lišty se při fokusu nesmí posouvat o výšku lišty (stránka by při Tabu skákala stovky pixelů). */
       html:has(nav :focus) { scroll-padding-top: 0; }
+      /* Jednotný kroužek při ovládání klávesnicí v celé appce (barva textu motivu má vždy dobrý kontrast). Prvky s vlastním
+         kroužkem nebo s outline-none ho přepíšou třídou, protože utility Tailwindu jsou níž. */
+      :where(a, button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])):focus-visible { outline: 2px solid var(--text-body); outline-offset: 2px; }
       /* Vysoký kontrast Windows: stisknuté přepínače (filtry knihovny) by jinak vypadaly stejně jako nestisknuté. */
       @media (forced-colors: active) { [aria-pressed="true"] { outline: 2px solid Highlight; outline-offset: -2px; } }
       body { font-family: 'Inter', system-ui, sans-serif; background-color: var(--bg-body, #f8fafc); color: var(--text-body, #0f172a); min-height: 100vh; min-height: 100dvh; }
