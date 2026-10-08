@@ -27,8 +27,12 @@ const pwaPlugin = () => ({
     Object.values(bundle).filter((c) => c.type === 'chunk' && c.isEntry).forEach((c) => visit(c.fileName));
     const publicDir = path.resolve('public');
     const publicFiles = fs.existsSync(publicDir) ? fs.readdirSync(publicDir).filter((f) => /\.(png|svg|ico|webmanifest)$/.test(f)).sort() : [];
-    const required = [...startup].sort().map((f) => `/${f}`);
-    const optional = publicFiles.map((f) => `/${f}`);
+    // Styly (styl „Experimentální vlastní“ je ve vlastním souboru) patří ke startu appky; písma se stahují jen při použití, takže jsou volitelná.
+    const emitted = Object.values(bundle).filter((c) => c.type === 'asset').map((c) => c.fileName);
+    const styles = emitted.filter((f) => /\.css$/.test(f)).sort();
+    const fonts = emitted.filter((f) => /\.woff2?$/.test(f)).sort();
+    const required = [...[...startup].sort(), ...styles].map((f) => `/${f}`);
+    const optional = [...fonts, ...publicFiles].map((f) => `/${f}`);
     const hash = crypto.createHash('sha1');
     [...required, ...optional].forEach((u) => hash.update(u));
     publicFiles.forEach((f) => hash.update(fs.readFileSync(path.join(publicDir, f))));

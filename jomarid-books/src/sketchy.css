@@ -1,0 +1,86 @@
+/* Motiv „Experimentální vlastní“: kreslený, hravý styl (nepravidelné rohy, ručně psané písmo, odsazené stíny, lehké
+   naklonění tlačítek). Zapíná ho atribut data-style="sketchy" na <html> (src/theme.js, před vykreslením i index.html).
+   Barvy se nemění: berou se z proměnných motivu. Text knih ve čtečce má vlastní písmo a zůstává beze změny.
+   Záměrně se nepoužívá transform na kartách: vytvořil by blok pro prvky s position: fixed (celá obrazovka editoru). */
+
+/* Písmo Patrick Hand (Pat Bentley, licence SIL Open Font License 1.1), vlastní kopie: nezávisí na Google Fonts a funguje i offline.
+   Stáhne se jen při použití (unicode-range), tedy jen u motivu „Experimentální vlastní“. size-adjust vyrovná menší výšku
+   malých písmen (0,47 em proti 0,54 em u běžných písem), jinak by drobný text vypadal příliš malý. latin-ext obsahuje čeština. */
+@font-face {
+  font-family: 'Patrick Hand'; font-style: normal; font-weight: 400; font-display: swap; size-adjust: 112%;
+  src: url('./fonts/patrick-hand-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Patrick Hand'; font-style: normal; font-weight: 400; font-display: swap; size-adjust: 112%;
+  src: url('./fonts/patrick-hand-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+html[data-style="sketchy"] {
+  --sk-font: 'Patrick Hand', 'Segoe Print', 'Bradley Hand', 'Chalkboard SE', 'Comic Sans MS', sans-serif;
+  /* nepravidelné rohy; každý druhý prvek v řadě je zrcadlově jiný, ať nic nevypadá jako razítko */
+  --sk-r-a: 20px 8px 18px 10px / 10px 18px 8px 20px;
+  --sk-r-b: 9px 19px 10px 17px / 17px 9px 19px 8px;
+  --sk-s-a: 12px 5px 11px 6px / 6px 11px 5px 12px;
+  --sk-s-b: 6px 12px 5px 10px / 11px 6px 12px 5px;
+  --sk-shadow: rgba(0, 0, 0, 0.25);
+}
+@supports (color: color-mix(in srgb, red, blue)) {
+  html[data-style="sketchy"] {
+    /* „tužkové“ okraje: tmavší než běžné, ale pořád z barev motivu (!important přebije hodnotu nastavenou skriptem) */
+    --border-color: color-mix(in srgb, var(--text-body) 45%, var(--bg-body)) !important;
+    --sk-shadow: color-mix(in srgb, var(--text-body) 32%, transparent);
+  }
+  html[data-style="sketchy"] ::selection { background: color-mix(in srgb, var(--bg-primary) 38%, transparent); }
+}
+
+/* písmo (čtečka i herní okna mají vlastní) */
+html[data-style="sketchy"] body,
+html[data-style="sketchy"] #root > div,
+html[data-style="sketchy"] .font-sans:not(.reader-font),
+html[data-style="sketchy"] :is(h1, h2, h3, h4, .font-heading) { font-family: var(--sk-font); }
+html[data-style="sketchy"] :is(.tracking-wider, .tracking-wide, .tracking-widest) { letter-spacing: 0.03em; }
+/* text knihy se píše a čte v běžném písmu */
+html[data-style="sketchy"] :is(#book-text, #admin-book-text) { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
+
+/* tvary */
+html[data-style="sketchy"] :is(.rounded-2xl, .rounded-3xl) { border-radius: var(--sk-r-a); }
+html[data-style="sketchy"] :is(.rounded-2xl, .rounded-3xl):nth-child(even) { border-radius: var(--sk-r-b); }
+html[data-style="sketchy"] :is(.rounded-md, .rounded-lg, .rounded-xl) { border-radius: var(--sk-s-a); }
+html[data-style="sketchy"] :is(.rounded-md, .rounded-lg, .rounded-xl):nth-child(even) { border-radius: var(--sk-s-b); }
+
+/* karty: silnější okraj a odsazený stín jako nakreslený tužkou */
+html[data-style="sketchy"] :is(.rounded-2xl, .rounded-3xl).border { border-width: 2px; box-shadow: 3px 4px 0 0 var(--sk-shadow); }
+html[data-style="sketchy"] :is(input, textarea, select).border { border-width: 2px; }
+
+/* tlačítka: stín, lehké naklonění a „pružné“ stisknutí */
+html[data-style="sketchy"] button:is(.rounded-lg, .rounded-xl) {
+  box-shadow: 2px 3px 0 0 var(--sk-shadow);
+  transition-property: translate, rotate, box-shadow, background-color, color, border-color, opacity;
+  transition-duration: 0.15s;
+  transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+html[data-style="sketchy"] :is(button, a):is(.rounded-lg, .rounded-xl):nth-child(3n + 1) { rotate: -0.8deg; }
+html[data-style="sketchy"] :is(button, a):is(.rounded-lg, .rounded-xl):nth-child(3n + 2) { rotate: 0.7deg; }
+html[data-style="sketchy"] button:is(.rounded-lg, .rounded-xl):hover:not(:disabled) { translate: -1px -1px; rotate: 0deg; box-shadow: 3px 4px 0 0 var(--sk-shadow); }
+html[data-style="sketchy"] button:is(.rounded-lg, .rounded-xl):active:not(:disabled) { translate: 1px 2px; box-shadow: 0 0 0 0 var(--sk-shadow); }
+
+/* logo: nepravidelná „bublina“ jako malovaná ručně */
+html[data-style="sketchy"] .app-logo {
+  border-radius: 46% 54% 42% 58% / 56% 44% 56% 44%;
+  rotate: -7deg;
+  box-shadow: 2px 3px 0 0 var(--sk-shadow);
+  border: 2px solid color-mix(in srgb, var(--bg-primary) 55%, var(--text-body));
+  font-family: var(--sk-font);
+  font-size: 1.15rem;
+  font-weight: 400;
+}
+
+/* dlaždice motivu v Nastavení vypadá kresleně i když styl ještě není zapnutý */
+.theme-tile-sketchy.rounded-xl { border-radius: 14px 6px 13px 7px / 7px 13px 6px 14px; rotate: -1deg; font-family: 'Patrick Hand', 'Segoe Print', 'Comic Sans MS', sans-serif; }
+
+/* Vynucené barvy Windows: odsazené stíny by se rozpadly, okraje stačí */
+@media (forced-colors: active) {
+  html[data-style="sketchy"] * { box-shadow: none !important; }
+}

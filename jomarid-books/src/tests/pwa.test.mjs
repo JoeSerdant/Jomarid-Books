@@ -291,3 +291,18 @@ describe('service worker: skripty z /assets/', () => {
     assert.equal(w.log.skipped, true);
   });
 });
+
+describe('sestavení: co se vkládá do offline úložiště', () => {
+  const config = read('vite.config.js');
+  test('stylesheet patří k povinným souborům (start appky), písma k volitelným (stahují se jen při použití)', () => {
+    assert.match(config, /required = \[\.\.\.\[\.\.\.startup\]\.sort\(\), \.\.\.styles\]/);
+    assert.match(config, /optional = \[\.\.\.fonts, \.\.\.publicFiles\]/);
+    assert.match(config, /\.css\$/);
+    assert.match(config, /\.woff2\?\$/);
+  });
+  test('kreslený styl a jeho písmo jsou v src, takže je sestavení opravdu vyrobí', () => {
+    assert.ok(fs.existsSync(path.join(ROOT, 'src', 'sketchy.css')));
+    assert.ok(fs.existsSync(path.join(ROOT, 'src', 'fonts', 'patrick-hand-latin.woff2')) && fs.existsSync(path.join(ROOT, 'src', 'fonts', 'patrick-hand-latin-ext.woff2')));
+    assert.match(read('src/index.jsx'), /import '\.\/sketchy\.css'/);
+  });
+});

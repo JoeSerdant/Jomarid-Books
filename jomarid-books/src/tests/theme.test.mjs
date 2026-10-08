@@ -211,13 +211,13 @@ describe('index.html: motiv před prvním vykreslením', () => {
 
   // Spustí skript s úložištěm a zachytí, co nastavil na <html> a v meta theme-color.
   const run = (store) => {
-    const props = {}; const meta = {}; const style = { setProperty: (k, v) => { props[k] = v; } };
+    const props = {}; const meta = {}; const attrs = {}; const style = { setProperty: (k, v) => { props[k] = v; } };
     const ctx = vm.createContext({
       localStorage: makeStorage(store),
-      document: { documentElement: { style }, querySelector: () => ({ setAttribute: (k, v) => { meta[k] = v; } }) },
+      document: { documentElement: { style, setAttribute: (k, v) => { attrs[k] = v; } }, querySelector: () => ({ setAttribute: (k, v) => { meta[k] = v; } }) },
     });
     vm.runInContext(script, ctx);
-    return { props, meta, scheme: style.colorScheme };
+    return { props, meta, attrs, scheme: style.colorScheme };
   };
   const SAAS = '#f8fafc';
 
@@ -249,6 +249,15 @@ describe('index.html: motiv před prvním vykreslením', () => {
       assert.equal(r.scheme, mode);
     }
   });
+  test('„Experimentální vlastní“ bere vlastní barvy a zapne kreslený styl už před vykreslením', () => {
+    T.saveCustomColors({ bg: '#fff1e6', accent: '#e11d48' });
+    const r = run({ 'jomarid-books-theme': 'experimental', 'jomarid-books-theme-vars': localStorage.getItem(T.CUSTOM_VARS_STORAGE) });
+    assert.equal(r.props['--bg-body'], '#fff1e6');
+    assert.equal(r.attrs['data-style'], 'sketchy');
+    assert.equal(r.scheme, 'light');
+    // ostatní motivy styl nezapínají
+    for (const key of ['saas', 'dark', 'custom', 'neexistuje']) assert.equal(run({ 'jomarid-books-theme': key }).attrs['data-style'], undefined, key);
+  });
   test('poškozené nebo cizí hodnoty se zahodí a vezme se světlý motiv (nic nespadne)', () => {
     const bad = ['{', 'null', '5', '"abc"', '[]', '{}', '{"0":"#fff","1":"#000","2":"dark"}', '["#zzzzzz","#000000","dark"]', '["#000000","#ffffff","blue"]',
       '[["#000000"],"#ffffff","dark"]', '["#000000","#ffffff","dark","x"]', '["red","blue","dark"]', '["#00000","#ffffff","dark"]',
@@ -265,5 +274,55 @@ describe('index.html: motiv před prvním vykreslením', () => {
   test('nedostupné úložiště skript neshodí', () => {
     const ctx = vm.createContext({ localStorage: makeStorage({}, true), document: { documentElement: { style: { setProperty() {} } }, querySelector: () => ({ setAttribute() {} }) } });
     assert.doesNotThrow(() => vm.runInContext(script, ctx));
+  });
+});
+
+describe('„Experimentální vlastní“ motiv', () => {
+  test('klíč, název a sdílené barvy s motivem „Vlastní“', () => {
+    assert.equal(T.EXPERIMENTAL_THEME_KEY, 'experimental');
+    assert.equal(T.THEME_LABELS.experimental, 'Experimentální vlastní');
+    assert.ok(T.usesCustomColors('custom') && T.usesCustomColors('experimental'));
+    for (const k of ['saas', 'dark', 'emerald', 'sepia', 'ocean', 'contrast', 'neexistuje', undefined, null]) assert.ok(!T.usesCustomColors(k), String(k));
+    T.saveCustomColors({ bg: '#1a1033', accent: '#a855f7' });
+    assert.deepEqual(T.resolveTheme('experimental'), T.resolveTheme('custom'));
+    assert.equal(T.resolveTheme('experimental')['--bg-primary'], '#a855f7');
+  });
+  test('tmavé a světlé pozadí se pozná i u experimentálního motivu', () => {
+    T.saveCustomColors({ bg: '#1a1033', accent: '#a855f7' });
+    assert.ok(T.isDarkTheme('experimental', T.resolveTheme('experimental')));
+    T.saveCustomColors({ bg: '#fff1e6', accent: '#e11d48' });
+    assert.ok(!T.isDarkTheme('experimental', T.resolveTheme('experimental')));
+  });
+  test('čitelnost zůstává zaručená: text na pozadí i zvýraznění má kontrast aspoň 4,5', () => {
+    for (const [bg, accent] of [['#fff1e6', '#e11d48'], ['#1a1033', '#a855f7'], ['#808080', '#808080'], ['#ffff00', '#00ffff']]) {
+      T.saveCustomColors({ bg, accent });
+      const v = T.resolveTheme('experimental');
+      assert.ok(T.contrast(v['--text-body'], v['--bg-body']) >= 4.5, `${bg} text/pozadí`);
+      assert.ok(T.contrast(v['--text-primary'], v['--bg-primary']) >= 4.5, `${accent} text/zvýraznění`);
+    }
+  });
+  test('styl se zapíná a vypíná atributem na <html>', () => {
+    const attrs = {};
+    const root = { setAttribute: (k, v) => { attrs[k] = v; }, removeAttribute: (k) => { delete attrs[k]; } };
+    T.applyThemeStyle('experimental', root);
+    assert.equal(attrs['data-style'], 'sketchy');
+    T.applyThemeStyle('custom', root);
+    assert.equal(attrs['data-style'], undefined);
+    assert.equal(T.themeStyle('saas'), null);
+  });
+  test('náhled dlaždice: experimentální motiv se chová jako „Vlastní“ (první barvy podle právě používaného motivu)', () => {
+    const fromDark = T.colorsFromTheme('dark');
+    assert.deepEqual(T.customColorsPreview('dark', T.loadCustomColors()), fromDark);
+    T.saveCustomColors({ bg: '#fff1e6', accent: '#e11d48' });
+    assert.deepEqual(T.customColorsPreview('experimental', T.loadCustomColors()), T.loadCustomColors());
+  });
+  test('písmo knihy se kresleným stylem nemění: třída reader-font je u textu čtečky vždy', () => {
+    for (const fam of Object.keys(T.FONT_FAMILIES)) assert.ok(T.readerTypography({ ...T.READER_DEFAULTS, fontFamily: fam }).className.split(' ').includes('reader-font'), fam);
+  });
+  test('pravidla v sketchy.css: písmo nepřebíjí text čtečky a karty se netransformují', () => {
+    const css = fs.readFileSync(path.join(ROOT, 'src', 'sketchy.css'), 'utf8');
+    assert.match(css, /\.font-sans:not\(\.reader-font\)/);
+    assert.ok(!/(^|[;{\s])transform\s*:/m.test(css.replace(/\/\*[\s\S]*?\*\//g, '')), 'transform vytvoří blok pro position: fixed (celá obrazovka editoru)');
+    assert.match(css, /size-adjust/);
   });
 });
