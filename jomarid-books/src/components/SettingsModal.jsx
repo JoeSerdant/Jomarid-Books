@@ -679,7 +679,14 @@ const AppTab = () => {
   const [result, setResult] = useState('');
   const [busy, setBusy] = useState(false);
   const [offlineReady, setOfflineReady] = useState(null);
-  useEffect(() => { let on = true; whenOfflineReady().then(v => { if (on) setOfflineReady(v); }); return () => { on = false; }; }, []);
+  const [resetMsg, setResetMsg] = useState('');
+  // Po třech vteřinách se ukáže "zatím není", ale čeká se dál: první návštěva na pomalé síti může dokončit ukládání později.
+  useEffect(() => {
+    let on = true;
+    const timer = setTimeout(() => { if (on) setOfflineReady(v => (v === null ? false : v)); }, 3000);
+    whenOfflineReady().then(v => { if (on && v) setOfflineReady(true); });
+    return () => { on = false; clearTimeout(timer); };
+  }, []);
 
   const install = async () => {
     setBusy(true);
@@ -720,8 +727,9 @@ const AppTab = () => {
           {offlineReady === null ? 'Zjišťuji stav...' : offlineReady ? 'Offline kopie obalu aplikace je připravená.' : 'Offline kopie zatím není k dispozici (třeba při prvním otevření nebo v anonymním okně).'}
         </Notice>
         <div className="space-y-1.5">
-          <ActionButton variant="ghost" busy={busy} onClick={async () => { setBusy(true); await resetApp(); }}><RefreshCw size={14} /> Obnovit aplikaci</ActionButton>
+          <ActionButton variant="ghost" busy={busy} onClick={async () => { setBusy(true); setResetMsg(''); const out = await resetApp(); if (out === 'offline') { setBusy(false); setResetMsg('Bez připojení k internetu se aplikace obnovit nedá, přišel bys o offline kopii. Zkus to znovu, až budeš online.'); } }}><RefreshCw size={14} /> Obnovit aplikaci</ActionButton>
           <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">Smaže uloženou offline kopii a načte nejnovější verzi. Použij, kdyby se appka chovala jako po staré verzi.</p>
+          {resetMsg && <Notice type="error">{resetMsg}</Notice>}
         </div>
       </Section>
 

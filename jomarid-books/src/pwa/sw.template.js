@@ -8,15 +8,19 @@
 
 const VERSION = '__VERSION__';
 const CACHE = 'jomarid-' + VERSION;
-const PRECACHE = [] /* PRECACHE */; // seznam souborů doplní sestavení
+const REQUIRED = [] /* REQUIRED */; // skripty potřebné ke startu appky (doplní sestavení): bez nich offline kopie nefunguje
+const OPTIONAL = [] /* OPTIONAL */; // ikony a manifest (doplní sestavení): když se nestáhnou, nevadí
 const SHELL = '/';
 const NETWORK_TIMEOUT_MS = 4000;
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
-    await cache.add(new Request(SHELL, { cache: 'reload' })); // obal appky je nezbytný, bez něj se instalace nepovede
-    await Promise.all(PRECACHE.map((url) => cache.add(url).catch(() => {}))); // ostatní jen když se podaří
+    // Obal appky a skripty ke startu jsou nezbytné: nepodaří-li se je stáhnout (výpadek spojení), instalace se nedokončí
+    // a zkusí se znovu. Jinak by se offline kopie tvářila jako připravená a bez připojení by se appka nespustila.
+    await cache.add(new Request(SHELL, { cache: 'reload' }));
+    await Promise.all(REQUIRED.map((url) => cache.add(url)));
+    await Promise.all(OPTIONAL.map((url) => cache.add(url).catch(() => {})));
     await self.skipWaiting();
   })());
 });

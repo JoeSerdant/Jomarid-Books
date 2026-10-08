@@ -124,8 +124,8 @@ class SwRequest extends Request {
   constructor(input, init) { super(typeof input === 'string' ? new URL(input, ORIGIN) : input, init); }
 }
 
-const makeWorker = ({ precache = ['/assets/index-abc.js', '/icon-192.png'], version = 'v1', net, preset = {}, putFails = false } = {}) => {
-  const source = TEMPLATE.replace("'__VERSION__'", JSON.stringify(version)).replace('[] /* PRECACHE */', JSON.stringify(precache));
+const makeWorker = ({ required = ['/assets/index-abc.js'], optional = ['/icon-192.png'], version = 'v1', net, preset = {}, putFails = false } = {}) => {
+  const source = TEMPLATE.replace("'__VERSION__'", JSON.stringify(version)).replace('[] /* REQUIRED */', JSON.stringify(required)).replace('[] /* OPTIONAL */', JSON.stringify(optional));
   const listeners = {};
   const stores = new Map(Object.entries(preset).map(([n, entries]) => [n, new Map(Object.entries(entries))]));
   const timers = [];
@@ -160,8 +160,9 @@ const offline = () => async () => { throw new TypeError('Failed to fetch'); };
 describe('service worker: šablona', () => {
   test('šablona má právě po jednom místě pro verzi a seznam souborů (plugin je doplňuje)', () => {
     assert.equal(TEMPLATE.split("'__VERSION__'").length - 1, 1);
-    assert.equal(TEMPLATE.split('[] /* PRECACHE */').length - 1, 1);
-    assert.equal(TEMPLATE.replace("'__VERSION__'", '"x"').replace('[] /* PRECACHE */', '[]').includes('__VERSION__'), false, 'po doplnění nezůstane žádné místo k doplnění');
+    assert.equal(TEMPLATE.split('[] /* REQUIRED */').length - 1, 1);
+    assert.equal(TEMPLATE.split('[] /* OPTIONAL */').length - 1, 1);
+    assert.equal(TEMPLATE.replace("'__VERSION__'", '"x"').includes('__VERSION__'), false, 'po doplnění nezůstane verze k doplnění');
   });
   test('doplněná šablona je platný skript', () => {
     assert.doesNotThrow(() => makeWorker({ net: online() }));
@@ -177,13 +178,18 @@ describe('service worker: instalace a aktivace', () => {
     assert.ok(cached.includes(`${ORIGIN}/assets/index-abc.js`) && cached.includes(`${ORIGIN}/icon-192.png`));
     assert.equal(w.log.skipped, true);
   });
-  test('selže-li stažení obalu, instalace se nepovede; selže-li jiný soubor, instalace projde', async () => {
+  test('selže-li stažení obalu nebo skriptu ke startu, instalace se nepovede (offline kopie by nefungovala); selže-li ikona, projde', async () => {
     const noShell = makeWorker({ net: online({ '/': () => new Response('nope', { status: 500 }) }) });
     await assert.rejects(() => noShell.lifecycle('install'));
+    const noScript = makeWorker({ net: online({ '/': () => HTML(), '/assets/index-abc.js': () => new Response('x', { status: 503 }) }) });
+    await assert.rejects(() => noScript.lifecycle('install'));
+    const dropped = makeWorker({ net: online({ '/': () => HTML(), '/assets/index-abc.js': new Error('spojení se přerušilo') }) });
+    await assert.rejects(() => dropped.lifecycle('install'), /spojení/);
     const oneMissing = makeWorker({ net: online({ '/': () => HTML(), '/icon-192.png': () => new Response('x', { status: 404 }) }) });
     await oneMissing.lifecycle('install');
     assert.ok(!oneMissing.stores.get(oneMissing.name).has(`${ORIGIN}/icon-192.png`));
     assert.ok(oneMissing.stores.get(oneMissing.name).has(`${ORIGIN}/assets/index-abc.js`));
+    assert.equal(oneMissing.log.skipped, true, 'a service worker se přesto aktivuje');
   });
   test('aktivace smaže úložiště starých verzí, cizí nechá být, a převezme stránky', async () => {
     const w = makeWorker({ version: 'v2', net: online(), preset: { 'jomarid-v1': { a: new Response('x') }, 'jomarid-v2': {}, 'cizi-appka': {} } });

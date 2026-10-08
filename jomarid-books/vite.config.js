@@ -27,14 +27,16 @@ const pwaPlugin = () => ({
     Object.values(bundle).filter((c) => c.type === 'chunk' && c.isEntry).forEach((c) => visit(c.fileName));
     const publicDir = path.resolve('public');
     const publicFiles = fs.existsSync(publicDir) ? fs.readdirSync(publicDir).filter((f) => /\.(png|svg|ico|webmanifest)$/.test(f)).sort() : [];
-    const precache = [...startup].sort().map((f) => `/${f}`).concat(publicFiles.map((f) => `/${f}`));
+    const required = [...startup].sort().map((f) => `/${f}`);
+    const optional = publicFiles.map((f) => `/${f}`);
     const hash = crypto.createHash('sha1');
-    precache.forEach((u) => hash.update(u));
+    [...required, ...optional].forEach((u) => hash.update(u));
     publicFiles.forEach((f) => hash.update(fs.readFileSync(path.join(publicDir, f))));
     const source = fs.readFileSync(path.resolve('src/pwa/sw.template.js'), 'utf8')
       .replace("'__VERSION__'", JSON.stringify(hash.digest('hex').slice(0, 10)))
-      .replace('[] /* PRECACHE */', JSON.stringify(precache));
-    if (source.includes('__VERSION__') || source.includes('/* PRECACHE */')) throw new Error('Šablona service workeru má nedoplněné místo.');
+      .replace('[] /* REQUIRED */', JSON.stringify(required))
+      .replace('[] /* OPTIONAL */', JSON.stringify(optional));
+    if (source.includes('__VERSION__') || source.includes('/* REQUIRED */') || source.includes('/* OPTIONAL */')) throw new Error('Šablona service workeru má nedoplněné místo.');
     this.emitFile({ type: 'asset', fileName: 'sw.js', source });
   },
 });
