@@ -2,7 +2,7 @@
 //
 // Každý přihlášený uživatel (čtenář, nakladatel i správce) tu vidí jen to, co může opravit sám: chybějící jméno
 // u účtu a u nakladatelů i nedodělané knihy. Nic z toho se nepočítá na serveru ani se nikam neukládá - jde o čtení
-// z tabulek, ke kterým už appka přistupuje (profiles, books, book_contents), takže žádná změna databáze není potřeba.
+// z tabulek, ke kterým už appka přistupuje (profiles, books, book_contents a soubory textů ve Storage), takže žádná změna databáze není potřeba.
 //
 // Logika je rozdělená na dvě části, ať jde první otestovat bez prohlížeče a bez databáze:
 //   buildAccountNotices - čistá funkce: z načtených dat udělá seznam upozornění
@@ -15,6 +15,8 @@ export const LEVEL_WARN = 'warn';  // je potřeba opravit
 export const LEVEL_INFO = 'info';  // tip nebo připomenutí
 
 // Role, které můžou mít vlastní knihy.
+import { findBookTexts } from './bookText/bookText.js';
+
 export const ROLES_WITH_BOOKS = ['nakladatel', 'správce'];
 
 export const MAX_ITEMS = 5; // kolik názvů knih se ukáže v jednom upozornění, zbytek se jen spočítá
@@ -153,6 +155,14 @@ export const loadAccountNotices = async (client, { user, role }) => {
         const ids = books.slice(i, i + CONTENT_CHUNK).map((b) => b.id);
         const res = await client.from('book_contents').select('book_id').in('book_id', ids);
         if (res.error) { complete = false; partial = true; } else (res.data || []).forEach((r) => have.add(r.book_id));
+      }
+      if (complete) {
+        // Texty přesunuté do úložiště už nejsou ve staré tabulce: dohledají se tam.
+        const missing = books.map((b) => b.id).filter((id) => !have.has(id));
+        const stored = await findBookTexts(client, missing);
+        stored.found.forEach((id) => have.add(id));
+        if (!stored.complete) partial = true;
+        complete = stored.complete;
       }
       bookIdsWithContent = complete ? have : null;
     }
