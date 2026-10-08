@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchBookText, saveBookText, removeBookText } from '../bookText/bookText';
 import BookTextStoragePanel from './admin/BookTextStoragePanel';
+import BookTextField from '../components/BookTextField';
 import { Button, Card } from '../components/ui';
 import { TourEditor, peekAdminTabRequest } from '../tour/TourEditor';
 import { useAuth } from '../contexts/AuthContext';
@@ -1802,7 +1803,7 @@ export const AdminDashboard = () => {
           </Card>
         )}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-5">
+          <div className="lg:col-span-6">
             <Card>
               <h3 className="text-sm font-black uppercase tracking-wider mb-4 flex items-center gap-2">
                 {editingBookId ? <ShieldAlert size={16} className="text-yellow-500"/> : <Plus size={16}/>}
@@ -1889,18 +1890,10 @@ export const AdminDashboard = () => {
                   </label>
                 </div>
 
-                <div className="space-y-1">
-                  <label style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Obsah a Text knihy</label>
-                  <textarea 
-                    placeholder="Sem vložte čistý text knihy, kapitoly nebo markdown..." 
-                    value={content} 
-                    onChange={e => setContent(e.target.value)} 
-                    rows={8} 
-                    style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
-                    className="w-full p-3 border rounded-lg text-sm font-medium outline-none resize-none font-mono placeholder:opacity-40" 
-                    required 
-                  />
-                </div>
+                <BookTextField
+                  key={editingBookId || 'nova-kniha'} id="admin-book-text" value={content} onChange={setContent} required labelStyle={{ color: 'var(--text-muted)' }}
+                  placeholder="Sem vložte čistý text knihy, kapitoly nebo markdown, nebo přetáhněte soubor .txt / .md..."
+                />
                 
                 <Button type="submit" disabled={actionLoading} className="w-full py-3 uppercase tracking-wider font-black">
                   {editingBookId ? '💾 Aktualizovat data v DB' : '🚀 Vydat knihu do oběhu'}
@@ -1920,7 +1913,7 @@ export const AdminDashboard = () => {
             </Card>
           </div>
 
-          <div className="lg:col-span-7 space-y-4">
+          <div className="lg:col-span-6 space-y-4">
             <div className="flex gap-2 items-center p-2 rounded-xl border border-solid" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
               <Search size={16} className="opacity-60 ml-2 shadow-sm shrink-0" />
               <input 

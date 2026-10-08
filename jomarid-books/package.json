@@ -14,7 +14,7 @@
     "test:browse": "node --test src/tests/browse.test.mjs",
     "test:settings": "node --test src/tests/settings.test.mjs",
     "test:pwa": "node --test src/tests/pwa.test.mjs",
-    "test:booktext": "node --test src/tests/bookText.test.mjs",
+    "test:booktext": "node --test src/tests/bookText.test.mjs src/tests/importText.test.mjs",
     "test:chess": "node --test src/gameContent/chess/tests/chess.test.mjs",
     "test:polygon": "node --test src/gameContent/polygonArena/tests/polygon.test.mjs",
     "polygon:calibrate": "node src/gameContent/polygonArena/tests/calibrate.mjs",
