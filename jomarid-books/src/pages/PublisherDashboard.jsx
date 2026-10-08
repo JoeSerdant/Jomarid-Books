@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { fetchBookText, saveBookText } from '../bookText/bookText';
 import { usePagedList } from '../browse/usePagedList';
 import { LoadMore } from '../browse/BrowseParts';
 import {
@@ -504,12 +505,12 @@ export const PublisherDashboard = () => {
   const startEditBook = async (book) => {
     const [{ data: row, error }, { data: contentRow, error: contentErr }] = await Promise.all([
       supabase.from('books').select('price_coins, genres, description').eq('id', book.id).single(),
-      supabase.from('book_contents').select('content').eq('book_id', book.id).maybeSingle(),
+      fetchBookText(supabase, book.id).then((r) => ({ data: r, error: r.error })),
     ]);
     if (error || contentErr || !row) { showNotice('error', 'Nepodařilo se načíst knihu k úpravě.'); return; }
     setEditingBookId(book.id);
     setTitle(book.title);
-    setBookContent(contentRow?.content || '');
+    setBookContent(contentRow?.text || '');
     setPriceCoins(row.price_coins ?? 150);
     setGenresInput(Array.isArray(row.genres) ? row.genres.join(', ') : '');
     setDescriptionInput(row.description || '');
@@ -529,7 +530,7 @@ export const PublisherDashboard = () => {
           .update({ title: title.trim(), price_coins: price, genres, description: descriptionInput || null })
           .eq('id', editingBookId).eq('author_id', user.id);
         if (bookError) throw bookError;
-        const { error: contentError } = await supabase.from('book_contents').upsert({ book_id: editingBookId, content: bookContent });
+        const { error: contentError } = await saveBookText(supabase, editingBookId, bookContent);
         if (contentError) throw contentError;
         showNotice('success', 'Změny v knize jsou uložené.');
       } else {
@@ -549,7 +550,7 @@ export const PublisherDashboard = () => {
         if (!publishNow) payload.is_hidden = true;
         const { data: inserted, error: bookError } = await supabase.from('books').insert([payload]).select('id').single();
         if (bookError) throw bookError;
-        const { error: contentError } = await supabase.from('book_contents').insert([{ book_id: inserted.id, content: bookContent }]);
+        const { error: contentError } = await saveBookText(supabase, inserted.id, bookContent);
         if (contentError) throw contentError;
         const { error: assignError } = await supabase.from('user_books').insert([{ user_id: user.id, book_id: inserted.id, status: 'active', is_read: false }]);
         if (assignError) console.warn('Kniha byla vytvořena, ale přidání do tvé knihovny selhalo:', assignError.message);

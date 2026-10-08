@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } fr
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { fetchBookText } from '../bookText/bookText';
 import { FONT_FAMILIES, LINE_HEIGHTS, TEXT_WIDTHS, ALIGNMENTS, PAGE_BREAKS, loadReaderPrefs, saveReaderPref, readerTypography } from '../theme';
 import {
   BookMarked, Loader2, Star, X, Settings2, List, Minimize2, Maximize2,
@@ -384,13 +385,13 @@ export const ReaderPage = () => {
         }
 
         const [{ data: contentRow }, { data: bookmarksData }, { data: ratingData }, { data: highlightsData }] = await Promise.all([
-          supabase.from('book_contents').select('content').eq('book_id', id).maybeSingle(),
+          fetchBookText(supabase, id).then((r) => ({ data: r })),
           supabase.from('book_bookmarks').select('id, label, scroll_position, created_at').eq('user_id', user.id).eq('book_id', id).order('created_at', { ascending: false }),
           supabase.from('book_ratings').select('rating').eq('user_id', user.id).eq('book_id', id).maybeSingle(),
           supabase.from('book_highlights').select('id, start_offset, end_offset, color, note').eq('user_id', user.id).eq('book_id', id).order('start_offset', { ascending: true }),
         ]);
 
-        setBook({ ...bookData, content: contentRow?.content || '' });
+        setBook({ ...bookData, content: contentRow?.text || '' });
         setBookmarks(bookmarksData || []);
         setMyRating(ratingData?.rating || 0);
         setHighlights(highlightsData || []);

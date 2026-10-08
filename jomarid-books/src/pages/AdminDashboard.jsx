@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { fetchBookText, saveBookText, removeBookText } from '../bookText/bookText';
+import BookTextStoragePanel from './admin/BookTextStoragePanel';
 import { Button, Card } from '../components/ui';
 import { TourEditor, peekAdminTabRequest } from '../tour/TourEditor';
 import { useAuth } from '../contexts/AuthContext';
@@ -1334,9 +1336,7 @@ export const AdminDashboard = () => {
     if (editingBookId) {
       const { error } = await supabase.from('books').update(payload).eq('id', editingBookId);
       if (!error) {
-        const { error: contentErr } = await supabase
-          .from('book_contents')
-          .upsert({ book_id: editingBookId, content });
+        const { error: contentErr } = await saveBookText(supabase, editingBookId, content);
         if (contentErr) alert('Kniha uložena, ale text se nepodařilo uložit: ' + contentErr.message);
         await safeLog('SUCCESS', `Upravena kniha: ${title} (Auto-přiřazení: ${isAutoAssigned ? 'ANO' : 'NE'}, Cena: ${payload.price_coins} mincí)`);
         setEditingBookId(null);
@@ -1349,9 +1349,7 @@ export const AdminDashboard = () => {
       if (!content) { setActionLoading(false); return alert('Doplňte text knihy.'); }
       const { data: newBook, error } = await supabase.from('books').insert([payload]).select('id').single();
       if (!error && newBook) {
-        const { error: contentErr } = await supabase
-          .from('book_contents')
-          .insert([{ book_id: newBook.id, content }]);
+        const { error: contentErr } = await saveBookText(supabase, newBook.id, content);
         if (contentErr) alert('Kniha vytvořena, ale text se nepodařilo uložit: ' + contentErr.message);
         await safeLog('SUCCESS', `Uložená nová kniha: ${title} (Auto-přiřazení: ${isAutoAssigned ? 'ANO' : 'NE'}, Cena: ${payload.price_coins} mincí)`);
         setTitle(''); setAuthor(''); setContent(''); setFakeLikes(0); setIsAutoAssigned(false); setPriceCoins(150); setGenresInput(''); setDescriptionInput('');
@@ -1366,13 +1364,13 @@ export const AdminDashboard = () => {
   const startEditBook = async (book) => {
     const [{ data, error }, { data: contentRow, error: contentErr }] = await Promise.all([
       supabase.from('books').select('fake_likes, is_auto_assigned, price_coins, genres, description').eq('id', book.id).single(),
-      supabase.from('book_contents').select('content').eq('book_id', book.id).maybeSingle()
+      fetchBookText(supabase, book.id).then((r) => ({ data: r, error: r.error }))
     ]);
     if (!error && data && !contentErr) {
       setEditingBookId(book.id);
       setTitle(book.title);
       setAuthor(book.author);
-      setContent(contentRow?.content || '');
+      setContent(contentRow?.text || '');
       setFakeLikes(data.fake_likes || 0);
       setIsAutoAssigned(data.is_auto_assigned || false);
       setPriceCoins(data.price_coins ?? 150);
@@ -1766,6 +1764,7 @@ export const AdminDashboard = () => {
       {/* 2. ZÁLOŽKA: SPRÁVA KNIH */}
       {activeTab === 'books' && (
         <div className="space-y-6">
+        <BookTextStoragePanel client={supabase} onLog={safeLog} />
         {books.some(b => !b.authorId && !b.is_auto_assigned) && (
           <Card>
             <h3 className="text-sm font-black uppercase tracking-wider mb-1 flex items-center gap-2 text-red-500">
@@ -1995,7 +1994,9 @@ export const AdminDashboard = () => {
                         <button 
                           onClick={async () => { 
                             if(confirm(`Smazat knihu "${b.title}" natvrdo z DB? Tato akce smaže i existující uživatelské licence!`)) { 
-                              await supabase.from('books').delete().eq('id', b.id); 
+                              const { error: delErr } = await supabase.from('books').delete().eq('id', b.id);
+                              if (delErr) { alert('Smazání se nepovedlo: ' + delErr.message); return; }
+                              await removeBookText(supabase, b.id);
                               await safeLog('DANGER', `Smazána kniha z databáze: ${b.title}`);
                               refreshData(); 
                             } 
