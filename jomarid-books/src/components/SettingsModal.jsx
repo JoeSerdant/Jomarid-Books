@@ -918,8 +918,14 @@ const InboxTab = () => {
       setItems([]);
       return;
     }
+    // Jiná odpověď než seznam (null je prázdná schránka) nesmí shodit stránku ani se tvářit jako prázdná schránka.
+    if (data != null && !Array.isArray(data)) {
+      setError('Oznámení se nepodařilo načíst. Zkus to za chvíli.');
+      setItems([]);
+      return;
+    }
     setError('');
-    const list = Array.isArray(data) ? data : []; // jiná odpověď než seznam (chyba funkce) nesmí shodit stránku
+    const list = data || [];
     setItems(list);
     if (markRead && list.some(n => !n.read_at)) {
       const { error: markError } = await supabase.rpc('mark_notifications_read');
