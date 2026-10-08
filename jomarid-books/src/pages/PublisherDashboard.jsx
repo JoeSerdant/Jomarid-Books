@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { fetchBookText, saveBookText } from '../bookText/bookText';
+import BookTextField from '../components/BookTextField';
 import { usePagedList } from '../browse/usePagedList';
 import { LoadMore } from '../browse/BrowseParts';
 import {
@@ -579,12 +580,6 @@ export const PublisherDashboard = () => {
     else showNotice('error', 'Čtenář s tímhle e-mailem nebyl nalezen. Zkontroluj, že je to e-mail, kterým se registroval.');
   };
 
-  const textStats = useMemo(() => {
-    const t = bookContent.trim();
-    const words = t ? t.split(/\s+/).length : 0;
-    return { chars: bookContent.length, words, minutes: Math.max(1, Math.round(words / 200)) };
-  }, [bookContent]);
-
   const startedBase = totals.started || 0;
 
   return (
@@ -729,7 +724,7 @@ export const PublisherDashboard = () => {
 
       {/* ============================ VYDAT / UPRAVIT ============================ */}
       {tab === 'editor' && (
-        <Card className="max-w-2xl">
+        <Card className="max-w-4xl">
           <h3 className="font-black mb-4 text-base uppercase tracking-tight flex items-center gap-2">
             <PlusCircle size={18} style={{ color: 'var(--bg-primary)' }} /> {editingBookId ? 'Upravit knihu' : 'Vydat novou knihu'}
           </h3>
@@ -751,12 +746,8 @@ export const PublisherDashboard = () => {
               <label htmlFor="book-desc" style={mutedStyle} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Popis (zobrazí se v detailu knihy před koupí)</label>
               <textarea id="book-desc" rows={3} maxLength={2000} value={descriptionInput} onChange={(e) => setDescriptionInput(e.target.value)} placeholder="Krátký popis, co čtenáře čeká..." style={inputStyle} className="w-full p-3 border rounded-xl font-bold outline-none text-sm resize-none" />
             </div>
-            <div className="space-y-1">
-              <label htmlFor="book-text" style={mutedStyle} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Text knihy</label>
-              <textarea id="book-text" rows={8} value={bookContent} onChange={(e) => setBookContent(e.target.value)} required
-                placeholder={editingBookId ? 'Text knihy (ponech, nebo přepiš celý)...' : 'Sem vlož kompletní text knihy...'} style={inputStyle} className="w-full p-3.5 border rounded-xl font-bold outline-none resize-y text-sm" />
-              {textStats.words > 0 && <p data-testid="text-stats" style={mutedStyle} className="text-[0.6875rem] m-0 pl-1 opacity-80">{fmt(textStats.words)} slov · {fmt(textStats.chars)} znaků · čtení asi {fmt(textStats.minutes)} min</p>}
-            </div>
+            <BookTextField id="book-text" value={bookContent} onChange={setBookContent} required labelStyle={mutedStyle}
+              placeholder={editingBookId ? 'Text knihy (ponech, nebo přepiš celý)...' : 'Sem vlož kompletní text knihy, nebo přetáhni soubor .txt / .md...'} />
             {!editingBookId && (
               <label className="flex items-start gap-3 cursor-pointer">
                 <input type="checkbox" checked={publishNow} onChange={(e) => setPublishNow(e.target.checked)} className="mt-1" style={{ accentColor: 'var(--bg-primary)' }} />
