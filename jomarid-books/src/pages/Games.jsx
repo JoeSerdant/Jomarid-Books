@@ -250,7 +250,7 @@ export const GameLauncher = ({ game }) => {
       </Link>
       <div 
         style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} 
-        className="border rounded-3xl p-8 md:p-12 shadow-xl flex flex-col items-center justify-center gap-6"
+        className="border rounded-2xl p-8 md:p-12 shadow-lg flex flex-col items-center justify-center gap-6"
       >
         <div className="w-20 h-20 bg-purple-500/10 text-purple-500 rounded-full flex items-center justify-center animate-bounce">
           <GameIcon size={40} />

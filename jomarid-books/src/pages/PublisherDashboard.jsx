@@ -87,9 +87,9 @@ const Delta = ({ current, previous }) => {
 
 const Kpi = ({ icon: Icon, label, value, sub, children, testId }) => (
   <Card className="flex flex-col gap-1.5 min-w-0" data-testid={testId}>
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 min-w-0">
       <span style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--bg-primary)' }} className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"><Icon size={16} /></span>
-      <p style={mutedStyle} className="text-[0.625rem] font-black uppercase tracking-wider m-0 opacity-70 leading-tight">{label}</p>
+      <p style={mutedStyle} className="text-[0.625rem] font-black uppercase tracking-wider m-0 opacity-70 leading-tight min-w-0 break-words">{label}</p>
     </div>
     <p className="text-2xl font-black m-0 leading-none tabular-nums break-words">{value}</p>
     {sub && <p style={mutedStyle} className="text-[0.6875rem] m-0 opacity-80 leading-snug">{sub}</p>}

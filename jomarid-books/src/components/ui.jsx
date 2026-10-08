@@ -17,5 +17,5 @@ export const Button = ({ children, variant = 'primary', className = '', ...props
 };
 
 export const Card = ({ children, className = '' }) => (
- <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className={`border rounded-xl shadow-xl p-6 transition-all ${className}`}>{children}</div>
+ <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className={`border rounded-2xl shadow-sm p-5 sm:p-6 transition-all ${className}`}>{children}</div>
 );

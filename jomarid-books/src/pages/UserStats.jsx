@@ -495,7 +495,7 @@ export const UserStats = () => {
       </div>
 
      {/* HLAVNÍ PROFILOVÁ HLAVIČKA (TMAVÝ KONZISTENTNÍ VZHLED) */}
-<div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="border rounded-3xl p-6 md:p-8 shadow-sm mb-8 relative overflow-hidden">
+<div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="border rounded-2xl p-6 md:p-8 shadow-sm mb-8 relative overflow-hidden">
   <div style={{ backgroundColor: 'var(--bg-primary)' }} className="absolute -right-10 -top-10 w-40 h-40 opacity-10 rounded-full blur-2xl"></div>
   
   <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
