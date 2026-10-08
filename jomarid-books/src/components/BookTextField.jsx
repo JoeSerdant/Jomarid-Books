@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FileText, Maximize2, Minimize2, Upload } from 'lucide-react';
 import { readTextFile, mergeImported } from '../bookText/importText';
 
@@ -16,25 +16,51 @@ export default function BookTextField({ id, value, onChange, placeholder, requir
   const [pending, setPending] = useState(null); // { name, text } čeká na volbu nahradit / připojit
   const area = useRef(null);
   const picker = useRef(null);
+  const wrap = useRef(null);
+  const toggle = useRef(null);
   const depth = useRef(0);
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const alive = useRef(true);
+  const reads = useRef(0); // číslo posledního čtení souboru: starší, pomalejší čtení se zahodí
 
+  // Po odpojení (třeba přepnutí na jinou knihu) se výsledek rozečteného souboru už nepoužije.
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+
+  // Celá obrazovka je modální okno: Tab zůstává uvnitř, stránka pod ním se neposouvá a po zavření se fokus vrátí na tlačítko.
   useEffect(() => {
     if (!full) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') setFull(false); };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e) => {
+      if (e.key === 'Escape') { setFull(false); return; }
+      if (e.key !== 'Tab' || !wrap.current) return;
+      const items = Array.from(wrap.current.querySelectorAll('button:not([disabled]), textarea, input:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter((el) => el.offsetParent !== null);
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (!wrap.current.contains(active)) { e.preventDefault(); first.focus(); }
+      else if (e.shiftKey && active === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+    };
     window.addEventListener('keydown', onKey);
     area.current?.focus();
-    return () => window.removeEventListener('keydown', onKey);
+    const opener = toggle.current;
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prevOverflow; opener?.focus(); };
   }, [full]);
 
   const take = async (file) => {
+    const mine = ++reads.current;
     setError('');
     const res = await readTextFile(file);
+    if (!alive.current || mine !== reads.current) return;
     if (res.error) { setError(res.error); return; }
-    if (!value.trim()) onChange(res.text); else setPending({ name: file.name, text: res.text });
+    if (!valueRef.current.trim()) onChange(res.text); else setPending({ name: file.name, text: res.text }); // rozhoduje aktuální obsah pole, ne ten z doby výběru souboru
   };
   const apply = (mode) => { onChange(mergeImported(value, pending.text, mode)); setPending(null); };
 
-  const words = value.trim() ? value.trim().split(/\s+/).length : 0;
+  const words = useMemo(() => { const t = value.trim(); return t ? t.split(/\s+/).length : 0; }, [value]);
   const minutes = Math.max(1, Math.round(words / 200));
 
   const onDrop = (e) => {
@@ -46,19 +72,20 @@ export default function BookTextField({ id, value, onChange, placeholder, requir
   };
 
   const box = full
-    ? 'fixed inset-0 z-[60] flex flex-col gap-2 p-3 sm:p-5'
+    ? 'fixed inset-0 z-[60] flex flex-col gap-2 p-3 sm:p-5 !m-0'
     : 'space-y-1';
   const area_h = full ? 'flex-1 min-h-0' : 'h-[45vh] min-h-[16rem] sm:h-[60vh] sm:min-h-[22rem]';
 
   return (
-    <div className={box} style={full ? { backgroundColor: 'var(--bg-card)', color: 'var(--text-body)' } : undefined}>
+    <div ref={wrap} className={box} style={full ? { backgroundColor: 'var(--bg-card)', color: 'var(--text-body)' } : undefined}
+      {...(full ? { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Editor textu knihy' } : {})}>
       <div className="flex items-center justify-between gap-2">
         <label htmlFor={id} style={labelStyle} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Text knihy</label>
         <div className="flex items-center gap-1.5">
           <button type="button" onClick={() => picker.current?.click()} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="px-2.5 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-black uppercase tracking-wider inline-flex items-center gap-1.5">
             <Upload size={12} /> Načíst ze souboru
           </button>
-          <button type="button" onClick={() => setFull((f) => !f)} aria-pressed={full} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="px-2.5 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-black uppercase tracking-wider inline-flex items-center gap-1.5">
+          <button type="button" ref={toggle} onClick={() => setFull((f) => !f)} aria-pressed={full} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="px-2.5 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-black uppercase tracking-wider inline-flex items-center gap-1.5">
             {full ? <><Minimize2 size={12} /> Zavřít celou obrazovku</> : <><Maximize2 size={12} /> Celá obrazovka</>}
           </button>
         </div>

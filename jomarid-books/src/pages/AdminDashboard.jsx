@@ -1891,7 +1891,7 @@ export const AdminDashboard = () => {
                 </div>
 
                 <BookTextField
-                  id="admin-book-text" value={content} onChange={setContent} required labelStyle={{ color: 'var(--text-muted)' }}
+                  key={editingBookId || 'nova-kniha'} id="admin-book-text" value={content} onChange={setContent} required labelStyle={{ color: 'var(--text-muted)' }}
                   placeholder="Sem vložte čistý text knihy, kapitoly nebo markdown, nebo přetáhněte soubor .txt / .md..."
                 />
                 
