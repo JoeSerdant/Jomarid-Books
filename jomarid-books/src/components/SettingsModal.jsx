@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, User, ShieldCheck, Palette, Database, Check, Loader2, Download, BookOpen, RotateCcw, Bell, EyeOff, MessageCircle, UserCog, Gift, X, ClipboardCheck, AlertTriangle, Info, RefreshCw, Compass, Play } from 'lucide-react';
+import { Smartphone, Share, ArrowLeft, User, ShieldCheck, Palette, Database, Check, Loader2, Download, BookOpen, RotateCcw, Bell, EyeOff, MessageCircle, UserCog, Gift, X, ClipboardCheck, AlertTriangle, Info, RefreshCw, Compass, Play } from 'lucide-react';
 import { useAuth, useTheme } from '../contexts/AuthContext';
 import { supabase, verifyPassword, validateNewPassword, mapAuthError } from '../lib/supabase';
 import { BOOK_BADGES } from '../constants/badges';
@@ -19,6 +19,8 @@ import { readLibraryPrefs, writeLibraryPref } from '../browse/browseStore';
 import { SORT_OPTIONS, STATUS_FILTERS } from '../browse/libraryModel';
 import { useSyncStatus } from '../settings/settingsSyncStore';
 import { APP_VERSION_LABEL } from '../appInfo';
+import { useInstallState, promptInstall } from '../pwa/install';
+import { whenOfflineReady, resetApp } from '../pwa/register';
 
 // ---- Sdílené stavební prvky nastavení ----
 const Section = ({ title, description, danger = false, children }) => (
@@ -671,6 +673,65 @@ const AppearanceTab = () => {
   );
 };
 
+// ---- Záložka: Aplikace (instalace jako PWA, offline obal, verze) ----
+const AppTab = () => {
+  const { installed, canPrompt, ios } = useInstallState();
+  const [result, setResult] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [offlineReady, setOfflineReady] = useState(null);
+  useEffect(() => { let on = true; whenOfflineReady().then(v => { if (on) setOfflineReady(v); }); return () => { on = false; }; }, []);
+
+  const install = async () => {
+    setBusy(true);
+    const outcome = await promptInstall();
+    setBusy(false);
+    setResult(outcome === 'accepted' ? 'Hotovo, aplikace se instaluje. Najdeš ji v nabídce nebo na ploše.' : outcome === 'dismissed' ? 'Instalace byla zrušena. Spustit ji můžeš kdykoli později.' : '');
+  };
+
+  return (
+    <div className="space-y-4">
+      <Section title="Instalace" description="Spouštěj Jomarid Books jako běžnou aplikaci: z plochy nebo z nabídky, v samostatném okně bez adresního řádku.">
+        {installed ? (
+          <Notice type="success">Aplikace je nainstalovaná. Právě ji používáš jako aplikaci.</Notice>
+        ) : canPrompt ? (
+          <ActionButton busy={busy} onClick={install}><Download size={14} /> Nainstalovat aplikaci</ActionButton>
+        ) : ios ? (
+          <div className="space-y-2">
+            <p className="text-xs font-bold m-0">Na iPhonu a iPadu se appka přidává ručně:</p>
+            <ol style={{ color: 'var(--text-body)' }} className="text-xs m-0 pl-5 space-y-1 leading-relaxed">
+              <li>Klepni na tlačítko <strong>Sdílet</strong> <Share size={12} className="inline align-text-bottom" /> v liště prohlížeče.</li>
+              <li>Vyber <strong>Přidat na plochu</strong>.</li>
+              <li>Potvrď tlačítkem <strong>Přidat</strong>.</li>
+            </ol>
+          </div>
+        ) : (
+          <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">
+            Tvůj prohlížeč teď instalační okno nenabízí. V Chromu a Edge hledej ikonu instalace v adresním řádku nebo položku
+            „Nainstalovat Jomarid Books“ v nabídce, v Safari na Macu to jde přes Soubor a Přidat do Docku. Ve Firefoxu na počítači
+            instalace appek není.
+          </p>
+        )}
+        {/* Výsledek je mimo větve nahoře: po klepnutí instalační okno zmizí (jde použít jen jednou) a s ním by zmizela i zpráva. */}
+        {result && !installed && <Notice>{result}</Notice>}
+      </Section>
+
+      <Section title="Offline a aktualizace" description="Obal aplikace se ukládá do zařízení, takže se otevře i bez připojení. Knihy, mince a postup ve čtení se ale vždy načítají z internetu, aby byly aktuální.">
+        <Notice>
+          {offlineReady === null ? 'Zjišťuji stav...' : offlineReady ? 'Offline kopie obalu aplikace je připravená.' : 'Offline kopie zatím není k dispozici (třeba při prvním otevření nebo v anonymním okně).'}
+        </Notice>
+        <div className="space-y-1.5">
+          <ActionButton variant="ghost" busy={busy} onClick={async () => { setBusy(true); await resetApp(); }}><RefreshCw size={14} /> Obnovit aplikaci</ActionButton>
+          <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">Smaže uloženou offline kopii a načte nejnovější verzi. Použij, kdyby se appka chovala jako po staré verzi.</p>
+        </div>
+      </Section>
+
+      <Section title="O aplikaci">
+        <p className="text-sm font-bold m-0">Jomarid Books · {APP_VERSION_LABEL}</p>
+      </Section>
+    </div>
+  );
+};
+
 // ---- Záložka: Čtečka ----
 const SAMPLE_TEXT = 'Na ranním nebi se pomalu rozhořívala první hvězda. „Dnes půjdeme dál,“ řekla tiše. Nejneobyčejnější na tom všem bylo, že nikdo z nich nepochyboval o tom, že cesta vede správným směrem – a přece se každý z nich ve skrytu duše bál, že nepředstavitelně dlouhá noc teprve začíná.';
 
@@ -886,6 +947,7 @@ const TABS = [
   { id: 'tour', label: 'Prohlídka appky', icon: Compass, needsUser: true },
   { id: 'appearance', label: 'Vzhled', icon: Palette, needsUser: false },
   { id: 'reader', label: 'Čtečka', icon: BookOpen, needsUser: false },
+  { id: 'app', label: 'Aplikace', icon: Smartphone, needsUser: false },
   { id: 'data', label: 'Data a účet', icon: Database, needsUser: true },
 ];
 
@@ -1204,6 +1266,7 @@ export const SettingsPage = () => {
           {active.id === 'tour' && <TourTab user={user} role={role} />}
           {active.id === 'appearance' && <AppearanceTab />}
           {active.id === 'reader' && <ReaderTab />}
+          {active.id === 'app' && <AppTab />}
           {active.id === 'data' && <DataTab user={user} role={role} />}
         </section>
       </div>

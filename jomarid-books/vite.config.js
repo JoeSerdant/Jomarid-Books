@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from 'tailwindcss';
@@ -7,8 +10,37 @@ const scaledSpacing = (spacing) => Object.fromEntries(
   Object.entries(spacing).map(([key, value]) => [key, key === '0' || key === 'px' ? value : `calc(${value} * var(--d, 1))`]),
 );
 
+// PWA: ze šablony src/pwa/sw.template.js vyrobí sw.js. Předem se uloží obal appky a skripty, které stránka potřebuje hned
+// při startu (vstupní soubor a to, co z něj přímo importuje); ostatní (hry, správce, čtečka) se uloží až při prvním použití.
+// Verze service workeru je otisk těchto souborů a souborů ve složce public, takže se mění jen s novým sestavením.
+const pwaPlugin = () => ({
+  name: 'jomarid-pwa',
+  apply: 'build',
+  generateBundle(_options, bundle) {
+    const startup = new Set();
+    const visit = (file) => {
+      const chunk = bundle[file];
+      if (!chunk || chunk.type !== 'chunk' || startup.has(file)) return;
+      startup.add(file);
+      (chunk.imports || []).forEach(visit);
+    };
+    Object.values(bundle).filter((c) => c.type === 'chunk' && c.isEntry).forEach((c) => visit(c.fileName));
+    const publicDir = path.resolve('public');
+    const publicFiles = fs.existsSync(publicDir) ? fs.readdirSync(publicDir).filter((f) => /\.(png|svg|ico|webmanifest)$/.test(f)).sort() : [];
+    const precache = [...startup].sort().map((f) => `/${f}`).concat(publicFiles.map((f) => `/${f}`));
+    const hash = crypto.createHash('sha1');
+    precache.forEach((u) => hash.update(u));
+    publicFiles.forEach((f) => hash.update(fs.readFileSync(path.join(publicDir, f))));
+    const source = fs.readFileSync(path.resolve('src/pwa/sw.template.js'), 'utf8')
+      .replace("'__VERSION__'", JSON.stringify(hash.digest('hex').slice(0, 10)))
+      .replace('[] /* PRECACHE */', JSON.stringify(precache));
+    if (source.includes('__VERSION__') || source.includes('/* PRECACHE */')) throw new Error('Šablona service workeru má nedoplněné místo.');
+    this.emitFile({ type: 'asset', fileName: 'sw.js', source });
+  },
+});
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), pwaPlugin()],
 
   // Tailwind se kompiluje při sestavení (dřív se za běhu stahoval z CDN, což je jen pro vývoj:
   // zpomalovalo to první vykreslení a ukázalo se nastylované až po načtení skriptu).
