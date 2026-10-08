@@ -335,12 +335,13 @@ export const GameLauncher = ({ game }) => {
 
 export const GamesHub = () => {
   return (
-    <div className="max-w-4xl mx-auto px-4 py-16 animate-in fade-in duration-300">
-      <div className="text-center mb-10">
+    <div className="max-w-4xl mx-auto px-4 py-8 sm:py-16 animate-in fade-in duration-300">
+      <div className="text-center mb-6 sm:mb-10">
         <h1 className="text-3xl font-black uppercase tracking-tight mb-2" style={{ color: 'var(--text-body)' }}>Mini-hry 🎮</h1>
         <p style={{ color: 'var(--text-muted)' }} className="text-sm">Krátká odbočka od čtení - a pár Jomarid Coinů navrch za to, že si dnes zahraješ.</p>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+      {/* Na telefonu dva sloupce s kompaktními kartami (pět her pod sebou zabíralo přes 1000 px). */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-6">
         {GAMES.map(game => {
           const GameIcon = game.icon;
           return (
@@ -348,13 +349,13 @@ export const GamesHub = () => {
               key={game.id}
               to={`/games/${game.id}`}
               style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}
-              className="border rounded-2xl p-6 flex flex-col items-center text-center gap-3 no-underline hover:shadow-lg transition-all"
+              className="border rounded-2xl p-3 sm:p-6 flex flex-col items-center text-center gap-2 sm:gap-3 no-underline hover:shadow-lg transition-all"
             >
-              <div className="w-16 h-16 bg-purple-500/10 text-purple-500 rounded-full flex items-center justify-center">
-                <GameIcon size={30} />
+              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-purple-500/10 text-purple-500 rounded-full flex items-center justify-center">
+                <GameIcon className="w-6 h-6 sm:w-[30px] sm:h-[30px]" />
               </div>
-              <h3 className="font-black uppercase text-sm tracking-tight m-0" style={{ color: 'var(--text-body)' }}>{game.title}</h3>
-              <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 opacity-75">{game.tagline}</p>
+              <h3 className="font-black uppercase text-xs sm:text-sm tracking-tight m-0" style={{ color: 'var(--text-body)' }}>{game.title}</h3>
+              <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] sm:text-xs m-0 line-clamp-3 sm:line-clamp-none">{game.tagline}</p>
             </Link>
           );
         })}
