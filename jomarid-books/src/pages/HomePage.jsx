@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { BOOK_BADGES } from '../constants/badges';
@@ -323,7 +323,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
               style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}
               className="border rounded-2xl p-6 shadow-lg"
             >
-              <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] font-semibold uppercase tracking-wide opacity-60 mb-1">
+              <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] font-semibold uppercase tracking-wide mb-1">
                 Vyzkoušejte to hned teď
               </p>
               <h3 className="font-heading text-lg font-bold mb-4">Co vás dnes láká?</h3>
@@ -385,7 +385,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
         ) : visibleBooks.length === 0 ? (
           <p style={{ color: 'var(--text-muted)' }} className="text-sm opacity-70 py-8">
             {featuredBooks.length === 0
-              ? 'Admin zatím nevybral doporučené tituly - zatím tu není co zobrazit.'
+              ? 'Doporučené tituly se právě chystají. Celý katalog uvidíte po přihlášení.'
               : 'V tomhle žánru zrovna nic doporučeného nemáme - zkuste jiný, nebo se podívejte na "Vše".'}
           </p>
         ) : (
@@ -488,7 +488,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
                   <ActiveBadgeIcon size={30} />
                 </div>
                 <div className="min-w-0">
-                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide opacity-60">{activeBadgeData.category}</span>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide">{activeBadgeData.category}</span>
                   <h3 className="font-heading font-bold text-xl mb-1.5">{activeBadgeData.title}</h3>
                   <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed mb-4">{activeBadgeData.description}</p>
                   <div className="flex items-center gap-4">
@@ -752,10 +752,11 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
         <h1 className="font-heading text-2xl md:text-3xl font-extrabold tracking-tight mb-1">Vítej zpátky, {username}</h1>
         <p style={{ color: 'var(--text-muted)' }} className="text-sm mb-8">{visuals.name}</p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-5">
+        {/* Na telefonu: úroveň přes celou šířku a série s mincemi vedle sebe (tři karty pod sebou zabíraly ~410 px). */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
+          <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="col-span-2 sm:col-span-1 border rounded-2xl p-4 sm:p-5">
             <div className="flex items-center justify-between mb-2">
-              <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide opacity-60">Úroveň</span>
+              <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide">Úroveň</span>
               <TrendingUp size={14} style={{ color: 'var(--bg-primary)' }} />
             </div>
             <div className="flex items-end justify-between mb-2">
@@ -767,23 +768,23 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
             </div>
           </div>
 
-          <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-5">
+          <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-4 sm:p-5">
             <div className="flex items-center justify-between mb-2">
-              <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide opacity-60">Streak</span>
+              <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide">Streak</span>
               <Flame size={14} className="text-orange-500" />
             </div>
-            <span className="font-heading text-3xl font-extrabold tabular-nums block mb-1">{streak} {streak === 1 ? 'den' : streak >= 2 && streak <= 4 ? 'dny' : 'dní'}</span>
+            <span className="font-heading text-2xl sm:text-3xl font-extrabold tabular-nums block mb-1">{streak} {streak === 1 ? 'den' : streak >= 2 && streak <= 4 ? 'dny' : 'dní'}</span>
             <span style={{ color: readToday ? '#22c55e' : '#f59e0b' }} className="text-[0.6875rem] font-bold">
               {readToday ? '✓ Dnes už splněno' : streak > 0 ? '⚠ Ještě jste dnes nečetli' : 'Začněte dnes svou sérii'}
             </span>
           </div>
 
-          <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-5">
+          <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-4 sm:p-5">
             <div className="flex items-center justify-between mb-2">
-              <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide opacity-60">Jomarid Coins</span>
+              <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide">Jomarid Coins</span>
               <Coins size={14} className="text-amber-500" />
             </div>
-            <span className="font-heading text-3xl font-extrabold tabular-nums block mb-1">{coins}</span>
+            <span className="font-heading text-2xl sm:text-3xl font-extrabold tabular-nums block mb-1">{coins}</span>
             <span style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] opacity-70">{totalBadges} odznaků odemčeno</span>
           </div>
         </div>
@@ -807,7 +808,7 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
           {continueBook ? (
             <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 flex flex-col justify-between">
               <div>
-                <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide opacity-60 block mb-2">Pokračovat ve čtení</span>
+                <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide block mb-2">Pokračovat ve čtení</span>
                 <h3 className="font-heading font-bold text-lg mb-1">{continueBook.title}</h3>
                 <p style={{ color: 'var(--text-muted)' }} className="text-xs mb-4">{continueBook.author_display || continueBook.author}</p>
                 <div style={{ backgroundColor: 'var(--bg-secondary)' }} className="w-full h-2 rounded-full overflow-hidden mb-2">
@@ -836,7 +837,7 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
           {recommended ? (
             <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 flex flex-col justify-between">
               <div>
-                <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide opacity-60 block mb-2">Doporučeno pro vás</span>
+                <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide block mb-2">Doporučeno pro vás</span>
                 <h3 className="font-heading font-bold text-lg mb-1">{recommended.title}</h3>
                 <p style={{ color: 'var(--text-muted)' }} className="text-xs mb-3">{recommended.author_display || recommended.author}</p>
                 {recommended.description && (
@@ -879,7 +880,7 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
                     <Trophy size={28} />
                   </div>
                   <div>
-                    <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide opacity-60">Naposledy odemčeno</span>
+                    <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide">Naposledy odemčeno</span>
                     <h3 className="font-heading font-bold text-lg">{latestBadge.title}</h3>
                     <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">{latestBadge.description}</p>
                   </div>
@@ -890,7 +891,7 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
                     <Footprints size={28} />
                   </div>
                   <div>
-                    <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide opacity-60">Váš první odznak čeká</span>
+                    <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide">Váš první odznak čeká</span>
                     <h3 className="font-heading font-bold text-lg">První Průzkumník</h3>
                     <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">Přečtěte svou první knihu a odemkněte ho.</p>
                   </div>
@@ -958,13 +959,17 @@ const SupportNote = ({ account = false }) => (
 
 const Footer = () => (
   <footer style={{ borderColor: 'var(--border-color)' }} className="max-w-6xl mx-auto px-4 pt-8 pb-12 border-t flex flex-col sm:flex-row items-center justify-between text-xs gap-4">
-    <div style={{ color: 'var(--text-muted)' }} className="flex flex-col sm:flex-row items-center gap-1 sm:gap-3 opacity-70">
+    <div style={{ color: 'var(--text-muted)' }} className="flex flex-col sm:flex-row items-center gap-1 sm:gap-3">
       <span className="font-semibold">© {new Date().getFullYear()} Jomarid Books</span>
       <span className="hidden sm:inline opacity-40">·</span>
       <span>Digitální čítárna s postupem</span>
       <span className="hidden sm:inline opacity-40">·</span>
       <span>{APP_VERSION_LABEL}</span>
     </div>
+    <nav aria-label="Odkazy v patičce" className="flex items-center gap-4 font-semibold">
+      <Link to="/settings" style={{ color: 'var(--text-body)' }} className="no-underline hover:underline underline-offset-2">Nastavení</Link>
+      <a href="mailto:wwsigmamango@gmail.com" style={{ color: 'var(--text-body)' }} className="no-underline hover:underline underline-offset-2">Kontakt</a>
+    </nav>
     <a
       href="mailto:wwsigmamango@gmail.com"
       style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' }}
