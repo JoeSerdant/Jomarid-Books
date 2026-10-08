@@ -52,15 +52,17 @@ const makeClient = ({ table = {}, files = {}, bucket = true, uploadError = null,
           async upload(path, blob, opts) {
             if (!bucket) return { data: null, error: missing() };
             if (uploadError) return { data: null, error: uploadError };
+            if (opts?.upsert === false && objs.has(path)) return { data: null, error: { message: 'The resource already exists', statusCode: '409' } };
             log.uploads.push({ path, opts });
             const bytes = new Uint8Array(await blob.arrayBuffer());
             objs.set(path, corruptUpload ? bytes.slice(0, Math.max(0, bytes.length - 1)) : bytes);
             return { data: { path }, error: null };
           },
           async remove(paths) { paths.forEach((p) => objs.delete(p)); return { data: [], error: null }; },
-          async list(_p, { search = '' } = {}) {
+          async list(_p, { search = '', limit = 100, offset = 0 } = {}) {
             if (!bucket) return { data: null, error: missing() };
-            return { data: [...objs.keys()].filter((k) => k.includes(search)).map((name) => ({ name, id: name })), error: null };
+            log.lists = (log.lists || 0) + 1;
+            return { data: [...objs.keys()].filter((k) => k.includes(search)).slice(offset, offset + limit).map((name) => ({ name, id: name })), error: null };
           },
         };
       },
@@ -112,6 +114,13 @@ test('čtení bez bucketu spadne na tabulku', async () => {
   assert.equal((await fetchBookText(c, A)).text, 'z tabulky');
 });
 
+test('čtení: výpadek Storage nenačte zastaralou kopii z tabulky', async () => {
+  const c = makeClient({ table: { [A]: 'zastaralý text' } });
+  c.storage.from = () => ({ download: async () => ({ data: null, error: { message: 'Failed to fetch' } }) });
+  const r = await fetchBookText(c, A);
+  assert.equal(r.text, null); assert.equal(r.source, 'none'); assert.ok(r.error);
+});
+
 test('čtení: chyba sítě ve Storage a prázdná tabulka se ohlásí jako chyba', async () => {
   const c = makeClient();
   c.storage.from = () => ({ download: async () => ({ data: null, error: { message: 'Failed to fetch' } }) });
@@ -151,8 +160,17 @@ test('findBookTexts: najde jen přesný název, bez bucketu nic a bez chyby', as
   const none = await findBookTexts(makeClient({ bucket: false }), [A, B]);
   assert.equal(none.found.size, 0); assert.equal(none.complete, true);
   assert.equal((await findBookTexts({}, [A])).complete, true);
-  const big = await findBookTexts(c, Array.from({ length: 130 }, (_, i) => `id${i}`));
-  assert.equal(big.complete, false); // víc knih než strop: nepředstírá úplnost
+});
+
+test('findBookTexts: stovky knih se ověří výpisem po stránkách, ne ztrátou upozornění', async () => {
+  const ids = Array.from({ length: 2600 }, (_, i) => `00000000-0000-0000-0000-${String(i).padStart(12, '0')}`);
+  const files = Object.fromEntries(ids.filter((_, i) => i % 2 === 0).map((id) => [`${id}.txt`, 'x']));
+  const c = makeClient({ files });
+  const r = await findBookTexts(c, ids);
+  assert.equal(r.complete, true);
+  assert.equal(r.found.size, 1300);
+  assert.ok(r.found.has(ids[0]) && !r.found.has(ids[1]));
+  assert.ok(c.log.lists <= 3); // 1300 souborů = 2 stránky, ne 2600 dotazů
 });
 
 test('seznam id ze staré tabulky po stránkách', async () => {
@@ -173,6 +191,19 @@ test('přesun jedné knihy: nová, už přesunutá, konflikt, prázdná, poškoz
   assert.equal((await migrateOneBookText(bad, A)).status, 'verify_failed');
   const nob = makeClient({ table: { [A]: 'abc' }, bucket: false });
   assert.equal((await migrateOneBookText(nob, A)).status, 'error');
+});
+
+test('přesun nepřepíše úpravu uloženou během přesunu (create-only)', async () => {
+  const c = makeClient({ table: { [A]: 'starý text' } });
+  const realFrom = c.storage.from;
+  let first = true;
+  c.storage.from = (name) => {
+    const st = realFrom(name);
+    return { ...st, download: async (p) => { const r = await st.download(p); if (first) { first = false; c.objs.set(p, enc('NOVÁ úprava')); } return r; } };
+  };
+  const r = await migrateOneBookText(c, A);
+  assert.equal(r.status, 'conflict');
+  assert.equal(new TextDecoder().decode(c.objs.get(`${A}.txt`)), 'NOVÁ úprava');
 });
 
 test('hromadný přesun nic nemaže a hlásí průběh', async () => {

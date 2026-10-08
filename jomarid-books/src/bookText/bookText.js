@@ -39,10 +39,20 @@ export const downloadBookText = async (client, bookId) => {
   try { return { text: await decodeExact(res.data) }; } catch (e) { return { error: e }; }
 };
 
-/** Nahraje text do Storage (přepíše existující soubor). Bez mezipaměti, ať editor nikdy nenačte starší verzi. */
-export const uploadBookText = async (client, bookId, text) => {
+/** Soubor už ve Storage je (nahrání bez přepisu skončí chybou 409). */
+export const isAlreadyExists = (error) => {
+  if (!error) return false;
+  const status = String(error.statusCode ?? error.status ?? '');
+  return status === '409' || /already exists|duplicate/i.test(String(error.message || ''));
+};
+
+/**
+ * Nahraje text do Storage. Bez mezipaměti, ať editor nikdy nenačte starší verzi.
+ * upsert=false (přesun) soubor jen vytvoří a existující nepřepíše, takže nemůže smazat novější úpravu.
+ */
+export const uploadBookText = async (client, bookId, text, { upsert = true } = {}) => {
   try {
-    const { error } = await store(client).upload(bookTextPath(bookId), new Blob([text], { type: MIME }), { upsert: true, contentType: MIME, cacheControl: '0' });
+    const { error } = await store(client).upload(bookTextPath(bookId), new Blob([text], { type: MIME }), { upsert, contentType: MIME, cacheControl: '0' });
     return { error: error || null };
   } catch (e) { return { error: e }; }
 };
@@ -60,10 +70,12 @@ const readTableText = async (client, bookId) => {
 export const fetchBookText = async (client, bookId) => {
   const fromStore = await downloadBookText(client, bookId);
   if (typeof fromStore.text === 'string') return { text: fromStore.text, source: 'storage', error: null };
+  // Stará tabulka je záloha jen pro knihu, kterou ve Storage opravdu nemáme (soubor nebo bucket chybí). Při výpadku
+  // Storage by se jinak načetl případně zastaralý text a jeho uložení by přepsalo novější verzi.
+  if (!fromStore.missing && !isBucketMissing(fromStore.error)) return { text: null, source: 'none', error: fromStore.error || new Error('Text knihy se nepodařilo načíst.') };
   const fromTable = await readTableText(client, bookId);
   if (typeof fromTable.text === 'string') return { text: fromTable.text, source: 'table', error: null };
-  const error = fromTable.error || (fromStore.missing ? null : fromStore.error) || null; // chybějící soubor není chyba
-  return { text: null, source: 'none', error };
+  return { text: null, source: 'none', error: fromTable.error || null };
 };
 
 /**
@@ -88,32 +100,37 @@ export const removeBookText = async (client, bookId) => {
   try { await store(client).remove([bookTextPath(bookId)]); } catch { /* nevadí */ }
 };
 
+const LIST_PAGE = 1000;
+const LIST_MAX_PAGES = 50;
+
 /**
  * Které z knih mají text ve Storage. Vrací { found:Set, complete }. complete=false: nepodařilo se ověřit všechny.
+ * Pár knih se ověří jednotlivě, víc se zjistí z výpisu bucketu po stránkách (jeden dotaz na 1000 souborů).
  * Bucket, který neexistuje, znamená "nic ve Storage" (complete zůstává true).
  */
-export const findBookTexts = async (client, ids, { concurrency = 6, max = 120 } = {}) => {
+export const findBookTexts = async (client, ids, { few = 25 } = {}) => {
   const found = new Set();
-  if (!ids.length) return { found, complete: true };
-  if (!client?.storage) return { found, complete: true };
-  const todo = ids.slice(0, max);
-  let complete = ids.length <= max;
-  let next = 0;
-  let stop = false;
-  const worker = async () => {
-    while (!stop && next < todo.length) {
-      const id = todo[next++];
+  if (!ids.length || !client?.storage) return { found, complete: true };
+  if (ids.length <= few) {
+    let complete = true;
+    for (const id of ids) {
       let res;
       try { res = await store(client).list('', { limit: 5, search: bookTextPath(id) }); } catch (e) { res = { error: e }; }
-      if (res.error) {
-        if (isBucketMissing(res.error)) stop = true; else complete = false;
-        continue;
-      }
+      if (res.error) { if (isBucketMissing(res.error)) break; complete = false; continue; }
       if ((res.data || []).some((o) => o?.name === bookTextPath(id))) found.add(id);
     }
-  };
-  await Promise.all(Array.from({ length: Math.min(concurrency, todo.length) }, worker));
-  return { found, complete };
+    return { found, complete };
+  }
+  const wanted = new Set(ids.map(bookTextPath));
+  for (let page = 0; page < LIST_MAX_PAGES; page++) {
+    let res;
+    try { res = await store(client).list('', { limit: LIST_PAGE, offset: page * LIST_PAGE }); } catch (e) { res = { error: e }; }
+    if (res.error) return { found, complete: isBucketMissing(res.error) };
+    const rows = res.data || [];
+    rows.forEach((o) => { if (wanted.has(o?.name)) found.add(o.name.slice(0, -4)); });
+    if (rows.length < LIST_PAGE) return { found, complete: true };
+  }
+  return { found, complete: false }; // výpis je delší než strop: co se nenašlo, není potvrzené
 };
 
 /* ---------- Hromadný přesun ze staré tabulky (správce) ---------- */
@@ -149,7 +166,8 @@ export const migrateOneBookText = async (client, bookId) => {
   const existing = await downloadBookText(client, bookId);
   if (typeof existing.text === 'string') return { status: existing.text === row.text ? 'already' : 'conflict' };
   if (!existing.missing) return { status: 'error', error: existing.error };
-  const up = await uploadBookText(client, bookId, row.text);
+  const up = await uploadBookText(client, bookId, row.text, { upsert: false }); // bez přepisu: mezitím uložená úprava se neztratí
+  if (isAlreadyExists(up.error)) return { status: 'conflict' };
   if (up.error) return { status: 'error', error: up.error };
   const back = await downloadBookText(client, bookId);
   if (typeof back.text !== 'string') return { status: 'verify_failed', error: back.error };

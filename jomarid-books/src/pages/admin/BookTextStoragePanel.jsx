@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Card } from '../../components/ui';
 import {
@@ -28,6 +28,9 @@ export default function BookTextStoragePanel({ client, onLog }) {
   const [overview, setOverview] = useState(null);
   const [message, setMessage] = useState(null);
   const abortRef = useRef(null);
+
+  // Přepnutí záložky panel odpojí: běžící přesun nebo úklid se přeruší (jinak by běžel bez ovládání a šel spustit podruhé).
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const fail = (error) => setMessage({
     type: 'error',
