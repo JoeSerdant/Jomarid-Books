@@ -164,7 +164,7 @@ export const Navbar = ({ onOpenSearch }) => {
                 className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all"
               >
                 <Library size={14} className="opacity-70" />
-                <span className="text-[0.5625rem] leading-none sm:hidden md:inline md:text-xs md:leading-normal">Knihovna</span>
+                <span className="text-[0.5625rem] leading-none sm:sr-only lg:not-sr-only lg:text-xs lg:leading-normal">Knihovna</span>
               </Link>
               
               <Link 
@@ -174,7 +174,7 @@ export const Navbar = ({ onOpenSearch }) => {
                 className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all"
               >
                 <BarChart3 size={14} className="opacity-70" />
-                <span className="text-[0.5625rem] leading-none sm:hidden md:inline md:text-xs md:leading-normal">Statistiky</span>
+                <span className="text-[0.5625rem] leading-none sm:sr-only lg:not-sr-only lg:text-xs lg:leading-normal">Statistiky</span>
               </Link>
 
               <Link 
@@ -184,7 +184,7 @@ export const Navbar = ({ onOpenSearch }) => {
                 className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all text-purple-600 dark:text-purple-400"
               >
                 <Gamepad2 size={14} className="opacity-80 animate-pulse" />
-                <span className="text-[0.5625rem] leading-none sm:hidden md:inline md:text-xs md:leading-normal">Hry</span>
+                <span className="text-[0.5625rem] leading-none sm:sr-only lg:not-sr-only lg:text-xs lg:leading-normal">Hry</span>
               </Link>
 
               {role === 'nakladatel' && (
@@ -195,7 +195,7 @@ export const Navbar = ({ onOpenSearch }) => {
                   className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all text-emerald-600 dark:text-emerald-400"
                 >
                   <Compass size={14} className="opacity-80" />
-                  <span className="text-[0.5625rem] leading-none sm:hidden md:inline md:text-xs md:leading-normal">Studio</span>
+                  <span className="text-[0.5625rem] leading-none sm:sr-only lg:not-sr-only lg:text-xs lg:leading-normal">Studio</span>
                 </Link>
               )}
 
@@ -211,7 +211,7 @@ export const Navbar = ({ onOpenSearch }) => {
                     <Shield size={14} className="opacity-80" />
                     {pending > 0 && <span data-testid="admin-badge" className="absolute -top-1.5 -right-2.5 min-w-[14px] h-[14px] px-1 rounded-full bg-red-500 text-white text-[0.5625rem] font-black leading-[14px] text-center">{pending > 9 ? '9+' : pending}</span>}
                   </span>
-                  <span className="text-[0.5625rem] leading-none sm:hidden md:inline md:text-xs md:leading-normal">Admin</span>
+                  <span className="text-[0.5625rem] leading-none sm:sr-only lg:not-sr-only lg:text-xs lg:leading-normal">Admin</span>
                 </Link>
               )}
             </div>
