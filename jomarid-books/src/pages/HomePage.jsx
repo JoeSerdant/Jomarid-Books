@@ -6,6 +6,7 @@ import { BOOK_BADGES } from '../constants/badges';
 import { calculateXpMultiplier, calculateLevelAndProgress, getLevelVisuals, calculateGoalMultiplier } from '../constants/leveling';
 import { FaqItem } from '../components/FaqItem';
 import { APP_VERSION_LABEL, APP_VERSION_SHORT } from '../appInfo';
+import { InstallNote, InstallPopup } from '../pwa/InstallParts';
 import {
   Book, BookOpen, ChevronRight, Coins, Flame, Library, Phone,
   ShieldCheck, Sparkles, Zap, Footprints, Scroll,
@@ -275,9 +276,11 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
   return (
     <div style={{ color: 'var(--text-body)' }} className="font-sans">
 
-      <div className="max-w-6xl mx-auto px-4 pt-6">
+      <div className="max-w-6xl mx-auto px-4 pt-6 space-y-3">
         <VersionBanner />
+        <InstallNote />
       </div>
+      <InstallPopup />
 
       {/* ============================================================
           1. HERO - nadpis vlevo, hledání podle žánru napravo (SKUTEČNĚ
@@ -929,8 +932,10 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
 
       <div className="max-w-6xl mx-auto px-4 pb-2 space-y-3">
         <VersionBanner />
+        <InstallNote />
         <SupportNote account />
       </div>
+      <InstallPopup />
 
       <Footer />
     </div>

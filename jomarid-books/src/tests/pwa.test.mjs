@@ -306,3 +306,41 @@ describe('sestavení: co se vkládá do offline úložiště', () => {
     assert.match(read('src/index.jsx'), /import '\.\/sketchy\.css'/);
   });
 });
+
+describe('nabídka instalace na úvodní stránce', () => {
+  let M;
+  const DAY = 24 * 60 * 60 * 1000;
+  const mem = (init = {}, broken = false) => { const m = new Map(Object.entries(init)); const g = () => { if (broken) throw new Error('x'); }; return { getItem: (k) => { g(); return m.has(k) ? m.get(k) : null; }, setItem: (k, v) => { g(); m.set(k, String(v)); } }; };
+  const CAN = { installed: false, canPrompt: true, ios: false };
+  const IOS = { installed: false, canPrompt: false, ios: true };
+  const NONE = { installed: false, canPrompt: false, ios: false };
+
+  test('model se načte', async () => { M = await import('../pwa/installPromptModel.js'); assert.ok(M.shouldShowInstallPopup); });
+  test('ukáže se tomu, kdo appku nemá a může ji nainstalovat (okno prohlížeče i iPhone)', () => {
+    assert.equal(M.shouldShowInstallPopup({ state: CAN, dismissals: { count: 0, at: 0 }, now: 1000 }), true);
+    assert.equal(M.shouldShowInstallPopup({ state: IOS, dismissals: { count: 0, at: 0 }, now: 1000 }), true);
+  });
+  test('neukáže se, když appka už běží nainstalovaná nebo když ji prohlížeč nemůže nainstalovat', () => {
+    assert.equal(M.shouldShowInstallPopup({ state: { installed: true, canPrompt: false, ios: false }, dismissals: { count: 0, at: 0 } }), false);
+    assert.equal(M.shouldShowInstallPopup({ state: NONE, dismissals: { count: 0, at: 0 } }), false);
+    assert.equal(M.shouldShowInstallPopup({ state: null, dismissals: { count: 0, at: 0 } }), false);
+  });
+  test('po prvním „Teď ne“ 7 dní pauza, po dalších 30', () => {
+    const t0 = 1_000_000;
+    assert.equal(M.shouldShowInstallPopup({ state: CAN, dismissals: { count: 1, at: t0 }, now: t0 + 6 * DAY }), false);
+    assert.equal(M.shouldShowInstallPopup({ state: CAN, dismissals: { count: 1, at: t0 }, now: t0 + 7 * DAY }), true);
+    assert.equal(M.shouldShowInstallPopup({ state: CAN, dismissals: { count: 2, at: t0 }, now: t0 + 29 * DAY }), false);
+    assert.equal(M.shouldShowInstallPopup({ state: CAN, dismissals: { count: 2, at: t0 }, now: t0 + 30 * DAY }), true);
+  });
+  test('odmítnutí se ukládá a čte; poškozená hodnota a nedostupné úložiště nic nerozbijí', () => {
+    const s = mem();
+    assert.deepEqual(M.readDismissals(s), { count: 0, at: 0 });
+    M.recordDismissal(s, 5000); M.recordDismissal(s, 9000);
+    assert.deepEqual(M.readDismissals(s), { count: 2, at: 9000 });
+    for (const bad of ['{', 'null', '5', '{"count":"x","at":1}', '{"count":-1,"at":1}', '{"count":1}', '[]']) assert.deepEqual(M.readDismissals(mem({ [M.INSTALL_DISMISS_KEY]: bad })), { count: 0, at: 0 }, bad);
+    const broken = mem({}, true);
+    assert.doesNotThrow(() => M.recordDismissal(broken, 1));
+    assert.deepEqual(M.readDismissals(broken), { count: 0, at: 0 });
+    assert.deepEqual(M.readDismissals(null), { count: 0, at: 0 });
+  });
+});
