@@ -45,3 +45,15 @@ export const enableMessage = (status) => ({
   'no-sw': 'Appka se ještě nenačetla do offline režimu. Zkus to za chvíli, nebo stránku obnov.',
   error: 'Oznámení se nepodařilo zapnout. Zkus to znovu.',
 }[status] || '');
+
+/** Druhy motivačních oznámení (shodují se s db/push-notifications.sql a db/push/send-push.ts): pro ukázky ve Správě. */
+export const PUSH_KINDS = [
+  { kind: 'streak_risk', label: 'Série v ohrožení' },
+  { kind: 'streak_milestone', label: 'Milník série' },
+  { kind: 'comeback', label: 'Návrat po pauze' },
+  { kind: 'continue_book', label: 'Rozečtená kniha' },
+  { kind: 'goal_progress', label: 'Měsíční cíl' },
+  { kind: 'coins_to_spend', label: 'Mince na knihu' },
+  { kind: 'gentle_nudge', label: 'Popostrčení' },
+  { kind: 'new_book', label: 'Nová kniha' },
+];

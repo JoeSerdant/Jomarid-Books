@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Copy, KeyRound, Loader2 } from 'lucide-react';
+import { Copy, KeyRound, Loader2, Send } from 'lucide-react';
 import { Card } from '../components/ui';
-import { VAPID_SETTINGS_KEY } from './pushModel.js';
-import { fetchVapidKey } from './pushClient.js';
+import { PUSH_KINDS, VAPID_SETTINGS_KEY } from './pushModel.js';
+import { fetchVapidKey, sendTestPush } from './pushClient.js';
 import { generateVapidKeys } from './vapid.js';
 
 const btn = 'px-3 py-2 rounded-lg border-none cursor-pointer text-[0.6875rem] font-black uppercase tracking-wider inline-flex items-center gap-1.5 disabled:opacity-50';
@@ -28,6 +28,20 @@ export default function PushAdminCard({ client }) {
   const [busy, setBusy] = useState(false);
   const [keys, setKeys] = useState(null);
   const [error, setError] = useState('');
+  const [preview, setPreview] = useState({ busy: '', text: '', tone: '' });
+
+  const sendPreview = async (kind, label) => {
+    setPreview({ busy: kind, text: '', tone: '' });
+    const res = await sendTestPush(client, kind);
+    setPreview({
+      busy: '',
+      tone: res.ok ? 'ok' : res.reason === 'too-many' ? 'info' : 'error',
+      text: res.ok ? `Ukázka „${label}“ je odeslaná na tvoje zařízení s povolenými oznámeními.`
+        : res.reason === 'too-many' ? 'Počkej pár vteřin před další ukázkou.'
+        : res.reason === 'not-configured' ? 'Server pro oznámení ještě není nastavený (spusť db/push-notifications.sql).'
+        : res.reason === 'forbidden' ? 'Ukázky smí posílat jen správce.' : 'Ukázku se nepodařilo odeslat.',
+    });
+  };
 
   useEffect(() => { let on = true; fetchVapidKey(client).then((r) => { if (on) setSaved(!r.error && !!r.key); }); return () => { on = false; }; }, [client]);
 
@@ -66,6 +80,21 @@ export default function PushAdminCard({ client }) {
           <KeyBox label="Soukromý klíč (VAPID_PRIVATE_KEY)" value={keys.privateKey} />
         </div>
       )}
+      <div className="mt-5 pt-4 border-t" style={{ borderColor: 'var(--border-color)' }}>
+        <h4 className="text-xs font-black uppercase tracking-wider m-0 mb-1">Ukázky motivačních oznámení</h4>
+        <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-1 mb-3 leading-relaxed">
+          Čtenářům chodí nejvýš jedno oznámení denně podle toho, co se hodí (série, rozečtená kniha, cíl...). Tady si každý druh vyzkoušíš s ukázkovými údaji;
+          přijde na tvoje zařízení, kde máš v Nastavení → Oznámení zapnutá oznámení. Texty se pokaždé losují z víc variant.
+        </p>
+        <div className="flex flex-wrap gap-2" data-testid="push-kinds">
+          {PUSH_KINDS.map(({ kind, label }) => (
+            <button key={kind} type="button" onClick={() => sendPreview(kind, label)} disabled={!!preview.busy || !saved} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', border: '1px solid var(--border-color)' }} className={btn}>
+              {preview.busy === kind ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}{label}
+            </button>
+          ))}
+        </div>
+        {preview.text && <p role={preview.tone === 'error' ? 'alert' : 'status'} className="text-xs font-bold mt-3 mb-0" style={{ color: preview.tone === 'error' ? '#ef4444' : 'var(--text-muted)' }}>{preview.text}</p>}
+      </div>
     </Card>
   );
 }

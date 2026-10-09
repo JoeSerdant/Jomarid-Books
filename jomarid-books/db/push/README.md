@@ -42,3 +42,18 @@ Ve vlastnostech funkce **vypni „Verify JWT“** (volá ji databáze s vlastní
 ## 6. Zkouška
 Nastavení → **Oznámení** → **Zapnout oznámení v tomhle zařízení** → **Poslat zkušební oznámení**. Do pár vteřin má přijít oznámení.
 Nepřišlo? Supabase → Edge Functions → `send-push` → **Logs** (a Database → Logs, `net._http_response`).
+
+## 7. Motivační oznámení (série, rozečtená kniha, cíl, novinky)
+Po kroku 1–5 fungují i připomínky ve stylu „série je v ohrožení“. Nic dalšího se nenastavuje, jen musí běžet hodinový plánovač:
+- SQL z kroku 1 ho zapne samo (rozšíření **pg_cron**). Kdyby SQL při spuštění vypsalo, že pg_cron nejde zapnout, zapni ho v Supabase:
+  **Database → Extensions → pg_cron**, pak znovu spusť soubor z kroku 1. Nebo ručně **Integrations → Cron** → nový úkol typu SQL snippet
+  `select public.push_engagement_tick();` každou hodinu.
+- Čtenář dostane **nejvýš jedno oznámení denně**, jen **mezi 16. a 19. hodinou pražského času** (každý má svou hodinu), nikdy v noci.
+  Vybírá se podle toho, co se hodí nejvíc: série v ohrožení → milník série (3, 7, 14, 30, 50, 100, 200, 365 dní) → návrat po pauze (3, 7, 14, 30 dní)
+  → rozečtená kniha → měsíční cíl → mince na novou knihu → jemné popostrčení. Kdo dnes už četl, dostane jen milník.
+- Texty jsou v `db/push/send-push.ts` (funkce `compose`): u každého druhu je víc variant, losují se. Chceš je upravit? Změň texty a funkci znovu nasaď (krok 5).
+- **Nové knihy**: když se v knihovně objeví nová viditelná kniha, všem se pošle jedno oznámení (nejvýš jednou za 6 hodin, ať hromadné vkládání knih
+  nezaplaví telefony). Autor knihy oznámení nedostane.
+- Každý čtenář si připomínky a novinky vypne v **Nastavení → Oznámení** (zaškrtávátko „Připomínky a novinky“). Oznámení z appky (dary, odpovědi správce...) zůstávají.
+- Ukázky: **Správa → Upozornění → Ukázky motivačních oznámení** pošle na tvoje zařízení vzorek každého druhu s ukázkovými údaji.
+- Už máš funkci `send-push` nasazenou z dřívějška? Vlož do ní nový obsah `db/push/send-push.ts` a nasaď znovu, jinak se motivační texty neskládají.

@@ -4,7 +4,7 @@ import { Bell, BellOff, Loader2, Send } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useInstallState } from '../pwa/install.js';
 import { enableMessage, pushSupport } from './pushModel.js';
-import { deviceState, disablePush, enablePush, fetchVapidKey, sendTestPush } from './pushClient.js';
+import { deviceState, disablePush, enablePush, fetchVapidKey, getPushPrefs, sendTestPush, setPushPrefs } from './pushClient.js';
 
 const btn = 'px-3 py-2 rounded-lg border-none cursor-pointer text-xs font-black inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed';
 const solid = { backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' };
@@ -21,8 +21,8 @@ export default function PushSettings({ client = supabase }) {
   const load = useCallback(async () => {
     const support = pushSupport({ win: window, nav: navigator, standalone: installed });
     if (!support.supported) { setState({ support }); return; }
-    const [device, vapid] = await Promise.all([deviceState({ nav: navigator, win: window }), fetchVapidKey(client)]);
-    setState({ support, device, configured: !vapid.error && !!vapid.key });
+    const [device, vapid, prefs] = await Promise.all([deviceState({ nav: navigator, win: window }), fetchVapidKey(client), getPushPrefs(client)]);
+    setState({ support, device, configured: !vapid.error && !!vapid.key, engage: prefs.engage });
   }, [client, installed]);
   useEffect(() => { load(); }, [load]);
 
@@ -47,6 +47,16 @@ export default function PushSettings({ client = supabase }) {
     setMessage(res.ok
       ? { tone: 'ok', text: 'Zkušební oznámení je odeslané, do pár vteřin by mělo dorazit. Nedorazí-li, zkontroluj s správcem nastavení serveru.' }
       : { tone: res.reason === 'too-many' ? 'info' : 'error', text: res.reason === 'too-many' ? 'Počkej chvilku a zkus to znovu.' : res.reason === 'not-configured' ? enableMessage('not-configured') : 'Zkušební oznámení se nepodařilo odeslat.' });
+  };
+
+  const toggleEngage = async (next) => {
+    setState((s) => ({ ...s, engage: next })); // hned vidět; při chybě se vrátí
+    setMessage(null);
+    const res = await setPushPrefs(client, next);
+    if (!res.ok) {
+      setState((s) => ({ ...s, engage: !next }));
+      setMessage({ tone: 'error', text: 'Nastavení se nepodařilo uložit. Zkus to za chvilku znovu.' });
+    }
   };
 
   const wrap = (children) => (
@@ -78,6 +88,15 @@ export default function PushSettings({ client = supabase }) {
         </div>
       ) : (
         <button type="button" onClick={turnOn} disabled={!!busy} style={solid} className={btn}>{busy === 'on' ? <Loader2 size={12} className="animate-spin" /> : <Bell size={12} />} Zapnout oznámení v tomhle zařízení</button>
+      )}
+      {configured && device.permission !== 'denied' && (
+        <label className="flex items-start gap-2 cursor-pointer pt-1" style={{ color: 'var(--text-body)' }}>
+          <input type="checkbox" data-testid="push-engage" checked={state.engage !== false} onChange={(e) => toggleEngage(e.target.checked)} className="mt-0.5 w-4 h-4 shrink-0" style={{ accentColor: 'var(--bg-primary)' }} />
+          <span className="text-xs leading-relaxed">
+            <span className="font-black">Připomínky a novinky</span>
+            <span style={{ color: 'var(--text-muted)' }} className="block">Série čtení, rozečtená kniha, měsíční cíl, mince na novou knihu a nové knihy v knihovně. Nejvýš jedno oznámení denně, vždy odpoledne a večer, nikdy v noci.</span>
+          </span>
+        </label>
       )}
       {message && <Note tone={message.tone === 'error' ? 'error' : undefined}>{message.text}</Note>}
     </>

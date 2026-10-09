@@ -73,11 +73,25 @@ export const cleanupOnLogout = async ({ client, nav, win }) => {
   try { await withTimeout(disablePush({ client, nav, win }), 2500, false); } catch { /* odhlášení se nesmí zablokovat */ }
 };
 
-/** Pošle sobě zkušební oznámení (projde celou cestou: oznámení v databázi -> Edge Function -> zařízení). */
-export const sendTestPush = async (client) => {
-  const { error } = await client.rpc('send_test_push');
+/** Pošle sobě zkušební oznámení (projde celou cestou: oznámení v databázi -> Edge Function -> zařízení).
+ *  S druhem (jen správce) pošle ukázku konkrétního motivačního oznámení s ukázkovými daty. */
+export const sendTestPush = async (client, kind) => {
+  const { error } = kind ? await client.rpc('send_test_push', { p_kind: kind }) : await client.rpc('send_test_push');
   if (!error) return { ok: true };
   if (isMissingFunction(error)) return { ok: false, reason: 'not-configured' };
-  if (/too_many/.test(String(error.message || ''))) return { ok: false, reason: 'too-many' };
+  const msg = String(error.message || '');
+  if (/too_many/.test(msg)) return { ok: false, reason: 'too-many' };
+  if (/forbidden/.test(msg)) return { ok: false, reason: 'forbidden' };
   return { ok: false, reason: 'error' };
+};
+
+/** Motivační oznámení (série, rozečtená kniha, cíl, novinky...) jsou po účtech; bez uloženého nastavení platí „zapnuto“. */
+export const getPushPrefs = async (client) => {
+  const { data, error } = await client.rpc('get_push_prefs');
+  if (error) return { ok: false, reason: isMissingFunction(error) ? 'not-configured' : 'error', engage: true };
+  return { ok: true, engage: data?.engage !== false };
+};
+export const setPushPrefs = async (client, engage) => {
+  const { error } = await client.rpc('set_push_prefs', { p_engage: !!engage });
+  return error ? { ok: false, reason: isMissingFunction(error) ? 'not-configured' : 'error' } : { ok: true };
 };

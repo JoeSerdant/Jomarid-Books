@@ -8,9 +8,9 @@ import path from 'node:path';
 import vm from 'node:vm';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { pushSupport, permissionState, subscriptionRow, sameApplicationServerKey, enableMessage, VAPID_SETTINGS_KEY } from '../push/pushModel.js';
+import { pushSupport, permissionState, subscriptionRow, sameApplicationServerKey, enableMessage, VAPID_SETTINGS_KEY, PUSH_KINDS } from '../push/pushModel.js';
 import { generateVapidKeys, isVapidPublicKey, isVapidPrivateKey, urlBase64ToUint8Array } from '../push/vapid.js';
-import { fetchVapidKey, enablePush, disablePush, cleanupOnLogout, sendTestPush, deviceState } from '../push/pushClient.js';
+import { fetchVapidKey, enablePush, disablePush, cleanupOnLogout, sendTestPush, deviceState, getPushPrefs, setPushPrefs } from '../push/pushClient.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -165,6 +165,37 @@ describe('klient: zapnutí a vypnutí', () => {
     assert.deepEqual(await sendTestPush(makeEnv({ rpcError: { code: 'PGRST202', message: 'x' } }).client), { ok: false, reason: 'not-configured' });
     assert.deepEqual(await sendTestPush(makeEnv({ rpcError: { message: 'jiná' } }).client), { ok: false, reason: 'error' });
   });
+  test('ukázka druhu oznámení (správce): posílá druh; zákaz pro nesprávce a chyby se rozliší', async () => {
+    const e = makeEnv();
+    assert.deepEqual(await sendTestPush(e.client, 'streak_risk'), { ok: true });
+    assert.deepEqual(e.log.rpc, [['send_test_push', { p_kind: 'streak_risk' }]]);
+    assert.deepEqual(await sendTestPush(makeEnv({ rpcError: { message: 'forbidden' } }).client, 'comeback'), { ok: false, reason: 'forbidden' });
+    assert.deepEqual(await sendTestPush(makeEnv({ rpcError: { message: 'too_many' } }).client, 'comeback'), { ok: false, reason: 'too-many' });
+    const plain = makeEnv(); await sendTestPush(plain.client);
+    assert.deepEqual(plain.log.rpc, [['send_test_push', undefined]], 'bez druhu se volá jako dřív');
+  });
+  test('připomínky a novinky: čtení (bez řádku platí zapnuto, chyba nic nevypne) a uložení', async () => {
+    const mk = (data, error = null) => ({ rpc: async (name, args) => ({ data: name === 'get_push_prefs' ? data : null, error, args }) });
+    assert.deepEqual(await getPushPrefs(mk({ engage: true })), { ok: true, engage: true });
+    assert.deepEqual(await getPushPrefs(mk({ engage: false })), { ok: true, engage: false });
+    assert.deepEqual(await getPushPrefs(mk(null)), { ok: true, engage: true });
+    assert.deepEqual(await getPushPrefs(mk(null, { message: 'boom' })), { ok: false, reason: 'error', engage: true });
+    assert.deepEqual(await getPushPrefs(mk(null, { code: 'PGRST202', message: 'x' })), { ok: false, reason: 'not-configured', engage: true });
+    const e = makeEnv();
+    assert.deepEqual(await setPushPrefs(e.client, false), { ok: true });
+    assert.deepEqual(e.log.rpc, [['set_push_prefs', { p_engage: false }]]);
+    assert.deepEqual(await setPushPrefs(makeEnv({ rpcError: { message: 'boom' } }).client, true), { ok: false, reason: 'error' });
+    assert.deepEqual(await setPushPrefs(makeEnv({ rpcError: { code: 'PGRST202', message: 'x' } }).client, true), { ok: false, reason: 'not-configured' });
+  });
+  test('seznam druhů ve Správě odpovídá druhům v Edge Function i v SQL', () => {
+    const sql = read('db/push-notifications.sql'); const edge = read('db/push/send-push.ts');
+    assert.equal(PUSH_KINDS.length, 8);
+    for (const { kind, label } of PUSH_KINDS) {
+      assert.ok(label.length > 3, kind);
+      assert.ok(new RegExp(`when '${kind}' then`).test(sql), `SQL ukázka: ${kind}`);
+      assert.ok(new RegExp(`case '${kind}'`).test(edge), `Edge compose: ${kind}`);
+    }
+  });
 });
 
 // ---- service worker ----
@@ -297,6 +328,128 @@ describe('Edge Function send-push', { skip: !EDGE && 'Node bez podpory TypeScrip
     const none = deps({ listSubscriptions: async () => [] });
     assert.deepEqual(await (await EDGE.handle(req({ audience: 'user', user_id: UID }), none.deps)).json(), { sent: 0, removed: 0, failed: 0, total: 0 });
   });
+  test('motivační oznámení: druh + data se změní na hotový text a cíl v appce, hlavička i značka zůstanou', async () => {
+    const { deps: d, calls } = deps({ rnd: () => 0 });
+    const res = await EDGE.handle(req({ audience: 'user', user_id: UID, kind: 'streak_risk', data: { streak: 5 }, tag: 'e-2026-10-09', url: '/', title: '', body: '' }), d);
+    assert.equal(res.status, 200);
+    const p = calls.sent[0][1];
+    assert.match(p.title, /5 dní v řadě/); assert.match(p.body, /kapitola/); assert.equal(p.url, '/app'); assert.equal(p.tag, 'e-2026-10-09');
+  });
+  test('milník série vede na statistiky, neznámý druh se odmítne, bez druhu platí hotový text', async () => {
+    const { deps: d, calls } = deps({ rnd: () => 0 });
+    await EDGE.handle(req({ audience: 'user', user_id: UID, kind: 'streak_milestone', data: { streak: 7 } }), d);
+    assert.equal(calls.sent[0][1].url, '/stats'); assert.match(calls.sent[0][1].title, /Týden/);
+    const bad = await EDGE.handle(req({ audience: 'user', user_id: UID, kind: 'nesmysl', title: 'x' }), d);
+    assert.equal(bad.status, 400); assert.deepEqual(await bad.json(), { error: 'bad_kind' });
+    calls.sent.length = 0;
+    await EDGE.handle(req({ audience: 'user', user_id: UID, title: 'Ahoj', body: 'B', kind: '' }), d);
+    assert.equal(calls.sent[0][1].title, 'Ahoj');
+  });
+  test('hromadné oznámení o nové knize: příjemci „všichni“, autor se předá k vynechání, nepovolená adresa se nepřebírá', async () => {
+    const { deps: d, calls } = deps({ rnd: () => 0, listSubscriptions: async (a, u, ex) => { calls.listed.push([a, u, ex]); return [{ id: 'a', endpoint: 'https://e/1', p256dh: 'P', auth: 'A' }]; } });
+    const res = await EDGE.handle(req({ audience: 'all', kind: 'new_book', data: { title: 'Ladící', author: 'Autorka' }, exclude_user: UID, url: 'https://evil.example' }), d);
+    assert.equal(res.status, 200);
+    assert.deepEqual(calls.listed, [['all', null, UID]]);
+    assert.match(calls.sent[0][1].body, /Ladící/); assert.equal(calls.sent[0][1].url, '/app');
+    calls.listed.length = 0;
+    await EDGE.handle(req({ audience: 'all', kind: 'new_book', data: {}, exclude_user: 'není-uuid' }), d);
+    assert.deepEqual(calls.listed, [['all', null, null]]);
+  });
+  test('jemné popostrčení: v pondělí, v pátek a o víkendu přibývají vlastní varianty (pražský čas)', async () => {
+    const titles = async (iso) => {
+      const out = new Set();
+      for (let i = 0; i < 40; i += 1) {
+        const { deps: d, calls } = deps({ rnd: () => i / 40, now: () => new Date(iso) });
+        await EDGE.handle(req({ audience: 'user', user_id: UID, kind: 'gentle_nudge' }), d);
+        out.add(calls.sent[0][1].title);
+      }
+      return out;
+    };
+    const mon = await titles('2026-10-12T10:00:00Z'); const fri = await titles('2026-10-09T10:00:00Z'); const sat = await titles('2026-10-10T10:00:00Z'); const wed = await titles('2026-10-07T10:00:00Z');
+    assert.ok(mon.has('Pondělí potřebuje dobrý příběh') && !wed.has('Pondělí potřebuje dobrý příběh'));
+    assert.ok(fri.has('Pátek! Čas na knihu 📚'));
+    assert.ok(sat.has('Víkend voní papírem 📖') && !wed.has('Víkend voní papírem 📖'));
+    assert.equal(wed.size, 8);
+    // 23:30 v neděli UTC je v Praze už pondělí (jiný den, jiná varianta)
+    const late = await titles('2026-10-11T22:30:00Z');
+    assert.ok(late.has('Pondělí potřebuje dobrý příběh'));
+  });
+});
+
+describe('texty oznámení (compose)', { skip: !EDGE && 'Node bez podpory TypeScriptu' }, () => {
+  const SAMPLES = {
+    streak_risk: [{ streak: 1 }, { streak: 2 }, { streak: 3 }, { streak: 6 }, { streak: 7 }, { streak: 29 }, { streak: 30 }, { streak: 400 }],
+    streak_milestone: [3, 7, 14, 30, 50, 100, 200, 365, 12].map((streak) => ({ streak })),
+    comeback: [3, 7, 14, 30, 90].map((days) => ({ days })),
+    continue_book: [{ title: 'Krátká', percent: 3 }, { title: 'Y'.repeat(500), percent: 97 }, { title: '  Více   mezer  ', percent: 50 }],
+    goal_progress: [{ goal: 4, done: 0, remaining: 4 }, { goal: 4, done: 1, remaining: 3 }, { goal: 4, done: 2, remaining: 2 }, { goal: 4, done: 3, remaining: 1 }, { goal: 1, done: 0, remaining: 1 }, { goal: 30, done: 14, remaining: 16 }],
+    coins_to_spend: [{ coins: 1 }, { coins: 3 }, { coins: 250 }],
+    gentle_nudge: [{}],
+    new_book: [{ title: 'Ladící kniha', author: 'Autorka' }, { title: 'T'.repeat(500), author: 'A'.repeat(500) }, { title: 'Bez autora', author: '' }],
+  };
+  // každou variantu jednou projdeme přes rnd 0..1, pro každý den v týdnu
+  const all = () => {
+    const out = [];
+    for (const kind of EDGE.MESSAGE_KINDS) for (const data of SAMPLES[kind]) for (let wd = 0; wd < 7; wd += 1) for (let i = 0; i < 24; i += 1) out.push([kind, data, EDGE.compose(kind, data, () => i / 24, wd)]);
+    return out;
+  };
+  test('všech 8 druhů má vzorky a umí složit text', () => {
+    assert.deepEqual([...EDGE.MESSAGE_KINDS].sort(), Object.keys(SAMPLES).sort());
+    for (const [kind, , m] of all()) assert.ok(m, kind);
+  });
+  test('žádná varianta nepřekročí limity, nemá prázdný text ani „undefined/NaN“ a jde na cestu v appce', () => {
+    for (const [kind, data, m] of all()) {
+      const where = `${kind} ${JSON.stringify(data).slice(0, 60)}`;
+      assert.ok(m.title.length > 3 && m.title.length <= 80, `titulek: ${where}: ${m.title.length}`);
+      assert.ok(m.body.length > 10 && m.body.length <= 200, `text: ${where}: ${m.body.length}`);
+      assert.ok(!/undefined|NaN|null|\[object|\$\{/.test(m.title + m.body), where);
+      assert.match(m.url, /^\/(app|stats)$/, where);
+    }
+  });
+  test('bez rodových tvarů a s tykáním: žádné „jsi/jste/bys/byste“ + příčestí, žádné „(a)“ a „/a“', () => {
+    for (const [kind, , m] of all()) {
+      const t = `${m.title} ${m.body}`;
+      assert.ok(!/(^|\s)(jsi|jste|bys|byste)(\s|$)/i.test(t), `${kind}: ${t}`);
+      assert.ok(!/\((a|la|á)\)|\/(a|la)\b/.test(t), `${kind}: ${t}`);
+      assert.ok(!/(^|\s)(Vy|Vás|Vám|Vaše|Vaši|Váš)\b/.test(t), `vykání: ${kind}: ${t}`);
+    }
+  });
+  test('je z čeho vybírat: aspoň 60 různých titulků a každý druh má několik variant (milníky aspoň po dvou)', () => {
+    const byKind = new Map();
+    for (const [kind, , m] of all()) { if (!byKind.has(kind)) byKind.set(kind, new Set()); byKind.get(kind).add(m.title); }
+    let total = 0;
+    for (const [kind, set] of byKind) { total += set.size; assert.ok(set.size >= 3, `${kind}: ${set.size}`); }
+    assert.ok(total >= 60, `celkem ${total}`);
+    for (const n of [3, 7, 14, 30, 50, 100]) assert.ok(new Set([0, 0.99].map((r) => EDGE.compose('streak_milestone', { streak: n }, () => r).title)).size === 2, `milník ${n}`);
+  });
+  test('série v ohrožení je přizpůsobená délce a správně skloňuje „den/dny/dní“', () => {
+    const first = (n) => EDGE.compose('streak_risk', { streak: n }, () => 0);
+    assert.match(first(1).body, /1 den\b/); assert.match(first(2).body, /2 dny\b/);
+    assert.match(first(5).title, /5 dní/); assert.match(first(11).body + first(11).title, /11 dní/);
+    assert.notEqual(first(1).title, first(40).title);
+  });
+  test('správné skloňování knih a mincí', () => {
+    const body = (kind, data, r = 0) => { const m = EDGE.compose(kind, data, () => r); return `${m.title} | ${m.body}`; };
+    assert.match(body('goal_progress', { goal: 5, done: 2, remaining: 3 }), /3 knihy/);
+    assert.match(body('goal_progress', { goal: 8, done: 2, remaining: 6 }), /6 knih/);
+    assert.match(body('goal_progress', { goal: 5, done: 3, remaining: 2 }), /2 knihy/);
+    assert.match(body('coins_to_spend', { coins: 1 }), /1 mince/); assert.match(body('coins_to_spend', { coins: 3 }), /3 mince/); assert.match(body('coins_to_spend', { coins: 250 }), /250 mincí/);
+  });
+  test('název knihy se zkrátí a v textu je v českých uvozovkách; chybná nebo cizí data text nerozbijí', () => {
+    const m = EDGE.compose('continue_book', { title: 'Z'.repeat(300), percent: 41 }, () => 0);
+    assert.ok(m.title.includes('…') && m.title.length <= 80);
+    assert.match(m.body, /41 %/);
+    for (const junk of [null, undefined, 5, 'text', [], { streak: 'abc' }, { streak: -4 }, { streak: 1e12 }, { streak: {} }]) {
+      for (const kind of EDGE.MESSAGE_KINDS) {
+        const x = EDGE.compose(kind, junk, () => 0.5);
+        assert.ok(x && x.title && x.body && !/NaN|undefined/.test(x.title + x.body), `${kind} ${JSON.stringify(junk)}`);
+      }
+    }
+    assert.equal(EDGE.compose('nesmysl', {}), null); assert.equal(EDGE.compose(undefined, {}), null);
+  });
+  test('rnd mimo rozsah variantu nerozbije (0, 1, záporné, nekonečno)', () => {
+    for (const r of [0, 1, -1, 5, Infinity, NaN]) assert.ok(EDGE.compose('gentle_nudge', {}, () => r), String(r));
+  });
 });
 
 // ---- SQL a návod ----
@@ -319,6 +472,16 @@ describe('SQL a návod pro server', () => {
     assert.match(sql, /if not found then raise exception 'too_many'/);
     assert.ok(!/insert into public\.user_notifications/.test(sql), 'zkouška nesmí zapisovat do schránky oznámení (může mít omezení na druhy)');
   });
+  test('motivační oznámení: plánovač, výběr, odhlášení, soukromé tabulky, hodiny a limit jednoho denně', () => {
+    for (const re of [/push_engagement_tick/, /push_engage_pick/, /cron\.schedule\('push-engagement'/, /Europe\/Prague/, /h < 16 or h > 19/, /get_push_prefs/, /set_push_prefs/, /trg_push_new_book/, /interval '6 hours'/]) assert.match(sql, re);
+    assert.match(sql, /unique|primary key \(user_id, day\)/i, 'jedno oznámení na uživatele a den');
+    assert.match(sql, /alter table public\.push_prefs enable row level security/);
+    assert.match(sql, /alter table public\.push_engage_log enable row level security/);
+    assert.match(sql, /revoke execute on function public\.push_engagement_tick[^;]*from public, anon, authenticated/);
+    assert.match(sql, /revoke execute on function public\.push_engage_pick[^;]*from public, anon, authenticated/);
+    assert.match(sql, /coalesce\(pf\.engage, true\)/, 'kdo si připomínky vypnul, nedostane je');
+    assert.ok(!/insert into public\.user_notifications/.test(sql));
+  });
   test('v souboru nejsou žádná tajemství ani pevná adresa projektu; složka se nejmenuje supabase/', () => {
     assert.ok(!/sb_secret|service_role|BEGIN PRIVATE KEY|vapid_private/i.test(sql));
     assert.ok(!/https:\/\/[a-z0-9]+\.supabase\.co/.test(sql));
@@ -327,6 +490,6 @@ describe('SQL a návod pro server', () => {
   });
   test('návod popisuje všechny kroky včetně vypnutí Verify JWT a tajných hodnot', () => {
     const readme = read('db/push/README.md');
-    for (const re of [/push-notifications\.sql/, /Vygenerovat klíče/, /VAPID_PRIVATE_KEY/, /PUSH_WEBHOOK_SECRET/, /Verify JWT/, /send-push/, /iPhon/]) assert.match(readme, re);
+    for (const re of [/push-notifications\.sql/, /Vygenerovat klíče/, /VAPID_PRIVATE_KEY/, /PUSH_WEBHOOK_SECRET/, /Verify JWT/, /send-push/, /iPhon/, /pg_cron/, /push_engagement_tick/, /Připomínky a novinky/, /nejvýš jedno oznámení denně/]) assert.match(readme, re);
   });
 });
