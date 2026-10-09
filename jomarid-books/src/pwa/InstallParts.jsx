@@ -26,6 +26,7 @@ export const InstallNote = () => {
   if (installed) return null;
   const install = async () => {
     const out = await promptInstall();
+    if (out === 'dismissed') recordDismissal(); // zrušené okno prohlížeče platí jako „Teď ne“ i tady, ať okno hned nevyskočí znovu
     setResult(out === 'accepted' ? 'Hotovo, appka se instaluje. Najdeš ji na ploše nebo v nabídce.' : '');
   };
   return (
@@ -56,13 +57,6 @@ export const InstallPopup = () => {
   const show = ready && !gone && shouldShowInstallPopup({ state, dismissals: readDismissals() });
   const close = () => { recordDismissal(); setGone(true); };
 
-  useEffect(() => {
-    if (!show) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') close(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [show]);
-
   if (!show) return null;
   const install = async () => {
     const out = await promptInstall();
@@ -72,6 +66,7 @@ export const InstallPopup = () => {
     <div
       role="dialog" aria-label="Instalace aplikace" data-testid="install-popup"
       style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)', bottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
+      onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } }} // jen když je fokus v okně: Escape jiného okna (hledání) ho nezavře
       className="fixed left-3 right-3 sm:left-auto sm:right-6 sm:w-[22rem] z-40 border rounded-2xl shadow-xl p-4"
     >
       <button type="button" onClick={close} aria-label="Zavřít" style={{ color: 'var(--text-muted)' }} className="absolute top-2.5 right-2.5 bg-transparent border-none cursor-pointer p-1 flex"><X size={16} /></button>
