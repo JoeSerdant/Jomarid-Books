@@ -2,6 +2,8 @@
 import { isIosDevice } from '../pwa/installModel.js';
 
 export const VAPID_SETTINGS_KEY = 'push_vapid_public'; // site_settings: { key: "<veřejný klíč VAPID>" }
+// Zkušební oznámení se odešle až za tolik vteřin: stihneš appku zavřít, přepnout se jinam nebo zamknout telefon a oznámení opravdu uvidíš.
+export const TEST_PUSH_DELAY_SECONDS = 10;
 
 /**
  * Jde v tomhle prohlížeči zapnout oznámení? reason: 'ok' | 'ios-needs-install' (iPhone a iPad je umí jen v appce přidané na
@@ -50,6 +52,7 @@ export const enableMessage = (status) => ({
 export const PUSH_KINDS = [
   { kind: 'streak_risk', label: 'Série v ohrožení' },
   { kind: 'streak_milestone', label: 'Milník série' },
+  { kind: 'praise', label: 'Pochvala' },
   { kind: 'comeback', label: 'Návrat po pauze' },
   { kind: 'continue_book', label: 'Rozečtená kniha' },
   { kind: 'goal_progress', label: 'Měsíční cíl' },

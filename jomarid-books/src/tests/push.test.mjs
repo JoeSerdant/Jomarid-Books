@@ -7,8 +7,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import crypto from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { pushSupport, permissionState, subscriptionRow, sameApplicationServerKey, enableMessage, VAPID_SETTINGS_KEY, PUSH_KINDS } from '../push/pushModel.js';
+import { pushSupport, permissionState, subscriptionRow, sameApplicationServerKey, enableMessage, VAPID_SETTINGS_KEY, PUSH_KINDS, TEST_PUSH_DELAY_SECONDS } from '../push/pushModel.js';
 import { generateVapidKeys, isVapidPublicKey, isVapidPrivateKey, urlBase64ToUint8Array } from '../push/vapid.js';
 import { fetchVapidKey, enablePush, disablePush, cleanupOnLogout, sendTestPush, deviceState, getPushPrefs, setPushPrefs } from '../push/pushClient.js';
 
@@ -213,6 +214,19 @@ describe('klient: zapnutí a vypnutí', () => {
     const plain = makeEnv(); await sendTestPush(plain.client);
     assert.deepEqual(plain.log.rpc, [['send_test_push', undefined]], 'bez druhu se volá jako dřív');
   });
+  test('zkušební oznámení se zpožděním: předá se jen kladné zpoždění a nejvýš 30 vteřin', async () => {
+    const e = makeEnv();
+    await sendTestPush(e.client, undefined, { delay: TEST_PUSH_DELAY_SECONDS });
+    await sendTestPush(e.client, 'praise', { delay: 10 });
+    await sendTestPush(e.client, 'praise', { delay: 999 });
+    await sendTestPush(e.client, 'praise', { delay: -5 });
+    await sendTestPush(e.client, undefined, { delay: 0 });
+    assert.deepEqual(e.log.rpc, [
+      ['send_test_push', { p_delay: 10 }], ['send_test_push', { p_kind: 'praise', p_delay: 10 }], ['send_test_push', { p_kind: 'praise', p_delay: 30 }],
+      ['send_test_push', { p_kind: 'praise' }], ['send_test_push', undefined],
+    ]);
+    assert.equal(TEST_PUSH_DELAY_SECONDS, 10);
+  });
   test('připomínky a novinky: čtení (bez řádku platí zapnuto, chyba nic nevypne) a uložení', async () => {
     const mk = (data, error = null) => ({ rpc: async (name, args) => ({ data: name === 'get_push_prefs' ? data : null, error, args }) });
     assert.deepEqual(await getPushPrefs(mk({ engage: true })), { ok: true, engage: true });
@@ -228,7 +242,7 @@ describe('klient: zapnutí a vypnutí', () => {
   });
   test('seznam druhů ve Správě odpovídá druhům v Edge Function i v SQL', () => {
     const sql = read('db/push-notifications.sql'); const edge = read('db/push/send-push.ts');
-    assert.equal(PUSH_KINDS.length, 8);
+    assert.equal(PUSH_KINDS.length, 9);
     for (const { kind, label } of PUSH_KINDS) {
       assert.ok(label.length > 3, kind);
       assert.ok(new RegExp(`when '${kind}' then`).test(sql), `SQL ukázka: ${kind}`);
@@ -412,26 +426,61 @@ describe('Edge Function send-push', { skip: !EDGE && 'Node bez podpory TypeScrip
     await EDGE.handle(req({ audience: 'user', user_id: UID, kind: 'new_book', data: { title: 'Ladící', author: 'Autorka' }, url: 'https://evil.example' }), d);
     assert.match(calls.sent[0][1].body, /Ladící/); assert.equal(calls.sent[0][1].url, '/app');
   });
-  test('jemné popostrčení: v pondělí, v pátek a o víkendu přibývají vlastní varianty (pražský čas)', async () => {
+  test('jemné popostrčení: v pondělí, v pátek a o víkendu i podle denní doby přibývají vlastní varianty (pražský čas)', async () => {
     const titles = async (iso) => {
       const out = new Set();
-      for (let i = 0; i < 40; i += 1) {
-        const { deps: d, calls } = deps({ rnd: () => i / 40, now: () => new Date(iso) });
+      for (let i = 0; i < 60; i += 1) {
+        const { deps: d, calls } = deps({ rnd: () => i / 60, now: () => new Date(iso) });
         await EDGE.handle(req({ audience: 'user', user_id: UID, kind: 'gentle_nudge' }), d);
         out.add(calls.sent[0][1].title);
       }
       return out;
     };
     const mon = await titles('2026-10-12T10:00:00Z'); const fri = await titles('2026-10-09T10:00:00Z'); const sat = await titles('2026-10-10T10:00:00Z'); const wed = await titles('2026-10-07T10:00:00Z');
-    assert.ok(mon.has('Pondělí potřebuje dobrý příběh') && !wed.has('Pondělí potřebuje dobrý příběh'));
-    assert.ok(fri.has('Pátek! Čas na knihu 📚'));
+    assert.ok(mon.has('Pondělí zvládneš s dobrým příběhem') && !wed.has('Pondělí zvládneš s dobrým příběhem'));
+    assert.ok(fri.has('Pátek! Čas na knihu 📚') && !wed.has('Pátek! Čas na knihu 📚'));
     assert.ok(sat.has('Víkend voní papírem 📖') && !wed.has('Víkend voní papírem 📖'));
-    assert.equal(wed.size, 8);
-    // 23:30 v neděli UTC je v Praze už pondělí (jiný den, jiná varianta)
+    // 22:30 UTC v neděli je v Praze už pondělí 00:30 (jiný den i denní doba)
     const late = await titles('2026-10-11T22:30:00Z');
-    assert.ok(late.has('Pondělí potřebuje dobrý příběh'));
+    assert.ok(late.has('Pondělí zvládneš s dobrým příběhem'));
   });
-
+  test('denní doba: ráno, přes den a večer mají své varianty (pražský čas, i v zimním čase)', async () => {
+    const titles = async (iso, kind = 'gentle_nudge', data) => {
+      const out = new Set();
+      for (let i = 0; i < 60; i += 1) {
+        const { deps: d, calls } = deps({ rnd: () => i / 60, now: () => new Date(iso) });
+        await EDGE.handle(req({ audience: 'user', user_id: UID, kind, data }), d);
+        out.add(calls.sent[0][1].title);
+      }
+      return out;
+    };
+    const morning = await titles('2026-10-07T07:30:00Z'); // 9:30 v Praze (letní čas)
+    const noon = await titles('2026-10-07T11:30:00Z');    // 13:30
+    const evening = await titles('2026-10-07T17:30:00Z'); // 19:30
+    assert.ok(morning.has('Dobré ráno! ☀️') && !noon.has('Dobré ráno! ☀️') && !evening.has('Dobré ráno! ☀️'));
+    assert.ok(noon.has('Polední pauza s knihou 🥪') && !morning.has('Polední pauza s knihou 🥪'));
+    assert.ok(evening.has('Klidný večer s knihou 🌙') && !noon.has('Klidný večer s knihou 🌙'));
+    const winterMorning = await titles('2026-12-09T08:30:00Z'); // 9:30 v Praze (zimní čas, UTC+1)
+    assert.ok(winterMorning.has('Dobré ráno! ☀️'));
+    const lateStreak = await titles('2026-10-07T19:30:00Z', 'streak_risk', { streak: 5 }); // 21:30
+    assert.ok(lateStreak.has('Ještě to stihneš! 🌟'));
+    const praiseEvening = await titles('2026-10-07T18:30:00Z', 'praise', { streak: 3 });
+    assert.ok(praiseEvening.has('Dobrá práce, teď si odpočiň 🌙') && !(await titles('2026-10-07T10:30:00Z', 'praise', { streak: 3 })).has('Dobrá práce, teď si odpočiň 🌙'));
+  });
+  test('zpoždění zkušebního oznámení: funkce počká po ověření hesla a před odesláním, nejvýš 30 vteřin; neplatné hodnoty = bez čekání', async () => {
+    const waited = [];
+    const { deps: d, calls } = deps({ sleep: async (ms) => { waited.push([ms, calls.sent.length]); } });
+    await EDGE.handle(req({ audience: 'user', user_id: UID, title: 'x', delay_seconds: 10 }), d);
+    assert.deepEqual(waited, [[10000, 0]], 'čeká před odesláním');
+    waited.length = 0;
+    await EDGE.handle(req({ audience: 'user', user_id: UID, title: 'x', delay_seconds: 999 }), d);
+    assert.equal(waited[0][0], 30000);
+    for (const bad of [undefined, 0, -3, 'abc', null, NaN]) { waited.length = 0; await EDGE.handle(req({ audience: 'user', user_id: UID, title: 'x', delay_seconds: bad }), d); assert.equal(waited.length, 0, String(bad)); }
+    waited.length = 0;
+    assert.equal((await EDGE.handle(req({ audience: 'user', user_id: UID, delay_seconds: 10 }, { secret: 'spatne' }), d)).status, 401);
+    assert.equal((await EDGE.handle(req({ audience: 'nikdo', delay_seconds: 10 }), d)).status, 400);
+    assert.equal(waited.length, 0, 'bez hesla ani se špatným příjemcem se nečeká');
+  });
   test('adresa zařízení musí vést na push službu prohlížeče: cizí adresy se nikdy nevolají, jen se smažou', async () => {
     const ok = ['https://fcm.googleapis.com/fcm/send/abc', 'https://updates.push.services.mozilla.com/wpush/v2/x', 'https://web.push.apple.com/Q', 'https://wns2-par02p.notify.windows.com/w/?token=x', 'https://android.googleapis.com/gcm/send/x', 'https://FCM.GOOGLEAPIS.COM:443/fcm/send/x'];
     const bad = ['https://evil.example/fcm.googleapis.com/', 'https://fcm.googleapis.com.evil.example/x', 'https://evilfcm.googleapis.com.evil.example/x', 'https://fcm.googleapis.com@evil.example/x', 'https://evil.example#.fcm.googleapis.com/', 'http://fcm.googleapis.com/x', 'https://fcm.googleapis.com:8443/x', 'https://127.0.0.1/x', 'https://localhost/x', 'https://169.254.169.254/latest/meta-data', 'https://fcm.googleapis.com', '', null, 5, 'https://fcm.googleapis.com/' + 'x'.repeat(2000)];
@@ -477,6 +526,7 @@ describe('texty oznámení (compose)', { skip: !EDGE && 'Node bez podpory TypeSc
   const SAMPLES = {
     streak_risk: [{ streak: 1 }, { streak: 2 }, { streak: 3 }, { streak: 6 }, { streak: 7 }, { streak: 29 }, { streak: 30 }, { streak: 400 }],
     streak_milestone: [3, 7, 14, 30, 50, 100, 200, 365, 12].map((streak) => ({ streak })),
+    praise: [0, 1, 2, 5, 40].map((streak) => ({ streak })),
     comeback: [3, 7, 14, 30, 90].map((days) => ({ days })),
     continue_book: [{ title: 'Krátká', percent: 3 }, { title: 'Y'.repeat(500), percent: 97 }, { title: '  Více   mezer  ', percent: 50 }],
     goal_progress: [{ goal: 4, done: 0, remaining: 4 }, { goal: 4, done: 1, remaining: 3 }, { goal: 4, done: 2, remaining: 2 }, { goal: 4, done: 3, remaining: 1 }, { goal: 1, done: 0, remaining: 1 }, { goal: 30, done: 14, remaining: 16 }],
@@ -487,10 +537,10 @@ describe('texty oznámení (compose)', { skip: !EDGE && 'Node bez podpory TypeSc
   // každou variantu jednou projdeme přes rnd 0..1, pro každý den v týdnu
   const all = () => {
     const out = [];
-    for (const kind of EDGE.MESSAGE_KINDS) for (const data of SAMPLES[kind]) for (let wd = 0; wd < 7; wd += 1) for (let i = 0; i < 24; i += 1) out.push([kind, data, EDGE.compose(kind, data, () => i / 24, wd)]);
+    for (const kind of EDGE.MESSAGE_KINDS) for (const data of SAMPLES[kind]) for (let wd = 0; wd < 7; wd += 3) for (const hour of [8, 14, 19, 21]) for (let i = 0; i < 24; i += 1) out.push([kind, data, EDGE.compose(kind, data, () => i / 24, wd, hour)]);
     return out;
   };
-  test('všech 8 druhů má vzorky a umí složit text', () => {
+  test('všech 9 druhů má vzorky a umí složit text', () => {
     assert.deepEqual([...EDGE.MESSAGE_KINDS].sort(), Object.keys(SAMPLES).sort());
     for (const [kind, , m] of all()) assert.ok(m, kind);
   });
@@ -503,20 +553,26 @@ describe('texty oznámení (compose)', { skip: !EDGE && 'Node bez podpory TypeSc
       assert.match(m.url, /^\/(app|stats)$/, where);
     }
   });
-  test('bez rodových tvarů a s tykáním: žádné „jsi/jste/bys/byste“ + příčestí, žádné „(a)“ a „/a“', () => {
+  test('bez rodových tvarů a s tykáním: žádné „jsi/jste/bys/byste“ (kromě „jsi legenda“ a „jsi na…“), žádné „(a)“ a „/a“', () => {
     for (const [kind, , m] of all()) {
       const t = `${m.title} ${m.body}`;
-      assert.ok(!/(^|\s)(jsi|jste|bys|byste)(\s|$)/i.test(t), `${kind}: ${t}`);
+      assert.ok(!/(^|\s)(jsi|jste|bys|byste)(\s|$)(?!(legenda|na)(\s|$))/i.test(t.replace(/(jsi|jste) (legenda|na) /gi, 'X ')), `${kind}: ${t}`); // „jsi legenda“ a „jsi na…“ jsou bez rodu
       assert.ok(!/\((a|la|á)\)|\/(a|la)\b/.test(t), `${kind}: ${t}`);
       assert.ok(!/(^|\s)(Vy|Vás|Vám|Vaše|Vaši|Váš)\b/.test(t), `vykání: ${kind}: ${t}`);
     }
   });
-  test('je z čeho vybírat: aspoň 60 různých titulků a každý druh má několik variant (milníky aspoň po dvou)', () => {
+  test('povzbudivý tón: žádné strašení, výčitky ani ztráty', () => {
+    for (const [kind, , m] of all()) {
+      const t = `${m.title} ${m.body}`;
+      assert.ok(!/škoda|bohužel|zklam|lenost|lenoch|zahoď|zahodit|zahodí|zmizí|zmizel|ztrat|ztrác|přijdeš o|přijdete o|selž|selhá|vzdej|vzdáš|hrozí|ohrožen|pozor|výčitk|opozd|nestihne/i.test(t), `${kind}: ${t}`);
+    }
+  });
+  test('je z čeho vybírat: aspoň 90 různých titulků a každý druh má několik variant (milníky aspoň po dvou)', () => {
     const byKind = new Map();
     for (const [kind, , m] of all()) { if (!byKind.has(kind)) byKind.set(kind, new Set()); byKind.get(kind).add(m.title); }
     let total = 0;
     for (const [kind, set] of byKind) { total += set.size; assert.ok(set.size >= 3, `${kind}: ${set.size}`); }
-    assert.ok(total >= 60, `celkem ${total}`);
+    assert.ok(total >= 90, `celkem ${total}`);
     for (const n of [3, 7, 14, 30, 50, 100]) assert.ok(new Set([0, 0.99].map((r) => EDGE.compose('streak_milestone', { streak: n }, () => r).title)).size === 2, `milník ${n}`);
   });
   test('série v ohrožení je přizpůsobená délce a správně skloňuje „den/dny/dní“', () => {
@@ -530,7 +586,8 @@ describe('texty oznámení (compose)', { skip: !EDGE && 'Node bez podpory TypeSc
     assert.match(body('goal_progress', { goal: 5, done: 2, remaining: 3 }), /3 knihy/);
     assert.match(body('goal_progress', { goal: 8, done: 2, remaining: 6 }), /6 knih/);
     assert.match(body('goal_progress', { goal: 5, done: 3, remaining: 2 }), /2 knihy/);
-    assert.match(body('coins_to_spend', { coins: 1 }), /1 mince/); assert.match(body('coins_to_spend', { coins: 3 }), /3 mince/); assert.match(body('coins_to_spend', { coins: 250 }), /250 mincí/);
+    assert.match(body('coins_to_spend', { coins: 1 }), /1 minci/); assert.match(body('coins_to_spend', { coins: 3 }), /3 mince/); assert.match(body('coins_to_spend', { coins: 250 }), /250 mincí/);
+    assert.match(body('coins_to_spend', { coins: 1 }, 0.3), /Na účtu je 1 mince/);
   });
   test('název knihy se zkrátí a v textu je v českých uvozovkách; chybná nebo cizí data text nerozbijí', () => {
     const m = EDGE.compose('continue_book', { title: 'Z'.repeat(300), percent: 41 }, () => 0);
@@ -578,8 +635,9 @@ describe('SQL a návod pro server', () => {
     assert.deepEqual(hosts(sql), hosts(read('db/push/send-push.ts')));
   });
   test('motivační oznámení: plánovač, výběr, odhlášení, soukromé tabulky, hodiny a limit jednoho denně', () => {
-    for (const re of [/push_engagement_tick/, /push_engage_pick/, /cron\.schedule\('push-engagement'/, /Europe\/Prague/, /h < 16 or h > 19/, /get_push_prefs/, /set_push_prefs/, /trg_push_new_book/, /push_new_books/]) assert.match(sql, re);
-    assert.match(sql, /unique|primary key \(user_id, day\)/i, 'jedno oznámení na uživatele a den');
+    for (const re of [/push_engagement_tick/, /push_engage_pick/, /cron\.schedule\('push-engagement'/, /Europe\/Prague/, /h < cfg\.engage_from or h > cfg\.engage_to/, /engage_gap_minutes/, /engage_max_per_day/, /get_push_prefs/, /set_push_prefs/, /trg_push_new_book/, /push_new_books/, /pg_try_advisory_xact_lock\(hashtext\('push_engagement_tick'\)\)/]) assert.match(sql, re);
+    assert.ok(!/unique \(user_id, day\)/i.test(sql.replace(/--[^\n]*/g, '')) || /drop constraint if exists push_engage_log_user_id_day_key/.test(sql), 'denní limit jedna na čtenáře už neplatí');
+    assert.match(sql, /drop constraint if exists push_engage_log_user_id_day_key/, 'starší instalace dostane více oznámení denně');
     assert.match(sql, /alter table public\.push_prefs enable row level security/);
     assert.match(sql, /alter table public\.push_engage_log enable row level security/);
     assert.match(sql, /revoke execute on function public\.push_engagement_tick[^;]*from public, anon, authenticated/);
@@ -597,6 +655,21 @@ describe('SQL a návod pro server', () => {
   });
   test('návod popisuje všechny kroky včetně vypnutí Verify JWT a tajných hodnot', () => {
     const readme = read('db/push/README.md');
-    for (const re of [/push-notifications\.sql/, /Vygenerovat klíče/, /VAPID_PRIVATE_KEY/, /PUSH_WEBHOOK_SECRET/, /Verify JWT/, /send-push/, /iPhon/, /pg_cron/, /push_engagement_tick/, /Připomínky a novinky/, /nejvýš jedno oznámení denně/]) assert.match(readme, re);
+    for (const re of [/push-notifications\.sql/, /Vygenerovat klíče/, /VAPID_PRIVATE_KEY/, /PUSH_WEBHOOK_SECRET/, /Verify JWT/, /send-push/, /iPhon/, /pg_cron/, /push_engagement_tick/, /Připomínky a novinky/, /engage_gap_minutes/, /engage_max_per_day/, /bez denního stropu/]) assert.match(readme, re);
+  });
+});
+
+// ---- SQL na skutečném PostgreSQL ----
+// db/tests/run.sh spustí db/push-notifications.sql na dočasném lokálním PostgreSQL proti zjednodušenému schématu Supabase a zkontroluje výběr
+// oznámení, plánovač (okno hodin, odstup, strop, střídání, souběh), spouštěče, oprávnění a RLS. Bez PostgreSQL (kód 77) se přeskočí.
+const sqlRun = (() => { try { return spawnSync('bash', [path.join(ROOT, 'db', 'tests', 'run.sh')], { encoding: 'utf8', timeout: 240000 }); } catch { return null; } })();
+// Přeskočí se jen když PostgreSQL (kód 77) nebo bash chybí; timeout nebo jiná chyba spuštění test shodí, ať zaseknutá SQL změna neprojde.
+const sqlUnavailable = !sqlRun || sqlRun.error?.code === 'ENOENT' || sqlRun.status === 77;
+describe('SQL na skutečném PostgreSQL (db/tests/run.sh)', { skip: sqlUnavailable && 'PostgreSQL není k dispozici' }, () => {
+  test('všechny SQL kontroly prošly (výběr, plánovač, souběh, oprávnění)', () => {
+    assert.ifError(sqlRun.error);
+    assert.equal(sqlRun.status, 0, `${sqlRun.stdout}\n${sqlRun.stderr}`);
+    const n = Number((sqlRun.stdout.match(/SQL testy: (\d+) kontrol prošlo/) || [])[1]);
+    assert.ok(n >= 90, `kontrol: ${n}`);
   });
 });

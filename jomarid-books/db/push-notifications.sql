@@ -30,6 +30,11 @@ create table if not exists public.push_settings (
 );
 alter table public.push_settings enable row level security;
 revoke all on public.push_settings from anon, authenticated;
+-- Četnost motivačních oznámení (měnit lze jedním UPDATE, viz db/push/README.md): odpoledne i ráno a večer, nikdy v noci.
+alter table public.push_settings add column if not exists engage_from int not null default 8;           -- od které hodiny (pražský čas)
+alter table public.push_settings add column if not exists engage_to int not null default 21;            -- do které hodiny včetně
+alter table public.push_settings add column if not exists engage_gap_minutes int not null default 180;  -- nejmenší odstup dvou oznámení téhož čtenáře
+alter table public.push_settings add column if not exists engage_max_per_day int;                       -- strop na den; prázdné = bez stropu
 
 -- Nastavení čtenáře: chce i připomínky a motivaci (série, cíle, novinky)? Bez řádku platí „ano“. Mění se jen přes funkce níž.
 create table if not exists public.push_prefs (
@@ -40,21 +45,23 @@ create table if not exists public.push_prefs (
 alter table public.push_prefs enable row level security;
 revoke all on public.push_prefs from anon, authenticated;
 
--- Deník motivačních oznámení: nejvýš jedno za den na čtenáře a odstupy mezi stejnými druhy.
+-- Deník motivačních oznámení: co a kdy čtenář dostal (z něj plánovač vybírá odstupy a střídání druhů).
 create table if not exists public.push_engage_log (
   id bigint generated always as identity primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
   day date not null,
   kind text not null,
   meta text,
-  created_at timestamptz not null default now(),
-  unique (user_id, day)
+  created_at timestamptz not null default now()
 );
+-- dřívější verze povolovala jedno oznámení denně; teď jich může být víc
+alter table public.push_engage_log drop constraint if exists push_engage_log_user_id_day_key;
+create index if not exists push_engage_log_day_idx on public.push_engage_log (user_id, day);
 create index if not exists push_engage_log_kind_idx on public.push_engage_log (user_id, kind, created_at desc);
 alter table public.push_engage_log enable row level security;
 revoke all on public.push_engage_log from anon, authenticated;
 
--- Nově zveřejněné knihy čekající na oznámení. Oznámí se až v plánovači (16-19 h, nejvýš jedno oznámení denně na čtenáře), ne ihned.
+-- Nově zveřejněné knihy čekající na oznámení. Oznámí se až v plánovači (v okně hodin a s odstupem jako ostatní připomínky), ne ihned.
 create table if not exists public.push_new_books (
   book_id uuid primary key,
   title text,
@@ -105,10 +112,13 @@ grant execute on function public.register_push_subscription(text, text, text, te
 -- Buď hotový titulek a text (oznámení z appky), nebo druh a data (motivační oznámení: texty skládá funkce podle druhu).
 drop function if exists public.push_dispatch(text, uuid, text, text, text, text);
 drop function if exists public.push_dispatch(text, uuid, text, text, text, text, text, jsonb, uuid);
+drop function if exists public.push_dispatch(text, uuid, text, text, text, text, text, jsonb);
+-- p_delay (vteřiny, 0-30): funkce počká a oznámení odešle až potom (zkušební oznámení: stihneš appku zavřít nebo zamknout telefon)
 create or replace function public.push_dispatch(p_audience text, p_user uuid, p_title text, p_body text, p_url text, p_tag text,
-                                                p_kind text default null, p_data jsonb default null)
+                                                p_kind text default null, p_data jsonb default null, p_delay int default 0)
 returns void language plpgsql security definer set search_path to 'public', 'extensions' as $$
 declare cfg record;
+        delay int := least(greatest(coalesce(p_delay, 0), 0), 30);
 begin
   select function_url, secret into cfg from public.push_settings where id = 1;
   if cfg.function_url is null or cfg.secret is null then return; end if;
@@ -117,12 +127,13 @@ begin
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-push-secret', cfg.secret),
     body := jsonb_build_object('audience', p_audience, 'user_id', p_user, 'title', left(coalesce(p_title, ''), 120),
                                'body', left(coalesce(p_body, ''), 200), 'url', p_url, 'tag', p_tag,
-                               'kind', p_kind, 'data', coalesce(p_data, '{}'::jsonb))
+                               'kind', p_kind, 'data', coalesce(p_data, '{}'::jsonb), 'delay_seconds', delay),
+    timeout_milliseconds := 5000 + delay * 1000   -- spojení nesmí vypršet dřív, než funkce po zpoždění odpoví
   );
 exception when others then
   null;
 end $$;
-revoke execute on function public.push_dispatch(text, uuid, text, text, text, text, text, jsonb) from public, anon, authenticated;
+revoke execute on function public.push_dispatch(text, uuid, text, text, text, text, text, jsonb, int) from public, anon, authenticated;
 
 -- 5) Spouštěče: nové oznámení čtenáři (Nastavení -> Oznámení) a nová žádost pro správce (Správa -> Upozornění)
 create or replace function public.trg_push_user_notification() returns trigger language plpgsql security definer set search_path to 'public' as $$
@@ -146,7 +157,7 @@ create trigger trg_push_admin_notification after insert on public.admin_notifica
   for each row execute function public.trg_push_admin_notification();
 
 -- 6) Novinky v knihovně: spouštěč jen zapíše knihu do fronty. Oznámí se až plánovačem (viz 9), takže platí stejná pravidla jako pro ostatní
---    připomínky: nejvýš jedno oznámení denně, jen odpoledne a večer, jen kdo má připomínky zapnuté. Autor knihu nedostane.
+--    připomínky: jen v okně hodin, s odstupem, jen kdo má připomínky zapnuté. Autor knihu nedostane.
 create or replace function public.trg_push_new_book() returns trigger language plpgsql security definer set search_path to 'public' as $$
 begin
   if coalesce(new.is_hidden, false) then return new; end if;                              -- skrytý koncept se neoznamuje
@@ -174,8 +185,9 @@ end $$;
 revoke execute on function public.get_push_prefs(), public.set_push_prefs(boolean) from public, anon;
 grant execute on function public.get_push_prefs(), public.set_push_prefs(boolean) to authenticated;
 
--- 8) Co dnes čtenáři připomenout? Vrací { kind, data, meta } nebo null. Pořadí: série v ohrožení, milník série, návrat po pauze,
---    rozečtená kniha, měsíční cíl, mince na novou knihu, nová kniha v knihovně, jemné popostrčení. Kdo dnes už četl, dostane jen milník nebo novinku.
+-- 8) Co čtenáři právě připomenout? Vrací { kind, data, meta } nebo null. Z druhů, které se zrovna hodí, vybere první v pořadí důležitosti,
+--    ale ne stejný druh jako naposledy (aby oznámení nebyla pořád totéž): série v ohrožení, návrat po pauze, rozečtená kniha, měsíční cíl,
+--    mince na novou knihu, nová kniha, jemné popostrčení. Kdo dnes už četl, dostane milník série, novinku nebo pochvalu.
 create or replace function public.push_engage_pick(p_user uuid, p_now timestamptz default now()) returns jsonb
 language plpgsql stable security definer set search_path to 'public' as $$
 declare
@@ -190,12 +202,16 @@ declare
   v_done int;
   v_min int;
   nb record;
-  new_book jsonb;
+  last_kind text;
+  cands jsonb[] := '{}';
+  c jsonb;
   recent_days constant int[] := array[3, 7, 14, 30];
   milestones constant int[] := array[3, 7, 14, 30, 50, 100, 200, 365];
 begin
   select exists (select 1 from public.user_daily_activity where user_id = p_user and activity_date = d) into read_today;
   select max(activity_date) into last_day from public.user_daily_activity where user_id = p_user;
+  -- poslední druh bez časového omezení: střídání platí i s denním stropem (jinak by se po 24 hodinách opakovalo totéž)
+  select l.kind into last_kind from public.push_engage_log l where l.user_id = p_user order by l.created_at desc, l.id desc limit 1;
 
   -- série do včerejška: po sobě jdoucí dny s čtením (zmrazené dny série se počítají jako splněné)
   select coalesce(count(*) filter (where g = d), 0) into streak_y from (
@@ -207,8 +223,55 @@ begin
   ) x;
   streak_now := streak_y + (case when read_today then 1 else 0 end);
 
-  -- nově zveřejněná kniha (poslední 4 dny), kterou čtenář ještě nemá a nenapsal; stejný druh nejdřív za 2 dny
-  -- název a autor se čtou z aktuální knihy (mezitím mohly být upraveny), fronta jen určuje, která kniha a odkdy je novinka
+  -- milník série (každý jen jednou)
+  if read_today and streak_now = any (milestones) and not exists (select 1 from public.push_engage_log where user_id = p_user and kind = 'streak_milestone' and meta = streak_now::text) then
+    cands := cands || jsonb_build_object('kind', 'streak_milestone', 'data', jsonb_build_object('streak', streak_now), 'meta', streak_now::text);
+  end if;
+
+  -- série v ohrožení: dnes se ještě nečetlo (připomíná se opakovaně během dne, odstup hlídá plánovač)
+  if not read_today and streak_y >= 1 then
+    cands := cands || jsonb_build_object('kind', 'streak_risk', 'data', jsonb_build_object('streak', streak_y));
+  end if;
+
+  -- návrat po pauze 3, 7, 14 a 30 dní (v ten den jednou)
+  if not read_today and last_day is not null and (d - last_day) = any (recent_days)
+     and not exists (select 1 from public.push_engage_log where user_id = p_user and kind = 'comeback' and day = d) then
+    cands := cands || jsonb_build_object('kind', 'comeback', 'data', jsonb_build_object('days', d - last_day));
+  end if;
+
+  -- rozečtená kniha (nejdřív za 20 hodin po minulém připomenutí)
+  if not read_today then
+    select bk.title, ub.scroll_position into b
+      from public.user_books ub join public.books bk on bk.id = ub.book_id
+     where ub.user_id = p_user and ub.status = 'active' and not coalesce(ub.is_read, false) and coalesce(ub.scroll_position, 0) between 3 and 97
+     order by ub.updated_at desc nulls last limit 1;
+    if found and not exists (select 1 from public.push_engage_log where user_id = p_user and kind = 'continue_book' and created_at > p_now - interval '20 hours') then
+      cands := cands || jsonb_build_object('kind', 'continue_book', 'data', jsonb_build_object('title', b.title, 'percent', round(b.scroll_position)::int));
+    end if;
+
+    -- měsíční cíl (od 10. dne v měsíci; nejdřív za 2 dny po minulém připomenutí)
+    select monthly_goal, coins into p from public.profiles where id = p_user;
+    if coalesce(p.monthly_goal, 0) > 0 and extract(day from d) >= 10
+       and not exists (select 1 from public.push_engage_log where user_id = p_user and kind = 'goal_progress' and created_at > p_now - interval '2 days') then
+      select count(*) into v_done from public.user_books
+       where user_id = p_user and coalesce(is_read, false) and first_completed_at >= (date_trunc('month', p_now at time zone tz)) at time zone tz;
+      if v_done < p.monthly_goal then
+        cands := cands || jsonb_build_object('kind', 'goal_progress', 'data', jsonb_build_object('goal', p.monthly_goal, 'done', v_done, 'remaining', p.monthly_goal - v_done));
+      end if;
+    end if;
+
+    -- mince na dosud nevlastněnou placenou knihu (nejdřív za 3 dny)
+    select min(bk.price_coins) into v_min from public.books bk
+     where not coalesce(bk.is_hidden, false) and bk.price_coins > 0
+       and not exists (select 1 from public.user_books ub where ub.user_id = p_user and ub.book_id = bk.id);
+    if v_min is not null and coalesce(p.coins, 0) >= v_min
+       and not exists (select 1 from public.push_engage_log where user_id = p_user and kind = 'coins_to_spend' and created_at > p_now - interval '3 days') then
+      cands := cands || jsonb_build_object('kind', 'coins_to_spend', 'data', jsonb_build_object('coins', p.coins));
+    end if;
+  end if;
+
+  -- nově zveřejněná kniha (poslední 4 dny), kterou čtenář ještě nemá a nenapsal; nejdřív za 12 hodin po minulé novince.
+  -- Název a autor se čtou z aktuální knihy (mezitím mohly být upraveny), fronta jen určuje, která kniha a odkdy je novinka.
   select n.book_id, bk.title, coalesce(bk.author_display, bk.author) as author into nb
     from public.push_new_books n join public.books bk on bk.id = n.book_id and not coalesce(bk.is_hidden, false)
    where n.announced_at > p_now - interval '4 days'
@@ -216,86 +279,59 @@ begin
      and not exists (select 1 from public.user_books ub where ub.user_id = p_user and ub.book_id = n.book_id)
      and not exists (select 1 from public.push_engage_log l where l.user_id = p_user and l.kind = 'new_book' and l.meta = n.book_id::text)
    order by n.announced_at desc limit 1;
-  if found and not exists (select 1 from public.push_engage_log where user_id = p_user and kind = 'new_book' and created_at > p_now - interval '2 days') then
-    new_book := jsonb_build_object('kind', 'new_book', 'data', jsonb_build_object('title', nb.title, 'author', nb.author), 'meta', nb.book_id::text);
+  if found and not exists (select 1 from public.push_engage_log where user_id = p_user and kind = 'new_book' and created_at > p_now - interval '12 hours') then
+    cands := cands || jsonb_build_object('kind', 'new_book', 'data', jsonb_build_object('title', nb.title, 'author', nb.author), 'meta', nb.book_id::text);
   end if;
 
-  if read_today then
-    if streak_now = any (milestones) and not exists (select 1 from public.push_engage_log where user_id = p_user and kind = 'streak_milestone' and meta = streak_now::text) then
-      return jsonb_build_object('kind', 'streak_milestone', 'data', jsonb_build_object('streak', streak_now), 'meta', streak_now::text);
-    end if;
-    return new_book;
+  -- pochvala za dnešní čtení (jednou za den)
+  if read_today and not exists (select 1 from public.push_engage_log where user_id = p_user and kind = 'praise' and day = d) then
+    cands := cands || jsonb_build_object('kind', 'praise', 'data', jsonb_build_object('streak', streak_now));
   end if;
 
-  if streak_y >= 1 then
-    return jsonb_build_object('kind', 'streak_risk', 'data', jsonb_build_object('streak', streak_y));
+  -- jemné popostrčení: pro toho, kdo dnes ještě nečetl a nic jiného se nehodí
+  if not read_today then
+    cands := cands || jsonb_build_object('kind', 'gentle_nudge', 'data', '{}'::jsonb);
   end if;
 
-  if last_day is not null and (d - last_day) = any (recent_days) then
-    return jsonb_build_object('kind', 'comeback', 'data', jsonb_build_object('days', d - last_day));
-  end if;
-
-  select bk.title, ub.scroll_position into b
-    from public.user_books ub join public.books bk on bk.id = ub.book_id
-   where ub.user_id = p_user and ub.status = 'active' and not coalesce(ub.is_read, false) and coalesce(ub.scroll_position, 0) between 3 and 97
-   order by ub.updated_at desc nulls last limit 1;
-  if found and not exists (select 1 from public.push_engage_log where user_id = p_user and kind = 'continue_book' and created_at > p_now - interval '3 days') then
-    return jsonb_build_object('kind', 'continue_book', 'data', jsonb_build_object('title', b.title, 'percent', round(b.scroll_position)::int));
-  end if;
-
-  select monthly_goal, coins into p from public.profiles where id = p_user;
-  if coalesce(p.monthly_goal, 0) > 0 and extract(day from d) >= 10
-     and not exists (select 1 from public.push_engage_log where user_id = p_user and kind = 'goal_progress' and created_at > p_now - interval '5 days') then
-    select count(*) into v_done from public.user_books
-     where user_id = p_user and coalesce(is_read, false) and first_completed_at >= (date_trunc('month', p_now at time zone tz)) at time zone tz;
-    if v_done < p.monthly_goal then
-      return jsonb_build_object('kind', 'goal_progress', 'data', jsonb_build_object('goal', p.monthly_goal, 'done', v_done, 'remaining', p.monthly_goal - v_done));
-    end if;
-  end if;
-
-  select min(bk.price_coins) into v_min from public.books bk
-   where not coalesce(bk.is_hidden, false) and bk.price_coins > 0
-     and not exists (select 1 from public.user_books ub where ub.user_id = p_user and ub.book_id = bk.id);
-  if v_min is not null and coalesce(p.coins, 0) >= v_min
-     and not exists (select 1 from public.push_engage_log where user_id = p_user and kind = 'coins_to_spend' and created_at > p_now - interval '7 days') then
-    return jsonb_build_object('kind', 'coins_to_spend', 'data', jsonb_build_object('coins', p.coins));
-  end if;
-
-  if new_book is not null then return new_book; end if;
-
-  if not exists (select 1 from public.push_engage_log where user_id = p_user and kind = 'gentle_nudge' and created_at > p_now - interval '3 days') then
-    return jsonb_build_object('kind', 'gentle_nudge', 'data', '{}'::jsonb);
-  end if;
-  return null;
+  if coalesce(array_length(cands, 1), 0) = 0 then return null; end if;
+  foreach c in array cands loop
+    if c->>'kind' is distinct from last_kind then return c; end if;   -- střídání druhů
+  end loop;
+  return cands[1];
 end $$;
 revoke execute on function public.push_engage_pick(uuid, timestamptz) from public, anon, authenticated;
 
--- 9) Plánovač: každou hodinu projde čtenáře, kterým právě nastal jejich čas (mezi 16. a 19. hodinou pražského času, každý má svou
---    hodinu podle sebe), a každému pošle nejvýš jedno motivační oznámení denně. Nikdy v noci.
+-- 9) Plánovač: každou hodinu projde čtenáře se zapnutými připomínkami a zařízením, a pokud nastal jejich čas (okno hodin a odstup
+--    z push_settings, výchozí 8-21 h pražského času a odstup 3 hodiny), pošle jim oznámení podle toho, co se hodí.
 create or replace function public.push_engagement_tick(p_now timestamptz default now()) returns int
 language plpgsql security definer set search_path to 'public' as $$
 declare
   tz constant text := 'Europe/Prague';
   d date := (p_now at time zone tz)::date;
   h int := extract(hour from (p_now at time zone tz))::int;
+  cfg record;
   u record;
   pick jsonb;
   sent int := 0;
 begin
-  if h < 16 or h > 19 then return 0; end if;
-  -- nenastavené odesílání: nic se nezapisuje do deníku, ať čtenáři nepřijdou o dnešní připomínku, až se server dokončí
-  if not exists (select 1 from public.push_settings where id = 1 and function_url is not null and secret is not null) then return 0; end if;
+  -- Dva průchody najednou (dva úkoly, ruční volání) by oba prošly kontrolou odstupu dřív, než jeden zapíše do deníku, a čtenář by dostal
+  -- oznámení dvakrát. Zámek drží do konce transakce; kdo ho nedostane, nedělá nic.
+  if not pg_try_advisory_xact_lock(hashtext('push_engagement_tick')) then return 0; end if;
+  -- nenastavené odesílání: nic se nezapisuje do deníku, ať čtenáři nepřijdou o připomínky, až se server dokončí
+  select * into cfg from public.push_settings where id = 1 and function_url is not null and secret is not null;
+  if not found then return 0; end if;
+  if h < cfg.engage_from or h > cfg.engage_to then return 0; end if;
   for u in
     select distinct s.user_id from public.push_subscriptions s
     left join public.push_prefs pf on pf.user_id = s.user_id
-    where coalesce(pf.engage, true) and (16 + mod(abs(hashtext(s.user_id::text)::bigint), 4)) = h
+    where coalesce(pf.engage, true)
   loop
-    continue when exists (select 1 from public.push_engage_log where user_id = u.user_id and day = d);
+    continue when cfg.engage_gap_minutes > 0 and exists (select 1 from public.push_engage_log where user_id = u.user_id and created_at > p_now - make_interval(mins => cfg.engage_gap_minutes));
+    continue when cfg.engage_max_per_day is not null and (select count(*) from public.push_engage_log where user_id = u.user_id and day = d) >= cfg.engage_max_per_day;
     pick := public.push_engage_pick(u.user_id, p_now);
     continue when pick is null;
-    insert into public.push_engage_log (user_id, day, kind, meta) values (u.user_id, d, pick->>'kind', pick->>'meta') on conflict (user_id, day) do nothing;
-    continue when not found;
-    perform public.push_dispatch('user', u.user_id, null, null, '/', 'e-' || d::text, pick->>'kind', pick->'data');
+    insert into public.push_engage_log (user_id, day, kind, meta, created_at) values (u.user_id, d, pick->>'kind', pick->>'meta', p_now);
+    perform public.push_dispatch('user', u.user_id, null, null, '/', 'e-' || d::text || '-' || h::text, pick->>'kind', pick->'data');
     sent := sent + 1;
   end loop;
   return sent;
@@ -321,7 +357,9 @@ alter table public.push_test_log enable row level security;
 revoke all on public.push_test_log from anon, authenticated;
 
 drop function if exists public.send_test_push();
-create or replace function public.send_test_push(p_kind text default null) returns void language plpgsql security definer set search_path to 'public' as $$
+drop function if exists public.send_test_push(text);
+-- p_delay: za kolik vteřin (0-30) se oznámení odešle; appka posílá 10, ať stihneš appku zavřít nebo zamknout telefon a oznámení opravdu uvidíš
+create or replace function public.send_test_push(p_kind text default null, p_delay int default 0) returns void language plpgsql security definer set search_path to 'public' as $$
 declare sample jsonb;
 begin
   if auth.uid() is null then raise exception 'not_authenticated'; end if;
@@ -336,6 +374,7 @@ begin
       when 'coins_to_spend' then '{"coins": 250}'::jsonb
       when 'gentle_nudge' then '{}'::jsonb
       when 'new_book' then '{"title": "Ukázková kniha", "author": "Jomarid"}'::jsonb
+      when 'praise' then '{"streak": 3}'::jsonb
       else null end;
     if sample is null then raise exception 'bad_kind'; end if;
   end if;
@@ -343,10 +382,10 @@ begin
   on conflict (user_id) do update set at = now() where public.push_test_log.at < now() - interval '20 seconds';
   if not found then raise exception 'too_many'; end if;
   if p_kind is null then
-    perform public.push_dispatch('user', auth.uid(), 'Zkušební oznámení', 'Takhle ti budou chodit oznámení z Jomarid Books.', '/settings/notifications', 'test');
+    perform public.push_dispatch('user', auth.uid(), 'Zkušební oznámení', 'Takhle ti budou chodit oznámení z Jomarid Books.', '/settings/notifications', 'test', null, null, p_delay);
   else
-    perform public.push_dispatch('user', auth.uid(), null, null, '/', 'test-' || p_kind, p_kind, sample);
+    perform public.push_dispatch('user', auth.uid(), null, null, '/', 'test-' || p_kind, p_kind, sample, p_delay);
   end if;
 end $$;
-revoke execute on function public.send_test_push(text) from public, anon;
-grant execute on function public.send_test_push(text) to authenticated;
+revoke execute on function public.send_test_push(text, int) from public, anon;
+grant execute on function public.send_test_push(text, int) to authenticated;
