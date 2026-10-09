@@ -67,3 +67,8 @@ Po kroku 1–5 fungují i připomínky ve stylu „série je v ohrožení“. Ni
 - Každý čtenář si připomínky a novinky vypne v **Nastavení → Oznámení** (zaškrtávátko „Připomínky a novinky“). Oznámení z appky (dary, odpovědi správce...) zůstávají.
 - Ukázky: **Správa → Upozornění → Ukázky motivačních oznámení** pošle na tvoje zařízení vzorek každého druhu s ukázkovými údaji.
 - Už máš funkci `send-push` nasazenou z dřívějška? Vlož do ní nový obsah `db/push/send-push.ts` a nasaď znovu, jinak se motivační texty neskládají.
+
+## Testy SQL (pro vývoj)
+`npm run test:sql` (nebo `bash db/tests/run.sh`) spustí `db/push-notifications.sql` na dočasném lokálním PostgreSQL proti zjednodušenému schématu Supabase
+(`db/tests/mock_schema.sql`) a zkontroluje výběr oznámení, plánovač (okno hodin, odstup, strop, střídání druhů, souběh dvou průchodů), spouštěče, oprávnění a RLS.
+Potřebuje PostgreSQL 14+ (`initdb`, `pg_ctl`, `psql`); bez něj se test přeskočí. Stejný test běží i v `npm test` (`src/tests/push.test.mjs`), je-li PostgreSQL k dispozici.

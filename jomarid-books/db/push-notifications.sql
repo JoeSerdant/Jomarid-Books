@@ -206,7 +206,8 @@ declare
 begin
   select exists (select 1 from public.user_daily_activity where user_id = p_user and activity_date = d) into read_today;
   select max(activity_date) into last_day from public.user_daily_activity where user_id = p_user;
-  select l.kind into last_kind from public.push_engage_log l where l.user_id = p_user and l.created_at > p_now - interval '24 hours' order by l.created_at desc, l.id desc limit 1;
+  -- poslední druh bez časového omezení: střídání platí i s denním stropem (jinak by se po 24 hodinách opakovalo totéž)
+  select l.kind into last_kind from public.push_engage_log l where l.user_id = p_user order by l.created_at desc, l.id desc limit 1;
 
   -- série do včerejška: po sobě jdoucí dny s čtením (zmrazené dny série se počítají jako splněné)
   select coalesce(count(*) filter (where g = d), 0) into streak_y from (
@@ -309,6 +310,9 @@ declare
   pick jsonb;
   sent int := 0;
 begin
+  -- Dva průchody najednou (dva úkoly, ruční volání) by oba prošly kontrolou odstupu dřív, než jeden zapíše do deníku, a čtenář by dostal
+  -- oznámení dvakrát. Zámek drží do konce transakce; kdo ho nedostane, nedělá nic.
+  if not pg_try_advisory_xact_lock(hashtext('push_engagement_tick')) then return 0; end if;
   -- nenastavené odesílání: nic se nezapisuje do deníku, ať čtenáři nepřijdou o připomínky, až se server dokončí
   select * into cfg from public.push_settings where id = 1 and function_url is not null and secret is not null;
   if not found then return 0; end if;
@@ -317,7 +321,6 @@ begin
     select distinct s.user_id from public.push_subscriptions s
     left join public.push_prefs pf on pf.user_id = s.user_id
     where coalesce(pf.engage, true)
-    limit 5000
   loop
     continue when cfg.engage_gap_minutes > 0 and exists (select 1 from public.push_engage_log where user_id = u.user_id and created_at > p_now - make_interval(mins => cfg.engage_gap_minutes));
     continue when cfg.engage_max_per_day is not null and (select count(*) from public.push_engage_log where user_id = u.user_id and day = d) >= cfg.engage_max_per_day;

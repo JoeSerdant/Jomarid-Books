@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import crypto from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { pushSupport, permissionState, subscriptionRow, sameApplicationServerKey, enableMessage, VAPID_SETTINGS_KEY, PUSH_KINDS } from '../push/pushModel.js';
 import { generateVapidKeys, isVapidPublicKey, isVapidPrivateKey, urlBase64ToUint8Array } from '../push/vapid.js';
@@ -607,7 +608,7 @@ describe('SQL a návod pro server', () => {
     assert.deepEqual(hosts(sql), hosts(read('db/push/send-push.ts')));
   });
   test('motivační oznámení: plánovač, výběr, odhlášení, soukromé tabulky, hodiny a limit jednoho denně', () => {
-    for (const re of [/push_engagement_tick/, /push_engage_pick/, /cron\.schedule\('push-engagement'/, /Europe\/Prague/, /h < cfg\.engage_from or h > cfg\.engage_to/, /engage_gap_minutes/, /engage_max_per_day/, /get_push_prefs/, /set_push_prefs/, /trg_push_new_book/, /push_new_books/]) assert.match(sql, re);
+    for (const re of [/push_engagement_tick/, /push_engage_pick/, /cron\.schedule\('push-engagement'/, /Europe\/Prague/, /h < cfg\.engage_from or h > cfg\.engage_to/, /engage_gap_minutes/, /engage_max_per_day/, /get_push_prefs/, /set_push_prefs/, /trg_push_new_book/, /push_new_books/, /pg_try_advisory_xact_lock\(hashtext\('push_engagement_tick'\)\)/]) assert.match(sql, re);
     assert.ok(!/unique \(user_id, day\)/i.test(sql.replace(/--[^\n]*/g, '')) || /drop constraint if exists push_engage_log_user_id_day_key/.test(sql), 'denní limit jedna na čtenáře už neplatí');
     assert.match(sql, /drop constraint if exists push_engage_log_user_id_day_key/, 'starší instalace dostane více oznámení denně');
     assert.match(sql, /alter table public\.push_prefs enable row level security/);
@@ -628,5 +629,17 @@ describe('SQL a návod pro server', () => {
   test('návod popisuje všechny kroky včetně vypnutí Verify JWT a tajných hodnot', () => {
     const readme = read('db/push/README.md');
     for (const re of [/push-notifications\.sql/, /Vygenerovat klíče/, /VAPID_PRIVATE_KEY/, /PUSH_WEBHOOK_SECRET/, /Verify JWT/, /send-push/, /iPhon/, /pg_cron/, /push_engagement_tick/, /Připomínky a novinky/, /engage_gap_minutes/, /engage_max_per_day/, /bez denního stropu/]) assert.match(readme, re);
+  });
+});
+
+// ---- SQL na skutečném PostgreSQL ----
+// db/tests/run.sh spustí db/push-notifications.sql na dočasném lokálním PostgreSQL proti zjednodušenému schématu Supabase a zkontroluje výběr
+// oznámení, plánovač (okno hodin, odstup, strop, střídání, souběh), spouštěče, oprávnění a RLS. Bez PostgreSQL (kód 77) se přeskočí.
+const sqlRun = (() => { try { return spawnSync('bash', [path.join(ROOT, 'db', 'tests', 'run.sh')], { encoding: 'utf8', timeout: 240000 }); } catch { return null; } })();
+describe('SQL na skutečném PostgreSQL (db/tests/run.sh)', { skip: (!sqlRun || sqlRun.error || sqlRun.status === 77) && 'PostgreSQL není k dispozici' }, () => {
+  test('všechny SQL kontroly prošly (výběr, plánovač, souběh, oprávnění)', () => {
+    assert.equal(sqlRun.status, 0, `${sqlRun.stdout}\n${sqlRun.stderr}`);
+    const n = Number((sqlRun.stdout.match(/SQL testy: (\d+) kontrol prošlo/) || [])[1]);
+    assert.ok(n >= 90, `kontrol: ${n}`);
   });
 });
