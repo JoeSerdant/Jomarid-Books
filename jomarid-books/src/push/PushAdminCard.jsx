@@ -83,7 +83,7 @@ export default function PushAdminCard({ client }) {
       <div className="mt-5 pt-4 border-t" style={{ borderColor: 'var(--border-color)' }}>
         <h4 className="text-xs font-black uppercase tracking-wider m-0 mb-1">Ukázky motivačních oznámení</h4>
         <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-1 mb-3 leading-relaxed">
-          Čtenářům chodí nejvýš jedno oznámení denně podle toho, co se hodí (série, rozečtená kniha, cíl...). Tady si každý druh vyzkoušíš s ukázkovými údaji;
+          Čtenářům chodí během dne povzbuzení podle toho, co se hodí (série, rozečtená kniha, cíl, pochvala...). Četnost se nastavuje v databázi (db/push/README.md). Tady si každý druh vyzkoušíš s ukázkovými údaji;
           přijde na tvoje zařízení, kde máš v Nastavení → Oznámení zapnutá oznámení. Texty se pokaždé losují z víc variant.
         </p>
         <div className="flex flex-wrap gap-2" data-testid="push-kinds">

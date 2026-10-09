@@ -50,6 +50,7 @@ export const enableMessage = (status) => ({
 export const PUSH_KINDS = [
   { kind: 'streak_risk', label: 'Série v ohrožení' },
   { kind: 'streak_milestone', label: 'Milník série' },
+  { kind: 'praise', label: 'Pochvala' },
   { kind: 'comeback', label: 'Návrat po pauze' },
   { kind: 'continue_book', label: 'Rozečtená kniha' },
   { kind: 'goal_progress', label: 'Měsíční cíl' },

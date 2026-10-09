@@ -103,7 +103,7 @@ export default function PushSettings({ client = supabase }) {
           <input type="checkbox" data-testid="push-engage" checked={state.engage !== false} disabled={savingEngage} onChange={(e) => toggleEngage(e.target.checked)} className="mt-0.5 w-4 h-4 shrink-0 disabled:opacity-60" style={{ accentColor: 'var(--bg-primary)' }} />
           <span className="text-xs leading-relaxed">
             <span className="font-black">Připomínky a novinky</span>
-            <span style={{ color: 'var(--text-muted)' }} className="block">Série čtení, rozečtená kniha, měsíční cíl, mince na novou knihu a nové knihy v knihovně. Nejvýš jedno oznámení denně, vždy odpoledne a večer, nikdy v noci.</span>
+            <span style={{ color: 'var(--text-muted)' }} className="block">Povzbuzení ke čtení, pochvaly za sérii, rozečtená kniha, měsíční cíl, mince na novou knihu a nové knihy v knihovně. Chodí během dne, nikdy v noci. Kdykoli si je tady vypneš.</span>
           </span>
         </label>
       )}

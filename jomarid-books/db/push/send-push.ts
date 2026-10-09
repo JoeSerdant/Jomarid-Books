@@ -35,48 +35,60 @@ export const isPushServiceUrl = (v: unknown) =>
   typeof v === 'string' && v.length <= 2000 && /^https:\/\/([a-z0-9-]+\.)*(fcm\.googleapis\.com|android\.googleapis\.com|push\.services\.mozilla\.com|push\.apple\.com|notify\.windows\.com)(:443)?\//i.test(v);
 
 // ---------- Texty motivačních oznámení ----------
-// Tykáme, hlas je hravý a trochu dramatický (jako Duolingo), ale s knižním humorem. Bez rodových tvarů minulého času
-// („přečetl/a“): jen přítomný čas, rozkaz a podstatná jména, ať sedí všem. Titulek do ~45 znaků, text do ~130.
+// Tykáme a držíme povzbudivý, hravý tón (jako Duolingo, ale s knižním humorem a bez vytýkání): chválíme, držíme palce, nikdy nestrašíme.
+// Bez rodových tvarů minulého času („přečetl/a“): jen přítomný čas, rozkaz a podstatná jména, ať sedí všem. Titulek do ~45 znaků, text do ~130.
+// Texty se losují z víc variant a podle denní doby (ráno, přes den, večer, pozdě večer) přibývají vlastní.
 export type Msg = { title: string; body: string; url?: string };
 type Data = Record<string, unknown>;
+type Part = 'morning' | 'day' | 'evening' | 'late';
 
 const plural = (n: number, one: string, few: string, many: string) => (n === 1 ? one : n >= 2 && n <= 4 ? few : many);
 const whole = (v: unknown, fallback = 0) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(Math.max(n, 0), 99999) : fallback; };
 const days = (n: number) => `${n} ${plural(n, 'den', 'dny', 'dní')}`;
 const books = (n: number) => `${n} ${plural(n, 'kniha', 'knihy', 'knih')}`;
 const coinsText = (n: number) => `${n} ${plural(n, 'mince', 'mince', 'mincí')}`;
+const coinsAcc = (n: number) => `${n} ${plural(n, 'minci', 'mince', 'mincí')}`; // „máš 1 minci“
+const partOf = (hour: number): Part => (hour < 11 ? 'morning' : hour < 18 ? 'day' : hour < 20 ? 'evening' : 'late');
 // Název knihy a autor jdou do textu zkrácené, ať se oznámení nikdy nepřetáhne přes limit.
 const short = (v: unknown, max: number) => {
   const s = (typeof v === 'string' ? v : '').replace(/\s+/g, ' ').trim();
   return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s;
 };
 
-const streakRisk = (n: number): Msg[] => {
+const streakRisk = (n: number, t: Part): Msg[] => {
   const nn = days(n);
-  if (n <= 2) return [
-    { title: 'Jedna stránka a série žije 📖', body: `Série z ${nn} se dnes může přerušit. Chvilka čtení ji zachrání.` },
-    { title: 'Záložka čeká na své místo', body: `Dnes zatím žádné čtení. Otevři knihu, než ${nn} série zmizí.` },
-    { title: 'Malý krok, velká série', body: `Pár odstavců stačí, aby série z ${nn} přežila do zítřka.` },
-    { title: 'Tohle ještě zachráníš 🔥', body: `Série má zatím ${nn}. Přidej dnešní čtení a z jedničky bude dvojka.` },
+  const base: Msg[] = n <= 2 ? [
+    { title: 'Skvělý začátek! 📖', body: `Série má ${nn} a může růst. Pár stránek dnes ji posune o další krok.` },
+    { title: 'Každá stránka se počítá ✨', body: 'Chvilka čtení a tvoje série poroste dál. Máš to v malíku!' },
+    { title: 'Malý krok, velká série', body: `Série má ${nn}. Pár odstavců dnes a bude z ní víc, zvládneš to!` },
+    { title: 'Tohle půjde samo 🔥', body: 'Otevři knihu, přečti pár stránek a série pokračuje. Držíme ti palce!' },
+  ] : n <= 6 ? [
+    { title: `🔥 ${nn} v řadě! Jedeš skvěle`, body: 'Dnešní čtení ještě čeká. Jedna kapitola a série pokračuje, to dáš!' },
+    { title: `Tvoje série má ${nn}! 🔥`, body: 'Pár minut s knihou a máš další den v kapse. Pojď na to!' },
+    { title: 'Na téhle sérii se dá stavět 🧱', body: `${nn} čtení v řadě je super základ. Dnes ještě přidej svůj kousek.` },
+    { title: 'Chvilka na knihu? 📚', body: `Tvoje série (${nn}) se na dnešek těší. Stačí pár stránek.` },
+  ] : n < 30 ? [
+    { title: `Wow, ${nn} v řadě! 🔥`, body: 'Takhle se buduje zvyk. Dnešní stránky ještě čekají, pojď na ně.' },
+    { title: 'Jsi na skvělé cestě 🌟', body: `Série má ${nn}. Dnešní čtení ji udrží při životě a ty budeš mít další důvod k hrdosti.` },
+    { title: `Držíš sérii už ${nn}!`, body: 'Přidej dnešní kousek, ať roste dál. Ty to umíš!' },
+    { title: 'Ta série je tvoje pýcha 💪', body: `${nn} bez přestávky! Pár stránek a pokračuje dál.` },
+  ] : [
+    { title: `🔥 ${nn}! Jsi legenda`, body: 'Dnešní čtení udrží legendární sérii při životě. Pár stránek a hotovo.' },
+    { title: `Série má ${nn}, to je síla!`, body: 'Takový výkon si zaslouží pokračování. Dnes ještě pár stránek?' },
+    { title: 'Pomník vytrvalosti 🏆', body: `${nn} čtení v řadě. Přidej dnešní kapitolu a posuň rekord dál.` },
   ];
-  if (n <= 6) return [
-    { title: `🔥 ${nn} v řadě! Nezahoď to`, body: 'Dnes zatím nic nepřečteno. Jedna kapitola a série pokračuje.' },
-    { title: `Série ${n}… a dnes ticho?`, body: 'Tvoje knihy si všimly. Otevři jednu aspoň na pár minut.' },
-    { title: 'Tohle by byla škoda 🔥', body: `${nn} čtení v řadě, dnes zatím nic. Nech sérii růst.` },
-    { title: 'Ještě to jde stihnout', body: `Do půlnoci zbývá čas na pár stránek. Série z ${nn} to ocení.` },
-  ];
-  if (n < 30) return [
-    { title: `Série ${nn} se nevzdává 🔥`, body: 'Dnes ještě chybí čtení. Pár stránek a rekord se prodlouží.' },
-    { title: `${nn} v řadě si zaslouží pokračování`, body: 'Otevři knihu, ať se to dnes nezlomí.' },
-    { title: 'Pozor, série se třese 🔥', body: `Čtení ${nn} v řadě visí na vlásku. Chvilka s knihou a je zachráněno.` },
-    { title: 'Knihy hlásí: dnes ticho', body: `${nn} čtení v řadě a dnes nic? Pár stránek to spraví.` },
-    { title: 'Tolik práce a teď by zmizela?', body: `Série z ${nn} se nehodí zahodit kvůli jedné večerní lenosti. Přečti aspoň kousek.` },
-  ];
-  return [
-    { title: `🔥 ${nn}. Tohle přece nepustíš`, body: 'Dnes ještě chybí čtení. Jedna stránka stačí k záchraně celé série.' },
-    { title: 'Legendární série v ohrožení', body: `Série ${nn} už je skoro pomník. Přidej dnešní čtení, než půlnoc zaklapne.` },
-    { title: `Půlnoc se blíží, série ${n}`, body: 'Pár minut s knihou a legenda žije dál.' },
-  ];
+  if (t === 'morning') base.push(
+    { title: 'Dobré ráno! ☀️', body: `Dnešní čtení ještě čeká a série (${nn}) se na něj těší. Začni pár stránkami.` },
+    { title: 'Ranní kapitola? 📖', body: `Série má ${nn} a poroste, stačí chvilka čtení u snídaně.` },
+  );
+  if (t === 'evening') base.push(
+    { title: 'Večer jako stvořený na čtení 🌙', body: `Pár stránek a série (${nn}) je zase o den delší. Zvládneš to!` },
+  );
+  if (t === 'late') base.push(
+    { title: 'Ještě to stihneš! 🌟', body: `Do půlnoci zbývá čas na pár stránek. Série (${nn}) ti poděkuje.` },
+    { title: 'Poslední výzva dne 🌙', body: 'Krátká kapitola před spaním a série žije dál. Dobrou chuť na čtení!' },
+  );
+  return base;
 };
 
 const MILESTONES: Record<number, Msg[]> = {
@@ -115,81 +127,109 @@ const milestone = (n: number): Msg[] => MILESTONES[n] ?? [
   { title: `Série ${days(n)}! 🔥`, body: 'Další milník splněn. Takhle dál!' },
 ];
 
+// Pochvala za dnešní čtení: ať si i ten, kdo už splnil, odnese dobrou zprávu.
+const praise = (streak: number, t: Part): Msg[] => {
+  const list: Msg[] = [
+    { title: 'Dnešní čtení je splněno! 🎉', body: 'Skvělá práce, takhle se z čtení stává zvyk.' },
+    { title: 'Dnes jsi na výbornou 🌟', body: 'Dnešní stránky máš za sebou. Tak dál!' },
+    { title: 'Paráda, tohle se počítá 📚', body: 'Dnešní čtení je v kapse. Odpočiň si a zítra zase.' },
+    { title: 'Dobrý pocit z přečtených stránek ✨', body: 'Užij si ho. Zítra tě čeká další příběh.' },
+  ];
+  if (streak >= 2) list.push(
+    { title: `Série má ${days(streak)} 🔥`, body: 'Dnes máš splněno, zítra pokračuj. Je to skvělý příklad vytrvalosti!' },
+    { title: 'Série roste a roste 💪', body: `${days(streak)} v řadě. Dnešní čtení se do ní právě zapsalo.` },
+  );
+  if (t === 'evening' || t === 'late') list.push({ title: 'Dobrá práce, teď si odpočiň 🌙', body: 'Dnešní čtení je splněné. Užij si zbytek večera.' });
+  return list;
+};
+
 const comeback = (n: number): Msg[] => {
   if (n <= 3) return [
-    { title: 'Knihy se po tobě stýskají 📚', body: `Už ${days(n)} bez čtení. Vrať se na pár stránek, ať to nevychladne.` },
-    { title: 'Záložka se nudí', body: 'Rozečtený příběh čeká přesně tam, kde přestal. Otevři ho na chvilku.' },
+    { title: 'Knihy na tebe čekají 📚', body: `Už ${days(n)} bez čtení, a to nevadí. Otevři knihu a navaž přesně tam, kde příběh čeká.` },
+    { title: 'Záložka drží místo', body: 'Rozečtený příběh nikam neuteče. Otevři ho na chvilku, bude se ti líbit.' },
   ];
   if (n <= 7) return [
-    { title: 'Týden bez čtení? Stránky čekají', body: 'Rozečtené věci nikam neutekly. Stačí otevřít knihu a navázat.' },
-    { title: 'Prach na polici se usazuje 📖', body: 'Týden ticha. Jedna krátká kapitola a zase jedeš.' },
+    { title: 'Vítej zpátky kdykoli 💛', body: 'Týden pauzy je v pořádku. Stačí pár stránek a zase to jede.' },
+    { title: 'Pauza skončila, příběh pokračuje 📖', body: 'Jedna krátká kapitola na rozjezd. Zvládneš to!' },
   ];
   if (n <= 14) return [
-    { title: 'Dva týdny ticha na polici', body: 'Knihovna zeje prázdnotou. Dnes stačí jedna krátká kapitola.' },
-    { title: 'Knihy mají pocit, že se na ně zapomnělo', body: 'Dokaž jim opak. Pár stránek stačí.' },
+    { title: 'Stýská se nám po tobě 👋', body: 'Žádný tlak, jen jedna krátká kapitola na rozjezd. Máš to v sobě!' },
+    { title: 'Dobrý den na nový začátek ✨', body: 'Knihovna je pořád tvoje. Vyber si něco, co tě bude bavit.' },
   ];
   return [
-    { title: 'Měsíc! Poznáme se ještě? 👀', body: 'Jomarid Books stojí na starém místě. Otevři knihu a začni znovu - série se rozběhne od jedničky.' },
-    { title: 'Tvoje knihovna se po tobě ptá', body: 'Dlouho se nevidíme. Vyber si něco krátkého a rozjeď to znovu.' },
+    { title: 'Vítej zpátky! 🎉', body: 'Jomarid Books na tebe čekalo. Vyber si něco krátkého a začni znovu, každý začátek je dobrý.' },
+    { title: 'Tvoje knihovna se rozzářila 💡', body: 'Dlouho jsme se neviděli. Dnes je skvělý den na novou kapitolu.' },
   ];
 };
 
-const continueBook = (title: string, pct: number): Msg[] => {
-  const t = short(title, 60);
-  return [
-    { title: `„${short(title, 40)}“ čeká na další stránky`, body: `Máš za sebou ${pct} %. Pokračuj přesně od záložky.` },
-    { title: 'Záložka drží místo', body: `V „${t}“ je hotovo ${pct} %. Zbytek čeká na tebe.` },
-    { title: `${pct} % je za tebou 📖`, body: `Rozečtená kniha „${t}“ se sama nepřečte. Navaž od záložky.` },
-    { title: `Příběh se zasekl na ${pct} %`, body: `„${t}“ prosí o další kapitolu. Jen jednu, slibujeme.` },
-    { title: 'Dej té knize ještě šanci', body: `Dnes aspoň pár stránek z „${t}“ a posuneš se z ${pct} % dál.` },
+const continueBook = (title: string, pct: number, t: Part): Msg[] => {
+  const k = short(title, 60);
+  const list: Msg[] = [
+    { title: `„${short(title, 40)}“ na tebe čeká 📖`, body: `Už máš ${pct} % hotovo, to je super! Pokračuj přesně od záložky.` },
+    { title: 'Záložka drží místo', body: `V „${k}“ je hotovo ${pct} %. Dnešních pár stránek tě posune o kus dál.` },
+    { title: `${pct} % je za tebou 🎉`, body: `Rozečtená kniha „${k}“ se na tebe těší. Navaž od záložky.` },
+    { title: 'Dej příběhu další kousek ✨', body: `Dnes aspoň pár stránek z „${k}“ a posuneš se z ${pct} % dál.` },
   ];
+  if (pct >= 70) list.push({ title: 'Cíl na dohled! 🏁', body: `Z „${k}“ zbývá už jen ${100 - pct} %. Dočti to, zvládneš to!` });
+  if (pct < 30) list.push({ title: 'Začátek je nejtěžší, a ten už máš', body: `V „${k}“ je ${pct} %. Další stránky půjdou samy.` });
+  if (t === 'evening' || t === 'late') list.push({ title: `Večer s „${short(title, 36)}“ 🌙`, body: `Odpočiň si u rozečtené knihy. Máš ${pct} % a každá další stránka je odměna.` });
+  if (t === 'morning') list.push({ title: 'Ranní stránky ☀️', body: `„${k}“ je ideální společník k ranní kávě. Máš ${pct} %, pojď na další.` });
+  return list;
 };
 
 const goalProgress = (goal: number, done: number, remaining: number): Msg[] => {
   if (remaining === 1) return [
-    { title: 'Poslední kniha do cíle! 🎯', body: 'Splnění měsíčního cíle dělí jedna kniha. Odměna v mincích je na dosah.' },
-    { title: 'Cíl je na dosah ruky', body: 'Stačí dočíst ještě jednu knihu a měsíc je splněný. Dáš to!' },
+    { title: 'Poslední kniha do cíle! 🎯', body: 'Už jen jedna kniha a měsíční cíl je tvůj. Odměna v mincích je na dosah, držíme ti palce!' },
+    { title: 'Cíl je na dosah ruky ✨', body: 'Stačí dočíst ještě jednu knihu a měsíc je splněný. Dáš to!' },
   ];
   if (done === 0) return [
-    { title: 'Měsíční cíl zatím na nule', body: `Cíl ${books(goal)} se sám nesplní. Vyber si kratší knihu a rozjeď to.` },
-    { title: 'Prázdný ukazatel cíle 🎯', body: 'Tenhle měsíc ještě nic nepřibylo. První kniha rozhýbe všechno.' },
+    { title: 'Nový cíl, nový začátek 🎯', body: `Cíl ${books(goal)} je dosažitelný. První kniha tě hned nakopne.` },
+    { title: 'Ukazatel cíle čeká na první kus 📚', body: 'Vyber si kratší knihu a rozjeď to, každá se počítá.' },
   ];
   if (done * 2 >= goal) return [
-    { title: `Cíl je na dosah: ${done} z ${goal} 🎯`, body: `Do splnění zbývá ${books(remaining)}. Máš to skoro doma.` },
-    { title: 'Přes půlku cíle!', body: `Máš ${done} z ${goal}. Dnešní čtení tě posune blíž.` },
+    { title: `Přes půlku cíle: ${done} z ${goal} 🎯`, body: `Jde ti to skvěle! Zbývá ${books(remaining)}.` },
+    { title: 'Cíl je na dosah 🌟', body: `Máš ${done} z ${goal}. Dnešní čtení tě posune blíž.` },
   ];
   return [
-    { title: `Měsíční cíl: ${done} z ${goal}`, body: `Do splnění zbývá ${books(remaining)}. Dnes je dobrý den začít další.` },
-    { title: 'Cíl měsíce se nepřečte sám 🎯', body: `Zbývá ${books(remaining)}. Vyber si a pusť se do toho.` },
+    { title: `Měsíční cíl: ${done} z ${goal}`, body: `Každá přečtená kniha se počítá. Zbývá ${books(remaining)}, to zvládneš!` },
+    { title: 'Krok po kroku k cíli 🎯', body: `Zbývá ${books(remaining)}. Vyber si a pusť se do toho.` },
   ];
 };
 
 const coinsToSpend = (coins: number): Msg[] => [
-  { title: `🪙 ${coinsText(coins)} leží ladem`, body: 'Za ně se odemkne nová kniha. Mrkni do knihovny, co by se hodilo.' },
+  { title: `🪙 Máš ${coinsAcc(coins)} na novou knihu!`, body: 'Mrkni do knihovny, jaký příběh si odemkneš.' },
   { title: 'Peněženka se hlásí 🪙', body: `Na účtu je ${coinsText(coins)}. V knihovně na ně čeká další příběh.` },
-  { title: 'Mince nečtou, ale knihy ano', body: `Tvých ${coinsText(coins)} stačí na novou knihu. Vyber si něco dobrého.` },
+  { title: 'Odměna za čtení čeká na využití', body: `Máš ${coinsAcc(coins)}, a to stačí na novou knihu. Vyber si něco dobrého.` },
   { title: 'Nová kniha je na dosah 🪙', body: 'Máš dost mincí na další příběh. Podívej se, co knihovna nabízí.' },
 ];
 
-// Jemné popostrčení: obecné i podle dne v týdnu (0 = neděle ... 6 = sobota, pražský čas).
-const gentleNudge = (weekday: number): Msg[] => {
-  const common: Msg[] = [
-    { title: 'Pár minut s knihou? 📖', body: 'Dnes je dobrý den na pár stránek. Otevři Jomarid Books a vyber si.' },
-    { title: 'Tvoje knihovna drží místo', body: 'Žádný tlak, jen pár stránek ve chvíli, kdy se to hodí.' },
-    { title: 'Chvilka pro příběh', body: 'Čaj, gauč, pár kapitol. Jomarid Books je připravené.' },
-    { title: 'Telefon máš stejně v ruce 📱', body: 'Tak ho využij k něčemu hezkému a přečti si pár stránek.' },
-    { title: 'Kniha ti posílá pozdrav 👋', body: 'Říká, že dnes ještě nebyla otevřená. Dej jí pár minut.' },
-    { title: 'Dnes ještě není pozdě', body: 'Do večera zbývá spousta času na krátkou kapitolu.' },
-    { title: 'Jedna stránka. Víc nechceme.', body: 'No dobře, chceme víc. Ale jedna stránka už se počítá.' },
-    { title: 'Nová série začíná dnes 🔥', body: 'Přečti pár stránek a zapiš si první den. Zítra už to budou dva.' },
+// Jemné popostrčení: obecné, podle denní doby i dne v týdnu (0 = neděle ... 6 = sobota, pražský čas).
+const gentleNudge = (weekday: number, t: Part): Msg[] => {
+  const list: Msg[] = [
+    { title: 'Pár stránek ti udělá dobře 📖', body: 'Dej si chvilku jen pro sebe a knihu. Jomarid Books je připravené.' },
+    { title: 'Čas na příběh ✨', body: 'Čaj, pohodlí a pár kapitol. Dnešek si to zaslouží.' },
+    { title: 'Tvoje knihovna se na tebe těší', body: 'Žádný tlak, jen pár stránek ve chvíli, kdy se ti to hodí.' },
+    { title: 'Dnes je dobrý den začít sérii 🔥', body: 'Přečti pár stránek a zapiš si první den. Zítra už to budou dva!' },
+    { title: 'Každá stránka je malé vítězství', body: 'Otevři knihu a dej si jednu. Máš na to!' },
+    { title: 'Hej, tvoje knihy na tebe mávají 👋', body: 'Pár minut čtení dokáže zázraky. Otevři Jomarid Books.' },
+    { title: 'Malá pauza, velký efekt', body: 'Pár minut s knihou tě odpoutá od starostí. Vyzkoušej to!' },
   ];
-  if (weekday === 1) common.push({ title: 'Pondělí potřebuje dobrý příběh', body: 'Start týdne se čtením vypadá líp. Pár stránek stačí.' });
-  if (weekday === 5) common.push({ title: 'Pátek! Čas na knihu 📚', body: 'Týden je za námi. Odměň se pár stránkami do víkendu.' });
-  if (weekday === 0 || weekday === 6) common.push(
-    { title: 'Víkend voní papírem 📖', body: 'Žádný spěch, jen klid a dobrá kniha. Vyber si, co ti sedne.' },
-    { title: 'Neděle je stvořená na čtení', body: 'Přikrývka, čaj a kapitola. Jomarid Books na tebe čeká.' },
+  if (t === 'morning') list.push(
+    { title: 'Dobré ráno! ☀️', body: 'Začni den pár stránkami. Dobrý příběh dělá dobré ráno.' },
+    { title: 'Ranní káva a kniha ☕', body: 'Nejhezčí kombinace dne. Otevři Jomarid Books a vyber si.' },
   );
-  return common;
+  if (t === 'day') list.push({ title: 'Polední pauza s knihou 🥪', body: 'Chvilka čtení během dne dobije baterky. Zkus to!' });
+  if (t === 'evening' || t === 'late') list.push(
+    { title: 'Klidný večer s knihou 🌙', body: 'Zpomal, odlož starosti a ponoř se do příběhu.' },
+    { title: 'Večerní čtení je nejlepší 🛋️', body: 'Pár stránek před spaním a den končí hezky.' },
+  );
+  if (weekday === 1) list.push({ title: 'Pondělí zvládneš s dobrým příběhem', body: 'Start týdne se čtením vypadá líp. Pár stránek stačí.' });
+  if (weekday === 5) list.push({ title: 'Pátek! Čas na knihu 📚', body: 'Týden je za námi. Odměň se pár stránkami do víkendu.' });
+  if (weekday === 0 || weekday === 6) list.push(
+    { title: 'Víkend voní papírem 📖', body: 'Žádný spěch, jen klid a dobrá kniha. Vyber si, co ti sedne.' },
+    { title: 'Víkend je stvořený na čtení', body: 'Přikrývka, čaj a kapitola. Jomarid Books na tebe čeká.' },
+  );
+  return list;
 };
 
 const newBook = (title: string, author: string): Msg[] => {
@@ -197,20 +237,23 @@ const newBook = (title: string, author: string): Msg[] => {
   const by = author ? ` Od ${short(author, 40)}.` : '';
   return [
     { title: '📚 Nová kniha v knihovně', body: `Nově v knihovně: „${t}“.${by} Mrkni, jestli ti sedne.`, url: '/app' },
-    { title: `Čerstvě přibylo: „${short(title, 36)}“`, body: `Nový příběh je na polici.${by}`, url: '/app' },
+    { title: `Čerstvě přibylo: „${short(title, 36)}“`, body: `Nový příběh je na polici.${by} Možná je to přesně ono!`, url: '/app' },
     { title: 'Něco nového na polici 📖', body: `Knihovna se rozrostla o „${t}“.${by}`, url: '/app' },
   ];
 };
 
-// Vrátí hotový titulek a text, nebo null pro neznámý druh. rnd vybírá variantu (0 až <1), weekday jen pro jemné popostrčení.
-export function compose(kind: unknown, data: Data | null | undefined, rnd: () => number = Math.random, weekday = 3): Msg | null {
+// Vrátí hotový titulek a text, nebo null pro neznámý druh. rnd vybírá variantu (0 až <1); weekday (0 = neděle) a hour (0-23, pražský čas)
+// přidávají varianty podle dne a denní doby.
+export function compose(kind: unknown, data: Data | null | undefined, rnd: () => number = Math.random, weekday = 3, hour = 14): Msg | null {
   const d = data && typeof data === 'object' ? data : {};
+  const t = partOf(Number.isFinite(hour) ? hour : 14);
   let list: Msg[];
   switch (kind) {
-    case 'streak_risk': list = streakRisk(Math.max(1, whole(d.streak, 1))); break;
+    case 'streak_risk': list = streakRisk(Math.max(1, whole(d.streak, 1)), t); break;
     case 'streak_milestone': list = milestone(Math.max(1, whole(d.streak, 1))); break;
+    case 'praise': list = praise(whole(d.streak, 1), t); break;
     case 'comeback': list = comeback(Math.max(1, whole(d.days, 7))); break;
-    case 'continue_book': list = continueBook(String(d.title ?? ''), Math.min(100, whole(d.percent))); break;
+    case 'continue_book': list = continueBook(String(d.title ?? ''), Math.min(100, whole(d.percent)), t); break;
     case 'goal_progress': {
       const goal = Math.max(1, whole(d.goal, 1));
       const done = Math.min(whole(d.done), goal - 1);
@@ -218,7 +261,7 @@ export function compose(kind: unknown, data: Data | null | undefined, rnd: () =>
       break;
     }
     case 'coins_to_spend': list = coinsToSpend(whole(d.coins)); break;
-    case 'gentle_nudge': list = gentleNudge(weekday); break;
+    case 'gentle_nudge': list = gentleNudge(weekday, t); break;
     case 'new_book': list = newBook(String(d.title ?? ''), String(d.author ?? '')); break;
     default: return null;
   }
@@ -227,7 +270,7 @@ export function compose(kind: unknown, data: Data | null | undefined, rnd: () =>
   const m = list[i];
   return { ...m, url: m.url ?? (kind === 'streak_milestone' ? '/stats' : '/app') };
 }
-export const MESSAGE_KINDS = ['streak_risk', 'streak_milestone', 'comeback', 'continue_book', 'goal_progress', 'coins_to_spend', 'gentle_nudge', 'new_book'];
+export const MESSAGE_KINDS = ['streak_risk', 'streak_milestone', 'praise', 'comeback', 'continue_book', 'goal_progress', 'coins_to_spend', 'gentle_nudge', 'new_book'];
 
 export async function handle(req: Request, deps: PushDeps): Promise<Response> {
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
@@ -244,8 +287,8 @@ export async function handle(req: Request, deps: PushDeps): Promise<Response> {
   let body = clip(input.body, 200);
   let url = safeUrl(input.url);
   if (typeof input.kind === 'string' && input.kind) {
-    const weekday = new Date(((deps.now?.() ?? new Date()).toLocaleString('en-US', { timeZone: 'Europe/Prague' }))).getDay();
-    const m = compose(input.kind, input.data as Data, deps.rnd ?? Math.random, weekday);
+    const prague = new Date((deps.now?.() ?? new Date()).toLocaleString('en-US', { timeZone: 'Europe/Prague' }));
+    const m = compose(input.kind, input.data as Data, deps.rnd ?? Math.random, prague.getDay(), prague.getHours());
     if (!m) return json({ error: 'bad_kind' }, 400);
     title = m.title;
     body = m.body;
