@@ -129,6 +129,7 @@ describe('klient: zapnutí a vypnutí', () => {
     assert.equal((await enablePush(e)).status, 'error'); assert.equal(e.log.unsubscribed, 1);
     e = makeEnv({ permission: 'granted', rpcError: { code: 'PGRST202', message: 'x' } });
     assert.equal((await enablePush(e)).status, 'not-configured');
+    assert.equal(e.log.unsubscribed, 1, 'ani při chybějící funkci nezůstane přihlášení bez řádku');
   });
   test('správce vyměnil klíče: staré přihlášení se zahodí a vytvoří nové', async () => {
     const e = makeEnv({ permission: 'granted', existing: { endpoint: 'https://push.example/old', options: { applicationServerKey: Uint8Array.of(9, 9, 9).buffer } } });
@@ -144,8 +145,46 @@ describe('klient: zapnutí a vypnutí', () => {
     assert.equal(await disablePush(makeEnv()), false);
   });
   test('stav zařízení', async () => {
-    assert.deepEqual(await deviceState(makeEnv({ permission: 'granted', existing: { endpoint: 'https://x/e' } })), { subscribed: true, permission: 'granted', hasRegistration: true });
-    assert.deepEqual(await deviceState(makeEnv()), { subscribed: false, permission: 'default', hasRegistration: true });
+    assert.deepEqual(await deviceState(makeEnv({ permission: 'granted', existing: { endpoint: 'https://x/e' } })), { subscribed: true, stale: false, permission: 'granted', hasRegistration: true });
+    assert.deepEqual(await deviceState(makeEnv()), { subscribed: false, stale: false, permission: 'default', hasRegistration: true });
+  });
+  test('stav zařízení: přihlášení po výměně klíčů nebo bez řádku v databázi se nepovažuje za zapnuté', async () => {
+    const rowClient = (data, error = null) => ({ from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data, error }) }) }) }) });
+    const oldKey = { applicationServerKey: Uint8Array.of(9, 9, 9).buffer };
+    const e1 = makeEnv({ permission: 'granted', existing: { endpoint: 'https://x/e', options: oldKey } });
+    assert.deepEqual(await deviceState({ ...e1, client: rowClient({ endpoint: 'https://x/e' }), vapidKey: KEY }), { subscribed: false, stale: true, permission: 'granted', hasRegistration: true });
+    const e2 = makeEnv({ permission: 'granted', existing: { endpoint: 'https://x/e' } });
+    assert.equal((await deviceState({ ...e2, client: rowClient(null), vapidKey: KEY })).stale, true, 'řádek chybí');
+    assert.equal((await deviceState({ ...e2, client: rowClient({ endpoint: 'https://x/e' }), vapidKey: KEY })).subscribed, true, 'řádek je a klíč sedí');
+    assert.equal((await deviceState({ ...e2, client: rowClient(null, { message: 'síť' }), vapidKey: KEY })).subscribed, true, 'nejde ověřit: věří se prohlížeči');
+    const hang = { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: () => new Promise(() => {}) }) }) }) };
+    assert.equal((await deviceState({ ...e2, client: hang, vapidKey: KEY })).subscribed, true, 'zaseknutá databáze nezablokuje stránku');
+    assert.equal((await deviceState({ ...makeEnv(), client: rowClient(null), vapidKey: KEY })).stale, false, 'bez přihlášení v prohlížeči není co opravovat');
+  });
+  test('zapnutí z klepnutí: s předaným klíčem se na povolení ptá hned, před jakýmkoli čekáním na databázi', async () => {
+    const order = [];
+    const e = makeEnv();
+    const baseFrom = e.client.from;
+    e.client.from = (...a) => { order.push('klíč ze serveru'); return baseFrom(...a); };
+    const ask = e.win.Notification.requestPermission;
+    e.win.Notification.requestPermission = async () => { order.push('povolení'); return ask(); };
+    assert.equal((await enablePush({ ...e, vapidKey: KEY })).status, 'enabled');
+    assert.deepEqual(order, ['povolení'], 'dotaz na povolení nesmí čekat na síť');
+    // bez předaného klíče (záloha) se klíč načte; neplatný předaný klíč se zahodí
+    const f = makeEnv(); assert.equal((await enablePush({ ...f, vapidKey: 'krátký' })).status, 'enabled');
+    const n = makeEnv({ vapid: null }); assert.equal((await enablePush({ ...n, vapidKey: null })).status, 'not-configured');
+  });
+  test('vypnutí: přihlášení v prohlížeči se odhlásí hned, i když databáze visí (po odhlášení z účtu nic nechodí)', async () => {
+    const e = makeEnv({ permission: 'granted', existing: { endpoint: 'https://push.example/ep4' } });
+    e.client.rpc = () => new Promise(() => {});
+    const done = disablePush(e);
+    await new Promise((r) => setTimeout(r, 30));
+    assert.equal(e.log.unsubscribed, 1, 'odhlášení v prohlížeči čekalo na databázi');
+    done.catch(() => {});
+    const out = makeEnv({ permission: 'granted', existing: { endpoint: 'https://push.example/ep5' } });
+    out.client.rpc = () => new Promise(() => {});
+    await cleanupOnLogout(out);
+    assert.equal(out.log.unsubscribed, 1);
   });
   test('před odhlášením se zařízení odhlásí; chyba ani zaseknutá databáze odhlášení nezablokují', async () => {
     const e = makeEnv({ permission: 'granted', existing: { endpoint: 'https://push.example/ep2' } });
@@ -267,11 +306,30 @@ describe('service worker: oznámení', () => {
     let w = makeSw(); await w.click(undefined); assert.deepEqual(w.opened, ['/']);
     w = makeSw(); await w.click('https://evil.example'); assert.deepEqual(w.opened, ['/']);
   });
+
+  test('platný JSON „null“, číslo nebo text místo objektu: ukáže se obecné oznámení, ne chyba', async () => {
+    for (const raw of ['null', '5', '"text"', 'true', '[]']) {
+      const sw = makeSw(); await sw.push(undefined, { raw });
+      assert.equal(sw.shown.length, 1, raw); assert.equal(sw.shown[0].title, 'Jomarid Books', raw); assert.equal(sw.shown[0].options.body, 'Máš nové oznámení.', raw);
+    }
+  });
+  test('cíl se zpětným lomítkem nebo řídicím znakem se změní na úvodní stránku (i při klepnutí)', async () => {
+    const sw = makeSw();
+    for (const bad of ['/\\evil.example', '/a\\b', '/a\u0000b', '/\t/evil.example']) {
+      await sw.push({ title: 'x', url: bad });
+      assert.equal(sw.shown.at(-1).options.data.url, '/', JSON.stringify(bad));
+      await sw.click(bad); assert.equal(sw.opened.at(-1), '/', JSON.stringify(bad));
+    }
+    await sw.push({ title: 'x', url: '/app?x=1' }); assert.equal(sw.shown.at(-1).options.data.url, '/app?x=1');
+  });
 });
 
 // ---- Edge Function ----
 let EDGE = null;
-try { EDGE = await import('../../db/push/send-push.ts'); } catch { /* starší Node bez podpory TypeScriptu: testy se přeskočí */ }
+try { EDGE = await import('../../db/push/send-push.ts'); } catch (e) {
+  // Přeskočí se jen starší Node bez podpory TypeScriptu. Chyba v samotném souboru (syntaxe, import) musí test shodit, ne ho tiše vynechat.
+  if (!['ERR_UNKNOWN_FILE_EXTENSION', 'ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX'].includes(e?.code)) throw e;
+}
 const UID = '11111111-1111-1111-1111-111111111111';
 const req = (body, { method = 'POST', secret = 's3', raw } = {}) => new Request('https://f.test/send-push', { method, headers: { 'x-push-secret': secret ?? '', 'content-type': 'application/json' }, body: method === 'GET' ? undefined : (raw ?? JSON.stringify(body)) });
 const deps = (over = {}) => {
@@ -279,7 +337,7 @@ const deps = (over = {}) => {
   return { calls, deps: {
     secret: 's3',
     sendWebPush: async (sub, payload) => { calls.sent.push([sub, JSON.parse(payload)]); },
-    listSubscriptions: async (a, u) => { calls.listed.push([a, u]); return [{ id: 'a', endpoint: 'https://e/1', p256dh: 'P', auth: 'A' }, { id: 'b', endpoint: 'https://e/2', p256dh: 'P', auth: 'A' }]; },
+    listSubscriptions: async (a, u) => { calls.listed.push([a, u]); return [{ id: 'a', endpoint: 'https://fcm.googleapis.com/fcm/send/1', p256dh: 'P', auth: 'A' }, { id: 'b', endpoint: 'https://fcm.googleapis.com/fcm/send/2', p256dh: 'P', auth: 'A' }]; },
     deleteSubscriptions: async (ids) => { calls.deleted.push(ids); },
     ...over,
   } };
@@ -303,7 +361,7 @@ describe('Edge Function send-push', { skip: !EDGE && 'Node bez podpory TypeScrip
     const res = await EDGE.handle(req({ audience: 'user', user_id: UID, title: 'Ahoj', body: 'Text', url: '/settings/notifications', tag: 'n-1' }), d);
     assert.deepEqual(await res.json(), { sent: 2, removed: 0, failed: 0, total: 2 });
     assert.deepEqual(calls.listed, [['user', UID]]);
-    assert.deepEqual(calls.sent[0], [{ endpoint: 'https://e/1', keys: { p256dh: 'P', auth: 'A' } }, { title: 'Ahoj', body: 'Text', url: '/settings/notifications', tag: 'n-1' }]);
+    assert.deepEqual(calls.sent[0], [{ endpoint: 'https://fcm.googleapis.com/fcm/send/1', keys: { p256dh: 'P', auth: 'A' } }, { title: 'Ahoj', body: 'Text', url: '/settings/notifications', tag: 'n-1' }]);
   });
   test('správcům nepotřebuje konkrétního uživatele', async () => {
     const { deps: d, calls } = deps();
@@ -346,7 +404,7 @@ describe('Edge Function send-push', { skip: !EDGE && 'Node bez podpory TypeScrip
     assert.equal(calls.sent[0][1].title, 'Ahoj');
   });
   test('hromadné oznámení o nové knize: příjemci „všichni“, autor se předá k vynechání, nepovolená adresa se nepřebírá', async () => {
-    const { deps: d, calls } = deps({ rnd: () => 0, listSubscriptions: async (a, u, ex) => { calls.listed.push([a, u, ex]); return [{ id: 'a', endpoint: 'https://e/1', p256dh: 'P', auth: 'A' }]; } });
+    const { deps: d, calls } = deps({ rnd: () => 0, listSubscriptions: async (a, u, ex) => { calls.listed.push([a, u, ex]); return [{ id: 'a', endpoint: 'https://fcm.googleapis.com/fcm/send/1', p256dh: 'P', auth: 'A' }]; } });
     const res = await EDGE.handle(req({ audience: 'all', kind: 'new_book', data: { title: 'Ladící', author: 'Autorka' }, exclude_user: UID, url: 'https://evil.example' }), d);
     assert.equal(res.status, 200);
     assert.deepEqual(calls.listed, [['all', null, UID]]);
@@ -373,6 +431,46 @@ describe('Edge Function send-push', { skip: !EDGE && 'Node bez podpory TypeScrip
     // 23:30 v neděli UTC je v Praze už pondělí (jiný den, jiná varianta)
     const late = await titles('2026-10-11T22:30:00Z');
     assert.ok(late.has('Pondělí potřebuje dobrý příběh'));
+  });
+
+  test('adresa zařízení musí vést na push službu prohlížeče: cizí adresy se nikdy nevolají, jen se smažou', async () => {
+    const ok = ['https://fcm.googleapis.com/fcm/send/abc', 'https://updates.push.services.mozilla.com/wpush/v2/x', 'https://web.push.apple.com/Q', 'https://wns2-par02p.notify.windows.com/w/?token=x', 'https://android.googleapis.com/gcm/send/x', 'https://FCM.GOOGLEAPIS.COM:443/fcm/send/x'];
+    const bad = ['https://evil.example/fcm.googleapis.com/', 'https://fcm.googleapis.com.evil.example/x', 'https://evilfcm.googleapis.com.evil.example/x', 'https://fcm.googleapis.com@evil.example/x', 'https://evil.example#.fcm.googleapis.com/', 'http://fcm.googleapis.com/x', 'https://fcm.googleapis.com:8443/x', 'https://127.0.0.1/x', 'https://localhost/x', 'https://169.254.169.254/latest/meta-data', 'https://fcm.googleapis.com', '', null, 5, 'https://fcm.googleapis.com/' + 'x'.repeat(2000)];
+    for (const u of ok) assert.equal(EDGE.isPushServiceUrl(u), true, u);
+    for (const u of bad) assert.equal(EDGE.isPushServiceUrl(u), false, String(u).slice(0, 60));
+    const subs = [...ok.slice(0, 2).map((endpoint, i) => ({ id: `g${i}`, endpoint, p256dh: 'P', auth: 'A' })), ...bad.slice(0, 3).map((endpoint, i) => ({ id: `b${i}`, endpoint, p256dh: 'P', auth: 'A' }))];
+    const { deps: d, calls } = deps({ listSubscriptions: async () => subs });
+    const res = await (await EDGE.handle(req({ audience: 'user', user_id: UID, title: 'x' }), d)).json();
+    assert.deepEqual(res, { sent: 2, removed: 3, failed: 0, total: 5 });
+    assert.deepEqual(calls.sent.map(([sub]) => sub.endpoint), ok.slice(0, 2));
+    assert.deepEqual(calls.deleted, [['b0', 'b1', 'b2']]);
+  });
+  test('cíl s lomítkem a zpětným lomítkem, řídicími znaky nebo mezerou se změní na úvodní stránku', async () => {
+    const { deps: d, calls } = deps();
+    for (const bad of ['/\\evil.example', '/a\\b', '/a\u0000b', '/a\nb', '/a\u007fb', '/\\/evil.example', '///evil']) {
+      calls.sent.length = 0; await EDGE.handle(req({ audience: 'user', user_id: UID, url: bad }), d);
+      assert.equal(calls.sent[0][1].url, '/', JSON.stringify(bad));
+    }
+    await EDGE.handle(req({ audience: 'user', user_id: UID, url: '/settings/notifications?x=1#a' }), d);
+    assert.equal(calls.sent.at(-1)[1].url, '/settings/notifications?x=1#a');
+  });
+  test('chyba čtení zařízení z databáze není „úspěch s nulou“: odpověď 500 a záznam v logu', async () => {
+    const logged = []; const orig = console.error; console.error = (...a) => logged.push(a);
+    try {
+      const { deps: d } = deps({ listSubscriptions: async () => { throw new Error('db spadla'); } });
+      const res = await EDGE.handle(req({ audience: 'user', user_id: UID }), d);
+      assert.equal(res.status, 500); assert.deepEqual(await res.json(), { error: 'db_error' });
+      assert.equal(logged.length, 1);
+    } finally { console.error = orig; }
+  });
+  test('selhalo mazání mrtvých zařízení: nepočítají se jako odstraněná a chyba se zaloguje', async () => {
+    const logged = []; const orig = console.error; console.error = (...a) => logged.push(a);
+    try {
+      const { deps: d } = deps({ sendWebPush: async () => { const e = new Error('gone'); e.statusCode = 410; throw e; }, deleteSubscriptions: async () => { throw new Error('db'); } });
+      const res = await (await EDGE.handle(req({ audience: 'user', user_id: UID }), d)).json();
+      assert.deepEqual(res, { sent: 0, removed: 0, failed: 0, total: 2 });
+      assert.equal(logged.length, 1);
+    } finally { console.error = orig; }
   });
 });
 
@@ -471,6 +569,14 @@ describe('SQL a návod pro server', () => {
     assert.match(sql, /alter table public\.push_test_log enable row level security/);
     assert.match(sql, /if not found then raise exception 'too_many'/);
     assert.ok(!/insert into public\.user_notifications/.test(sql), 'zkouška nesmí zapisovat do schránky oznámení (může mít omezení na druhy)');
+  });
+  test('adresa zařízení smí vést jen na push službu: SQL i Edge Function mají stejný seznam', () => {
+    assert.match(sql, /create or replace function public\.push_endpoint_ok/);
+    assert.match(sql, /if not public\.push_endpoint_ok\(p_endpoint\) then raise exception 'bad_endpoint'/);
+    assert.match(sql, /delete from public\.push_subscriptions where not public\.push_endpoint_ok\(endpoint\)/, 'dřív uložené cizí adresy se smažou');
+    const hosts = (txt) => (txt.match(/\(([a-z\\.|]+googleapis[a-z\\.|]+)\)/i)?.[1] || '').split('|').sort();
+    assert.ok(hosts(sql).length === 5, 'seznam v SQL');
+    assert.deepEqual(hosts(sql), hosts(read('db/push/send-push.ts')));
   });
   test('motivační oznámení: plánovač, výběr, odhlášení, soukromé tabulky, hodiny a limit jednoho denně', () => {
     for (const re of [/push_engagement_tick/, /push_engage_pick/, /cron\.schedule\('push-engagement'/, /Europe\/Prague/, /h < 16 or h > 19/, /get_push_prefs/, /set_push_prefs/, /trg_push_new_book/, /interval '6 hours'/]) assert.match(sql, re);

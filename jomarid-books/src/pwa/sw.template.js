@@ -83,11 +83,17 @@ self.addEventListener('message', (event) => {
 // ---- Oznámení do zařízení (Web Push) ----
 const NOTIFICATION_ICON = '/icon-192.png';
 // Cíl klepnutí smí být jen cesta v téhle appce (ne cizí adresa ani protokol).
-const safePath = (v) => (typeof v === 'string' && /^\/(?!\/)[^\s]*$/.test(v) && v.length <= 200 ? v : '/');
+// Bez zpětných lomítek, mezer a řídicích znaků (prohlížeč čte „/\\example.com“ jako cizí adresu) a po rozložení musí zůstat na stejném původu.
+const safePath = (v) => {
+  if (typeof v !== 'string' || v.length > 200 || v[0] !== '/' || v[1] === '/' || v[1] === '\\') return '/';
+  for (const ch of v) { const c = ch.codePointAt(0); if (c <= 32 || c === 127 || c === 92 || /\s/.test(ch)) return '/'; }
+  try { return new URL(v, self.location.origin).origin === self.location.origin ? v : '/'; } catch { return '/'; }
+};
 
 self.addEventListener('push', (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch { /* prázdná nebo nečitelná zpráva: ukáže se obecné oznámení */ }
+  if (!data || typeof data !== 'object') data = {}; // JSON „null“, číslo nebo text: také obecné oznámení
   const title = typeof data.title === 'string' && data.title ? data.title.slice(0, 120) : 'Jomarid Books';
   const body = typeof data.body === 'string' && data.body ? data.body.slice(0, 200) : (data.title ? '' : 'Máš nové oznámení.');
   const options = { body, icon: NOTIFICATION_ICON, badge: NOTIFICATION_ICON, data: { url: safePath(data.url) } };

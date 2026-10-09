@@ -56,11 +56,20 @@ alter table public.push_engage_log enable row level security;
 revoke all on public.push_engage_log from anon, authenticated;
 
 -- 3) Přihlášení a odhlášení zařízení (security definer: zařízení sdílené dvěma účty se přepíše na toho, kdo se právě přihlásil)
+-- Adresa zařízení smí vést jen na skutečnou push službu prohlížeče (Chrome/FCM, Firefox, Safari, Edge/Windows). Jinak by si přihlášený čtenář
+-- mohl zaregistrovat libovolnou adresu a server by na ni posílal požadavky. Stejné pravidlo kontroluje i Edge Function před odesláním.
+create or replace function public.push_endpoint_ok(p_endpoint text) returns boolean language sql immutable as $$
+  select coalesce(
+    p_endpoint ~* '^https://([a-z0-9-]+\.)*(fcm\.googleapis\.com|android\.googleapis\.com|push\.services\.mozilla\.com|push\.apple\.com|notify\.windows\.com)(:443)?/'
+    and length(p_endpoint) <= 2000, false)
+$$;
+delete from public.push_subscriptions where not public.push_endpoint_ok(endpoint);
+
 create or replace function public.register_push_subscription(p_endpoint text, p_p256dh text, p_auth text, p_user_agent text default null)
 returns void language plpgsql security definer set search_path to 'public' as $$
 begin
   if auth.uid() is null then raise exception 'not_authenticated'; end if;
-  if p_endpoint is null or p_endpoint !~ '^https://' or length(p_endpoint) > 2000 then raise exception 'bad_endpoint'; end if;
+  if not public.push_endpoint_ok(p_endpoint) then raise exception 'bad_endpoint'; end if;
   if coalesce(length(p_p256dh), 0) not between 20 and 200 or coalesce(length(p_auth), 0) not between 8 and 100 then raise exception 'bad_keys'; end if;
   insert into public.push_subscriptions (user_id, endpoint, p256dh, auth, user_agent)
   values (auth.uid(), p_endpoint, p_p256dh, p_auth, left(p_user_agent, 300))

@@ -21,14 +21,16 @@ export default function PushSettings({ client = supabase }) {
   const load = useCallback(async () => {
     const support = pushSupport({ win: window, nav: navigator, standalone: installed });
     if (!support.supported) { setState({ support }); return; }
-    const [device, vapid, prefs] = await Promise.all([deviceState({ nav: navigator, win: window }), fetchVapidKey(client), getPushPrefs(client)]);
-    setState({ support, device, configured: !vapid.error && !!vapid.key, engage: prefs.engage });
+    const vapid = await fetchVapidKey(client);
+    const vapidKey = !vapid.error && vapid.key ? vapid.key : null;
+    const [device, prefs] = await Promise.all([deviceState({ nav: navigator, win: window, client, vapidKey }), getPushPrefs(client)]);
+    setState({ support, device, configured: !!vapidKey, vapidKey, engage: prefs.engage });
   }, [client, installed]);
   useEffect(() => { load(); }, [load]);
 
   const turnOn = async () => {
     setBusy('on'); setMessage(null);
-    const res = await enablePush({ client, nav: navigator, win: window });
+    const res = await enablePush({ client, nav: navigator, win: window, vapidKey: state?.vapidKey }); // klíč je načtený předem, ať dotaz na povolení přijde přímo z klepnutí
     setBusy('');
     setMessage({ tone: res.status === 'enabled' ? 'ok' : res.status === 'error' ? 'error' : 'info', text: enableMessage(res.status) });
     load();
@@ -87,7 +89,10 @@ export default function PushSettings({ client = supabase }) {
           <button type="button" onClick={turnOff} disabled={!!busy} style={soft} className={btn}>{busy === 'off' ? <Loader2 size={12} className="animate-spin" /> : <BellOff size={12} />} Vypnout</button>
         </div>
       ) : (
-        <button type="button" onClick={turnOn} disabled={!!busy} style={solid} className={btn}>{busy === 'on' ? <Loader2 size={12} className="animate-spin" /> : <Bell size={12} />} Zapnout oznámení v tomhle zařízení</button>
+        <div className="space-y-2">
+          {device.stale && <Note>Oznámení v tomhle zařízení přestala fungovat (změna klíčů serveru nebo odpojené zařízení). Zapni je prosím znovu.</Note>}
+          <button type="button" onClick={turnOn} disabled={!!busy} style={solid} className={btn}>{busy === 'on' ? <Loader2 size={12} className="animate-spin" /> : <Bell size={12} />} Zapnout oznámení v tomhle zařízení</button>
+        </div>
       )}
       {configured && device.permission !== 'denied' && (
         <label className="flex items-start gap-2 cursor-pointer pt-1" style={{ color: 'var(--text-body)' }}>

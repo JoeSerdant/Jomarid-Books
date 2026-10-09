@@ -17,27 +17,51 @@ export const fetchVapidKey = async (client) => {
 /** Registrace service workeru (ve vývojovém režimu žádný není, proto čekání jen krátce). */
 export const getRegistration = (nav, ms = 4000) => (nav?.serviceWorker ? withTimeout(nav.serviceWorker.ready.catch(() => null), ms) : Promise.resolve(null));
 
-/** Stav tohohle zařízení: { subscribed, permission }. */
-export const deviceState = async ({ nav, win }) => {
+/**
+ * Stav tohohle zařízení: { subscribed, stale, permission, hasRegistration }.
+ * Se znalostí klíče serveru (vapidKey) a klienta se ověří, že přihlášení v prohlížeči sedí na aktuální klíč a že má řádek v databázi
+ * (po výměně klíčů nebo smazání zařízení z databáze je `stale` a Nastavení nabídne zapnutí znovu, místo aby tvrdilo, že oznámení fungují).
+ */
+export const deviceState = async ({ nav, win, client, vapidKey }) => {
   const reg = await getRegistration(nav, 2500);
   let sub = null;
   try { sub = reg ? await reg.pushManager.getSubscription() : null; } catch { /* nevadí */ }
-  return { subscribed: !!sub, permission: win?.Notification?.permission ?? 'unsupported', hasRegistration: !!reg };
+  let healthy = !!sub;
+  if (sub && vapidKey && isVapidPublicKey(vapidKey) && !sameApplicationServerKey(sub, urlBase64ToUint8Array(vapidKey))) healthy = false;
+  if (healthy && client) {
+    try {
+      const res = await withTimeout(client.from('push_subscriptions').select('endpoint').eq('endpoint', sub.endpoint).maybeSingle(), 3000, null);
+      if (res && !res.error && !res.data) healthy = false; // v databázi řádek není (smazán, vytlačen limitem zařízení)
+    } catch { /* nejde ověřit: věříme prohlížeči */ }
+  }
+  return { subscribed: healthy, stale: !!sub && !healthy, permission: win?.Notification?.permission ?? 'unsupported', hasRegistration: !!reg };
 };
 
-/** Zapne oznámení. status: enabled | denied | dismissed | not-configured | no-sw | error. */
-export const enablePush = async ({ client, nav, win }) => {
-  const vapid = await fetchVapidKey(client);
-  if (vapid.error) return { status: 'error', error: vapid.error };
-  if (!vapid.key) return { status: 'not-configured' };
+/**
+ * Zapne oznámení. status: enabled | denied | dismissed | not-configured | no-sw | error.
+ * Volá se přímo z klepnutí: dotaz na povolení musí přijít dřív než jakékoli čekání na síť, jinak Safari (i v appce na iPhonu) okno
+ * nezobrazí. Proto klíč serveru předává volající, který ho načetl už při otevření stránky (vapidKey); sám se načítá jen jako záloha.
+ */
+export const enablePush = async ({ client, nav, win, vapidKey = null }) => {
   if (win.Notification.permission === 'denied') return { status: 'denied' };
+  let key = isVapidPublicKey(vapidKey) ? vapidKey : null;
+  if (!key) { // záloha: bez předaného klíče se načte tady (dotaz na povolení pak nemusí být z klepnutí)
+    const fetched = await fetchVapidKey(client);
+    if (fetched.error) return { status: 'error', error: fetched.error };
+    if (!fetched.key) return { status: 'not-configured' };
+    key = fetched.key;
+  }
   if (win.Notification.permission !== 'granted') {
-    const answer = await win.Notification.requestPermission(); // musí běžet přímo z klepnutí uživatele
+    const answer = await win.Notification.requestPermission();
     if (answer !== 'granted') return { status: answer === 'denied' ? 'denied' : 'dismissed' };
   }
+  return register({ client, nav, key });
+};
+
+const register = async ({ client, nav, key }) => {
   const reg = await getRegistration(nav);
   if (!reg) return { status: 'no-sw' };
-  const keyBytes = urlBase64ToUint8Array(vapid.key);
+  const keyBytes = urlBase64ToUint8Array(key);
   try {
     let sub = await reg.pushManager.getSubscription();
     if (sub && !sameApplicationServerKey(sub, keyBytes)) { await sub.unsubscribe(); sub = null; } // správce vyměnil klíče
@@ -46,9 +70,8 @@ export const enablePush = async ({ client, nav, win }) => {
     if (!row) return { status: 'error' };
     const { error } = await client.rpc('register_push_subscription', { p_endpoint: row.endpoint, p_p256dh: row.p256dh, p_auth: row.auth, p_user_agent: nav.userAgent || null });
     if (error) {
-      if (isMissingFunction(error)) return { status: 'not-configured' };
-      try { await sub.unsubscribe(); } catch { /* nevadí */ }
-      return { status: 'error', error };
+      try { await sub.unsubscribe(); } catch { /* nevadí */ } // nezůstane přihlášení bez řádku v databázi
+      return isMissingFunction(error) ? { status: 'not-configured' } : { status: 'error', error };
     }
     return { status: 'enabled' };
   } catch (e) {
@@ -63,8 +86,11 @@ export const disablePush = async ({ client, nav }) => {
   try { sub = reg ? await reg.pushManager.getSubscription() : null; } catch { /* nevadí */ }
   if (!sub) return false;
   const endpoint = sub.endpoint;
-  try { await client.rpc('unregister_push_subscription', { p_endpoint: endpoint }); } catch { /* řádek se vyčistí při dalším odeslání (410) */ }
-  try { await sub.unsubscribe(); } catch { /* nevadí */ }
+  // Odhlášení v prohlížeči i řádek v databázi se spouští zároveň: i kdyby databáze visela, zařízení přestane oznámení dostávat hned
+  // (řádek se pak vyčistí při dalším odeslání, kdy push služba vrátí 404/410).
+  const fromBrowser = (async () => { try { await sub.unsubscribe(); } catch { /* nevadí */ } })();
+  const fromDatabase = (async () => { try { await client.rpc('unregister_push_subscription', { p_endpoint: endpoint }); } catch { /* vyčistí se při dalším odeslání */ } })();
+  await Promise.all([fromBrowser, fromDatabase]);
   return true;
 };
 

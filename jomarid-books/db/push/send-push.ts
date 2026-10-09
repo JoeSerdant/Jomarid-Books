@@ -8,11 +8,13 @@
 // pak texty složí compose() níž: pro každý druh je víc variant, ať se oznámení neomílají.
 // Logika je ve funkcích handle() a compose() se závislostmi zvenku, takže jde testovat v Node (src/tests/push.test.mjs) bez Deno a sítě.
 
+export interface PushSub { id: string; endpoint: string; p256dh: string; auth: string }
+
 export interface PushDeps {
   secret: string;
   sendWebPush: (sub: { endpoint: string; keys: { p256dh: string; auth: string } }, payload: string) => Promise<void>;
   // audience 'all' = všichni kromě excludeUser a těch, kdo si motivační oznámení vypnuli
-  listSubscriptions: (audience: 'user' | 'admins' | 'all', userId: string | null, excludeUser?: string | null) => Promise<Array<{ id: string; endpoint: string; p256dh: string; auth: string }>>;
+  listSubscriptions: (audience: 'user' | 'admins' | 'all', userId: string | null, excludeUser?: string | null) => Promise<PushSub[]>;
   deleteSubscriptions: (ids: string[]) => Promise<void>;
   rnd?: () => number; // výběr varianty textu (v testech pevný)
   now?: () => Date;
@@ -22,7 +24,16 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const clip = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : '');
 // Cíl kliknutí smí být jen cesta v téhle appce (ne cizí adresa).
-const safeUrl = (v: unknown) => (typeof v === 'string' && /^\/(?!\/)[^\s]*$/.test(v) && v.length <= 200 ? v : '/');
+// Bez zpětných lomítek, mezer a řídicích znaků: prohlížeč čte „/\\example.com“ jako cizí adresu.
+const safeUrl = (v: unknown) => {
+  if (typeof v !== 'string' || v.length > 200 || v[0] !== '/' || v[1] === '/' || v[1] === '\\') return '/';
+  for (const ch of v) { const c = ch.codePointAt(0)!; if (c <= 32 || c === 127 || c === 92 || /\s/.test(ch)) return '/'; }
+  return v;
+};
+// Zařízení smí vést jen na push službu prohlížeče (stejné pravidlo jako push_endpoint_ok v SQL). Jiná adresa se nikdy nevolá, ať server
+// nikdo nepřiměje posílat požadavky kam chce.
+export const isPushServiceUrl = (v: unknown) =>
+  typeof v === 'string' && v.length <= 2000 && /^https:\/\/([a-z0-9-]+\.)*(fcm\.googleapis\.com|android\.googleapis\.com|push\.services\.mozilla\.com|push\.apple\.com|notify\.windows\.com)(:443)?\//i.test(v);
 
 // ---------- Texty motivačních oznámení ----------
 // Tykáme, hlas je hravý a trochu dramatický (jako Duolingo), ale s knižním humorem. Bez rodových tvarů minulého času
@@ -249,11 +260,19 @@ export async function handle(req: Request, deps: PushDeps): Promise<Response> {
     tag: clip(input.tag, 80) || undefined,
   });
 
-  const subs = await deps.listSubscriptions(audience, userId, excludeUser);
-  const dead: string[] = [];
+  let subs: PushSub[];
+  try {
+    subs = await deps.listSubscriptions(audience, userId, excludeUser);
+  } catch (e) {
+    console.error('send-push: čtení zařízení z databáze selhalo', e); // ať se chyba nastavení nepřehlédne (Edge Functions -> Logs)
+    return json({ error: 'db_error' }, 500);
+  }
+  const dead: PushSub[] = [];
   let sent = 0;
   let failed = 0;
-  const queue = [...subs];
+  const queue: PushSub[] = [];
+  for (const s of subs) (isPushServiceUrl(s.endpoint) ? queue : dead).push(s); // cizí adresy se jen smažou, nevolají se
+  const toSend = queue.length;
   const worker = async () => {
     for (let s = queue.shift(); s; s = queue.shift()) {
       try {
@@ -261,14 +280,17 @@ export async function handle(req: Request, deps: PushDeps): Promise<Response> {
         sent += 1;
       } catch (e) {
         const status = Number((e as { statusCode?: number })?.statusCode);
-        if (status === 404 || status === 410) dead.push(s.id); // odhlášené nebo smazané zařízení
+        if (status === 404 || status === 410) dead.push(s); // odhlášené nebo smazané zařízení
         else failed += 1;
       }
     }
   };
-  await Promise.all(Array.from({ length: Math.min(8, queue.length) }, worker));
-  if (dead.length) { try { await deps.deleteSubscriptions(dead); } catch { /* příště */ } }
-  return json({ sent, removed: dead.length, failed, total: subs.length });
+  await Promise.all(Array.from({ length: Math.min(8, toSend) }, worker));
+  let removed = 0;
+  if (dead.length) {
+    try { await deps.deleteSubscriptions(dead.map((d) => d.id)); removed = dead.length; } catch (e) { console.error('send-push: mazání mrtvých zařízení selhalo', e); }
+  }
+  return json({ sent, removed, failed, total: subs.length });
 }
 
 // Spuštění v Supabase (Deno). V Node (testy) se tahle část přeskočí.
@@ -286,12 +308,14 @@ if (D && typeof D.serve === 'function') {
       if (audience === 'all') {
         // Všichni kromě autora a těch, kdo si motivační oznámení vypnuli. Po stránkách (limit PostgREST), strop 5000 zařízení.
         const off = new Set<string>();
-        const { data: prefs } = await db.from('push_prefs').select('user_id').eq('engage', false);
-        for (const r of prefs ?? []) off.add((r as { user_id: string }).user_id);
-        const out: Array<{ id: string; endpoint: string; p256dh: string; auth: string }> = [];
+        const prefs = await db.from('push_prefs').select('user_id').eq('engage', false);
+        if (prefs.error) throw prefs.error;
+        for (const r of prefs.data ?? []) off.add((r as { user_id: string }).user_id);
+        const out: PushSub[] = [];
         for (let from = 0; from < 5000; from += 1000) {
-          const { data } = await db.from('push_subscriptions').select(`${cols}, user_id`).order('id').range(from, from + 999);
-          const rows = (data ?? []) as Array<{ id: string; endpoint: string; p256dh: string; auth: string; user_id: string }>;
+          const page = await db.from('push_subscriptions').select(`${cols}, user_id`).order('id').range(from, from + 999);
+          if (page.error) throw page.error;
+          const rows = (page.data ?? []) as Array<PushSub & { user_id: string }>;
           for (const r of rows) if (r.user_id !== excludeUser && !off.has(r.user_id)) out.push(r);
           if (rows.length < 1000) break;
         }
@@ -299,14 +323,19 @@ if (D && typeof D.serve === 'function') {
       }
       let ids: string[] = userId ? [userId] : [];
       if (audience === 'admins') {
-        const { data } = await db.from('profiles').select('id').eq('role', 'správce');
-        ids = (data ?? []).map((r: { id: string }) => r.id);
+        const admins = await db.from('profiles').select('id').eq('role', 'správce');
+        if (admins.error) throw admins.error;
+        ids = (admins.data ?? []).map((r: { id: string }) => r.id);
       }
       if (!ids.length) return [];
-      const { data } = await db.from('push_subscriptions').select(cols).in('user_id', ids);
-      return data ?? [];
+      const res = await db.from('push_subscriptions').select(cols).in('user_id', ids);
+      if (res.error) throw res.error;
+      return (res.data ?? []) as PushSub[];
     },
-    deleteSubscriptions: async (ids) => { await db.from('push_subscriptions').delete().in('id', ids); },
+    deleteSubscriptions: async (ids) => {
+      const res = await db.from('push_subscriptions').delete().in('id', ids);
+      if (res.error) throw res.error;
+    },
   };
   D.serve((req: Request) => handle(req, deps));
 }
