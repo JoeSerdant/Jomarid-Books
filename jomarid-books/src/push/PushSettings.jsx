@@ -16,6 +16,7 @@ export default function PushSettings({ client = supabase }) {
   const { installed } = useInstallState();
   const [state, setState] = useState(null); // { support, device, configured }
   const [busy, setBusy] = useState('');
+  const [savingEngage, setSavingEngage] = useState(false); // dvě rychlé změny za sebou by se do databáze mohly dostat v opačném pořadí
   const [message, setMessage] = useState(null); // { tone, text }
 
   const load = useCallback(async () => {
@@ -52,6 +53,8 @@ export default function PushSettings({ client = supabase }) {
   };
 
   const toggleEngage = async (next) => {
+    if (savingEngage) return;
+    setSavingEngage(true);
     setState((s) => ({ ...s, engage: next })); // hned vidět; při chybě se vrátí
     setMessage(null);
     const res = await setPushPrefs(client, next);
@@ -59,6 +62,7 @@ export default function PushSettings({ client = supabase }) {
       setState((s) => ({ ...s, engage: !next }));
       setMessage({ tone: 'error', text: 'Nastavení se nepodařilo uložit. Zkus to za chvilku znovu.' });
     }
+    setSavingEngage(false);
   };
 
   const wrap = (children) => (
@@ -96,7 +100,7 @@ export default function PushSettings({ client = supabase }) {
       )}
       {configured && device.permission !== 'denied' && (
         <label className="flex items-start gap-2 cursor-pointer pt-1" style={{ color: 'var(--text-body)' }}>
-          <input type="checkbox" data-testid="push-engage" checked={state.engage !== false} onChange={(e) => toggleEngage(e.target.checked)} className="mt-0.5 w-4 h-4 shrink-0" style={{ accentColor: 'var(--bg-primary)' }} />
+          <input type="checkbox" data-testid="push-engage" checked={state.engage !== false} disabled={savingEngage} onChange={(e) => toggleEngage(e.target.checked)} className="mt-0.5 w-4 h-4 shrink-0 disabled:opacity-60" style={{ accentColor: 'var(--bg-primary)' }} />
           <span className="text-xs leading-relaxed">
             <span className="font-black">Připomínky a novinky</span>
             <span style={{ color: 'var(--text-muted)' }} className="block">Série čtení, rozečtená kniha, měsíční cíl, mince na novou knihu a nové knihy v knihovně. Nejvýš jedno oznámení denně, vždy odpoledne a večer, nikdy v noci.</span>

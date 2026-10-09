@@ -30,7 +30,6 @@ create table if not exists public.push_settings (
 );
 alter table public.push_settings enable row level security;
 revoke all on public.push_settings from anon, authenticated;
-alter table public.push_settings add column if not exists last_book_push timestamptz;
 
 -- Nastavení čtenáře: chce i připomínky a motivaci (série, cíle, novinky)? Bez řádku platí „ano“. Mění se jen přes funkce níž.
 create table if not exists public.push_prefs (
@@ -54,6 +53,17 @@ create table if not exists public.push_engage_log (
 create index if not exists push_engage_log_kind_idx on public.push_engage_log (user_id, kind, created_at desc);
 alter table public.push_engage_log enable row level security;
 revoke all on public.push_engage_log from anon, authenticated;
+
+-- Nově zveřejněné knihy čekající na oznámení. Oznámí se až v plánovači (16-19 h, nejvýš jedno oznámení denně na čtenáře), ne ihned.
+create table if not exists public.push_new_books (
+  book_id uuid primary key,
+  title text,
+  author text,
+  author_id uuid,
+  announced_at timestamptz not null default now()
+);
+alter table public.push_new_books enable row level security;
+revoke all on public.push_new_books from anon, authenticated;
 
 -- 3) Přihlášení a odhlášení zařízení (security definer: zařízení sdílené dvěma účty se přepíše na toho, kdo se právě přihlásil)
 -- Adresa zařízení smí vést jen na skutečnou push službu prohlížeče (Chrome/FCM, Firefox, Safari, Edge/Windows). Jinak by si přihlášený čtenář
@@ -94,8 +104,9 @@ grant execute on function public.register_push_subscription(text, text, text, te
 -- 4) Odeslání: zavolá Edge Function. Nenastavené odesílání nebo chyba sítě nikdy nesmí rozbít zápis oznámení.
 -- Buď hotový titulek a text (oznámení z appky), nebo druh a data (motivační oznámení: texty skládá funkce podle druhu).
 drop function if exists public.push_dispatch(text, uuid, text, text, text, text);
+drop function if exists public.push_dispatch(text, uuid, text, text, text, text, text, jsonb, uuid);
 create or replace function public.push_dispatch(p_audience text, p_user uuid, p_title text, p_body text, p_url text, p_tag text,
-                                                p_kind text default null, p_data jsonb default null, p_exclude uuid default null)
+                                                p_kind text default null, p_data jsonb default null)
 returns void language plpgsql security definer set search_path to 'public', 'extensions' as $$
 declare cfg record;
 begin
@@ -106,12 +117,12 @@ begin
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-push-secret', cfg.secret),
     body := jsonb_build_object('audience', p_audience, 'user_id', p_user, 'title', left(coalesce(p_title, ''), 120),
                                'body', left(coalesce(p_body, ''), 200), 'url', p_url, 'tag', p_tag,
-                               'kind', p_kind, 'data', coalesce(p_data, '{}'::jsonb), 'exclude_user', p_exclude)
+                               'kind', p_kind, 'data', coalesce(p_data, '{}'::jsonb))
   );
 exception when others then
   null;
 end $$;
-revoke execute on function public.push_dispatch(text, uuid, text, text, text, text, text, jsonb, uuid) from public, anon, authenticated;
+revoke execute on function public.push_dispatch(text, uuid, text, text, text, text, text, jsonb) from public, anon, authenticated;
 
 -- 5) Spouštěče: nové oznámení čtenáři (Nastavení -> Oznámení) a nová žádost pro správce (Správa -> Upozornění)
 create or replace function public.trg_push_user_notification() returns trigger language plpgsql security definer set search_path to 'public' as $$
@@ -134,17 +145,16 @@ drop trigger if exists trg_push_admin_notification on public.admin_notifications
 create trigger trg_push_admin_notification after insert on public.admin_notifications
   for each row execute function public.trg_push_admin_notification();
 
--- 6) Novinky v knihovně: hromadné oznámení, nejvýš jednou za 6 hodin (hromadné vkládání knih nezaplaví telefony), autor knihu nedostane.
+-- 6) Novinky v knihovně: spouštěč jen zapíše knihu do fronty. Oznámí se až plánovačem (viz 9), takže platí stejná pravidla jako pro ostatní
+--    připomínky: nejvýš jedno oznámení denně, jen odpoledne a večer, jen kdo má připomínky zapnuté. Autor knihu nedostane.
 create or replace function public.trg_push_new_book() returns trigger language plpgsql security definer set search_path to 'public' as $$
 begin
   if coalesce(new.is_hidden, false) then return new; end if;                              -- skrytý koncept se neoznamuje
   if tg_op = 'UPDATE' and not coalesce(old.is_hidden, false) then return new; end if;     -- jen když se kniha právě zveřejnila
-  update public.push_settings set last_book_push = now()
-   where id = 1 and (last_book_push is null or last_book_push < now() - interval '6 hours');
-  if found then
-    perform public.push_dispatch('all', null, null, null, '/app', 'book-' || new.id::text, 'new_book',
-                                 jsonb_build_object('title', new.title, 'author', coalesce(new.author_display, new.author)), new.author_id);
-  end if;
+  insert into public.push_new_books (book_id, title, author, author_id, announced_at)
+  values (new.id, new.title, coalesce(new.author_display, new.author), new.author_id, now())
+  on conflict (book_id) do update set title = excluded.title, author = excluded.author, author_id = excluded.author_id, announced_at = excluded.announced_at;
+  delete from public.push_new_books where announced_at < now() - interval '30 days';
   return new;
 end $$;
 drop trigger if exists trg_push_new_book on public.books;
@@ -165,7 +175,7 @@ revoke execute on function public.get_push_prefs(), public.set_push_prefs(boolea
 grant execute on function public.get_push_prefs(), public.set_push_prefs(boolean) to authenticated;
 
 -- 8) Co dnes čtenáři připomenout? Vrací { kind, data, meta } nebo null. Pořadí: série v ohrožení, milník série, návrat po pauze,
---    rozečtená kniha, měsíční cíl, mince na novou knihu, jemné popostrčení. Po dnešním čtení se připomíná jen milník.
+--    rozečtená kniha, měsíční cíl, mince na novou knihu, nová kniha v knihovně, jemné popostrčení. Kdo dnes už četl, dostane jen milník nebo novinku.
 create or replace function public.push_engage_pick(p_user uuid, p_now timestamptz default now()) returns jsonb
 language plpgsql stable security definer set search_path to 'public' as $$
 declare
@@ -179,6 +189,8 @@ declare
   p record;
   v_done int;
   v_min int;
+  nb record;
+  new_book jsonb;
   recent_days constant int[] := array[3, 7, 14, 30];
   milestones constant int[] := array[3, 7, 14, 30, 50, 100, 200, 365];
 begin
@@ -195,11 +207,23 @@ begin
   ) x;
   streak_now := streak_y + (case when read_today then 1 else 0 end);
 
+  -- nově zveřejněná kniha (poslední 4 dny), kterou čtenář ještě nemá a nenapsal; stejný druh nejdřív za 2 dny
+  select n.book_id, n.title, n.author into nb from public.push_new_books n
+   where n.announced_at > p_now - interval '4 days'
+     and n.author_id is distinct from p_user
+     and not exists (select 1 from public.user_books ub where ub.user_id = p_user and ub.book_id = n.book_id)
+     and exists (select 1 from public.books bk where bk.id = n.book_id and not coalesce(bk.is_hidden, false))
+     and not exists (select 1 from public.push_engage_log l where l.user_id = p_user and l.kind = 'new_book' and l.meta = n.book_id::text)
+   order by n.announced_at desc limit 1;
+  if found and not exists (select 1 from public.push_engage_log where user_id = p_user and kind = 'new_book' and created_at > p_now - interval '2 days') then
+    new_book := jsonb_build_object('kind', 'new_book', 'data', jsonb_build_object('title', nb.title, 'author', nb.author), 'meta', nb.book_id::text);
+  end if;
+
   if read_today then
     if streak_now = any (milestones) and not exists (select 1 from public.push_engage_log where user_id = p_user and kind = 'streak_milestone' and meta = streak_now::text) then
       return jsonb_build_object('kind', 'streak_milestone', 'data', jsonb_build_object('streak', streak_now), 'meta', streak_now::text);
     end if;
-    return null;
+    return new_book;
   end if;
 
   if streak_y >= 1 then
@@ -235,6 +259,8 @@ begin
      and not exists (select 1 from public.push_engage_log where user_id = p_user and kind = 'coins_to_spend' and created_at > p_now - interval '7 days') then
     return jsonb_build_object('kind', 'coins_to_spend', 'data', jsonb_build_object('coins', p.coins));
   end if;
+
+  if new_book is not null then return new_book; end if;
 
   if not exists (select 1 from public.push_engage_log where user_id = p_user and kind = 'gentle_nudge' and created_at > p_now - interval '3 days') then
     return jsonb_build_object('kind', 'gentle_nudge', 'data', '{}'::jsonb);

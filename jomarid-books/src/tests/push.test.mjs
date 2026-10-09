@@ -403,15 +403,14 @@ describe('Edge Function send-push', { skip: !EDGE && 'Node bez podpory TypeScrip
     await EDGE.handle(req({ audience: 'user', user_id: UID, title: 'Ahoj', body: 'B', kind: '' }), d);
     assert.equal(calls.sent[0][1].title, 'Ahoj');
   });
-  test('hromadné oznámení o nové knize: příjemci „všichni“, autor se předá k vynechání, nepovolená adresa se nepřebírá', async () => {
-    const { deps: d, calls } = deps({ rnd: () => 0, listSubscriptions: async (a, u, ex) => { calls.listed.push([a, u, ex]); return [{ id: 'a', endpoint: 'https://fcm.googleapis.com/fcm/send/1', p256dh: 'P', auth: 'A' }]; } });
-    const res = await EDGE.handle(req({ audience: 'all', kind: 'new_book', data: { title: 'Ladící', author: 'Autorka' }, exclude_user: UID, url: 'https://evil.example' }), d);
-    assert.equal(res.status, 200);
-    assert.deepEqual(calls.listed, [['all', null, UID]]);
+  test('příjemce „všichni“ a vynechání autora už neexistují: novinky jdou jednotlivě přes plánovač a respektují hodiny i vypnutí', async () => {
+    const { deps: d, calls } = deps({ rnd: () => 0 });
+    const res = await EDGE.handle(req({ audience: 'all', kind: 'new_book', data: { title: 'T', author: 'A' } }), d);
+    assert.equal(res.status, 400); assert.deepEqual(await res.json(), { error: 'bad_audience' });
+    assert.equal(calls.listed.length, 0);
+    // novinka jednomu čtenáři přes druh new_book
+    await EDGE.handle(req({ audience: 'user', user_id: UID, kind: 'new_book', data: { title: 'Ladící', author: 'Autorka' }, url: 'https://evil.example' }), d);
     assert.match(calls.sent[0][1].body, /Ladící/); assert.equal(calls.sent[0][1].url, '/app');
-    calls.listed.length = 0;
-    await EDGE.handle(req({ audience: 'all', kind: 'new_book', data: {}, exclude_user: 'není-uuid' }), d);
-    assert.deepEqual(calls.listed, [['all', null, null]]);
   });
   test('jemné popostrčení: v pondělí, v pátek a o víkendu přibývají vlastní varianty (pražský čas)', async () => {
     const titles = async (iso) => {
@@ -579,7 +578,7 @@ describe('SQL a návod pro server', () => {
     assert.deepEqual(hosts(sql), hosts(read('db/push/send-push.ts')));
   });
   test('motivační oznámení: plánovač, výběr, odhlášení, soukromé tabulky, hodiny a limit jednoho denně', () => {
-    for (const re of [/push_engagement_tick/, /push_engage_pick/, /cron\.schedule\('push-engagement'/, /Europe\/Prague/, /h < 16 or h > 19/, /get_push_prefs/, /set_push_prefs/, /trg_push_new_book/, /interval '6 hours'/]) assert.match(sql, re);
+    for (const re of [/push_engagement_tick/, /push_engage_pick/, /cron\.schedule\('push-engagement'/, /Europe\/Prague/, /h < 16 or h > 19/, /get_push_prefs/, /set_push_prefs/, /trg_push_new_book/, /push_new_books/]) assert.match(sql, re);
     assert.match(sql, /unique|primary key \(user_id, day\)/i, 'jedno oznámení na uživatele a den');
     assert.match(sql, /alter table public\.push_prefs enable row level security/);
     assert.match(sql, /alter table public\.push_engage_log enable row level security/);
@@ -587,6 +586,8 @@ describe('SQL a návod pro server', () => {
     assert.match(sql, /revoke execute on function public\.push_engage_pick[^;]*from public, anon, authenticated/);
     assert.match(sql, /coalesce\(pf\.engage, true\)/, 'kdo si připomínky vypnul, nedostane je');
     assert.ok(!/insert into public\.user_notifications/.test(sql));
+    assert.match(sql, /alter table public\.push_new_books enable row level security/);
+    assert.ok(!/push_dispatch\('all'/.test(sql), 'novinky se neposílají hromadně a hned');
   });
   test('v souboru nejsou žádná tajemství ani pevná adresa projektu; složka se nejmenuje supabase/', () => {
     assert.ok(!/sb_secret|service_role|BEGIN PRIVATE KEY|vapid_private/i.test(sql));

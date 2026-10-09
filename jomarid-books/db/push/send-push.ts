@@ -13,8 +13,7 @@ export interface PushSub { id: string; endpoint: string; p256dh: string; auth: s
 export interface PushDeps {
   secret: string;
   sendWebPush: (sub: { endpoint: string; keys: { p256dh: string; auth: string } }, payload: string) => Promise<void>;
-  // audience 'all' = všichni kromě excludeUser a těch, kdo si motivační oznámení vypnuli
-  listSubscriptions: (audience: 'user' | 'admins' | 'all', userId: string | null, excludeUser?: string | null) => Promise<PushSub[]>;
+  listSubscriptions: (audience: 'user' | 'admins', userId: string | null) => Promise<PushSub[]>;
   deleteSubscriptions: (ids: string[]) => Promise<void>;
   rnd?: () => number; // výběr varianty textu (v testech pevný)
   now?: () => Date;
@@ -236,9 +235,8 @@ export async function handle(req: Request, deps: PushDeps): Promise<Response> {
   let input: Record<string, unknown>;
   try { input = await req.json(); } catch { return json({ error: 'bad_json' }, 400); }
 
-  const audience = input.audience === 'admins' ? 'admins' : input.audience === 'user' ? 'user' : input.audience === 'all' ? 'all' : null;
+  const audience = input.audience === 'admins' ? 'admins' : input.audience === 'user' ? 'user' : null;
   const userId = typeof input.user_id === 'string' && UUID.test(input.user_id) ? input.user_id : null;
-  const excludeUser = typeof input.exclude_user === 'string' && UUID.test(input.exclude_user) ? input.exclude_user : null;
   if (!audience || (audience === 'user' && !userId)) return json({ error: 'bad_audience' }, 400);
 
   // Druh + data (motivační oznámení): texty složí tahle funkce. Jinak platí hotový titulek a text z databáze.
@@ -262,7 +260,7 @@ export async function handle(req: Request, deps: PushDeps): Promise<Response> {
 
   let subs: PushSub[];
   try {
-    subs = await deps.listSubscriptions(audience, userId, excludeUser);
+    subs = await deps.listSubscriptions(audience, userId);
   } catch (e) {
     console.error('send-push: čtení zařízení z databáze selhalo', e); // ať se chyba nastavení nepřehlédne (Edge Functions -> Logs)
     return json({ error: 'db_error' }, 500);
@@ -303,24 +301,8 @@ if (D && typeof D.serve === 'function') {
   const deps: PushDeps = {
     secret: D.env.get('PUSH_WEBHOOK_SECRET') ?? '',
     sendWebPush: async (sub, payload) => { await webpush.sendNotification(sub, payload, { TTL: 86400, urgency: 'normal' }); },
-    listSubscriptions: async (audience, userId, excludeUser) => {
+    listSubscriptions: async (audience, userId) => {
       const cols = 'id, endpoint, p256dh, auth';
-      if (audience === 'all') {
-        // Všichni kromě autora a těch, kdo si motivační oznámení vypnuli. Po stránkách (limit PostgREST), strop 5000 zařízení.
-        const off = new Set<string>();
-        const prefs = await db.from('push_prefs').select('user_id').eq('engage', false);
-        if (prefs.error) throw prefs.error;
-        for (const r of prefs.data ?? []) off.add((r as { user_id: string }).user_id);
-        const out: PushSub[] = [];
-        for (let from = 0; from < 5000; from += 1000) {
-          const page = await db.from('push_subscriptions').select(`${cols}, user_id`).order('id').range(from, from + 999);
-          if (page.error) throw page.error;
-          const rows = (page.data ?? []) as Array<PushSub & { user_id: string }>;
-          for (const r of rows) if (r.user_id !== excludeUser && !off.has(r.user_id)) out.push(r);
-          if (rows.length < 1000) break;
-        }
-        return out;
-      }
       let ids: string[] = userId ? [userId] : [];
       if (audience === 'admins') {
         const admins = await db.from('profiles').select('id').eq('role', 'správce');

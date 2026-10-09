@@ -50,10 +50,12 @@ Po kroku 1–5 fungují i připomínky ve stylu „série je v ohrožení“. Ni
   `select public.push_engagement_tick();` každou hodinu.
 - Čtenář dostane **nejvýš jedno oznámení denně**, jen **mezi 16. a 19. hodinou pražského času** (každý má svou hodinu), nikdy v noci.
   Vybírá se podle toho, co se hodí nejvíc: série v ohrožení → milník série (3, 7, 14, 30, 50, 100, 200, 365 dní) → návrat po pauze (3, 7, 14, 30 dní)
-  → rozečtená kniha → měsíční cíl → mince na novou knihu → jemné popostrčení. Kdo dnes už četl, dostane jen milník.
+  → rozečtená kniha → měsíční cíl → mince na novou knihu → nová kniha v knihovně → jemné popostrčení. Kdo dnes už četl, dostane jen milník nebo novinku.
 - Texty jsou v `db/push/send-push.ts` (funkce `compose`): u každého druhu je víc variant, losují se. Chceš je upravit? Změň texty a funkci znovu nasaď (krok 5).
-- **Nové knihy**: když se v knihovně objeví nová viditelná kniha, všem se pošle jedno oznámení (nejvýš jednou za 6 hodin, ať hromadné vkládání knih
-  nezaplaví telefony). Autor knihy oznámení nedostane.
+- **Nové knihy** se oznamují stejnou cestou jako ostatní připomínky (ne hned): kniha, která se právě zveřejnila, čeká ve frontě a čtenář o ní dostane
+  oznámení v době 16–19 h, nejvýš jedno oznámení denně (nová kniha má přednost před jemným popostrčením, ne před sérií, cílem apod.). Novinky se
+  neposílají autorovi, ani tomu, kdo knihu už má, a stejné oznámení dostane čtenář nejdřív za 2 dny (hromadné vkládání knih nikoho nezaplaví).
+  Kdo dnes už četl, dostane novinku místo mlčení.
 - Každý čtenář si připomínky a novinky vypne v **Nastavení → Oznámení** (zaškrtávátko „Připomínky a novinky“). Oznámení z appky (dary, odpovědi správce...) zůstávají.
 - Ukázky: **Správa → Upozornění → Ukázky motivačních oznámení** pošle na tvoje zařízení vzorek každého druhu s ukázkovými údaji.
 - Už máš funkci `send-push` nasazenou z dřívějška? Vlož do ní nový obsah `db/push/send-push.ts` a nasaď znovu, jinak se motivační texty neskládají.
