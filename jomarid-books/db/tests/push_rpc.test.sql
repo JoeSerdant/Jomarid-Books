@@ -104,3 +104,19 @@ do $$ declare k text; begin
   perform tt.ok((select count(distinct body->>'kind') from net.calls where body->>'kind' is not null) = 9, 'správce může vyzkoušet všech 9 druhů, neznámý druh se odmítne');
 end $$;
 
+
+-- ===== zpoždění zkušebního oznámení (0-30 s) =====
+truncate net.calls restart identity;
+reset role; update public.push_test_log set at = now() - interval '1 minute'; set role authenticated; select tt.as_user(2);
+select public.send_test_push(null, 10);
+reset role;
+select tt.ok((select (body->>'delay_seconds')::int = 10 and body->>'title' = 'Zkušební oznámení' from net.calls order by id desc limit 1), 'zkušební oznámení se zpožděním 10 s: funkce dostane delay_seconds = 10');
+update public.push_test_log set at = now() - interval '1 minute'; set role authenticated; select public.send_test_push(null, 999); reset role;
+select tt.ok((select (body->>'delay_seconds')::int from net.calls order by id desc limit 1) = 30, 'víc než 30 vteřin se zkrátí na 30');
+update public.push_test_log set at = now() - interval '1 minute'; set role authenticated; select public.send_test_push(null, -4); reset role;
+select tt.ok((select (body->>'delay_seconds')::int from net.calls order by id desc limit 1) = 0, 'záporné zpoždění = bez zpoždění');
+update public.push_test_log set at = now() - interval '1 minute'; set role authenticated; select public.send_test_push(); reset role;
+select tt.ok((select (body->>'delay_seconds')::int from net.calls order by id desc limit 1) = 0, 'bez zpoždění (starší volání bez parametrů) se odešle hned');
+update public.push_test_log set at = now() - interval '1 minute'; set role authenticated; select tt.as_user(1); select public.send_test_push('praise', 10); reset role;
+select tt.ok((select (body->>'delay_seconds')::int = 10 and body->>'kind' = 'praise' from net.calls order by id desc limit 1), 'ukázka druhu (správce) se zpožděním');
+select tt.ok(not has_function_privilege('anon', 'public.send_test_push(text, int)', 'execute') and has_function_privilege('authenticated', 'public.send_test_push(text, int)', 'execute') and not has_function_privilege('authenticated', 'public.push_dispatch(text, uuid, text, text, text, text, text, jsonb, int)', 'execute'), 'oprávnění po změně podpisu: anon ne, přihlášený jen zkoušku, odeslání jen databáze');

@@ -99,10 +99,14 @@ export const cleanupOnLogout = async ({ client, nav, win }) => {
   try { await withTimeout(disablePush({ client, nav, win }), 2500, false); } catch { /* odhlášení se nesmí zablokovat */ }
 };
 
-/** Pošle sobě zkušební oznámení (projde celou cestou: oznámení v databázi -> Edge Function -> zařízení).
- *  S druhem (jen správce) pošle ukázku konkrétního motivačního oznámení s ukázkovými daty. */
-export const sendTestPush = async (client, kind) => {
-  const { error } = kind ? await client.rpc('send_test_push', { p_kind: kind }) : await client.rpc('send_test_push');
+/** Pošle sobě zkušební oznámení (projde celou cestou: databáze -> Edge Function -> zařízení).
+ *  S druhem (jen správce) pošle ukázku konkrétního motivačního oznámení s ukázkovými daty.
+ *  delay = za kolik vteřin se oznámení odešle (0-30), ať stihneš appku zavřít a oznámení uvidíš. */
+export const sendTestPush = async (client, kind, { delay = 0 } = {}) => {
+  const args = {};
+  if (kind) args.p_kind = kind;
+  if (delay > 0) args.p_delay = Math.min(30, Math.round(delay));
+  const { error } = Object.keys(args).length ? await client.rpc('send_test_push', args) : await client.rpc('send_test_push');
   if (!error) return { ok: true };
   if (isMissingFunction(error)) return { ok: false, reason: 'not-configured' };
   const msg = String(error.message || '');

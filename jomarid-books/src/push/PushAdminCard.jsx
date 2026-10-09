@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Copy, KeyRound, Loader2, Send } from 'lucide-react';
 import { Card } from '../components/ui';
-import { PUSH_KINDS, VAPID_SETTINGS_KEY } from './pushModel.js';
+import { PUSH_KINDS, TEST_PUSH_DELAY_SECONDS, VAPID_SETTINGS_KEY } from './pushModel.js';
 import { fetchVapidKey, sendTestPush } from './pushClient.js';
 import { generateVapidKeys } from './vapid.js';
 
@@ -25,6 +25,7 @@ const KeyBox = ({ label, value }) => {
 /** Správa -> Upozornění: klíče pro oznámení do zařízení (celý postup: db/push/README.md). */
 export default function PushAdminCard({ client }) {
   const [saved, setSaved] = useState(null); // null = zjišťuje se, true/false
+  const [savedKey, setSavedKey] = useState(null); // uložený veřejný klíč (není tajný, jde kdykoli znovu zkopírovat)
   const [busy, setBusy] = useState(false);
   const [keys, setKeys] = useState(null);
   const [error, setError] = useState('');
@@ -32,18 +33,18 @@ export default function PushAdminCard({ client }) {
 
   const sendPreview = async (kind, label) => {
     setPreview({ busy: kind, text: '', tone: '' });
-    const res = await sendTestPush(client, kind);
+    const res = await sendTestPush(client, kind, { delay: TEST_PUSH_DELAY_SECONDS });
     setPreview({
       busy: '',
       tone: res.ok ? 'ok' : res.reason === 'too-many' ? 'info' : 'error',
-      text: res.ok ? `Ukázka „${label}“ je odeslaná na tvoje zařízení s povolenými oznámeními.`
+      text: res.ok ? `Ukázka „${label}“ přijde za ${TEST_PUSH_DELAY_SECONDS} sekund na tvoje zařízení s povolenými oznámeními. Teď appku zavři nebo se přepni jinam, ať ji uvidíš.`
         : res.reason === 'too-many' ? 'Počkej pár vteřin před další ukázkou.'
         : res.reason === 'not-configured' ? 'Server pro oznámení ještě není nastavený (spusť db/push-notifications.sql).'
         : res.reason === 'forbidden' ? 'Ukázky smí posílat jen správce.' : 'Ukázku se nepodařilo odeslat.',
     });
   };
 
-  useEffect(() => { let on = true; fetchVapidKey(client).then((r) => { if (on) setSaved(!r.error && !!r.key); }); return () => { on = false; }; }, [client]);
+  useEffect(() => { let on = true; fetchVapidKey(client).then((r) => { if (on) { setSaved(!r.error && !!r.key); setSavedKey(!r.error && r.key ? r.key : null); } }); return () => { on = false; }; }, [client]);
 
   const generate = async () => {
     if (saved && !confirm('Klíče už jsou nastavené. Když je vyměníš, všichni si musí oznámení v zařízení zapnout znovu. Pokračovat?')) return;
@@ -52,7 +53,7 @@ export default function PushAdminCard({ client }) {
       const pair = await generateVapidKeys();
       const { error: saveError } = await client.from('site_settings').upsert({ key: VAPID_SETTINGS_KEY, value: { key: pair.publicKey } }, { onConflict: 'key' });
       if (saveError) throw saveError;
-      setKeys(pair); setSaved(true);
+      setKeys(pair); setSaved(true); setSavedKey(pair.publicKey);
     } catch (e) {
       setError(`Klíče se nepodařilo vytvořit nebo uložit: ${e?.message || 'neznámá chyba'}`);
     }
@@ -72,6 +73,15 @@ export default function PushAdminCard({ client }) {
         </button>
         <span data-testid="vapid-status" style={{ color: 'var(--text-muted)' }} className="text-xs font-bold">{saved === null ? 'Zjišťuji...' : saved ? 'Veřejný klíč je uložený.' : 'Klíče zatím nejsou nastavené.'}</span>
       </div>
+      {!keys && savedKey && (
+        <div className="mt-4 space-y-2">
+          <KeyBox label="Veřejný klíč (VAPID_PUBLIC_KEY)" value={savedKey} />
+          <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">
+            Tenhle klíč patří i do Supabase jako <code>VAPID_PUBLIC_KEY</code> (Edge Functions → Secrets), vedle soukromého klíče. Soukromý klíč se po vygenerování znovu zobrazit nedá;
+            nemáš-li ho uložený, vygeneruj klíče znovu (zařízení si pak musí oznámení zapnout znovu).
+          </p>
+        </div>
+      )}
       {error && <p role="alert" className="text-xs font-bold mt-3 mb-0" style={{ color: '#ef4444' }}>{error}</p>}
       {keys && (
         <div className="mt-4 space-y-3">
@@ -84,7 +94,7 @@ export default function PushAdminCard({ client }) {
         <h4 className="text-xs font-black uppercase tracking-wider m-0 mb-1">Ukázky motivačních oznámení</h4>
         <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-1 mb-3 leading-relaxed">
           Čtenářům chodí během dne povzbuzení podle toho, co se hodí (série, rozečtená kniha, cíl, pochvala...). Četnost se nastavuje v databázi (db/push/README.md). Tady si každý druh vyzkoušíš s ukázkovými údaji;
-          přijde na tvoje zařízení, kde máš v Nastavení → Oznámení zapnutá oznámení. Texty se pokaždé losují z víc variant.
+          odešle se za 10 sekund na tvoje zařízení, kde máš v Nastavení → Oznámení zapnutá oznámení, takže stihneš appku zavřít nebo se přepnout jinam a ukázku opravdu uvidíš. Texty se pokaždé losují z víc variant.
         </p>
         <div className="flex flex-wrap gap-2" data-testid="push-kinds">
           {PUSH_KINDS.map(({ kind, label }) => (

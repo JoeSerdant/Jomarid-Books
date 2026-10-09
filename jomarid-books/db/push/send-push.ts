@@ -17,6 +17,7 @@ export interface PushDeps {
   deleteSubscriptions: (ids: string[]) => Promise<void>;
   rnd?: () => number; // výběr varianty textu (v testech pevný)
   now?: () => Date;
+  sleep?: (ms: number) => Promise<void>; // čekání před odesláním (zkušební oznámení se zpožděním)
 }
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -300,6 +301,10 @@ export async function handle(req: Request, deps: PushDeps): Promise<Response> {
     url,
     tag: clip(input.tag, 80) || undefined,
   });
+
+  // Zkušební oznámení se zpožděním: čeká se až po ověření hesla a složení textu, nejvýš 30 vteřin.
+  const delay = Math.min(30, Math.max(0, Math.round(Number(input.delay_seconds)) || 0));
+  if (delay > 0) await (deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms))))(delay * 1000);
 
   let subs: PushSub[];
   try {

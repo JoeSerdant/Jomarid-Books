@@ -112,10 +112,13 @@ grant execute on function public.register_push_subscription(text, text, text, te
 -- Buď hotový titulek a text (oznámení z appky), nebo druh a data (motivační oznámení: texty skládá funkce podle druhu).
 drop function if exists public.push_dispatch(text, uuid, text, text, text, text);
 drop function if exists public.push_dispatch(text, uuid, text, text, text, text, text, jsonb, uuid);
+drop function if exists public.push_dispatch(text, uuid, text, text, text, text, text, jsonb);
+-- p_delay (vteřiny, 0-30): funkce počká a oznámení odešle až potom (zkušební oznámení: stihneš appku zavřít nebo zamknout telefon)
 create or replace function public.push_dispatch(p_audience text, p_user uuid, p_title text, p_body text, p_url text, p_tag text,
-                                                p_kind text default null, p_data jsonb default null)
+                                                p_kind text default null, p_data jsonb default null, p_delay int default 0)
 returns void language plpgsql security definer set search_path to 'public', 'extensions' as $$
 declare cfg record;
+        delay int := least(greatest(coalesce(p_delay, 0), 0), 30);
 begin
   select function_url, secret into cfg from public.push_settings where id = 1;
   if cfg.function_url is null or cfg.secret is null then return; end if;
@@ -124,12 +127,13 @@ begin
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-push-secret', cfg.secret),
     body := jsonb_build_object('audience', p_audience, 'user_id', p_user, 'title', left(coalesce(p_title, ''), 120),
                                'body', left(coalesce(p_body, ''), 200), 'url', p_url, 'tag', p_tag,
-                               'kind', p_kind, 'data', coalesce(p_data, '{}'::jsonb))
+                               'kind', p_kind, 'data', coalesce(p_data, '{}'::jsonb), 'delay_seconds', delay),
+    timeout_milliseconds := 5000 + delay * 1000   -- spojení nesmí vypršet dřív, než funkce po zpoždění odpoví
   );
 exception when others then
   null;
 end $$;
-revoke execute on function public.push_dispatch(text, uuid, text, text, text, text, text, jsonb) from public, anon, authenticated;
+revoke execute on function public.push_dispatch(text, uuid, text, text, text, text, text, jsonb, int) from public, anon, authenticated;
 
 -- 5) Spouštěče: nové oznámení čtenáři (Nastavení -> Oznámení) a nová žádost pro správce (Správa -> Upozornění)
 create or replace function public.trg_push_user_notification() returns trigger language plpgsql security definer set search_path to 'public' as $$
@@ -353,7 +357,9 @@ alter table public.push_test_log enable row level security;
 revoke all on public.push_test_log from anon, authenticated;
 
 drop function if exists public.send_test_push();
-create or replace function public.send_test_push(p_kind text default null) returns void language plpgsql security definer set search_path to 'public' as $$
+drop function if exists public.send_test_push(text);
+-- p_delay: za kolik vteřin (0-30) se oznámení odešle; appka posílá 10, ať stihneš appku zavřít nebo zamknout telefon a oznámení opravdu uvidíš
+create or replace function public.send_test_push(p_kind text default null, p_delay int default 0) returns void language plpgsql security definer set search_path to 'public' as $$
 declare sample jsonb;
 begin
   if auth.uid() is null then raise exception 'not_authenticated'; end if;
@@ -376,10 +382,10 @@ begin
   on conflict (user_id) do update set at = now() where public.push_test_log.at < now() - interval '20 seconds';
   if not found then raise exception 'too_many'; end if;
   if p_kind is null then
-    perform public.push_dispatch('user', auth.uid(), 'Zkušební oznámení', 'Takhle ti budou chodit oznámení z Jomarid Books.', '/settings/notifications', 'test');
+    perform public.push_dispatch('user', auth.uid(), 'Zkušební oznámení', 'Takhle ti budou chodit oznámení z Jomarid Books.', '/settings/notifications', 'test', null, null, p_delay);
   else
-    perform public.push_dispatch('user', auth.uid(), null, null, '/', 'test-' || p_kind, p_kind, sample);
+    perform public.push_dispatch('user', auth.uid(), null, null, '/', 'test-' || p_kind, p_kind, sample, p_delay);
   end if;
 end $$;
-revoke execute on function public.send_test_push(text) from public, anon;
-grant execute on function public.send_test_push(text) to authenticated;
+revoke execute on function public.send_test_push(text, int) from public, anon;
+grant execute on function public.send_test_push(text, int) to authenticated;

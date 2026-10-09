@@ -11,7 +11,7 @@ Supabase → **SQL Editor** → vlož celý soubor `db/push-notifications.sql` �
 
 ## 2. Klíče (VAPID)
 V appce jako správce: **Správa → Upozornění → Oznámení do telefonu → Vygenerovat klíče**. Veřejný klíč se uloží sám, **soukromý se ukáže jen jednou**:
-nech okno otevřené, než ho vložíš do Supabase v kroku 4.
+nech okno otevřené, než ho vložíš do Supabase v kroku 4. Veřejný klíč (potřebuješ ho v kroku 4 taky) uvidíš ve Správě → Upozornění i později a jde zkopírovat; soukromý ne.
 (Znovu generovat klíče znamená, že si všichni musí oznámení zapnout znovu.)
 
 ## 3. Adresa funkce a sdílené heslo
@@ -40,8 +40,24 @@ Supabase → **Edge Functions → Deploy a new function → Via Editor** → ná
 Ve vlastnostech funkce **vypni „Verify JWT“** (volá ji databáze s vlastním heslem, ne přihlášený uživatel).
 
 ## 6. Zkouška
-Nastavení → **Oznámení** → **Zapnout oznámení v tomhle zařízení** → **Poslat zkušební oznámení**. Do pár vteřin má přijít oznámení.
-Nepřišlo? Supabase → Edge Functions → `send-push` → **Logs** (a Database → Logs, `net._http_response`).
+Nastavení → **Oznámení** → **Zapnout oznámení v tomhle zařízení** → **Poslat zkušební oznámení (za 10 s)**. Oznámení se odešle **až za 10 sekund**, takže appku hned
+zavři, přepni se na jinou kartu nebo zamkni telefon, ať ho opravdu uvidíš (v otevřené appce se na něj snadno nekoukne).
+
+### Nepřišlo? Zjisti, kde to vázne
+1. **Odešlo se vůbec něco?** V Supabase SQL Editoru:
+   ```sql
+   select id, status_code, left(content, 200) as odpoved, error_msg, created
+   from net._http_response order by created desc limit 5;
+   ```
+   - `status_code 200` a v odpovědi `"sent":1` (nebo víc): server oznámení odeslal push službě prohlížeče. Pak je problém na zařízení: povolení oznámení v prohlížeči/systému,
+     režim Nerušit, u iPhonu appka musí být přidaná na plochu a otevřená z ní.
+   - `"sent":0,"total":0`: v databázi není žádné zařízení tohohle účtu. Zapni oznámení v Nastavení znovu.
+   - `401`: heslo v databázi (`push_settings.secret`) nesedí s `PUSH_WEBHOOK_SECRET` v Edge Functions → Secrets. Dej tam stejnou hodnotu.
+   - `404`: funkce `send-push` není nasazená, nebo adresa `function_url` v `push_settings` nesedí.
+   - `500` nebo `db_error`: chyba v databázi, detail v Edge Functions → `send-push` → **Logs**.
+   - Žádný řádek: databáze nic nevolala. Zkontroluj, že `push_settings` má vyplněnou `function_url` a `secret` (`select function_url, secret is not null from public.push_settings;`).
+2. **Logy funkce:** Edge Functions → `send-push` → **Logs**. Chybějící nebo špatný klíč (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, musejí být ze stejného páru) se pozná tady.
+3. **Verify JWT** u funkce musí být **vypnuté**.
 
 ## 7. Motivační oznámení (série, rozečtená kniha, cíl, novinky)
 Po kroku 1–5 fungují i připomínky ve stylu „série je v ohrožení“. Nic dalšího se nenastavuje, jen musí běžet hodinový plánovač:

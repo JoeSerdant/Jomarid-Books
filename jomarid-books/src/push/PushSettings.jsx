@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Bell, BellOff, Loader2, Send } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useInstallState } from '../pwa/install.js';
-import { enableMessage, pushSupport } from './pushModel.js';
+import { enableMessage, pushSupport, TEST_PUSH_DELAY_SECONDS } from './pushModel.js';
 import { deviceState, disablePush, enablePush, fetchVapidKey, getPushPrefs, sendTestPush, setPushPrefs } from './pushClient.js';
 
 const btn = 'px-3 py-2 rounded-lg border-none cursor-pointer text-xs font-black inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed';
@@ -45,10 +45,10 @@ export default function PushSettings({ client = supabase }) {
   };
   const test = async () => {
     setBusy('test'); setMessage(null);
-    const res = await sendTestPush(client);
+    const res = await sendTestPush(client, undefined, { delay: TEST_PUSH_DELAY_SECONDS });
     setBusy('');
     setMessage(res.ok
-      ? { tone: 'ok', text: 'Zkušební oznámení je odeslané, do pár vteřin by mělo dorazit. Nedorazí-li, zkontroluj s správcem nastavení serveru.' }
+      ? { tone: 'ok', text: `Zkušební oznámení přijde za ${TEST_PUSH_DELAY_SECONDS} sekund. Teď appku zavři, přepni se jinam nebo zamkni telefon, ať ho uvidíš. Nedorazí-li, ať správce zkontroluje nastavení serveru (návod: db/push/README.md).` }
       : { tone: res.reason === 'too-many' ? 'info' : 'error', text: res.reason === 'too-many' ? 'Počkej chvilku a zkus to znovu.' : res.reason === 'not-configured' ? enableMessage('not-configured') : 'Zkušební oznámení se nepodařilo odeslat.' });
   };
 
@@ -89,7 +89,7 @@ export default function PushSettings({ client = supabase }) {
       ) : device.subscribed ? (
         <div className="flex flex-wrap items-center gap-2">
           <span style={{ color: 'var(--text-body)' }} className="text-xs font-black flex items-center gap-1.5"><Bell size={13} /> Zapnuto v tomhle zařízení</span>
-          <button type="button" onClick={test} disabled={!!busy} style={solid} className={btn}>{busy === 'test' ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} Poslat zkušební oznámení</button>
+          <button type="button" onClick={test} disabled={!!busy} style={solid} className={btn}>{busy === 'test' ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} Poslat zkušební oznámení (za {TEST_PUSH_DELAY_SECONDS} s)</button>
           <button type="button" onClick={turnOff} disabled={!!busy} style={soft} className={btn}>{busy === 'off' ? <Loader2 size={12} className="animate-spin" /> : <BellOff size={12} />} Vypnout</button>
         </div>
       ) : (

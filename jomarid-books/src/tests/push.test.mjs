@@ -9,7 +9,7 @@ import vm from 'node:vm';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { pushSupport, permissionState, subscriptionRow, sameApplicationServerKey, enableMessage, VAPID_SETTINGS_KEY, PUSH_KINDS } from '../push/pushModel.js';
+import { pushSupport, permissionState, subscriptionRow, sameApplicationServerKey, enableMessage, VAPID_SETTINGS_KEY, PUSH_KINDS, TEST_PUSH_DELAY_SECONDS } from '../push/pushModel.js';
 import { generateVapidKeys, isVapidPublicKey, isVapidPrivateKey, urlBase64ToUint8Array } from '../push/vapid.js';
 import { fetchVapidKey, enablePush, disablePush, cleanupOnLogout, sendTestPush, deviceState, getPushPrefs, setPushPrefs } from '../push/pushClient.js';
 
@@ -213,6 +213,19 @@ describe('klient: zapnutí a vypnutí', () => {
     assert.deepEqual(await sendTestPush(makeEnv({ rpcError: { message: 'too_many' } }).client, 'comeback'), { ok: false, reason: 'too-many' });
     const plain = makeEnv(); await sendTestPush(plain.client);
     assert.deepEqual(plain.log.rpc, [['send_test_push', undefined]], 'bez druhu se volá jako dřív');
+  });
+  test('zkušební oznámení se zpožděním: předá se jen kladné zpoždění a nejvýš 30 vteřin', async () => {
+    const e = makeEnv();
+    await sendTestPush(e.client, undefined, { delay: TEST_PUSH_DELAY_SECONDS });
+    await sendTestPush(e.client, 'praise', { delay: 10 });
+    await sendTestPush(e.client, 'praise', { delay: 999 });
+    await sendTestPush(e.client, 'praise', { delay: -5 });
+    await sendTestPush(e.client, undefined, { delay: 0 });
+    assert.deepEqual(e.log.rpc, [
+      ['send_test_push', { p_delay: 10 }], ['send_test_push', { p_kind: 'praise', p_delay: 10 }], ['send_test_push', { p_kind: 'praise', p_delay: 30 }],
+      ['send_test_push', { p_kind: 'praise' }], ['send_test_push', undefined],
+    ]);
+    assert.equal(TEST_PUSH_DELAY_SECONDS, 10);
   });
   test('připomínky a novinky: čtení (bez řádku platí zapnuto, chyba nic nevypne) a uložení', async () => {
     const mk = (data, error = null) => ({ rpc: async (name, args) => ({ data: name === 'get_push_prefs' ? data : null, error, args }) });
@@ -453,6 +466,20 @@ describe('Edge Function send-push', { skip: !EDGE && 'Node bez podpory TypeScrip
     assert.ok(lateStreak.has('Ještě to stihneš! 🌟'));
     const praiseEvening = await titles('2026-10-07T18:30:00Z', 'praise', { streak: 3 });
     assert.ok(praiseEvening.has('Dobrá práce, teď si odpočiň 🌙') && !(await titles('2026-10-07T10:30:00Z', 'praise', { streak: 3 })).has('Dobrá práce, teď si odpočiň 🌙'));
+  });
+  test('zpoždění zkušebního oznámení: funkce počká po ověření hesla a před odesláním, nejvýš 30 vteřin; neplatné hodnoty = bez čekání', async () => {
+    const waited = [];
+    const { deps: d, calls } = deps({ sleep: async (ms) => { waited.push([ms, calls.sent.length]); } });
+    await EDGE.handle(req({ audience: 'user', user_id: UID, title: 'x', delay_seconds: 10 }), d);
+    assert.deepEqual(waited, [[10000, 0]], 'čeká před odesláním');
+    waited.length = 0;
+    await EDGE.handle(req({ audience: 'user', user_id: UID, title: 'x', delay_seconds: 999 }), d);
+    assert.equal(waited[0][0], 30000);
+    for (const bad of [undefined, 0, -3, 'abc', null, NaN]) { waited.length = 0; await EDGE.handle(req({ audience: 'user', user_id: UID, title: 'x', delay_seconds: bad }), d); assert.equal(waited.length, 0, String(bad)); }
+    waited.length = 0;
+    assert.equal((await EDGE.handle(req({ audience: 'user', user_id: UID, delay_seconds: 10 }, { secret: 'spatne' }), d)).status, 401);
+    assert.equal((await EDGE.handle(req({ audience: 'nikdo', delay_seconds: 10 }), d)).status, 400);
+    assert.equal(waited.length, 0, 'bez hesla ani se špatným příjemcem se nečeká');
   });
   test('adresa zařízení musí vést na push službu prohlížeče: cizí adresy se nikdy nevolají, jen se smažou', async () => {
     const ok = ['https://fcm.googleapis.com/fcm/send/abc', 'https://updates.push.services.mozilla.com/wpush/v2/x', 'https://web.push.apple.com/Q', 'https://wns2-par02p.notify.windows.com/w/?token=x', 'https://android.googleapis.com/gcm/send/x', 'https://FCM.GOOGLEAPIS.COM:443/fcm/send/x'];
