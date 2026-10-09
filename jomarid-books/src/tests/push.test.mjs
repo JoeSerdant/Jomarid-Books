@@ -636,8 +636,11 @@ describe('SQL a návod pro server', () => {
 // db/tests/run.sh spustí db/push-notifications.sql na dočasném lokálním PostgreSQL proti zjednodušenému schématu Supabase a zkontroluje výběr
 // oznámení, plánovač (okno hodin, odstup, strop, střídání, souběh), spouštěče, oprávnění a RLS. Bez PostgreSQL (kód 77) se přeskočí.
 const sqlRun = (() => { try { return spawnSync('bash', [path.join(ROOT, 'db', 'tests', 'run.sh')], { encoding: 'utf8', timeout: 240000 }); } catch { return null; } })();
-describe('SQL na skutečném PostgreSQL (db/tests/run.sh)', { skip: (!sqlRun || sqlRun.error || sqlRun.status === 77) && 'PostgreSQL není k dispozici' }, () => {
+// Přeskočí se jen když PostgreSQL (kód 77) nebo bash chybí; timeout nebo jiná chyba spuštění test shodí, ať zaseknutá SQL změna neprojde.
+const sqlUnavailable = !sqlRun || sqlRun.error?.code === 'ENOENT' || sqlRun.status === 77;
+describe('SQL na skutečném PostgreSQL (db/tests/run.sh)', { skip: sqlUnavailable && 'PostgreSQL není k dispozici' }, () => {
   test('všechny SQL kontroly prošly (výběr, plánovač, souběh, oprávnění)', () => {
+    assert.ifError(sqlRun.error);
     assert.equal(sqlRun.status, 0, `${sqlRun.stdout}\n${sqlRun.stderr}`);
     const n = Number((sqlRun.stdout.match(/SQL testy: (\d+) kontrol prošlo/) || [])[1]);
     assert.ok(n >= 90, `kontrol: ${n}`);

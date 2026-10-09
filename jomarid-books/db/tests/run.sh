@@ -42,20 +42,36 @@ OUT="$TMP/out.txt"
 } >"$OUT" 2>&1
 STATUS=$?
 
-# souběh dvou průchodů plánovače: druhý nesmí nic poslat, dokud první drží zámek (a po uvolnění zase funguje)
+# Souběh dvou průchodů plánovače: druhý nesmí nic poslat, dokud první drží zámek (a po uvolnění zase funguje).
+# Bez časování na slepo: držící spojení potvrdí získání zámku souborem "locked" a drží ho, dokud nedostane "release".
 if [ $STATUS -eq 0 ]; then
-  PSQL -c "truncate public.push_engage_log, net.calls restart identity;" >/dev/null 2>&1
-  PSQL -c "begin; select pg_advisory_xact_lock(hashtext('push_engagement_tick')); select pg_sleep(4); commit;" >/dev/null 2>&1 &
+  PSQLQ -c "truncate public.push_engage_log, net.calls restart identity;" || STATUS=1
+  cat > "$TMP/hold.sql" <<HOLD
+begin;
+select pg_advisory_xact_lock(hashtext('push_engagement_tick'));
+\\! touch "$TMP/locked"
+\\! i=0; while [ ! -f "$TMP/release" ] && [ \$i -lt 300 ]; do sleep 0.1; i=\$((i+1)); done
+commit;
+HOLD
+  chmod 644 "$TMP/hold.sql"
+  PSQLQ -f "$TMP/hold.sql" >/dev/null 2>&1 &
   HOLD=$!
-  sleep 1
-  BLOCKED=$(PSQL -At -c "select public.push_engagement_tick('2026-10-09 12:05:00+02')" 2>&1)
-  LOGGED_WHILE_LOCKED=$(PSQL -At -c "select count(*) from public.push_engage_log" 2>&1)
-  wait $HOLD
-  FREE=$(PSQL -At -c "select public.push_engagement_tick('2026-10-09 12:05:00+02')" 2>&1)
-  if [ "$BLOCKED" = "0" ] && [ "$LOGGED_WHILE_LOCKED" = "0" ] && [ "${FREE:-0}" -gt 0 ] 2>/dev/null; then
-    echo "NOTICE:  OK   souběh plánovače: při drženém zámku nic neodešle a nic nezapíše, po uvolnění zase funguje (odesláno $FREE)" >>"$OUT"
+  for _ in $(seq 1 100); do [ -f "$TMP/locked" ] && break; sleep 0.1; done
+  if [ ! -f "$TMP/locked" ]; then
+    echo "SELÁHALO: souběh plánovače (držící spojení nezískalo zámek)" >>"$OUT"; STATUS=1; touch "$TMP/release"
   else
-    echo "SELÁHALO: souběh plánovače (zamčený průchod vrátil '$BLOCKED', v deníku $LOGGED_WHILE_LOCKED, po uvolnění '$FREE')" >>"$OUT"; STATUS=1
+    BLOCKED=$(PSQL -At -c "select public.push_engagement_tick('2026-10-09 12:05:00+02')" 2>&1)
+    LOGGED_WHILE_LOCKED=$(PSQL -At -c "select count(*) from public.push_engage_log" 2>&1)
+    touch "$TMP/release"
+  fi
+  wait $HOLD
+  if [ -f "$TMP/locked" ]; then
+    FREE=$(PSQL -At -c "select public.push_engagement_tick('2026-10-09 12:05:00+02')" 2>&1)
+    if [ "$BLOCKED" = "0" ] && [ "$LOGGED_WHILE_LOCKED" = "0" ] && [ "${FREE:-0}" -gt 0 ] 2>/dev/null; then
+      echo "NOTICE:  OK   souběh plánovače: při drženém zámku nic neodešle a nic nezapíše, po uvolnění zase funguje (odesláno $FREE)" >>"$OUT"
+    else
+      echo "SELÁHALO: souběh plánovače (zamčený průchod vrátil '$BLOCKED', v deníku $LOGGED_WHILE_LOCKED, po uvolnění '$FREE')" >>"$OUT"; STATUS=1
+    fi
   fi
 fi
 
