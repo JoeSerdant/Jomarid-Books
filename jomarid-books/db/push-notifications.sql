@@ -208,11 +208,12 @@ begin
   streak_now := streak_y + (case when read_today then 1 else 0 end);
 
   -- nově zveřejněná kniha (poslední 4 dny), kterou čtenář ještě nemá a nenapsal; stejný druh nejdřív za 2 dny
-  select n.book_id, n.title, n.author into nb from public.push_new_books n
+  -- název a autor se čtou z aktuální knihy (mezitím mohly být upraveny), fronta jen určuje, která kniha a odkdy je novinka
+  select n.book_id, bk.title, coalesce(bk.author_display, bk.author) as author into nb
+    from public.push_new_books n join public.books bk on bk.id = n.book_id and not coalesce(bk.is_hidden, false)
    where n.announced_at > p_now - interval '4 days'
-     and n.author_id is distinct from p_user
+     and bk.author_id is distinct from p_user
      and not exists (select 1 from public.user_books ub where ub.user_id = p_user and ub.book_id = n.book_id)
-     and exists (select 1 from public.books bk where bk.id = n.book_id and not coalesce(bk.is_hidden, false))
      and not exists (select 1 from public.push_engage_log l where l.user_id = p_user and l.kind = 'new_book' and l.meta = n.book_id::text)
    order by n.announced_at desc limit 1;
   if found and not exists (select 1 from public.push_engage_log where user_id = p_user and kind = 'new_book' and created_at > p_now - interval '2 days') then
