@@ -4,7 +4,9 @@
      nezdržují: data se vždy berou z internetu, aby čtenář neviděl zastaralý stav knihovny, mincí ani postupu.
    - Stránky (navigace): nejdřív síť (vždy nejnovější verze), a když není připojení nebo je moc pomalé, uložený obal appky.
    - Soubory v /assets/ mají v názvu otisk obsahu, takže se po stažení berou z úložiště (jsou neměnné).
-   - Při nové verzi se staré úložiště smaže a nový service worker se ujme stránek hned. */
+   - Při nové verzi se staré úložiště smaže a nový service worker se ujme stránek hned.
+   - Oznámení do zařízení (Web Push): událost push vždy ukáže oznámení (iPhone to vyžaduje u každého pushe), klepnutí otevře
+     appku na cílové stránce. Cíl smí být jen cesta v téhle appce. */
 
 const VERSION = '__VERSION__';
 const CACHE = 'jomarid-' + VERSION;
@@ -76,4 +78,40 @@ self.addEventListener('fetch', (event) => {
 
 self.addEventListener('message', (event) => {
   if (event.data === 'SKIP_WAITING') self.skipWaiting();
+});
+
+// ---- Oznámení do zařízení (Web Push) ----
+const NOTIFICATION_ICON = '/icon-192.png';
+// Cíl klepnutí smí být jen cesta v téhle appce (ne cizí adresa ani protokol).
+// Bez zpětných lomítek, mezer a řídicích znaků (prohlížeč čte „/\\example.com“ jako cizí adresu) a po rozložení musí zůstat na stejném původu.
+const safePath = (v) => {
+  if (typeof v !== 'string' || v.length > 200 || v[0] !== '/' || v[1] === '/' || v[1] === '\\') return '/';
+  for (const ch of v) { const c = ch.codePointAt(0); if (c <= 32 || c === 127 || c === 92 || /\s/.test(ch)) return '/'; }
+  try { return new URL(v, self.location.origin).origin === self.location.origin ? v : '/'; } catch { return '/'; }
+};
+
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { /* prázdná nebo nečitelná zpráva: ukáže se obecné oznámení */ }
+  if (!data || typeof data !== 'object') data = {}; // JSON „null“, číslo nebo text: také obecné oznámení
+  const title = typeof data.title === 'string' && data.title ? data.title.slice(0, 120) : 'Jomarid Books';
+  const body = typeof data.body === 'string' && data.body ? data.body.slice(0, 200) : (data.title ? '' : 'Máš nové oznámení.');
+  const options = { body, icon: NOTIFICATION_ICON, badge: NOTIFICATION_ICON, data: { url: safePath(data.url) } };
+  if (typeof data.tag === 'string' && data.tag) options.tag = data.tag.slice(0, 80);
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = safePath(event.notification.data && event.notification.data.url);
+  event.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const open = wins.find((w) => new URL(w.url).origin === self.location.origin);
+    if (open) {
+      try { await open.focus(); } catch { /* okno už zaniklo */ }
+      if (new URL(open.url).pathname !== target && typeof open.navigate === 'function') { try { await open.navigate(target); } catch { /* cizí řízení: zůstane, kde je */ } }
+      return;
+    }
+    await self.clients.openWindow(target);
+  })());
 });

@@ -19,6 +19,8 @@ import { readLibraryPrefs, writeLibraryPref } from '../browse/browseStore';
 import { SORT_OPTIONS, STATUS_FILTERS } from '../browse/libraryModel';
 import { useSyncStatus } from '../settings/settingsSyncStore';
 import { APP_VERSION_LABEL } from '../appInfo';
+import PushSettings from '../push/PushSettings';
+import { cleanupOnLogout } from '../push/pushClient';
 import { useInstallState, promptInstall } from '../pwa/install';
 import { whenOfflineReady, resetApp } from '../pwa/register';
 
@@ -370,6 +372,7 @@ const SecurityTab = ({ user }) => {
   const signOutEverywhere = async () => {
     setSignOutMsg(null);
     setSignOutBusy(true);
+    await cleanupOnLogout({ client: supabase, nav: navigator, win: window }); // zařízení nemá dál dostávat oznámení odhlášeného účtu
     const { error } = await supabase.auth.signOut({ scope: 'global' });
     setSignOutBusy(false);
     if (error) return setSignOutMsg({ type: 'error', text: mapAuthError(error) });
@@ -1031,6 +1034,7 @@ const InboxTab = () => {
 
   return (
     <div className="space-y-3">
+      <PushSettings />
       {error && <Notice type="error">{error}</Notice>}
       {items.length === 0 ? (
         <p style={{ color: 'var(--text-muted)' }} className="text-sm m-0 py-6 text-center leading-relaxed">Zatím nemáš žádná oznámení. Ozveme se, když správce zasáhne do tvé knihy nebo komentáře, nebo když ti autor daruje knihu.</p>
