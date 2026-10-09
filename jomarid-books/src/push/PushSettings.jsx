@@ -48,7 +48,7 @@ export default function PushSettings({ client = supabase }) {
     const res = await sendTestPush(client, undefined, { delay: TEST_PUSH_DELAY_SECONDS });
     setBusy('');
     setMessage(res.ok
-      ? { tone: 'ok', text: `Zkušební oznámení přijde za ${TEST_PUSH_DELAY_SECONDS} sekund. Teď appku zavři, přepni se jinam nebo zamkni telefon, ať ho uvidíš. Nedorazí-li, ať správce zkontroluje nastavení serveru (návod: db/push/README.md).` }
+      ? { tone: 'ok', text: `Zkušební oznámení přijde za ${TEST_PUSH_DELAY_SECONDS} sekund. Teď appku zavři, přepni se jinam nebo zamkni telefon, ať ho uvidíš. Nedorazí-li, dej vědět správci.` }
       : { tone: res.reason === 'too-many' ? 'info' : 'error', text: res.reason === 'too-many' ? 'Počkej chvilku a zkus to znovu.' : res.reason === 'not-configured' ? enableMessage('not-configured') : 'Zkušební oznámení se nepodařilo odeslat.' });
   };
 

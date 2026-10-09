@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { BarChart3, Coins, Compass, Gamepad2, Library, LogOut, Search, Settings, Shield } from 'lucide-react';
 
 export const Navbar = ({ onOpenSearch }) => {
   const { user, logout, role, username: accountName } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
   const onSettingsPage = location.pathname.startsWith('/settings');
   const [pending, setPending] = useState(0); // otevrena upozorneni pro spravce
