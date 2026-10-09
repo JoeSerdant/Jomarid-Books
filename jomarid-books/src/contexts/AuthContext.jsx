@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { clearPersonalBrowseState } from '../browse/browseStore';
+import { cleanupOnLogout } from '../push/pushClient';
 
 export const ThemeContext = createContext(null);
 export const AuthContext = createContext(null);
@@ -92,6 +93,7 @@ export function AuthProvider({ children }) {
 
  const logout = async () => {
    clearPersonalBrowseState(); // hledání a filtry z knihovny nemají po odhlášení zůstat v kartě
+   await cleanupOnLogout({ client: supabase, nav: navigator, win: window }); // zařízení nemá dál dostávat oznámení odhlášeného účtu
    await supabase.auth.signOut();
  };
 

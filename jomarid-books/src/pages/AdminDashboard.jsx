@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { fetchBookText, saveBookText, removeBookText } from '../bookText/bookText';
 import BookTextStoragePanel from './admin/BookTextStoragePanel';
 import BookTextField from '../components/BookTextField';
+import PushAdminCard from '../push/PushAdminCard';
 import { Button, Card } from '../components/ui';
 import { TourEditor, peekAdminTabRequest } from '../tour/TourEditor';
 import { useAuth } from '../contexts/AuthContext';
@@ -1754,6 +1755,7 @@ export const AdminDashboard = () => {
         />
       )}
 
+      {activeTab === 'notifications' && <div className="mb-6"><PushAdminCard client={supabase} /></div>}
       {activeTab === 'notifications' && (
         <NotificationsTab onCountChange={setPendingCount} currentUserId={adminUser?.id} onOpenAccount={(u) => { setAccountsPreset({ search: u.email || '', openId: u.id, nonce: Date.now() }); setActiveTab('accounts'); }} />
       )}
