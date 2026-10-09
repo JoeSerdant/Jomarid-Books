@@ -537,7 +537,7 @@ describe('texty oznámení (compose)', { skip: !EDGE && 'Node bez podpory TypeSc
   // každou variantu jednou projdeme přes rnd 0..1, pro každý den v týdnu
   const all = () => {
     const out = [];
-    for (const kind of EDGE.MESSAGE_KINDS) for (const data of SAMPLES[kind]) for (let wd = 0; wd < 7; wd += 3) for (const hour of [8, 14, 19, 21]) for (let i = 0; i < 24; i += 1) out.push([kind, data, EDGE.compose(kind, data, () => i / 24, wd, hour)]);
+    for (const kind of EDGE.MESSAGE_KINDS) for (const data of SAMPLES[kind]) for (let wd = 0; wd < 7; wd += 1) for (const hour of [8, 14, 19, 21]) for (let i = 0; i < 24; i += 1) out.push([kind, data, EDGE.compose(kind, data, () => i / 24, wd, hour)]);
     return out;
   };
   test('všech 9 druhů má vzorky a umí složit text', () => {
