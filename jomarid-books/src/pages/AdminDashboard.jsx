@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchBookText, saveBookText, removeBookText } from '../bookText/bookText';
-import BookTextStoragePanel from './admin/BookTextStoragePanel';
 import BookTextField from '../components/BookTextField';
 import PushAdminCard from '../push/PushAdminCard';
 import { Button, Card } from '../components/ui';
@@ -672,7 +671,7 @@ export const NotificationsTab = ({ onCountChange, currentUserId, onOpenAccount }
   };
 
   if (missing) {
-    return <InlineMessage type="error">Upozornění potřebují novější databázi. Spusť v Supabase (SQL Editor) skript <b>username_zadosti.sql</b> a obnov stránku.</InlineMessage>;
+    return <InlineMessage type="error">Upozornění potřebují novější databázi (v Supabase chybí funkce, kterou appka volá). Obnov stránku; nepomůže-li to, dej vědět tvůrci appky.</InlineMessage>;
   }
 
   const hasHandled = (items || []).some(n => n.status !== 'open');
@@ -1767,7 +1766,6 @@ export const AdminDashboard = () => {
       {/* 2. ZÁLOŽKA: SPRÁVA KNIH */}
       {activeTab === 'books' && (
         <div className="space-y-6">
-        <BookTextStoragePanel client={supabase} onLog={safeLog} />
         {books.some(b => !b.authorId && !b.is_auto_assigned) && (
           <Card>
             <h3 className="text-sm font-black uppercase tracking-wider mb-1 flex items-center gap-2 text-red-500">

@@ -613,7 +613,7 @@ export const PublisherDashboard = () => {
 
       {loadError === 'MISSING' && (
         <Notice type="error">
-          Statistiky a správa knih potřebují novější databázi. Spusť v Supabase (SQL Editor) aktuální <b>full_migration.sql</b> (část R) a obnov stránku. Do té doby funguje jen vydávání a úprava knih.
+          Statistiky a správa knih potřebují novější databázi. Dej vědět správci. Do té doby funguje jen vydávání a úprava knih.
         </Notice>
       )}
       {loadError && loadError !== 'MISSING' && <Notice type="error">{loadError}</Notice>}

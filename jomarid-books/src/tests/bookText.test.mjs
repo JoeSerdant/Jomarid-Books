@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   BOOK_TEXT_BUCKET, bookTextPath, isBucketMissing, isObjectMissing, fetchBookText, saveBookText, removeBookText,
-  findBookTexts, listTableBookIds, migrateOneBookText, migrateAllBookTexts, cleanupTableCopies, uploadBookText, downloadBookText,
+  findBookTexts, uploadBookText, downloadBookText,
 } from '../bookText/bookText.js';
 
 const enc = (s) => new TextEncoder().encode(s);
@@ -171,66 +171,4 @@ test('findBookTexts: stovky knih se ověří výpisem po stránkách, ne ztráto
   assert.equal(r.found.size, 1300);
   assert.ok(r.found.has(ids[0]) && !r.found.has(ids[1]));
   assert.ok(c.log.lists <= 3); // 1300 souborů = 2 stránky, ne 2600 dotazů
-});
-
-test('seznam id ze staré tabulky po stránkách', async () => {
-  const table = {};
-  for (let i = 0; i < 250; i++) table[`00000000-0000-0000-0000-${String(i).padStart(12, '0')}`] = `t${i}`;
-  const { ids, error } = await listTableBookIds(makeClient({ table }));
-  assert.equal(error, null); assert.equal(ids.length, 250); assert.equal(new Set(ids).size, 250);
-});
-
-test('přesun jedné knihy: nová, už přesunutá, konflikt, prázdná, poškozený upload', async () => {
-  const c = makeClient({ table: { [A]: TEXT, [B]: 'x', [C]: '' }, files: { [`${B}.txt`]: 'jiný' } });
-  assert.deepEqual(await migrateOneBookText(c, A), { status: 'migrated' });
-  assert.deepEqual(await migrateOneBookText(c, A), { status: 'already' });
-  assert.deepEqual(await migrateOneBookText(c, B), { status: 'conflict' });
-  assert.equal(new TextDecoder().decode(c.objs.get(`${B}.txt`)), 'jiný'); // cizí soubor se nepřepsal
-  assert.deepEqual(await migrateOneBookText(c, C), { status: 'empty' });
-  const bad = makeClient({ table: { [A]: 'abcdef' }, corruptUpload: true });
-  assert.equal((await migrateOneBookText(bad, A)).status, 'verify_failed');
-  const nob = makeClient({ table: { [A]: 'abc' }, bucket: false });
-  assert.equal((await migrateOneBookText(nob, A)).status, 'error');
-});
-
-test('přesun nepřepíše úpravu uloženou během přesunu (create-only)', async () => {
-  const c = makeClient({ table: { [A]: 'starý text' } });
-  const realFrom = c.storage.from;
-  let first = true;
-  c.storage.from = (name) => {
-    const st = realFrom(name);
-    return { ...st, download: async (p) => { const r = await st.download(p); if (first) { first = false; c.objs.set(p, enc('NOVÁ úprava')); } return r; } };
-  };
-  const r = await migrateOneBookText(c, A);
-  assert.equal(r.status, 'conflict');
-  assert.equal(new TextDecoder().decode(c.objs.get(`${A}.txt`)), 'NOVÁ úprava');
-});
-
-test('hromadný přesun nic nemaže a hlásí průběh', async () => {
-  const c = makeClient({ table: { [A]: 'a', [B]: 'b', [C]: 'c' }, files: { [`${C}.txt`]: 'c' } });
-  const seen = [];
-  const r = await migrateAllBookTexts(c, { onProgress: (p) => seen.push(p.done) });
-  assert.equal(r.total, 3);
-  assert.deepEqual(r.counts, { migrated: 2, already: 1, conflict: 0, empty: 0, verify_failed: 0, error: 0 });
-  assert.deepEqual(seen, [1, 2, 3]);
-  assert.equal(c.rows.size, 3); assert.equal(c.log.deletes.length, 0);
-  assert.equal(r.failures.length, 0);
-});
-
-test('úklid smaže jen totožné kopie', async () => {
-  const c = makeClient({
-    table: { [A]: 'shodné', [B]: 'liší se', [C]: 'chybí ve storage' },
-    files: { [`${A}.txt`]: 'shodné', [`${B}.txt`]: 'jiné' },
-  });
-  const r = await cleanupTableCopies(c);
-  assert.deepEqual(r.counts, { deleted: 1, kept: 2, error: 0 });
-  assert.deepEqual([...c.rows.keys()].sort(), [B, C]);
-});
-
-test('úklid při výpadku Storage nic nesmaže', async () => {
-  const c = makeClient({ table: { [A]: 'a' } });
-  c.storage.from = () => ({ download: async () => ({ data: null, error: { message: 'Failed to fetch' } }) });
-  const r = await cleanupTableCopies(c);
-  assert.deepEqual(r.counts, { deleted: 0, kept: 0, error: 1 });
-  assert.equal(c.rows.size, 1);
 });
