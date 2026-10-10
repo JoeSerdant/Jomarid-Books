@@ -537,7 +537,7 @@ describe('texty oznámení (compose)', { skip: !EDGE && 'Node bez podpory TypeSc
   // každou variantu jednou projdeme přes rnd 0..1, pro každý den v týdnu
   const all = () => {
     const out = [];
-    for (const kind of EDGE.MESSAGE_KINDS) for (const data of SAMPLES[kind]) for (let wd = 0; wd < 7; wd += 3) for (const hour of [8, 14, 19, 21]) for (let i = 0; i < 24; i += 1) out.push([kind, data, EDGE.compose(kind, data, () => i / 24, wd, hour)]);
+    for (const kind of EDGE.MESSAGE_KINDS) for (const data of SAMPLES[kind]) for (let wd = 0; wd < 7; wd += 1) for (const hour of [8, 14, 19, 21]) for (let i = 0; i < 24; i += 1) out.push([kind, data, EDGE.compose(kind, data, () => i / 24, wd, hour)]);
     return out;
   };
   test('všech 9 druhů má vzorky a umí složit text', () => {
@@ -567,12 +567,12 @@ describe('texty oznámení (compose)', { skip: !EDGE && 'Node bez podpory TypeSc
       assert.ok(!/škoda|bohužel|zklam|lenost|lenoch|zahoď|zahodit|zahodí|zmizí|zmizel|ztrat|ztrác|přijdeš o|přijdete o|selž|selhá|vzdej|vzdáš|hrozí|ohrožen|pozor|výčitk|opozd|nestihne/i.test(t), `${kind}: ${t}`);
     }
   });
-  test('je z čeho vybírat: aspoň 90 různých titulků a každý druh má několik variant (milníky aspoň po dvou)', () => {
+  test('je z čeho vybírat: aspoň 150 různých titulků a každý druh má několik variant (milníky aspoň po dvou)', () => {
     const byKind = new Map();
     for (const [kind, , m] of all()) { if (!byKind.has(kind)) byKind.set(kind, new Set()); byKind.get(kind).add(m.title); }
     let total = 0;
     for (const [kind, set] of byKind) { total += set.size; assert.ok(set.size >= 3, `${kind}: ${set.size}`); }
-    assert.ok(total >= 90, `celkem ${total}`);
+    assert.ok(total >= 150, `celkem ${total}`);
     for (const n of [3, 7, 14, 30, 50, 100]) assert.ok(new Set([0, 0.99].map((r) => EDGE.compose('streak_milestone', { streak: n }, () => r).title)).size === 2, `milník ${n}`);
   });
   test('série v ohrožení je přizpůsobená délce a správně skloňuje „den/dny/dní“', () => {
@@ -587,7 +587,9 @@ describe('texty oznámení (compose)', { skip: !EDGE && 'Node bez podpory TypeSc
     assert.match(body('goal_progress', { goal: 8, done: 2, remaining: 6 }), /6 knih/);
     assert.match(body('goal_progress', { goal: 5, done: 3, remaining: 2 }), /2 knihy/);
     assert.match(body('coins_to_spend', { coins: 1 }), /1 minci/); assert.match(body('coins_to_spend', { coins: 3 }), /3 mince/); assert.match(body('coins_to_spend', { coins: 250 }), /250 mincí/);
-    assert.match(body('coins_to_spend', { coins: 1 }, 0.3), /Na účtu je 1 mince/);
+    const every = (kind, data) => Array.from({ length: 40 }, (_, i) => body(kind, data, i / 40)).join('\n');
+    assert.match(every('coins_to_spend', { coins: 1 }), /Na účtu je 1 mince/, 'nominativ jednotného čísla v některé variantě');
+    assert.ok(!/1 mincí|1 minci mince/.test(every('coins_to_spend', { coins: 1 })));
   });
   test('název knihy se zkrátí a v textu je v českých uvozovkách; chybná nebo cizí data text nerozbijí', () => {
     const m = EDGE.compose('continue_book', { title: 'Z'.repeat(300), percent: 41 }, () => 0);

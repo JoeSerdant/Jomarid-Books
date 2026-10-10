@@ -89,7 +89,7 @@ export const BREAK_MODES = { word: 0, sentence: 0.22, paragraph: 0.3 };
 
 const isWs = (ch) => ch === ' ' || ch === '\n' || ch === '\t' || ch === '\r'; // NBSP záměrně NENÍ mezera - nezalamuje se
 const CLOSERS = '"\'”“»’)]';
-const SENTENCE_START = /[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ0-9„"“«(\[–—\-]/;
+const SENTENCE_START = /[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ0-9„"“«([–—-]/;
 
 // Vybere, kde stránka skutečně skončí. rawEnd = největší index, kam se ještě vejdou řádky.
 export function chooseBreak(content, start, rawEnd, mode = 'sentence') {
@@ -188,14 +188,7 @@ export function createPaginator(content, node, pageHeight, { breakMode = 'senten
   return { nextPage, get position() { return pos; }, total };
 }
 
-export function paginateSync(content, node, pageHeight, opts = {}) {
-  const p = createPaginator(content, node, pageHeight, opts);
-  const pages = [];
-  for (let page = p.nextPage(); page; page = p.nextPage()) pages.push(page);
-  return pages.length ? pages : [{ start: 0, end: content.length }];
-}
-
-// Stejné, ale po dávkách, s průběhem a možností zrušit. Mezi dávkami se uvolní hlavní vlákno, aby šlo
+// Rozdělí text na stránky po dávkách, s průběhem a možností zrušit. Mezi dávkami se uvolní hlavní vlákno, aby šlo
 // ovládat stránku; dávka je ale nutné držet delší (40 ms), protože každé uvolnění dovolí prohlížeči
 // vykreslit celý snímek a na pomalém telefonu to stojí víc než samotná práce (naměřeno: 12 ms dávky
 // = 11 s, 40 ms dávky = zlomek). Uvolňuje se přes MessageChannel (setTimeout má po pár opakováních
@@ -921,8 +914,6 @@ export const ReaderPage = () => {
     </div>
   );
 
-  const fontFamily = FONT_FAMILIES[fontFamilyKey] || FONT_FAMILIES.serif;
-  const lineHeight = LINE_HEIGHTS[lineHeightKey] || LINE_HEIGHTS.normal;
   const textWidth = TEXT_WIDTHS[textWidthKey] || TEXT_WIDTHS.medium;
   const readingBg = paperMode ? '#f4ecd8' : 'var(--bg-body)';
   const readingText = paperMode ? '#3b2f1e' : 'var(--text-body)';

@@ -7,38 +7,6 @@ import { calculateXpMultiplier, calculateLevelAndProgress, getLevelVisuals, calc
 import { BadgesSection } from '../components/BadgesSection';
 import { Award, Calendar, CheckCircle, ChevronRight, Coins, Flame, Loader2, Lock, Shield, ShieldCheck, ShieldOff, Sparkles, TrendingUp, Trophy, Users } from 'lucide-react';
 
-/**
- * POZOR: Tahle funkce se už NEPOUŽÍVÁ pro výpočet celkových mincí uživatele
- * (viz fetchFullStats v UserStats) - level/streak/goal/počet odznáčků už mají
- * vlastní odměnu přes BOOK_BADGES, takže sčítání obojího dvakrát počítalo stejné mince.
- * Necháno tu jen pro případné budoucí použití (např. jednorázový bonus mimo odznáčky).
- */
-export const calculateUserCoins = (
-  level = 1, 
-  streak = 0, 
-  unlockedBadges = [], 
-  goalCompleted = false
-) => {
-  let coins = 0;
-
-  // 100 mincí za každý postoupený level (Level 1 = 0 mincí)
-  coins += Math.max(0, level - 1) * 100;
-
-  // 50 mincí za každý dokončený týden sérií (7 dní = 50, 14 dní = 100, ...)
-  coins += Math.floor(Math.max(0, streak) / 7) * 50;
-
-  // 75 mincí za každý získaný odznak
-  const badgesCount = Array.isArray(unlockedBadges) ? unlockedBadges.length : (unlockedBadges || 0);
-  coins += Math.max(0, badgesCount) * 75;
-
-  // Bonus 200 mincí za splněný měsíční cíl
-  if (goalCompleted) {
-    coins += 200;
-  }
-
-  return coins;
-};
-
 // ==========================================
 // 3. HLAVNÍ KOMPONENTA USER STATS
 // ==========================================

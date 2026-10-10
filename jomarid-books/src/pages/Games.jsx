@@ -184,7 +184,7 @@ export const GameLauncher = ({ game }) => {
             if (data?.granted) setCoins(data.balance ?? 0);
             try {
               event.source?.postMessage({ source: 'jomarid-host', type: 'coin-result', granted: data?.granted || 0, capped: !!data?.capped }, '*');
-            } catch (e) {}
+            } catch { /* okno hry už zaniklo */ }
           })
           .catch((err) => console.error('Chyba při udílení herní odměny:', err.message));
       }
