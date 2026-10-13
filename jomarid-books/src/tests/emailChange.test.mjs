@@ -222,6 +222,16 @@ describe('shoda SQL a klienta', () => {
     assert.doesNotMatch(values[cols.indexOf('title')], /v_new/);
     assert.doesNotMatch(values[cols.indexOf('body')], /v_new/);
   });
+
+  test('strop otevřených žádostí se počítá pod zámkem (dvě souběžné žádosti ho nepřekročí)', () => {
+    const body = bodies.request_email_change;
+    const lock = body.search(/pg_advisory_xact_lock\(/i);
+    const cap = body.search(/select count\(\*\)\s+from public\.admin_notifications[^;]*status\s*=\s*'open'/i);
+    const insert = body.search(/insert into public\.admin_notifications/i);
+    assert.ok(lock >= 0, 'chybí pg_advisory_xact_lock');
+    assert.ok(cap >= 0, 'chybí kontrola celkového stropu');
+    assert.ok(lock < cap && cap < insert, 'pořadí musí být zámek → počet → vložení');
+  });
 });
 
 describe('shoda klienta', () => {
