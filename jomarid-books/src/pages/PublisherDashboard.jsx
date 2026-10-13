@@ -708,7 +708,7 @@ export const PublisherDashboard = () => {
 
           {books.length === 0 ? (
             <Card className="text-center py-10">
-              <p className="text-xs font-black uppercase opacity-60 m-0">Zatím jsi nevydal(a) žádnou knihu.</p>
+              <p className="text-xs font-black uppercase opacity-60 m-0">Zatím nemáš žádnou vydanou knihu.</p>
               <button type="button" onClick={() => setTab('editor')} style={primaryBtn} className="mt-4 px-5 py-2.5 rounded-xl border-none font-black uppercase text-xs cursor-pointer">Vydat první knihu</button>
             </Card>
           ) : visibleBooks.length === 0 ? (

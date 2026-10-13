@@ -129,7 +129,7 @@ export const LoginPage = () => {
         <h2 style={{ color: 'var(--text-body)' }} className="text-xl font-black text-center uppercase tracking-tight mb-6">{TITLES[mode]}</h2>
 
         {mode === 'forgot' && (
-          <p style={{ color: 'var(--text-muted)' }} className="text-xs text-center mb-4 -mt-3 opacity-80">Heslo ti e-mailem neposíláme: žádost jde správci, který ti vydá dočasné heslo. Napiš e-mail a uživatelské jméno k účtu (když sis jméno nikdy nenastavoval, je to začátek e-mailu před @).</p>
+          <p style={{ color: 'var(--text-muted)' }} className="text-xs text-center mb-4 -mt-3 opacity-80">Heslo ti e-mailem neposíláme: žádost jde správci, který ti vydá dočasné heslo. Napiš e-mail a uživatelské jméno k účtu (když jméno nemáš nastavené, je to začátek e-mailu před @).</p>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
