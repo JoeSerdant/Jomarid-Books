@@ -212,3 +212,63 @@ test('obchod: nákup odečte mince a přidá předmět, bez mincí se nic nestan
   run("$('items').onclick({ target: { dataset: { k: 'hit', p: '100' } } });");
   assert.equal(run('S.coins'), 10);
 });
+
+/* ---------------------------------------------------------------- opravy z kontroly: Zpět, konec hry, dotyk */
+const fire = (env, type, ev) => (env.sandbox.document.getElementById('c').listeners[type] || []).forEach((fn) => fn(ev));
+
+test('Zpět vrátí i hod, počet sloučení a combo: ve hře 30 hodů se neztratí hod', () => {
+  const { run } = makeEnv();
+  run("start('drops')");
+  run('g.left = 1; g.cool = 0; g.merges = 4; g.cb = 3; g.cT = 20;');
+  run('drop();');
+  assert.equal(run('g.left'), 0);
+  run('g.merges = 7; g.cb = 5; g.cT = 0;');
+  run("ability('undo')");
+  assert.equal(run('g.left'), 1, 'hod se nevrátil');
+  assert.equal(run('g.balls.length'), 0);
+  assert.equal(run('g.merges'), 4);
+  assert.equal(run('g.cb'), 3);
+  assert.equal(run('g.cT'), 20);
+  // a koule jde znovu hodit
+  run('g.cool = 0; drop();');
+  assert.equal(run('g.balls.length'), 1);
+});
+
+test('po konci Časovky ani 30 hodů se krok nedokončí: sloučení v posledním snímku se nepřičte', () => {
+  const t = makeEnv();
+  t.run("start('time')");
+  t.run('g.t = 1; g.balls = [mk(270, 600, 0), mk(270, 600, 0)];');
+  t.run('step()');
+  assert.equal(t.run('st'), 'over');
+  assert.equal(t.run('g.score'), 0);
+  assert.equal(t.run('g.merges'), 0);
+  const d = makeEnv();
+  d.run("start('drops')");
+  d.run('g.left = 0; g.cool = -200; g.balls = [mk(270, 600, 0), mk(270, 600, 0)];');
+  d.run('step()');
+  assert.equal(d.run('st'), 'over');
+  assert.equal(d.run('g.score'), 0);
+});
+
+test('zrušený dotyk koule neodhodí a táhnutí smí dokončit jen prst, který ho začal', () => {
+  const env = makeEnv();
+  const { run } = env;
+  run("start('classic')");
+  const left0 = run('g.left');
+  fire(env, 'pointerdown', { clientX: 270, clientY: 400, pointerId: 1 });
+  assert.equal(run('g.aiming'), true);
+  fire(env, 'pointercancel', { pointerId: 1 });
+  assert.equal(run('g.aiming'), false);
+  fire(env, 'pointerup', { clientX: 270, clientY: 400, pointerId: 1 });
+  assert.equal(run('g.left'), left0, 'po zrušení dotyku se nesmí házet');
+  // cizí prst táhnutí nedokončí ani nezruší
+  fire(env, 'pointerdown', { clientX: 270, clientY: 400, pointerId: 1 });
+  fire(env, 'pointerup', { clientX: 270, clientY: 400, pointerId: 2 });
+  fire(env, 'pointercancel', { pointerId: 2 });
+  assert.equal(run('g.left'), left0);
+  assert.equal(run('g.aiming'), true);
+  fire(env, 'pointermove', { clientX: 200, clientY: 400, pointerId: 2 });
+  assert.notEqual(run('g.aimX'), 200, 'cizí prst nesmí posouvat míření');
+  fire(env, 'pointerup', { clientX: 200, clientY: 400, pointerId: 1 });
+  assert.equal(run('g.left'), left0 - 1);
+});

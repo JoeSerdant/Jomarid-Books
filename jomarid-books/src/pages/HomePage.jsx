@@ -72,7 +72,7 @@ const THEME_COUNT = Object.keys(THEME_LABELS).length;
 const DEFAULT_SETTINGS = {
   homepage_hero: {
     headline: 'Otevřete knihu a sledujte, jak stoupá vaše úroveň',
-    subtitle: `Tři originální knižní řady, ${BADGE_COUNT} ${plural(BADGE_COUNT, 'sběratelský odznak', 'sběratelské odznaky', 'sběratelských odznaků')} a vlastní herní měna, kterou si vyděláte čtením - nebo si mezitím zahrajete jednu z pěti miniher.`,
+    subtitle: `Tři originální knižní řady, ${BADGE_COUNT} ${plural(BADGE_COUNT, 'sběratelský odznak', 'sběratelské odznaky', 'sběratelských odznaků')} a vlastní herní měna, kterou si vyděláte čtením - nebo si mezitím zahrajete jednu ze šesti miniher.`,
   },
   homepage_featured_books: { book_ids: [] },
   homepage_font_demo: {
