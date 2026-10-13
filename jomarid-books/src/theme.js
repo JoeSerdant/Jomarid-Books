@@ -329,7 +329,9 @@ export const loadReaderPrefs = () => {
   };
 };
 
-const notifyReaderPrefs = () => { try { window.dispatchEvent(new Event('jomarid-reader-prefs')); } catch { /* mimo prohlížeč */ } };
+// Událost „čtecí nastavení se změnilo“: poslouchá ji čtečka i záložka Čtečka v Nastavení.
+export const READER_PREFS_EVENT = 'jomarid-reader-prefs';
+export const notifyReaderPrefs = () => { try { window.dispatchEvent(new Event(READER_PREFS_EVENT)); } catch { /* mimo prohlížeč */ } };
 
 export const saveReaderPref = (name, value) => {
   if (!READER_STORAGE[name]) return;

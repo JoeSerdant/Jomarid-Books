@@ -410,12 +410,12 @@ describe('synchronizace nastavení: řadič', () => {
 });
 
 describe('verze aplikace', () => {
-  test('verze v appInfo.js odpovídá package.json (i v package-lock.json) a popisek z ní vychází', () => {
+  test('verze je jen v appInfo.js (package.json ani zámek ji nenesou) a popisek z ní vychází', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
     const lock = JSON.parse(fs.readFileSync(path.join(ROOT, 'package-lock.json'), 'utf8'));
-    assert.equal(APP_VERSION, pkg.version);
-    assert.equal(lock.version, pkg.version);
-    assert.equal(lock.packages[''].version, pkg.version);
+    assert.equal(pkg.version, undefined);
+    assert.equal(lock.version, undefined);
+    assert.equal(lock.packages[''].version, undefined);
     assert.match(APP_VERSION, /^\d+\.\d+\.\d+$/);
     assert.ok(APP_VERSION.startsWith(APP_VERSION_SHORT + '.'));
     assert.equal(APP_VERSION_LABEL, 'Verze ' + APP_VERSION_SHORT);
