@@ -36,7 +36,9 @@ begin
        where user_id = v_uid and kind = 'email_change_request' and created_at > now() - interval '24 hours') >= 3 then
     raise exception 'too_many_requests';
   end if;
-  -- Strop otevřených žádostí všech uživatelů dohromady (aby spousta účtů nezahltila správce upozorněními).
+  -- Strop otevřených žádostí všech uživatelů dohromady (aby spousta účtů nezahltila správce upozorněními). Zámek drží do konce
+  -- transakce, takže dvě souběžné žádosti strop nepřekročí; žádost trvá zlomek vteřiny, takže se nic nezdržuje.
+  perform pg_advisory_xact_lock(hashtext('email_change_request_cap'));
   if (select count(*) from public.admin_notifications where kind = 'email_change_request' and status = 'open') >= 200 then
     raise exception 'too_many_requests';
   end if;

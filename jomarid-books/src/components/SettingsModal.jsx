@@ -307,7 +307,7 @@ const ProfileTab = ({ user, role }) => {
 const isMissingRpc = (err) => !!err && (err.code === 'PGRST202' || /could not find the function/i.test(String(err.message || '')));
 
 const SecurityTab = ({ user }) => {
-  const { username: accountName } = useAuth();
+  const { username: accountName, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
   const [curPw, setCurPw] = useState('');
@@ -326,6 +326,7 @@ const SecurityTab = ({ user }) => {
   const [emailRequest, setEmailRequest] = useState(undefined);
   const [emailLoadFailed, setEmailLoadFailed] = useState(false);
   const alive = useRef(true);
+  const lastEmailStatus = useRef(null); // stav žádosti při posledním načtení
 
   const loadEmailRequest = async () => {
     const { data, error } = await supabase.rpc('my_email_change_request');
@@ -335,9 +336,15 @@ const SecurityTab = ({ user }) => {
       else setEmailLoadFailed(true);
       return;
     }
+    const next = data || null;
+    // správce žádost mezitím provedl: relace nese starý e-mail, profil se načte znovu a obnoví ji
+    if (lastEmailStatus.current === 'open' && next?.status === 'done') refreshProfile?.();
+    lastEmailStatus.current = next?.status ?? null;
     setEmailLoadFailed(false);
-    setEmailRequest(data || null);
+    setEmailRequest(next);
   };
+  const loadEmailRequestRef = useRef(loadEmailRequest);
+  loadEmailRequestRef.current = loadEmailRequest;
 
   const retryEmailRequest = () => {
     setEmailLoadFailed(false);
@@ -347,8 +354,18 @@ const SecurityTab = ({ user }) => {
 
   useEffect(() => {
     alive.current = true;
-    loadEmailRequest();
-    return () => { alive.current = false; };
+    loadEmailRequestRef.current();
+    // Otevřená žádost se znovu načte, když se čtenář vrátí na stránku (správce ji mezitím mohl vyřídit).
+    const refreshOpenRequest = () => {
+      if (document.visibilityState !== 'hidden' && lastEmailStatus.current === 'open') loadEmailRequestRef.current();
+    };
+    window.addEventListener('focus', refreshOpenRequest);
+    document.addEventListener('visibilitychange', refreshOpenRequest);
+    return () => {
+      alive.current = false;
+      window.removeEventListener('focus', refreshOpenRequest);
+      document.removeEventListener('visibilitychange', refreshOpenRequest);
+    };
   }, []);
 
   const [resetBusy, setResetBusy] = useState(false);
