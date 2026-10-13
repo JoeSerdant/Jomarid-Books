@@ -1,0 +1,56 @@
+name: Kontrola
+
+# Při každém pull requestu a po každém mergi do main: lint, testy, build a SQL testy.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Novější push do stejného pull requestu zruší rozběhnutou starší kontrolu; na main se nic neruší.
+concurrency:
+  group: kontrola-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    working-directory: jomarid-books
+
+jobs:
+  aplikace:
+    name: Lint, testy a build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: jomarid-books/package-lock.json
+      - name: Instalace závislostí
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Testy
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  sql:
+    name: SQL testy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: PostgreSQL
+        # Runner ho obvykle má; kdyby ne, doinstaluje se. initdb a spol. hledá db/tests/run.sh sám v /usr/lib/postgresql/*/bin.
+        run: |
+          if ! ls /usr/lib/postgresql/*/bin/initdb >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql
+          fi
+      - name: SQL testy
+        run: bash db/tests/run.sh

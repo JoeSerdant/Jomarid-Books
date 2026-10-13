@@ -17,6 +17,9 @@ Ve složce `jomarid-books/`:
 - `npm run build` – sestavení pro nasazení
 - `npm test` – testy
 - `npm run lint` – kontrola kódu
+- `npm run test:sql` – SQL testy (potřebují PostgreSQL, viz `jomarid-books/db/README.md`)
+
+Při každém pull requestu a po mergi do `main` je spouští i GitHub Actions (`.github/workflows/ci.yml`): lint, testy, build a SQL testy.
 
 ## Verze
 Číslo verze je jen v `jomarid-books/src/appInfo.js`.
