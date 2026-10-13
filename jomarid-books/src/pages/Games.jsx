@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Coins, Loader2, X, Rocket, Swords, Building2, Target, Crown, Lock } from 'lucide-react';
+import { Coins, Loader2, X, Rocket, Swords, Building2, Target, Crown, Smile, Lock } from 'lucide-react';
 
 // Každá hra je velký kus textu (stovky kB, šachy i s Reactem). Stahuje se až při spuštění (dynamický import), ne spolu
 // se stránkou Her - jinak by si hráč už při otevření seznamu stáhl všechny hry najednou.
@@ -41,6 +41,13 @@ const GAMES = [
     tagline: 'Šachy proti pěti botům s vlastní osobností - skutečný Elo rating, hodiny, nápověda, rozbor partie a ligový postup.',
     icon: Crown,
     load: () => import('../gameContent/chess').then(m => m.CHESS_HTML),
+  },
+  {
+    id: 'koulovikamosi',
+    title: 'Kouloví Kámoši',
+    tagline: 'Pouštěj do misky měkké koule, spojuj stejné a vypěstuj tu největší - pět režimů od klasiky po chaos, obchod s vylepšeními a vlastní rekordy.',
+    icon: Smile,
+    load: () => import('../gameContent/koulovi').then(m => m.KOULOVI_HTML),
   },
   // Další hra se přidá jako další objekt v tomhle poli.
 ];

@@ -1,0 +1,24 @@
+:root{--bg:#cfd3dc;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--f:'Lilita One',Impact,'Arial Black',sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15161c}}
+:root[data-theme="dark"]{--bg:#15161c}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{height:100%;margin:0;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;user-select:none;font-family:var(--f)}
+#stage{position:relative;background:#e6e4df;overflow:hidden}
+canvas{width:100%;height:100%;display:block}
+.ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.2em;background:#e6e4df linear-gradient(#d4d1ca 1px,transparent 1px) 0 0/2.5em 2.5em;color:#fff;text-align:center}
+.ov.over{background:rgba(20,20,30,.78)}
+.hide{display:none}
+h1{margin:0;font-size:4.4em;line-height:.95;color:#ffd92e;-webkit-text-stroke:.09em #111;paint-order:stroke fill;text-shadow:0 .08em 0 #111}
+button{font:inherit;font-size:2.4em;padding:.25em 1.6em;color:#fff;background:#ffd92e;border:.12em solid #111;border-radius:.4em;box-shadow:0 .14em 0 #111;cursor:pointer;-webkit-text-stroke:.07em #111;paint-order:stroke fill}
+button:active{transform:translateY(.1em);box-shadow:0 .04em 0 #111}
+button.sec{font-size:1.5em;background:#4aa8ff}
+.stats{background:#5b12b0;border:.15em solid #111;border-radius:.8em;padding:.7em 1em;width:20em}
+.stats h2{margin:0 0 .4em;font-size:1.5em;font-weight:400}
+.row{display:flex;justify-content:space-around}
+.row div{display:flex;flex-direction:column;font-size:1.7em}.row i{font-style:normal;font-size:.55em;opacity:.9}
+.small{font-size:1em;margin-top:.5em;opacity:.85}
+.mas{display:flex;gap:.3em;align-items:flex-end}
+.b{position:relative;border:.12em solid #111;border-radius:50%;animation:bob 1.6s ease-in-out infinite}
+.b span{position:absolute;top:30%;width:26%;height:30%;background:#fff;border:.06em solid #111;border-radius:50%}
+.b span:before{content:"";position:absolute;left:35%;top:35%;width:40%;height:50%;background:#111;border-radius:50%}
+@keyframes bob{50%{transform:translateY(-.5em)}}
