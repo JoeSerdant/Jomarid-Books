@@ -327,10 +327,12 @@ const SecurityTab = ({ user }) => {
   const [emailLoadFailed, setEmailLoadFailed] = useState(false);
   const alive = useRef(true);
   const lastEmailStatus = useRef(null); // stav žádosti při posledním načtení
+  const emailLoadSeq = useRef(0); // pořadí načtení: pomalejší starší odpověď nesmí přepsat novější
 
   const loadEmailRequest = async () => {
+    const seq = ++emailLoadSeq.current;
     const { data, error } = await supabase.rpc('my_email_change_request');
-    if (!alive.current) return;
+    if (!alive.current || seq !== emailLoadSeq.current) return;
     if (error) {
       if (isMissingRpc(error)) { setEmailLoadFailed(false); setEmailRequest(null); }
       else setEmailLoadFailed(true);
