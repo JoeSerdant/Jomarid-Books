@@ -1,10 +1,21 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { clearPersonalBrowseState } from '../browse/browseStore';
 import { cleanupOnLogout } from '../push/pushClient';
 import { ROLE_READER, ROLE_ADMIN } from '../constants/roles';
+import { sameEmail, normalizeEmail } from '../emailChange';
+
+// Správce může změnit e-mail účtu, zatímco je čtenář přihlášený: relace pak nese starý e-mail, dokud se token neobnoví
+// (až hodinu). Jedno obnovení to srovná (nový uživatel z relace pak přijde přes onAuthStateChange); pro stejnou dvojici
+// e-mailů se zkusí jen jednou, ať se to nikdy nezacyklí.
+const refreshStaleSessionEmail = (triedRef, profileEmail, sessionEmail) => {
+  const pair = `${normalizeEmail(sessionEmail)}|${normalizeEmail(profileEmail)}`;
+  if (triedRef.current === pair) return;
+  triedRef.current = pair;
+  Promise.resolve(supabase.auth.refreshSession()).catch(() => {});
+};
 
 export const ThemeContext = createContext(null);
 export const AuthContext = createContext(null);
@@ -22,6 +33,8 @@ export function AuthProvider({ children }) {
  // uzivatelske jmeno (z profilu; jinak zaklad e-mailu) a priznak "spravce vydal docasne heslo - musi si nastavit vlastni"
  const [username, setUsername] = useState('');
  const [mustChange, setMustChange] = useState(false);
+ // dvojice "e-mail v relaci | e-mail v profilu", pro kterou už se obnovení relace zkusilo (aby se to nikdy nezacyklilo)
+ const emailRefreshTried = useRef('');
 
  async function syncProfile(sessionUser) {
    if (!sessionUser) {
@@ -64,6 +77,7 @@ export function AuthProvider({ children }) {
        setRole(data?.role || ROLE_READER);
        setUsername(data?.username || (sessionUser.email ? sessionUser.email.split('@')[0] : ''));
        setMustChange(!!data?.must_change_password);
+       if (data?.email && !sameEmail(data.email, sessionUser.email)) refreshStaleSessionEmail(emailRefreshTried, data.email, sessionUser.email);
      }
    } catch (catchedError) {
      console.error("Auth sync crash:", catchedError);

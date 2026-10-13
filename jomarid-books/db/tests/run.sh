@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# SQL testy oznámení na skutečném PostgreSQL: db/push-notifications.sql proti zjednodušenému schématu Supabase (mock_schema.sql).
+# SQL testy na skutečném PostgreSQL: db/push-notifications.sql (oznámení) a db/email-change.sql (změna e-mailu přes správce)
+# proti zjednodušenému schématu Supabase (mock_schema.sql).
 #   bash db/tests/run.sh        (nebo: npm run test:sql)
 # Potřebuje PostgreSQL 14+ (initdb, pg_ctl, psql v PATH nebo v /usr/lib/postgresql/*/bin). Vytvoří dočasný cluster mimo síť (jen unix socket),
 # po doběhnutí ho smaže. Při spuštění jako root používá uživatele postgres. Návratový kód 0 = vše prošlo, 77 = PostgreSQL není k dispozici.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SQL="$HERE/../push-notifications.sql"
+EMAIL_SQL="$HERE/../email-change.sql"
 
 BIN=""
 for d in $(command -v initdb >/dev/null 2>&1 && dirname "$(command -v initdb)") /usr/lib/postgresql/*/bin; do
@@ -17,7 +19,7 @@ TMP="$(mktemp -d)"
 RUNAS=""
 if [ "$(id -u)" = "0" ]; then
   id postgres >/dev/null 2>&1 || { echo "Jako root je potřeba uživatel postgres." >&2; rm -rf "$TMP"; exit 77; }
-  chown postgres "$TMP"; chmod 755 "$HERE" "$HERE"/*.sql "$SQL" 2>/dev/null || true
+  chown postgres "$TMP"; chmod 755 "$HERE" "$HERE"/*.sql "$SQL" "$EMAIL_SQL" 2>/dev/null || true
   RUNAS="runuser -u postgres --"
 fi
 run() { $RUNAS "$@"; }
@@ -37,8 +39,11 @@ OUT="$TMP/out.txt"
   PSQLQ -f "$HERE/mock_schema.sql" &&
   PSQLQ -f "$TMP/push.sql" &&
   PSQLQ -f "$TMP/push.sql" &&   # podruhé: SQL musí jít spustit víckrát
+  PSQLQ -f "$EMAIL_SQL" &&
+  PSQLQ -f "$EMAIL_SQL" &&      # i tenhle soubor
   PSQLQ -f "$HERE/push_logic.test.sql" &&
-  PSQLQ -f "$HERE/push_rpc.test.sql"
+  PSQLQ -f "$HERE/push_rpc.test.sql" &&
+  PSQLQ -f "$HERE/email_change.test.sql"
 } >"$OUT" 2>&1
 STATUS=$?
 

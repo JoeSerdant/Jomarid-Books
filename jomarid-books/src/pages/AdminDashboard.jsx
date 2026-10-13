@@ -14,9 +14,10 @@ import { plural } from '../lib/plural';
 import { ROLE_READER, ROLE_PUBLISHER, ROLE_ADMIN, ROLE_LABELS } from '../constants/roles';
 import { DEFAULT_BOOK_PRICE } from '../constants/economy';
 import { USERNAME_MIN, USERNAME_MAX } from '../lib/username';
+import { EMAIL_MAX, EMAIL_REQUEST_KIND, ADMIN_EMAIL_ERRORS, isValidEmail, normalizeEmail, sameEmail } from '../emailChange';
 import { BOOK_BADGES } from '../constants/badges';
 import { DEFAULT_MONTHLY_GOAL } from '../constants/leveling';
-import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle, LayoutDashboard, UserCog, Loader2, CheckCircle2, X, ChevronLeft, ChevronRight, Ban, KeyRound, Trash2, ShieldCheck, Bell, Copy, Flag, Eye, EyeOff, Download } from 'lucide-react';
+import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle, LayoutDashboard, UserCog, Loader2, CheckCircle2, X, ChevronLeft, ChevronRight, Ban, KeyRound, Trash2, ShieldCheck, Bell, Copy, Flag, Eye, EyeOff, Download, Mail } from 'lucide-react';
 
 // ============================================================================
 // Admin: Přehled a správa účtů (pomocné prvky, záložka Přehled, záložka Účty)
@@ -77,6 +78,7 @@ const ADMIN_ERRORS = {
   username_invalid: `Neplatné uživatelské jméno (${USERNAME_MIN}-${USERNAME_MAX} znaků, a-z, číslice, . _ -).`,
   username_reserved: 'Tohle jméno je rezervované.',
   username_taken: 'Tohle jméno už někdo používá.',
+  ...ADMIN_EMAIL_ERRORS,
 };
 const mapAdminError = (err) => {
   const msg = String(err?.message || '');
@@ -334,7 +336,7 @@ const SmallButton = ({ tone = 'ghost', busy = false, disabled, children, ...prop
   );
 };
 
-const AccountDetail = ({ userId, currentUserId, onClose, onChanged }) => {
+const AccountDetail = ({ userId, currentUserId, onClose, onChanged, onEmailChanged }) => {
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -344,6 +346,7 @@ const AccountDetail = ({ userId, currentUserId, onClose, onChanged }) => {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [tempOpen, setTempOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
 
   const load = useCallback(async () => {
@@ -354,13 +357,13 @@ const AccountDetail = ({ userId, currentUserId, onClose, onChanged }) => {
     setRoleDraft(data?.profile?.role || '');
     setNameDraft(data?.profile?.username || '');
   }, [userId]);
-  useEffect(() => { setDetail(null); setMsg(null); setConfirmBan(false); load(); }, [load]);
+  useEffect(() => { setDetail(null); setMsg(null); setConfirmBan(false); setEmailOpen(false); load(); }, [load]);
 
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape' && !deleteOpen) onClose(); };
+    const onKey = (e) => { if (e.key === 'Escape' && !deleteOpen && !emailOpen) onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, deleteOpen]);
+  }, [onClose, deleteOpen, emailOpen]);
 
   const run = async (call, okText) => {
     setBusy(true);
@@ -443,7 +446,7 @@ const AccountDetail = ({ userId, currentUserId, onClose, onChanged }) => {
               <section className="space-y-3">
                 <h4 className="text-xs font-black uppercase tracking-wider m-0">Akce</h4>
                 {msg && <InlineMessage type={msg.type}>{msg.text}</InlineMessage>}
-                {isSelf && <InlineMessage>Na vlastním účtu nejde měnit roli, blokovat, mazat ani vydat dočasné heslo - to může provést jiný správce.</InlineMessage>}
+                {isSelf && <InlineMessage>Na vlastním účtu nejde měnit roli, blokovat, mazat, vydat dočasné heslo ani změnit e-mail - to může provést jiný správce.</InlineMessage>}
 
                 {profile?.must_change_password && <InlineMessage>Čeká na změnu hesla: správce vydal dočasné heslo a uživatel si zatím nenastavil vlastní.</InlineMessage>}
 
@@ -474,6 +477,7 @@ const AccountDetail = ({ userId, currentUserId, onClose, onChanged }) => {
 
                 <div className="flex flex-wrap gap-2">
                   <SmallButton busy={busy} disabled={isSelf} onClick={() => setTempOpen(true)}><KeyRound size={13} /> Vydat dočasné heslo</SmallButton>
+                  <SmallButton busy={busy} disabled={isSelf} onClick={() => setEmailOpen(true)}><Mail size={13} /> Změnit e-mail</SmallButton>
                   {isBanned ? (
                     <SmallButton busy={busy} disabled={isSelf} onClick={() => run(() => supabase.rpc('admin_set_user_banned', { p_user_id: userId, p_banned: false }), 'Účet odblokován.')}><Ban size={13} /> Odblokovat</SmallButton>
                   ) : !confirmBan ? (
@@ -531,6 +535,14 @@ const AccountDetail = ({ userId, currentUserId, onClose, onChanged }) => {
           target={{ id: userId, username: profile?.username || (account?.email || '').split('@')[0], email: account?.email }}
           onClose={() => setTempOpen(false)}
           onIssued={() => { load(); onChanged?.(); }}
+        />
+      )}
+
+      {emailOpen && (
+        <ChangeEmailDialog
+          target={{ userId, username: profile?.username || '', currentEmail: account?.email || '' }}
+          onClose={() => setEmailOpen(false)}
+          onDone={(res) => { onEmailChanged?.(res?.old_email, res?.new_email); load(); onChanged?.(); }}
         />
       )}
     </div>
@@ -613,12 +625,169 @@ export const TempPasswordDialog = ({ target, onClose, onIssued }) => {
   );
 };
 
+// Změna e-mailu účtu správcem (z žádosti uživatele, nebo přímo z detailu účtu). Nový e-mail z žádosti je pevný,
+// z detailu účtu se zadává. Uživatel zůstane přihlášený, potvrzovací e-mail se neposílá.
+export const ChangeEmailDialog = ({ target, onClose, onDone }) => {
+  const fixedNew = !!target.newEmail;
+  const [step, setStep] = useState('confirm'); // 'confirm' | 'result'
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState(null);
+  const [draft, setDraft] = useState('');
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape' && !busy) onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [busy, onClose]);
+
+  const newEmail = normalizeEmail(fixedNew ? target.newEmail : draft);
+  const isSame = sameEmail(newEmail, target.currentEmail);
+  const canSubmit = isValidEmail(newEmail) && !isSame;
+  const draftHint = !fixedNew && draft.trim() !== '' ? (!isValidEmail(newEmail) ? ADMIN_EMAIL_ERRORS.invalid_email : isSame ? ADMIN_EMAIL_ERRORS.same_email : '') : '';
+
+  const change = async () => {
+    if (!canSubmit || busy) return;
+    setBusy(true);
+    setError('');
+    const { data, error: rpcError } = await supabase.rpc('admin_change_email', { p_user: target.userId, p_new_email: newEmail, p_notification: target.notificationId || null });
+    setBusy(false);
+    if (rpcError) return setError(mapAdminError(rpcError));
+    setResult(data);
+    setStep('result');
+    onDone?.(data);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[130] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3" onClick={() => { if (!busy) onClose(); }}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Změna e-mailu"
+        onClick={(e) => e.stopPropagation()}
+        style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
+        className="border rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-4 max-h-[92dvh] overflow-y-auto"
+      >
+        {step === 'confirm' ? (
+          <>
+            <h3 className="text-base font-black uppercase tracking-tight m-0 flex items-center gap-2"><Mail size={18} /> Změnit e-mail?</h3>
+            <p className="text-sm m-0 leading-relaxed">Účet: <b className="break-all">{target.username || target.currentEmail}</b></p>
+            {fixedNew || canSubmit ? (
+              <p className="text-sm m-0 leading-relaxed">E-mail se změní z <b className="break-all">{target.currentEmail}</b> na <b className="break-all">{newEmail}</b>.</p>
+            ) : (
+              <p className="text-sm m-0 leading-relaxed">Současný e-mail: <b className="break-all">{target.currentEmail}</b></p>
+            )}
+            {!fixedNew && (
+              <label className="block">
+                <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-1">Nový e-mail</span>
+                <input
+                  type="email"
+                  aria-label="Nový e-mail"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') change(); }}
+                  maxLength={EMAIL_MAX}
+                  autoCapitalize="none"
+                  autoComplete="off"
+                  spellCheck={false}
+                  disabled={busy}
+                  style={selectStyle}
+                  className="w-full p-2.5 border rounded-lg text-xs font-bold outline-none disabled:opacity-50"
+                />
+                {draftHint && <span style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] block mt-1">{draftHint}</span>}
+              </label>
+            )}
+            {fixedNew && isSame && <InlineMessage>{ADMIN_EMAIL_ERRORS.same_email}</InlineMessage>}
+            <ul style={{ color: 'var(--text-muted)' }} className="text-xs m-0 pl-4 space-y-1.5 leading-relaxed">
+              <li>Potvrzovací e-mail se neposílá, nový e-mail se rovnou bere jako potvrzený.</li>
+              <li>Uživatel zůstane přihlášený a heslo se nemění; přihlašovat se bude novým e-mailem.</li>
+              <li>Uživatel dostane oznámení v appce. Řekni mu to i mimo aplikaci.</li>
+              {!target.username && <li>Účet nemá uživatelské jméno, zobrazované jméno se odvozuje z e-mailu a po změně se změní.</li>}
+            </ul>
+            {error && <InlineMessage type="error">{error}</InlineMessage>}
+            <div className="flex gap-2 justify-end">
+              <SmallButton onClick={onClose} disabled={busy}>Zrušit</SmallButton>
+              <SmallButton tone="primary" busy={busy} disabled={!canSubmit} onClick={change}><Mail size={13} /> Změnit e-mail</SmallButton>
+            </div>
+          </>
+        ) : (
+          <>
+            <h3 className="text-base font-black uppercase tracking-tight m-0 flex items-center gap-2"><CheckCircle2 size={18} style={{ color: '#10b981' }} /> E-mail je změněný.</h3>
+            <p className="text-sm m-0 leading-relaxed break-all"><b>{result?.old_email}</b> → <b>{result?.new_email}</b></p>
+            <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">Uživatel dostal oznámení v appce. Řekni mu to i mimo aplikaci - přihlašovat se bude novým e-mailem.</p>
+            <div className="flex justify-end"><SmallButton tone="primary" onClick={onClose}>Hotovo</SmallButton></div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Zamítnutí žádosti o změnu e-mailu: uživatel dostane oznámení, volitelně s důvodem.
+const REJECT_REASON_MAX = 300;
+const RejectEmailChangeDialog = ({ target, onClose, onDone }) => {
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape' && !busy) onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [busy, onClose]);
+
+  const reject = async () => {
+    setBusy(true);
+    setError('');
+    const { error: rpcError } = await supabase.rpc('admin_reject_email_change', { p_notification: target.notificationId, p_reason: reason.trim() || null });
+    setBusy(false);
+    if (rpcError) return setError(mapAdminError(rpcError));
+    onDone?.();
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[130] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3" onClick={() => { if (!busy) onClose(); }}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Zamítnutí žádosti o změnu e-mailu"
+        onClick={(e) => e.stopPropagation()}
+        style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
+        className="border rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-4 max-h-[92dvh] overflow-y-auto"
+      >
+        <h3 className="text-base font-black uppercase tracking-tight m-0 flex items-center gap-2"><XCircle size={18} /> Zamítnout žádost?</h3>
+        <p className="text-sm m-0 leading-relaxed">Účet: <b className="break-all">{target.username || target.email}</b></p>
+        <label className="block">
+          <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-1">Důvod (nepovinný)</span>
+          <textarea
+            aria-label="Důvod zamítnutí"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            maxLength={REJECT_REASON_MAX}
+            rows={3}
+            disabled={busy}
+            style={selectStyle}
+            className="w-full p-2.5 border rounded-lg text-xs font-semibold outline-none resize-y disabled:opacity-50"
+          />
+          <span style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] block mt-1">Uživatel dostane oznámení v appce a důvod v něm uvidí. {reason.length}/{REJECT_REASON_MAX}</span>
+        </label>
+        {error && <InlineMessage type="error">{error}</InlineMessage>}
+        <div className="flex gap-2 justify-end">
+          <SmallButton onClick={onClose} disabled={busy}>Zpět</SmallButton>
+          <SmallButton tone="danger" busy={busy} onClick={reject}><XCircle size={13} /> Zamítnout</SmallButton>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const NOTIF_STATUS = { open: ['Otevřené', 'warn'], done: ['Vyřízeno', 'ok'], dismissed: ['Zamítnuto', 'muted'] };
 const NOTIF_FILTERS = [['open', 'Otevřené'], ['all', 'Vše']];
 const REPORT_STATUS = { open: ['Otevřené', 'warn'], done: ['Smazáno', 'ok'], dismissed: ['Ponecháno', 'muted'] };
 const REPORT_REASONS = { spam: 'spam', abuse: 'urážky', inappropriate: 'nevhodný obsah', other: 'jiný důvod' };
 
-export const NotificationsTab = ({ onCountChange, currentUserId, onOpenAccount }) => {
+export const NotificationsTab = ({ onCountChange, currentUserId, onOpenAccount, onChanged }) => {
   const [filter, setFilter] = useState('open');
   const [items, setItems] = useState(null);
   const [error, setError] = useState('');
@@ -626,6 +795,8 @@ export const NotificationsTab = ({ onCountChange, currentUserId, onOpenAccount }
   const [busyId, setBusyId] = useState(null);
   const [msg, setMsg] = useState(null);
   const [issueFor, setIssueFor] = useState(null);
+  const [emailFor, setEmailFor] = useState(null);
+  const [rejectFor, setRejectFor] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   const load = useCallback(async () => {
@@ -667,6 +838,13 @@ export const NotificationsTab = ({ onCountChange, currentUserId, onOpenAccount }
     if (rpcError) return setMsg({ type: 'error', text: mapAdminError(rpcError) });
     setMsg({ type: 'success', text: del ? (data?.deleted ? 'Komentář je smazaný.' : 'Komentář už byl dřív smazaný, upozornění je vyřízené.') : 'Komentář je ponechaný.' });
     await load();
+  };
+
+  // Po změně e-mailu nebo zamítnutí žádosti se znovu načte seznam i počty a dá se vědět nadřazené stránce (její seznam účtů).
+  const emailRequestHandled = async (text) => {
+    setMsg({ type: 'success', text });
+    await load();
+    onChanged?.();
   };
 
   const clearHandled = async () => {
@@ -711,12 +889,15 @@ export const NotificationsTab = ({ onCountChange, currentUserId, onOpenAccount }
         const [statusLabel, statusTone] = (isReport ? REPORT_STATUS : NOTIF_STATUS)[n.status] || [n.status, 'muted'];
         const u = n.user;
         const isPassword = n.kind === 'password_request';
+        const isEmail = n.kind === EMAIL_REQUEST_KIND;
+        const isOwnRequest = !!u && u.id === currentUserId;
+        const ownRequestTitle = isOwnRequest ? 'Vlastní žádost nevyřídíš - nech to na druhém správci.' : undefined;
         return (
           <div key={n.id} data-testid="notification">
           <Card className="space-y-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <h4 className="text-sm font-black uppercase tracking-tight m-0 flex items-center gap-2">{isReport ? <Flag size={15} /> : <KeyRound size={15} />} {n.title}</h4>
+                <h4 className="text-sm font-black uppercase tracking-tight m-0 flex items-center gap-2">{isReport ? <Flag size={15} /> : isEmail ? <Mail size={15} /> : <KeyRound size={15} />} {isEmail ? 'Žádost o změnu e-mailu' : n.title}</h4>
                 <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] m-0 mt-1 opacity-80">{relativeTime(n.created_at)} · {formatDateTime(n.created_at)}{n.handled_at ? ` · vyřízeno ${formatDateTime(n.handled_at)}` : ''}</p>
               </div>
               <Pill tone={statusTone}>{statusLabel}</Pill>
@@ -739,6 +920,14 @@ export const NotificationsTab = ({ onCountChange, currentUserId, onOpenAccount }
               </dl>
             )}
 
+            {isEmail && (
+              <p className="text-xs m-0 leading-relaxed">
+                <span style={{ color: 'var(--text-muted)' }} className="font-bold">Nový e-mail: </span><b className="break-all">{n.payload?.new_email || '-'}</b>
+              </p>
+            )}
+            {isEmail && n.status === 'open' && n.payload?.conflict && <InlineMessage type="error">Tenhle e-mail už používá jiný účet, změnu nepůjde provést.</InlineMessage>}
+            {isEmail && n.status === 'dismissed' && n.payload?.cancelled && <InlineMessage>Uživatel žádost zrušil.</InlineMessage>}
+
             {n.body && <p style={{ backgroundColor: 'var(--bg-secondary)' }} className="text-sm m-0 rounded-lg px-3 py-2 leading-relaxed whitespace-pre-wrap break-words">„{n.body}“</p>}
             {isPassword && <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] m-0 leading-relaxed opacity-90">{n.payload?.logged_in ? 'Žádost poslal přihlášený uživatel z Nastavení.' : 'Žádost poslal nepřihlášený člověk (zapomenuté heslo).'} E-mail i jméno sedí, ale to samo nedokazuje, že žádá majitel účtu - ověř to mimo aplikaci.</p>}
 
@@ -753,22 +942,32 @@ export const NotificationsTab = ({ onCountChange, currentUserId, onOpenAccount }
                     <CheckCircle2 size={13} /> {confirmDeleteId === n.id ? 'Zpět' : 'Ponechat komentář'}
                   </SmallButton>
                 </>
+              ) : n.status === 'open' && isEmail ? (
+                <>
+                  <SmallButton tone="primary" disabled={!u || isOwnRequest || !n.payload?.new_email} title={ownRequestTitle} onClick={() => { setMsg(null); setEmailFor({ userId: u.id, username: u.username, currentEmail: u.email, newEmail: n.payload.new_email, notificationId: n.id }); }}><Mail size={13} /> Změnit e-mail</SmallButton>
+                  {u
+                    ? <SmallButton disabled={isOwnRequest} title={ownRequestTitle} onClick={() => { setMsg(null); setRejectFor({ notificationId: n.id, username: u.username, email: u.email }); }}><XCircle size={13} /> Zamítnout</SmallButton>
+                    : <SmallButton busy={busyId === n.id} onClick={() => setStatus(n, 'dismissed')}><XCircle size={13} /> Zamítnout</SmallButton>}
+                </>
               ) : n.status === 'open' ? (
                 <>
                   {isPassword && u && <SmallButton tone="primary" disabled={u.id === currentUserId} onClick={() => setIssueFor({ id: u.id, username: u.username, email: u.email, notificationId: n.id })}><KeyRound size={13} /> Vydat dočasné heslo</SmallButton>}
                   <SmallButton busy={busyId === n.id} onClick={() => setStatus(n, 'dismissed')}><XCircle size={13} /> Zamítnout</SmallButton>
                   <SmallButton busy={busyId === n.id} onClick={() => setStatus(n, 'done')}><CheckCircle2 size={13} /> Vyřízeno</SmallButton>
                 </>
-              ) : (
+              ) : !isEmail && (
                 <SmallButton busy={busyId === n.id} onClick={() => setStatus(n, 'open')}><RefreshCw size={13} /> Znovu otevřít</SmallButton>
               )}
             </div>
+            {isEmail && n.status === 'open' && u && <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] m-0 leading-relaxed opacity-90">To, že žádost poslal přihlášený uživatel, nedokazuje, že žádá majitel účtu - ověř to mimo aplikaci.</p>}
           </Card>
           </div>
         );
       })}
 
       {issueFor && <TempPasswordDialog target={issueFor} onClose={() => setIssueFor(null)} onIssued={load} />}
+      {emailFor && <ChangeEmailDialog target={emailFor} onClose={() => setEmailFor(null)} onDone={() => emailRequestHandled('E-mail je změněný a žádost je vyřízená.')} />}
+      {rejectFor && <RejectEmailChangeDialog target={rejectFor} onClose={() => setRejectFor(null)} onDone={() => emailRequestHandled('Žádost je zamítnutá, uživatel dostane oznámení.')} />}
     </div>
   );
 };
@@ -1080,6 +1279,10 @@ export const AccountsTab = ({ currentUserId, preset, onChanged }) => {
           currentUserId={currentUserId}
           onClose={() => setSelectedId(null)}
           onChanged={() => { setReloadKey(k => k + 1); onChanged?.(); }}
+          onEmailChanged={(oldEmail, newEmail) => {
+            // Hledání podle starého e-mailu by už účet nenašlo.
+            if (newEmail && sameEmail(searchInput, oldEmail)) { setSearchInput(newEmail); setSearch(newEmail); setPage(0); }
+          }}
         />
       )}
     </div>
@@ -1757,7 +1960,7 @@ export const AdminDashboard = () => {
 
       {activeTab === 'notifications' && <div className="mb-6"><PushAdminCard client={supabase} /></div>}
       {activeTab === 'notifications' && (
-        <NotificationsTab onCountChange={setPendingCount} currentUserId={adminUser?.id} onOpenAccount={(u) => { setAccountsPreset({ search: u.email || '', openId: u.id, nonce: Date.now() }); setActiveTab('accounts'); }} />
+        <NotificationsTab onCountChange={setPendingCount} currentUserId={adminUser?.id} onChanged={refreshData} onOpenAccount={(u) => { setAccountsPreset({ search: u.email || '', openId: u.id, nonce: Date.now() }); setActiveTab('accounts'); }} />
       )}
 
       {activeTab === 'accounts' && (
