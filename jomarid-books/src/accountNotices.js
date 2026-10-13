@@ -13,14 +13,13 @@
 
 import { findBookTexts } from './bookText/bookText.js';
 import { plural } from './lib/plural.js';
-
-export { plural };
+import { ROLE_PUBLISHER, ROLE_ADMIN } from './constants/roles.js';
 
 export const LEVEL_WARN = 'warn';  // je potřeba opravit
 export const LEVEL_INFO = 'info';  // tip nebo připomenutí
 
 // Role, které můžou mít vlastní knihy.
-export const ROLES_WITH_BOOKS = ['nakladatel', 'správce'];
+export const ROLES_WITH_BOOKS = [ROLE_PUBLISHER, ROLE_ADMIN];
 
 export const MAX_ITEMS = 5; // kolik názvů knih se ukáže v jednom upozornění, zbytek se jen spočítá
 const CONTENT_CHUNK = 40;   // kolik knih se ptáme na text najednou (limit délky adresy dotazu)
@@ -57,7 +56,7 @@ export const buildAccountNotices = ({ role, profile, books, bookIdsWithContent }
       out.push({
         id: 'username-missing', level: LEVEL_WARN,
         title: 'Chybí uživatelské jméno',
-        detail: 'Bez něj se v žebříčku a na dalších místech ukáže začátek tvého e-mailu (před zavináčem).',
+        detail: 'Bez něj se v žebříčku ukážeš jako Anonym a na dalších místech (třeba v nabídce nebo na úvodní stránce) se použije začátek tvého e-mailu před zavináčem.',
         to: '/settings/profile', linkLabel: 'Nastavit jméno',
       });
     }

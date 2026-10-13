@@ -14,6 +14,8 @@ import { plural } from '../lib/plural';
 import { ROLE_READER, ROLE_PUBLISHER, ROLE_ADMIN, ROLE_LABELS } from '../constants/roles';
 import { DEFAULT_BOOK_PRICE } from '../constants/economy';
 import { USERNAME_MIN, USERNAME_MAX } from '../lib/username';
+import { BOOK_BADGES } from '../constants/badges';
+import { DEFAULT_MONTHLY_GOAL } from '../constants/leveling';
 import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle, LayoutDashboard, UserCog, Loader2, CheckCircle2, X, ChevronLeft, ChevronRight, Ban, KeyRound, Trash2, ShieldCheck, Bell, Copy, Flag, Eye, EyeOff, Download } from 'lucide-react';
 
 // ============================================================================
@@ -2404,8 +2406,8 @@ export const AdminDashboard = () => {
                         <Award size={11} /> Herní postup (jen pro přehled)
                       </label>
                       <div className="grid grid-cols-2 gap-2 text-[0.6875rem] font-bold">
-                        <span style={{ color: 'var(--text-muted)' }}>Odznaky: <span style={{ color: 'var(--text-body)' }}>{(activeUser.unlocked_badges || []).length} / 100</span></span>
-                        <span style={{ color: 'var(--text-muted)' }}>Nejvyšší splněný cíl: <span style={{ color: 'var(--text-body)' }}>{activeUser.highest_goal_completed ?? 25}</span></span>
+                        <span style={{ color: 'var(--text-muted)' }}>Odznaky: <span style={{ color: 'var(--text-body)' }}>{(activeUser.unlocked_badges || []).length} / {BOOK_BADGES.length}</span></span>
+                        <span style={{ color: 'var(--text-muted)' }}>Nejvyšší splněný cíl: <span style={{ color: 'var(--text-body)' }}>{activeUser.highest_goal_completed ?? DEFAULT_MONTHLY_GOAL}</span></span>
                         <span style={{ color: 'var(--text-muted)' }} className="col-span-2">Vystavený odznak: <span style={{ color: 'var(--text-body)' }}>{activeUser.featured_badge || '—'}</span></span>
                       </div>
                       <div className="flex items-center justify-between pt-1">

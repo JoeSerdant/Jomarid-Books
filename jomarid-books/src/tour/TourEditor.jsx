@@ -195,7 +195,7 @@ export const TourEditor = () => {
             <button type="button" onClick={() => setField({ version: Math.min(TOUR_LIMITS.maxVersion, normalizedDraft.version + 1) })} style={inputStyle} className={smallBtn}>
               <RotateCcw size={12} /> Zobrazit znovu těm, kdo ji viděli
             </button>
-            <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] opacity-70">Zvýšením verze (a uložením) se prohlídka sama spustí znovu těm, kdo ji už viděli, a novým účtům. Starším účtům, které ji nikdy neviděly, se sama nespustí.</span>
+            <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] opacity-70">Zvýšením verze (a uložením) se prohlídka sama spustí znovu těm, kdo ji už viděli. Nové účty ji dostanou podle počtu dní výše. Starším účtům, které ji nikdy neviděly, se sama nespustí.</span>
           </div>
         </div>
       </Card>

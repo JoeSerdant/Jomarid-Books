@@ -8,7 +8,7 @@ import { sumBadgeXp } from '../constants/badgeXp';
 import { STREAK_FREEZE_PRICE } from '../constants/economy';
 import { plural } from '../lib/plural';
 import { BadgesSection } from '../components/BadgesSection';
-import { Award, Calendar, CheckCircle, ChevronRight, Coins, Flame, Loader2, Lock, Shield, ShieldCheck, ShieldOff, Sparkles, TrendingUp, Trophy, Users } from 'lucide-react';
+import { Calendar, CheckCircle, ChevronRight, Coins, Flame, Loader2, Lock, Shield, ShieldCheck, ShieldOff, Sparkles, TrendingUp, Trophy, Users } from 'lucide-react';
 
 export const UserStats = () => {
   const { user } = useAuth();

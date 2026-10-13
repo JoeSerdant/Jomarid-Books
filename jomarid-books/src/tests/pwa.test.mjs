@@ -45,6 +45,12 @@ describe('manifest a ikony', () => {
     }
     for (const i of manifest.icons) assert.ok(fs.existsSync(path.join(ROOT, 'public', i.src.replace(/^\//, ''))), i.src);
   });
+  test('ikona "maskable" (PNG) nemá průhledné rohy: bez alfa kanálu a bez tRNS', () => {
+    const png = fs.readFileSync(path.join(ROOT, 'public', 'icon-maskable-512.png'));
+    const colorType = png[25]; // barevný typ v hlavičce IHDR: 0 šedá, 2 RGB, 3 paleta, 4 šedá s alfou, 6 RGBA
+    assert.ok([0, 2, 3].includes(colorType), `barevný typ ${colorType} nemá alfa kanál`);
+    assert.ok(!png.includes('tRNS'), 'bez průhlednosti (tRNS)');
+  });
   test('zkratky vedou na stránky appky a mají ikonu', () => {
     assert.ok(manifest.shortcuts.length >= 3);
     for (const s of manifest.shortcuts) {
@@ -83,13 +89,13 @@ describe('index.html a hlavičky', () => {
     const rewrite = JSON.parse(read('vercel.json')).rewrites.find((r) => r.destination === '/index.html');
     const matches = (p) => new RegExp(`^${rewrite.source}$`).test(p);
     const routes = [...read('src/App.jsx').matchAll(/<Route path="([^"]+)"/g)].map((m) => m[1]).filter((p) => p !== '*');
-    assert.ok(routes.length >= 10, 'cesty se z App.jsx načetly');
+    assert.ok(routes.length >= 10, `cesty se z App.jsx načetly (nalezeno ${routes.length})`);
     for (const route of routes) {
       const p = route.replace(/:\w+\?/g, 'profile').replace(/:\w+/g, '123');
       assert.ok(matches(p), `stránka ${p} patří appce`);
     }
     for (const p of ['/', '/settings', '/settings/profile', '/reset-password', '/app', '/read/123e4567-e89b-12d3-a456-426614174000']) assert.ok(matches(p), p);
-    for (const p of ['/assets/index-abc.js', '/assets/smazany-1a2b.js', '/sw.js', '/manifest.webmanifest']) assert.ok(!matches(p), `${p} je soubor`);
+    for (const p of ['/assets/index-abc.js', '/assets/smazany-1a2b.js', '/assets/chunk', '/sw.js', '/manifest.webmanifest', '/font.woff2']) assert.ok(!matches(p), `${p} je soubor`);
     for (const f of fs.readdirSync(path.join(ROOT, 'public'), { withFileTypes: true }).filter((e) => e.isFile())) assert.ok(!matches(`/${f.name}`), `/${f.name} se podává jako soubor`);
   });
 });

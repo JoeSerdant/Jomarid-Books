@@ -2,7 +2,6 @@
 //
 // Pokrývají čistou logiku: hledání bez diakritiky, postupné zobrazování, generované obálky, převod řádků z databáze
 // na knihy, řazení a filtry knihovny, načítání po částech a zapamatovaný stav.
-// Vykreslení a chování v prohlížeči se ověřuje zvlášť (E2E).
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import * as B from '../browse/browseModel.js';

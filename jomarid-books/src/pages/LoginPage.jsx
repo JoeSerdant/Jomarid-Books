@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase, validateNewPassword, mapAuthError } from '../lib/supabase';
 import { Button, Card } from '../components/ui';
 import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
-import { USERNAME_RE, USERNAME_MAX } from '../lib/username';
+import { USERNAME_RE, USERNAME_MIN, USERNAME_MAX } from '../lib/username';
 
 const INPUT_STYLE = { backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' };
 const INPUT_CLASS = 'w-full p-3 border rounded-lg text-sm font-bold outline-none transition-colors placeholder:opacity-50';
@@ -15,7 +15,7 @@ const NAME_HINTS = {
   available: 'Jméno je volné.',
   taken: 'Tohle jméno už někdo používá.',
   reserved: 'Tohle jméno je rezervované. Zvol jiné.',
-  invalid: 'Zatím neplatné: 3-20 znaků, a-z bez diakritiky, číslice, tečka, podtržítko, pomlčka.',
+  invalid: `Zatím neplatné: ${USERNAME_MIN}-${USERNAME_MAX} znaků, a-z bez diakritiky, číslice, tečka, podtržítko, pomlčka.`,
   error: 'Dostupnost teď nejde ověřit - jméno se zkusí použít při vytvoření účtu.',
 };
 
@@ -76,7 +76,7 @@ export const LoginPage = () => {
     try {
       if (mode === 'signup') {
         const wanted = username.trim();
-        if (wanted && !USERNAME_RE.test(wanted)) { setError('Uživatelské jméno: 3-20 znaků, a-z bez diakritiky, číslice, tečka, podtržítko nebo pomlčka. Nebo pole nech prázdné.'); return; }
+        if (wanted && !USERNAME_RE.test(wanted)) { setError(`Uživatelské jméno: ${USERNAME_MIN}-${USERNAME_MAX} znaků, a-z bez diakritiky, číslice, tečka, podtržítko nebo pomlčka. Nebo pole nech prázdné.`); return; }
         if (wanted && (nameCheck === 'taken' || nameCheck === 'reserved')) { setError('Tohle uživatelské jméno nejde použít. Zvol jiné, nebo pole nech prázdné.'); return; }
         // Vybrané jméno jde v user_metadata; server ho při založení profilu znovu ověří (platné, volné, nerezervované).
         const { data, error: signUpError } = await supabase.auth.signUp(wanted ? { email, password, options: { data: { username: wanted } } } : { email, password });

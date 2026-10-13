@@ -55,7 +55,7 @@ const GAMES_PREVIEW = [
 const COIN_SOURCES = [
   { label: 'Denní přihlášení', coins: 15, icon: Calendar },
   { label: 'Zahraná minihra dnes', coins: 20, icon: Gamepad2 },
-  { label: 'Odznak „První Průzkumník"', coins: 50, icon: Footprints },
+  { label: 'Odznak „První Průzkumník“', coins: 50, icon: Footprints },
   { label: 'Splněný měsíční cíl', coins: 250, icon: Target },
 ];
 
@@ -452,7 +452,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 md:gap-6">
             {[
               { n: '1', title: 'Vyberte si knihu', text: 'Procházejte katalog, přečtěte si popis a hodnocení od ostatních čtenářů přímo u knihy.' },
-              { n: '2', title: 'Čtěte a vydělávejte', text: 'Za dočtené knihy a denní sérii získáváte XP, další přidávají odznaky a splněný měsíční cíl. Za odznaky, denní přihlášení a minihry sbíráte Jomarid Coins.' },
+              { n: '2', title: 'Čtěte a vydělávejte', text: 'Za dočtené knihy (víc při splněných vyšších měsíčních cílech) a denní sérii získáváte XP, další přidávají odznaky. Za odznaky, denní přihlášení a minihry sbíráte Jomarid Coins.' },
               { n: '3', title: 'Odemykejte další', text: 'Mincemi si v knihovně rovnou kupujete přístup k dalším titulům - žádné čekání na schválení.' },
               { n: '4', title: 'Postupujte a sbírejte', text: `Levely, denní streak, měsíční cíle a ${BADGES_TEXT} drží motivaci i po týdnech čtení.` },
             ].map((step) => (
@@ -580,7 +580,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
               style={{ accentColor: 'var(--bg-primary)' }}
             />
             <p style={{ fontSize: `${demoFontSize}px`, color: 'var(--text-body)' }} className="font-serif leading-relaxed transition-all duration-100 mb-2">
-              „{fontDemo.quote}"
+              „{fontDemo.quote}“
             </p>
             {fontDemo.attribution && (
               <span style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] opacity-60">— {fontDemo.attribution}</span>
@@ -704,7 +704,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
       <section className="max-w-2xl mx-auto px-4 py-20">
         <h2 className="font-heading text-2xl md:text-3xl font-bold mb-8 text-center">Časté otázky</h2>
         <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="p-6 rounded-2xl border shadow-sm space-y-2">
-          <FaqItem question="Jak funguje systém gamifikace a získávání odznaků?" answer={`XP sbíráte za dočtené knihy, denní sérii a splněný měsíční cíl. Podmínky odznaků se vyhodnotí, když otevřete Statistiky - tam hned uvidíte nově odemčené odznaky z celkové sbírky ${BADGES_TEXT}.`} />
+          <FaqItem question="Jak funguje systém gamifikace a získávání odznaků?" answer={`XP sbíráte za dočtené knihy (víc při splněných vyšších měsíčních cílech), za denní sérii a za odznaky. Podmínky odznaků se vyhodnotí, když otevřete Statistiky - tam hned uvidíte nově odemčené odznaky z celkové sbírky ${BADGES_TEXT}.`} />
           <FaqItem question="Jak získám přístup ke konkrétním knihám?" answer="V knihovně vidíte celý katalog i knihy, které ještě nevlastníte. Klikem na knihu otevřete její detail s popisem, hodnocením a komentáři - a rovnou si ji tam koupíte za Jomarid Coins. Přístup se odemkne okamžitě." />
           <FaqItem question="Co jsou ty minihry a musím je hrát?" answer="Vůbec ne - je to pět volitelných her v samostatné sekci appky, čistě pro zábavu mimo čtení. Když si zahrajete alespoň chvilku, dostanete jednou denně bonusové Jomarid Coins navrch." />
           <FaqItem question="Jak funguje Streak Freeze?" answer={`Koupíte si ho v sekci Statistiky za ${STREAK_FREEZE_PRICE} Jomarid Coins. Jakmile ho vlastníte, jeden zmeškaný den se automaticky počítá jako pokrytý a vaše série se nepřeruší.`} />

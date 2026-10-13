@@ -9,6 +9,7 @@ import { usePagedList } from '../browse/usePagedList';
 import { isCancelledError, loadLibrary } from '../browse/libraryData';
 import { isInProgress } from '../browse/libraryModel';
 import { czCount } from '../browse/browseModel';
+import { plural } from '../lib/plural';
 import {
   BookOpen, Coins, Heart, Library, Loader2, LogOut, Sparkles, Star, ArrowLeft, Feather,
 } from 'lucide-react';
@@ -189,7 +190,7 @@ export const UserLibrary = () => {
     <div role="status" className="flex flex-col items-center justify-center min-h-[60vh]">
       <Loader2 className="animate-spin mb-4" size={40} style={{ color: 'var(--bg-primary)' }} />
       <p className="text-sm font-black uppercase tracking-wider">Otevírám tvoji knihovnu...</p>
-      {loadedCount > 0 && <p style={{ color: 'var(--text-muted)' }} className="text-xs font-bold mt-2 m-0 tabular-nums">Načteno {loadedCount.toLocaleString('cs-CZ')} knih</p>}
+      {loadedCount > 0 && <p style={{ color: 'var(--text-muted)' }} className="text-xs font-bold mt-2 m-0 tabular-nums">Načteno {loadedCount.toLocaleString('cs-CZ')} {plural(loadedCount, 'kniha', 'knihy', 'knih')}</p>}
     </div>
   );
 

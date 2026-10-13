@@ -20,6 +20,10 @@ const makeStorage = (init = {}) => {
 };
 const setStorage = (s) => Object.defineProperty(globalThis, 'localStorage', { value: s, configurable: true, writable: true });
 beforeEach(() => setStorage(makeStorage()));
+// Zdroj bez komentářů (/* */, JSX {/* */} i řádkové //), aby kontroly textu zdroje nesplnil jen komentář.
+const readCode = (...parts) => fs.readFileSync(path.join(ROOT, ...parts), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/(^|\s)\/\/.*$/gm, '$1');
 
 describe('hotové motivy', () => {
   const KEYS = Object.keys(T.THEMES.saas).sort();
@@ -205,18 +209,26 @@ describe('synchronizace nastavení: snímek a použití', () => {
     assert.equal(S.SEARCH_PREFS_KEY, 'jomarid-search-prefs');
     assert.ok(S.SYNC_KEYS.includes(S.SEARCH_PREFS_KEY));
     assert.deepEqual(S.collectSettings(makeStorage({ [S.SEARCH_PREFS_KEY]: '{"scope":"catalog"}' })), { v: 1, items: { 'jomarid-search-prefs': '{"scope":"catalog"}' } });
-    const src = fs.readFileSync(path.join(ROOT, 'src', 'components', 'SearchModal.jsx'), 'utf8');
+    const src = readCode('src', 'components', 'SearchModal.jsx');
     assert.ok(!src.includes('jomarid-search-prefs'), 'SearchModal si klíč nedefinuje znovu');
-    assert.match(src, /import \{ SEARCH_PREFS_KEY \} from '..\/settings\/settingsSync'/);
-    assert.match(src, /notifySettingsChanged\(\)/, 'změna filtrů se ohlásí synchronizaci');
-    assert.match(src, /addEventListener\(SETTINGS_APPLIED,/, 'po stažení nastavení z účtu se filtry přečtou znovu');
+    assert.match(src, /import \{ SEARCH_PREFS_KEY \} from ['"]\.\.\/settings\/settingsSync(\.js)?['"]/);
+    assert.match(src, /localStorage\.setItem\(SEARCH_PREFS_KEY, json\)[\s\S]*?notifySettingsChanged\(\);/, 'změna filtrů se uloží a ohlásí synchronizaci');
+    assert.match(src, /savedPrefsRef\.current = json;/, 'uložená podoba filtrů se pamatuje');
+    assert.match(src, /addEventListener\(SETTINGS_APPLIED, reread\)/, 'po stažení nastavení z účtu se filtry přečtou znovu');
+    assert.match(src, /setPrefs\(next\)/, 'přečtené filtry se použijí');
+    assert.match(src, /removeEventListener\(SETTINGS_APPLIED, reread\)/, 'posluchač se při odmontování odpojí');
   });
   test('čtečka: název události i meze posuvníků jsou jen v theme.js', () => {
     assert.equal(T.READER_PREFS_EVENT, 'jomarid-reader-prefs');
-    const src = fs.readFileSync(path.join(ROOT, 'src', 'pages', 'ReaderPage.jsx'), 'utf8');
+    const src = readCode('src', 'pages', 'ReaderPage.jsx');
+    const modal = readCode('src', 'components', 'SettingsModal.jsx');
     assert.ok(!src.includes('jomarid-reader-prefs'), 'ReaderPage používá READER_PREFS_EVENT');
+    assert.ok(!modal.includes('jomarid-reader-prefs'), 'SettingsModal používá READER_PREFS_EVENT');
     assert.match(src, /addEventListener\(READER_PREFS_EVENT,/);
+    assert.match(modal, /addEventListener\(READER_PREFS_EVENT,/);
     assert.ok(!/min=\{(14|8)\}|max=\{(28|60)\}/.test(src), 'meze velikosti písma a automatického listování jsou z theme.js');
+    assert.ok(!/Math\.(max|min)\(\s*(14|28)\s*,/.test(src), 'tlačítka A- a A+ berou meze z theme.js');
+    assert.ok(!/\b(min|max)=\{\s*\d+\s*\}/.test(modal), 'posuvníky v Nastavení berou meze z theme.js');
   });
   test('data z účtu jsou cizí vstup: neznámé klíče, divné typy, příliš dlouhé hodnoty a novější verze se zahodí', () => {
     assert.equal(S.sanitizeRemote(null), null);

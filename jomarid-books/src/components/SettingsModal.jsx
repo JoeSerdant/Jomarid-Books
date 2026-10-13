@@ -4,9 +4,10 @@ import { Smartphone, Share, ArrowLeft, User, ShieldCheck, Palette, Database, Che
 import { useAuth, useTheme } from '../contexts/AuthContext';
 import { supabase, verifyPassword, validateNewPassword, mapAuthError } from '../lib/supabase';
 import { BOOK_BADGES } from '../constants/badges';
-import { ROLE_LABELS } from '../constants/roles';
+import { ROLE_PUBLISHER, ROLE_ADMIN, ROLE_LABELS } from '../constants/roles';
 import { USERNAME_RE, USERNAME_MIN, USERNAME_MAX } from '../lib/username';
-import { loadAccountNotices, countWarnings, plural, LEVEL_WARN } from '../accountNotices';
+import { loadAccountNotices, countWarnings, LEVEL_WARN } from '../accountNotices';
+import { plural } from '../lib/plural';
 import { useTour } from '../tour/TourProvider';
 import { activeSteps } from '../tour/tourModel';
 import { readSeenVersion } from '../tour/tourSeen';
@@ -21,7 +22,7 @@ import {
 import { readLibraryPrefs, writeLibraryPref } from '../browse/browseStore';
 import { SORT_OPTIONS, STATUS_FILTERS } from '../browse/libraryModel';
 import { useSyncStatus } from '../settings/settingsSyncStore';
-import { SETTINGS_TABLE } from '../settings/settingsSync';
+import { SETTINGS_TABLE, isMissingTable } from '../settings/settingsSync';
 import { APP_VERSION_LABEL } from '../appInfo';
 import PushSettings from '../push/PushSettings';
 import { cleanupOnLogout } from '../push/pushClient';
@@ -268,7 +269,7 @@ const ProfileTab = ({ user, role }) => {
       </Section>
 
       {canEdit && <UsernameSection profile={profile} onSaved={(name) => { setProfile(p => ({ ...p, username: name })); refreshProfile?.(); }} />}
-      {canEdit && (role === 'nakladatel' || role === 'správce') && <PenNameSection profile={profile} onSaved={(pen) => setProfile(p => ({ ...p, pen_name: pen }))} />}
+      {canEdit && (role === ROLE_PUBLISHER || role === ROLE_ADMIN) && <PenNameSection profile={profile} onSaved={(pen) => setProfile(p => ({ ...p, pen_name: pen }))} />}
 
       <Section title="Veřejná viditelnost" description="Co o tobě uvidí ostatní čtenáři.">
         <div className="flex items-center justify-between gap-4">
@@ -849,7 +850,7 @@ const EXPORT_SOURCES = [
   { key: 'likes', table: 'book_likes', column: 'user_id' },
   { key: 'coin_transactions', table: 'coin_transactions', column: 'user_id' },
   { key: 'daily_activity', table: 'user_daily_activity', column: 'user_id' },
-  { key: 'settings', table: SETTINGS_TABLE, column: 'user_id' },
+  { key: 'settings', table: SETTINGS_TABLE, column: 'user_id', optional: true }, // tabulka nemusí existovat
 ];
 
 // Supabase vrací nanejvýš 1000 řádků na dotaz - proto se čte po stránkách.
@@ -887,8 +888,9 @@ const DataTab = ({ user, role }) => {
       const data = {};
       const errors = [];
       results.forEach((r, i) => {
-        const { key, table } = EXPORT_SOURCES[i];
+        const { key, table, optional } = EXPORT_SOURCES[i];
         if (r.status === 'fulfilled') data[key] = key === 'profile' ? (r.value[0] || null) : r.value;
+        else if (optional && isMissingTable(r.reason)) return; // chybějící volitelná tabulka není chyba exportu
         else errors.push(`${table}: ${r.reason?.message || 'chyba čtení'}`);
       });
       const payload = {
@@ -907,7 +909,7 @@ const DataTab = ({ user, role }) => {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       setExportMsg(errors.length
-        ? { type: 'info', text: `Export je stažený, ale ${errors.length} část(í) se nepodařilo načíst (najdeš je v souboru pod "errors").` }
+        ? { type: 'info', text: `Export je stažený, ale nepodařilo se načíst ${errors.length} ${plural(errors.length, 'část', 'části', 'částí')} (podrobnosti najdeš v souboru pod "errors").` }
         : { type: 'success', text: 'Export je stažený.' });
     } catch (err) {
       setExportMsg({ type: 'error', text: 'Export se nepovedl: ' + (err?.message || 'neznámá chyba') });
@@ -942,9 +944,9 @@ const DataTab = ({ user, role }) => {
         title="Smazat účet"
         description="Nevratně smaže tvůj účet i všechna data: profil, odznaky, rozečtené knihy, záložky, zvýraznění, hodnocení, komentáře, lajky, mince, aktivitu a nastavení. Zpět to nejde vzít."
       >
-        {(role === 'správce' || role === 'nakladatel') && (
+        {(role === ROLE_ADMIN || role === ROLE_PUBLISHER) && (
           <Notice type="info">
-            {role === 'správce' ? 'Účet správce si sám smazat nejde.' : 'Vydané knihy musíš před smazáním účtu smazat (jdou jen ty bez čtenářů) nebo nechat převést na jiný účet. Převod udělá správce.'}
+            {role === ROLE_ADMIN ? 'Účet správce si sám smazat nejde.' : 'Vydané knihy musíš před smazáním účtu smazat (jdou jen ty bez čtenářů) nebo nechat převést na jiný účet. Převod udělá správce.'}
           </Notice>
         )}
         <Field label={`Pro potvrzení napiš svůj e-mail (${user.email})`}>
@@ -1098,7 +1100,7 @@ const useAccountNotices = (user, role, refreshKey) => {
 
 const ChecksTab = ({ state, role, onRecheck }) => {
   const { status, notices, partial } = state;
-  const hasBooks = role === 'nakladatel' || role === 'správce';
+  const hasBooks = role === ROLE_PUBLISHER || role === ROLE_ADMIN;
   const recheck = (
     <button
       type="button"

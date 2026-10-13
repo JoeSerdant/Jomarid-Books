@@ -32,7 +32,7 @@ export const Navbar = ({ onOpenSearch }) => {
 
   // Správce: odznak s počtem otevřených upozornění (žádosti o heslo...).
   useEffect(() => {
-    if (role !== 'správce') { setPending(0); return undefined; }
+    if (role !== ROLE_ADMIN) { setPending(0); return undefined; }
     let alive = true;
     const refresh = async () => {
       const { data, error } = await supabase.rpc('admin_open_notifications_count');
@@ -187,7 +187,7 @@ export const Navbar = ({ onOpenSearch }) => {
                 <span className="text-[0.5625rem] leading-none sm:sr-only lg:not-sr-only lg:text-xs lg:leading-normal">Hry</span>
               </Link>
 
-              {role === 'nakladatel' && (
+              {role === ROLE_PUBLISHER && (
                 <Link 
                   to="/publisher" 
                   data-tour="nav-studio"
@@ -199,7 +199,7 @@ export const Navbar = ({ onOpenSearch }) => {
                 </Link>
               )}
 
-              {role === 'správce' && (
+              {role === ROLE_ADMIN && (
                 <Link 
                   to="/admin" 
                   data-tour="nav-admin"

@@ -743,7 +743,7 @@ export const PublisherDashboard = () => {
             <div className="space-y-1">
               <label htmlFor="book-genres" style={mutedStyle} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Žánry (oddělené čárkou)</label>
               <input id="book-genres" type="text" placeholder="např. Sci-Fi, Dobrodružství" value={genresInput} onChange={(e) => setGenresInput(e.target.value)} style={inputStyle} className="w-full p-3 border rounded-xl font-bold outline-none text-sm" />
-              <p style={mutedStyle} className="text-[0.6875rem] m-0 pl-1 opacity-80">Nejvýš {GENRES_PER_BOOK} žánrů, každý do {GENRE_MAX_LENGTH} znaků.</p>
+              <p style={mutedStyle} className="text-[0.6875rem] m-0 pl-1 opacity-80">Nejvýš {GENRES_PER_BOOK} {plural(GENRES_PER_BOOK, 'žánr', 'žánry', 'žánrů')}, každý nejvýš {GENRE_MAX_LENGTH} {plural(GENRE_MAX_LENGTH, 'znak', 'znaky', 'znaků')}. Co je navíc, se při uložení zahodí.</p>
             </div>
             <div className="space-y-1">
               <label htmlFor="book-desc" style={mutedStyle} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Popis (zobrazí se v detailu knihy před koupí)</label>
