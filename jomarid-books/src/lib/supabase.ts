@@ -5,7 +5,7 @@ const supabaseKey = 'sb_publishable_bUOqlH__G6I20FTiowth0w_-MIZrAiM'
 
 export const supabase = createClient(supabaseUrl, supabaseKey)
 
-// Ověří heslo přihlášeného účtu (před změnou hesla / e-mailu / smazáním účtu)
+// Ověří heslo přihlášeného účtu (před žádostí o změnu e-mailu, změnou hesla a smazáním účtu)
 // přes VLASTNÍHO, jednorázového klienta, který nic neukládá. Kdyby se to
 // zkoušelo přes hlavního klienta, vyvolalo by to událost SIGNED_IN a všechny
 // otevřené stránky (knihovna, čtečka...) by se znovu načetly.
@@ -40,7 +40,6 @@ export const mapAuthError = (err: any): string => {
   if (err?.status === 429 || msg.includes('rate limit') || msg.includes('too many')) return 'Příliš mnoho pokusů. Zkus to za chvíli.'
   if (msg.includes('different from the old') || msg.includes('same as the old')) return 'Nové heslo musí být jiné než současné.'
   if (msg.includes('weak') || msg.includes('at least') || msg.includes('should contain')) return 'Heslo je příliš slabé - zvol delší a méně předvídatelné.'
-  if (msg.includes('already been registered') || msg.includes('already registered') || msg.includes('already exists')) return 'Tento e-mail už používá jiný účet.'
   if (msg.includes('jwt') || msg.includes('session') || msg.includes('not authenticated')) return 'Přihlášení vypršelo, přihlas se prosím znovu.'
   return 'Něco se nepovedlo: ' + (err?.message || 'neznámá chyba')
 }

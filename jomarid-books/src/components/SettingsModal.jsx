@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Smartphone, Share, ArrowLeft, User, ShieldCheck, Palette, Database, Check, Loader2, Download, BookOpen, RotateCcw, Bell, EyeOff, MessageCircle, UserCog, Gift, X, ClipboardCheck, AlertTriangle, Info, RefreshCw, Compass, Play } from 'lucide-react';
+import { Smartphone, Share, ArrowLeft, User, ShieldCheck, Palette, Database, Check, Loader2, Download, BookOpen, RotateCcw, Bell, EyeOff, MessageCircle, UserCog, Gift, X, ClipboardCheck, AlertTriangle, Info, RefreshCw, Compass, Play, Mail, MailX } from 'lucide-react';
 import { useAuth, useTheme } from '../contexts/AuthContext';
 import { supabase, verifyPassword, validateNewPassword, mapAuthError } from '../lib/supabase';
 import { BOOK_BADGES } from '../constants/badges';
@@ -8,6 +8,7 @@ import { ROLE_PUBLISHER, ROLE_ADMIN, ROLE_LABELS } from '../constants/roles';
 import { USERNAME_RE, USERNAME_MIN, USERNAME_MAX } from '../lib/username';
 import { loadAccountNotices, countWarnings, LEVEL_WARN } from '../accountNotices';
 import { plural } from '../lib/plural';
+import { isValidEmail, sameEmail, normalizeEmail, explainEmailError, REQUEST_ERRORS, EMAIL_CHANGED_KIND, EMAIL_REJECTED_KIND } from '../emailChange';
 import { useTour } from '../tour/TourProvider';
 import { activeSteps } from '../tour/tourModel';
 import { readSeenVersion } from '../tour/tourSeen';
@@ -256,7 +257,7 @@ const ProfileTab = ({ user, role }) => {
 
   return (
     <div className="space-y-4">
-      <Section title="Účet" description="Údaje o tvém účtu. E-mail se mění v záložce Zabezpečení.">
+      <Section title="Účet" description="Údaje o tvém účtu. Změnu e-mailu ti na žádost udělá správce (záložka Zabezpečení).">
         <dl className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-2 text-sm m-0">
           <dt style={{ color: 'var(--text-muted)' }} className="text-xs font-bold">E-mail</dt>
           <dd className="m-0 font-semibold break-all">{user.email}</dd>
@@ -303,10 +304,10 @@ const ProfileTab = ({ user, role }) => {
 };
 
 // ---- Záložka: Zabezpečení ----
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const isMissingRpc = (err) => !!err && (err.code === 'PGRST202' || /could not find the function/i.test(String(err.message || '')));
 
 const SecurityTab = ({ user }) => {
-  const { username: accountName } = useAuth();
+  const { username: accountName, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
   const [curPw, setCurPw] = useState('');
@@ -317,8 +318,57 @@ const SecurityTab = ({ user }) => {
 
   const [newEmail, setNewEmail] = useState('');
   const [emailPw, setEmailPw] = useState('');
+  const [emailNote, setEmailNote] = useState('');
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailMsg, setEmailMsg] = useState(null);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  // poslední žádost o změnu e-mailu tohoto účtu (undefined, dokud nepřijde první odpověď; null, když žádná není nebo funkce v databázi chybí)
+  const [emailRequest, setEmailRequest] = useState(undefined);
+  const [emailLoadFailed, setEmailLoadFailed] = useState(false);
+  const alive = useRef(true);
+  const lastEmailStatus = useRef(null); // stav žádosti při posledním načtení
+  const emailLoadSeq = useRef(0); // pořadí načtení: pomalejší starší odpověď nesmí přepsat novější
+
+  const loadEmailRequest = async () => {
+    const seq = ++emailLoadSeq.current;
+    const { data, error } = await supabase.rpc('my_email_change_request');
+    if (!alive.current || seq !== emailLoadSeq.current) return;
+    if (error) {
+      if (isMissingRpc(error)) { setEmailLoadFailed(false); setEmailRequest(null); }
+      else setEmailLoadFailed(true);
+      return;
+    }
+    const next = data || null;
+    // správce žádost mezitím provedl: relace nese starý e-mail, profil se načte znovu a obnoví ji
+    if (lastEmailStatus.current === 'open' && next?.status === 'done') refreshProfile?.();
+    lastEmailStatus.current = next?.status ?? null;
+    setEmailLoadFailed(false);
+    setEmailRequest(next);
+  };
+  const loadEmailRequestRef = useRef(loadEmailRequest);
+  loadEmailRequestRef.current = loadEmailRequest;
+
+  const retryEmailRequest = () => {
+    setEmailLoadFailed(false);
+    setEmailRequest(undefined);
+    loadEmailRequest();
+  };
+
+  useEffect(() => {
+    alive.current = true;
+    loadEmailRequestRef.current();
+    // Otevřená žádost se znovu načte, když se čtenář vrátí na stránku (správce ji mezitím mohl vyřídit).
+    const refreshOpenRequest = () => {
+      if (document.visibilityState !== 'hidden' && lastEmailStatus.current === 'open') loadEmailRequestRef.current();
+    };
+    window.addEventListener('focus', refreshOpenRequest);
+    document.addEventListener('visibilitychange', refreshOpenRequest);
+    return () => {
+      alive.current = false;
+      window.removeEventListener('focus', refreshOpenRequest);
+      document.removeEventListener('visibilitychange', refreshOpenRequest);
+    };
+  }, []);
 
   const [resetBusy, setResetBusy] = useState(false);
   const [resetMsg, setResetMsg] = useState(null);
@@ -326,6 +376,14 @@ const SecurityTab = ({ user }) => {
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [signOutBusy, setSignOutBusy] = useState(false);
   const [signOutMsg, setSignOutMsg] = useState(null);
+
+  // Správce mohl e-mail změnit, zatímco je relace otevřená: pro kontrolu hesla ho proto bereme ze serveru.
+  const currentEmail = async () => {
+    try {
+      const { data } = await supabase.auth.getUser();
+      return data?.user?.email || user.email;
+    } catch { return user.email; }
+  };
 
   const changePassword = async (e) => {
     e.preventDefault();
@@ -335,7 +393,7 @@ const SecurityTab = ({ user }) => {
     if (problem) return setPwMsg({ type: 'error', text: problem });
     setPwBusy(true);
     try {
-      if (!(await verifyPassword(user.email, curPw))) return setPwMsg({ type: 'error', text: 'Současné heslo nesedí.' });
+      if (!(await verifyPassword(await currentEmail(), curPw))) return setPwMsg({ type: 'error', text: 'Současné heslo nesedí.' });
       const { error } = await supabase.auth.updateUser({ password: newPw });
       if (error) return setPwMsg({ type: 'error', text: mapAuthError(error) });
       setCurPw(''); setNewPw(''); setConfPw('');
@@ -343,21 +401,41 @@ const SecurityTab = ({ user }) => {
     } finally { setPwBusy(false); }
   };
 
-  const changeEmail = async (e) => {
+  // E-mail se nemění sám: žádost jde správci, který ho změní a čtenáři pošle oznámení. Heslo tu slouží jen jako potvrzení.
+  const requestEmailChange = async (e) => {
     e.preventDefault();
+    if (emailBusy) return;
     setEmailMsg(null);
-    const target = newEmail.trim();
-    if (!EMAIL_RE.test(target)) return setEmailMsg({ type: 'error', text: 'Zadej platný e-mail.' });
-    if (target.toLowerCase() === (user.email || '').toLowerCase()) return setEmailMsg({ type: 'error', text: 'To je tvůj současný e-mail.' });
+    if (!isValidEmail(newEmail)) return setEmailMsg({ type: 'error', text: 'Zadej platný e-mail.' });
+    if (sameEmail(newEmail, user.email)) return setEmailMsg({ type: 'error', text: 'To je tvůj současný e-mail.' });
     if (!emailPw) return setEmailMsg({ type: 'error', text: 'Pro potvrzení zadej své heslo.' });
     setEmailBusy(true);
     try {
-      if (!(await verifyPassword(user.email, emailPw))) return setEmailMsg({ type: 'error', text: 'Heslo nesedí.' });
-      const { error } = await supabase.auth.updateUser({ email: target }, { emailRedirectTo: `${window.location.origin}/app` });
-      if (error) return setEmailMsg({ type: 'error', text: mapAuthError(error) });
-      setNewEmail(''); setEmailPw('');
-      setEmailMsg({ type: 'success', text: `Poslali jsme potvrzení na ${target}. Změna se projeví po kliknutí na odkaz v e-mailu (podle nastavení může přijít potvrzení i na tvůj současný e-mail). Do té doby se přihlašuj dál starým.` });
-    } finally { setEmailBusy(false); }
+      if (!(await verifyPassword(await currentEmail(), emailPw))) return setEmailMsg({ type: 'error', text: 'Heslo nesedí.' });
+      const { error } = await supabase.rpc('request_email_change', { p_new_email: normalizeEmail(newEmail), p_note: emailNote.trim() });
+      if (error) {
+        if (isMissingRpc(error)) return setEmailMsg({ type: 'error', text: 'Změna e-mailu teď není dostupná. Zkus to později.' });
+        if (String(error.message || '').includes('request_already_open')) await loadEmailRequest();
+        return setEmailMsg({ type: 'error', text: explainEmailError(error, REQUEST_ERRORS, 'Žádost se nepodařilo odeslat. Zkus to znovu.') });
+      }
+      setNewEmail(''); setEmailPw(''); setEmailNote('');
+      setEmailMsg({ type: 'success', text: 'Žádost je u správce. Až e-mail změní, objeví se oznámení v Nastavení → Oznámení a příště se přihlásíš novým. Do té doby se přihlašuj dál současným. Odpověď může chvíli trvat, žádost neposílej víckrát.' });
+      await loadEmailRequest();
+    } finally { if (alive.current) setEmailBusy(false); }
+  };
+
+  const cancelEmailRequest = async () => {
+    if (cancelBusy) return;
+    setEmailMsg(null);
+    setCancelBusy(true);
+    try {
+      const { data, error } = await supabase.rpc('cancel_my_email_change_request');
+      if (error) return setEmailMsg({ type: 'error', text: 'Žádost se nepodařilo zrušit. Zkus to znovu.' });
+      setEmailMsg(data?.cancelled === false
+        ? { type: 'info', text: 'Žádost už nejde zrušit, správce ji mezitím vyřídil.' }
+        : { type: 'success', text: 'Žádost je zrušená.' });
+      await loadEmailRequest();
+    } finally { if (alive.current) setCancelBusy(false); }
   };
 
   // Heslo se neposílá e-mailem: žádost jde správci, který vydá dočasné heslo a předá ho mimo aplikaci.
@@ -365,7 +443,7 @@ const SecurityTab = ({ user }) => {
     setResetMsg(null);
     setResetBusy(true);
     try {
-      const { error } = await supabase.rpc('request_password_help', { p_email: user.email, p_username: accountName || '', p_note: 'Žádost z Nastavení (uživatel je přihlášený).' });
+      const { error } = await supabase.rpc('request_password_help', { p_email: await currentEmail(), p_username: accountName || '', p_note: 'Žádost z Nastavení (uživatel je přihlášený).' });
       if (error) return setResetMsg({ type: 'error', text: 'Žádost se nepodařilo odeslat. Zkus to znovu.' });
       setResetMsg({ type: 'success', text: 'Žádost je u správce. Až ti vydá dočasné heslo, dostaneš ho od něj mimo aplikaci. Po přihlášení si nastavíš vlastní. Odpověď může chvíli trvat, žádost neposílej víckrát.' });
     } finally { setResetBusy(false); }
@@ -399,13 +477,41 @@ const SecurityTab = ({ user }) => {
         </form>
       </Section>
 
-      <Section title="Změna e-mailu" description={`Teď se přihlašuješ přes ${user.email}. Nový e-mail je potřeba potvrdit odkazem, který na něj pošleme.`}>
-        <form onSubmit={changeEmail} className="space-y-3">
-          <Field label="Nový e-mail"><TextInput type="email" autoComplete="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} /></Field>
-          <Field label="Tvoje heslo"><TextInput type="password" autoComplete="current-password" value={emailPw} onChange={e => setEmailPw(e.target.value)} /></Field>
-          {emailMsg && <Notice type={emailMsg.type}>{emailMsg.text}</Notice>}
-          <ActionButton type="submit" busy={emailBusy}>Změnit e-mail</ActionButton>
-        </form>
+      <Section title="Změna e-mailu" description={`Teď se přihlašuješ přes ${user.email}. E-mail ti změní správce, stejně jako dočasné heslo: pošli mu žádost.`}>
+        {emailLoadFailed ? (
+          <div className="space-y-3">
+            <Notice type="error">Stav žádosti se nepodařilo načíst. Zkus to znovu.</Notice>
+            <ActionButton variant="ghost" onClick={retryEmailRequest}>Zkusit znovu</ActionButton>
+          </div>
+        ) : emailRequest === undefined ? (
+          <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 opacity-80">Načítám…</p>
+        ) : emailRequest?.status === 'open' ? (
+          <div className="space-y-3">
+            <Notice>Čeká se na správce: žádost o změnu e-mailu na {emailRequest.new_email}.</Notice>
+            <ActionButton variant="ghost" busy={cancelBusy} onClick={cancelEmailRequest}>Zrušit žádost</ActionButton>
+          </div>
+        ) : (
+          <form onSubmit={requestEmailChange} className="space-y-3">
+            {emailRequest?.status === 'dismissed' && !emailRequest.cancelled && (
+              <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 opacity-80">Poslední žádost správce zamítl. Můžeš poslat novou.</p>
+            )}
+            <Field label="Nový e-mail"><TextInput type="email" autoComplete="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} /></Field>
+            <Field label="Tvoje heslo"><TextInput type="password" autoComplete="current-password" value={emailPw} onChange={e => setEmailPw(e.target.value)} /></Field>
+            <Field label="Vzkaz pro správce (nepovinné)">
+              <textarea
+                value={emailNote}
+                onChange={e => setEmailNote(e.target.value)}
+                maxLength={500}
+                rows={3}
+                placeholder="Jak tě pozná, kde ti může odpovědět..."
+                style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
+                className="w-full p-2.5 border rounded-lg text-sm font-semibold outline-none resize-y"
+              />
+            </Field>
+            <ActionButton type="submit" busy={emailBusy}>Požádat správce o změnu</ActionButton>
+          </form>
+        )}
+        {emailMsg && <Notice type={emailMsg.type}>{emailMsg.text}</Notice>}
       </Section>
 
       <Section title="Přihlášená zařízení" description="Odhlásí tě všude - na telefonu, v jiných prohlížečích i tady. Hodí se, když ses přihlásil na cizím zařízení.">
@@ -973,7 +1079,7 @@ const TABS = [
   { id: 'data', label: 'Data a účet', icon: Database, needsUser: true },
 ];
 
-const INBOX_ICONS = { book_hidden: EyeOff, book_unhidden: EyeOff, comment_removed: MessageCircle, username_changed: UserCog, license_received: Gift };
+const INBOX_ICONS = { book_hidden: EyeOff, book_unhidden: EyeOff, comment_removed: MessageCircle, username_changed: UserCog, license_received: Gift, [EMAIL_CHANGED_KIND]: Mail, [EMAIL_REJECTED_KIND]: MailX };
 const timeAgo = (iso) => {
   const sec = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
   if (sec < 60) return 'právě teď';
@@ -1043,7 +1149,7 @@ const InboxTab = () => {
       <PushSettings />
       {error && <Notice type="error">{error}</Notice>}
       {items.length === 0 ? (
-        <p style={{ color: 'var(--text-muted)' }} className="text-sm m-0 py-6 text-center leading-relaxed">Zatím nemáš žádná oznámení. Ozveme se, když správce zasáhne do tvé knihy, komentáře nebo uživatelského jména, nebo když ti autor daruje knihu.</p>
+        <p style={{ color: 'var(--text-muted)' }} className="text-sm m-0 py-6 text-center leading-relaxed">Zatím nemáš žádná oznámení. Ozveme se, když správce zasáhne do tvé knihy, komentáře, uživatelského jména nebo e-mailu, nebo když ti autor daruje knihu.</p>
       ) : (
         <>
           <div className="flex items-center justify-between gap-3">
