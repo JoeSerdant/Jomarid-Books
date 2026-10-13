@@ -5,9 +5,10 @@ import { supabase } from '../lib/supabase';
 import { loadCatalog } from '../browse/libraryData';
 import { RECENT_SEARCH_KEY } from '../browse/browseStore';
 import { canonicalizeGenres, cleanGenres } from '../browse/libraryModel';
+import { SEARCH_PREFS_KEY } from '../settings/settingsSync';
+import { SETTINGS_APPLIED, notifySettingsChanged } from '../settings/settingsEvents';
 import { ChevronRight, Loader2, Search, X, SlidersHorizontal, Star, Heart, RotateCcw, History, Library, Globe } from 'lucide-react';
 
-const PREFS_KEY = 'jomarid-search-prefs';
 const RECENT_KEY = RECENT_SEARCH_KEY;
 const PAGE_SIZE = 20;
 const DAY_MS = 86400000;
@@ -216,7 +217,8 @@ const Check = ({ checked, onChange, children }) => (
 export const SearchModal = ({ isOpen, onClose }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [prefs, setPrefs] = useState(() => sanitizePrefs(loadJson(PREFS_KEY, null)));
+  const [prefs, setPrefs] = useState(() => sanitizePrefs(loadJson(SEARCH_PREFS_KEY, null)));
+  const savedPrefsRef = useRef(JSON.stringify(prefs)); // podoba filtrů, která je právě v úložišti
   const [query, setQuery] = useState('');
   const [items, setItems] = useState([]);
   const [coins, setCoins] = useState(0);
@@ -250,7 +252,26 @@ export const SearchModal = ({ isOpen, onClose }) => {
   }, [isOpen, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { if (!isOpen) { setQuery(''); setLimit(PAGE_SIZE); setActiveIdx(0); setShowFilters(false); } }, [isOpen]);
-  useEffect(() => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch { /* úložiště nemusí být dostupné */ } }, [prefs]);
+  // Filtry se ukládají do zařízení a změna se ohlásí synchronizaci s účtem (klíč je v SYNC_KEYS).
+  useEffect(() => {
+    const json = JSON.stringify(prefs);
+    if (json === savedPrefsRef.current) return;
+    savedPrefsRef.current = json;
+    try { localStorage.setItem(SEARCH_PREFS_KEY, json); } catch { /* úložiště nemusí být dostupné */ }
+    notifySettingsChanged();
+  }, [prefs]);
+  // Po stažení nastavení z účtu se filtry přečtou znovu (okno je namontované pořád, i když je zavřené).
+  useEffect(() => {
+    const reread = () => {
+      const next = sanitizePrefs(loadJson(SEARCH_PREFS_KEY, null));
+      const json = JSON.stringify(next);
+      if (json === savedPrefsRef.current) return;
+      savedPrefsRef.current = json;
+      setPrefs(next);
+    };
+    window.addEventListener(SETTINGS_APPLIED, reread);
+    return () => window.removeEventListener(SETTINGS_APPLIED, reread);
+  }, []);
   useEffect(() => { setLimit(PAGE_SIZE); setActiveIdx(0); }, [query, prefs]);
   useEffect(() => {
     if (!isOpen) return;

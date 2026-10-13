@@ -6,8 +6,11 @@ import { fetchBookText, saveBookText } from '../bookText/bookText';
 import BookTextField from '../components/BookTextField';
 import { usePagedList } from '../browse/usePagedList';
 import { LoadMore } from '../browse/BrowseParts';
+import { cleanGenres, GENRES_PER_BOOK, GENRE_MAX_LENGTH } from '../browse/libraryModel';
+import { plural } from '../lib/plural';
+import { DEFAULT_BOOK_PRICE } from '../constants/economy';
 import {
-  BarChart3, BookOpen, Check, Coins, Eye, EyeOff, Feather, Gift, Heart, Loader2, MessageSquare, Pencil,
+  BarChart3, BookOpen, Check, Coins, Eye, EyeOff, Feather, Gift, Heart, Loader2, Pencil,
   PlusCircle, Search, ShieldCheck, Star, Trash2, TrendingDown, TrendingUp, Users, Wallet, X,
 } from 'lucide-react';
 
@@ -16,7 +19,6 @@ import {
 // ---------------------------------------------------------------------------
 const nf = new Intl.NumberFormat('cs-CZ');
 const fmt = (n) => nf.format(Math.round(Number(n) || 0));
-const plural = (n, one, few, many) => { const a = Math.abs(Number(n) || 0); return a === 1 ? one : a >= 2 && a <= 4 ? few : many; };
 const coinsText = (n) => `${fmt(n)} ${plural(n, 'coin', 'coiny', 'coinů')}`;
 const pct = (a, b) => (b > 0 ? Math.round((100 * a) / b) : 0);
 const fmtDay = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric' });
@@ -322,7 +324,7 @@ const BookDetail = ({ book, onClose, onChanged, onNotice, userId }) => {
             <MiniStat label="Komentáře" value={fmt(book.comments)} />
             <MiniStat label="Záložky / zvýraznění" value={`${fmt(book.bookmarks)} / ${fmt(book.highlights)}`} />
           </div>
-          {book.gifted > 0 && <p style={mutedStyle} className="text-xs m-0">Z čtenářů je {fmt(book.gifted)} {plural(book.gifted, 'dostal', 'dostali', 'dostalo')} knihu darem (bez platby).</p>}
+          {book.gifted > 0 && <p style={mutedStyle} className="text-xs m-0">Knihu {plural(book.gifted, 'dostal', 'dostali', 'dostalo')} darem {fmt(book.gifted)} {plural(book.gifted, 'čtenář', 'čtenáři', 'čtenářů')} (bez platby).</p>}
           {book.sales_legacy > 0 && <Notice>Starších prodejů bez výplaty: {fmt(book.sales_legacy)}. Tyhle nákupy proběhly dřív, než se autorům začaly vyplácet coiny, proto nejsou v grafu ani ve výdělku.</Notice>}
 
           {error && <Notice type="error">{error}</Notice>}
@@ -372,7 +374,7 @@ const BookDetail = ({ book, onClose, onChanged, onNotice, userId }) => {
               <div className="min-w-0">
                 <p className="text-sm font-bold m-0">{book.hidden ? 'Kniha je skrytá' : 'Kniha je v prodeji'}</p>
                 <p style={mutedStyle} className="text-[0.6875rem] m-0 mt-0.5 opacity-80">
-                  {book.hidden ? 'Nové čtenáře se v katalogu neukazuje a nejde koupit. Kdo ji vlastní, čte ji dál.' : 'Stažení z prodeje je vratné: kniha zmizí z katalogu, ale kdo ji vlastní, čte ji dál.'}
+                  {book.hidden ? 'Novým čtenářům se v katalogu neukazuje a nemohou ji koupit. Kdo ji vlastní, čte ji dál.' : 'Stažení z prodeje je vratné: kniha zmizí z katalogu, ale kdo ji vlastní, čte ji dál.'}
                 </p>
               </div>
               <button type="button" onClick={toggleHidden} disabled={busy} style={ghostBtn}
@@ -431,7 +433,7 @@ export const PublisherDashboard = () => {
   // formulář knihy
   const [title, setTitle] = useState('');
   const [bookContent, setBookContent] = useState('');
-  const [priceCoins, setPriceCoins] = useState(150);
+  const [priceCoins, setPriceCoins] = useState(DEFAULT_BOOK_PRICE);
   const [genresInput, setGenresInput] = useState('');
   const [descriptionInput, setDescriptionInput] = useState('');
   const [publishNow, setPublishNow] = useState(true);
@@ -500,7 +502,7 @@ export const PublisherDashboard = () => {
   };
 
   const resetForm = () => {
-    setEditingBookId(null); setTitle(''); setBookContent(''); setPriceCoins(150); setGenresInput(''); setDescriptionInput(''); setPublishNow(true);
+    setEditingBookId(null); setTitle(''); setBookContent(''); setPriceCoins(DEFAULT_BOOK_PRICE); setGenresInput(''); setDescriptionInput(''); setPublishNow(true);
   };
 
   const startEditBook = async (book) => {
@@ -512,7 +514,7 @@ export const PublisherDashboard = () => {
     setEditingBookId(book.id);
     setTitle(book.title);
     setBookContent(contentRow?.text || '');
-    setPriceCoins(row.price_coins ?? 150);
+    setPriceCoins(row.price_coins ?? DEFAULT_BOOK_PRICE);
     setGenresInput(Array.isArray(row.genres) ? row.genres.join(', ') : '');
     setDescriptionInput(row.description || '');
     setTab('editor');
@@ -524,7 +526,7 @@ export const PublisherDashboard = () => {
     if (!title.trim() || !bookContent.trim()) { showNotice('error', 'Doplň název a text knihy.'); return; }
     setIsSubmitting(true);
     const price = Math.max(0, Math.min(100000, parseInt(priceCoins, 10) || 0));
-    const genres = genresInput.split(',').map(g => g.trim()).filter(Boolean);
+    const genres = cleanGenres(genresInput.split(','));
     try {
       if (editingBookId) {
         const { error: bookError } = await supabase.from('books')
@@ -547,7 +549,7 @@ export const PublisherDashboard = () => {
           genres,
           description: descriptionInput || null,
         };
-        // is_hidden se posílá jen u konceptu, takže běžné vydání funguje i před spuštěním nejnovější migrace.
+        // Koncept se vkládá rovnou jako skrytý. U vydané knihy se is_hidden neposílá a platí výchozí hodnota sloupce.
         if (!publishNow) payload.is_hidden = true;
         const { data: inserted, error: bookError } = await supabase.from('books').insert([payload]).select('id').single();
         if (bookError) throw bookError;
@@ -613,7 +615,7 @@ export const PublisherDashboard = () => {
 
       {loadError === 'MISSING' && (
         <Notice type="error">
-          Statistiky a správa knih potřebují novější databázi. Dej vědět správci. Do té doby funguje jen vydávání a úprava knih.
+          Statistiky a správa knih teď nejsou dostupné. Zkus stránku obnovit; vydávání a úprava knih funguje dál.
         </Notice>
       )}
       {loadError && loadError !== 'MISSING' && <Notice type="error">{loadError}</Notice>}
@@ -636,7 +638,7 @@ export const PublisherDashboard = () => {
             <Kpi testId="kpi-readers" icon={Users} label="Čtenáři s licencí" value={fmt(totals.readers)}
               sub={totals.gifted > 0 ? `z toho ${fmt(totals.gifted)} darem` : 'žádné darované licence'} />
             <Kpi testId="kpi-completed" icon={Check} label="Dočetlo" value={fmt(totals.completed)}
-              sub={startedBase > 0 ? `z ${fmt(startedBase)} ${plural(startedBase, 'čtenáře', 'čtenářů', 'čtenářů')}, co začali číst (${pct(totals.completed, startedBase)} %)` : 'zatím nikdo nezačal'} />
+              sub={startedBase > 0 ? `z ${fmt(startedBase)} ${plural(startedBase, 'čtenáře', 'čtenářů', 'čtenářů')}, ${plural(startedBase, 'co začal', 'co začali', 'co začali')} číst (${pct(totals.completed, startedBase)} %)` : 'zatím nikdo nezačal'} />
             <Kpi testId="kpi-rating" icon={Star} label="Hodnocení" value={totals.ratings > 0 ? `${Number(totals.avg_rating).toFixed(1)} ★` : '—'}
               sub={totals.ratings > 0 ? `z ${fmt(totals.ratings)} ${plural(totals.ratings, 'hodnocení', 'hodnocení', 'hodnocení')}` : 'zatím bez hodnocení'} />
             <Kpi testId="kpi-likes" icon={Heart} label="Lajky" value={fmt(totals.likes)} sub={`${fmt(totals.comments)} ${plural(totals.comments, 'komentář', 'komentáře', 'komentářů')}`} />
@@ -741,6 +743,7 @@ export const PublisherDashboard = () => {
             <div className="space-y-1">
               <label htmlFor="book-genres" style={mutedStyle} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Žánry (oddělené čárkou)</label>
               <input id="book-genres" type="text" placeholder="např. Sci-Fi, Dobrodružství" value={genresInput} onChange={(e) => setGenresInput(e.target.value)} style={inputStyle} className="w-full p-3 border rounded-xl font-bold outline-none text-sm" />
+              <p style={mutedStyle} className="text-[0.6875rem] m-0 pl-1 opacity-80">Nejvýš {GENRES_PER_BOOK} žánrů, každý do {GENRE_MAX_LENGTH} znaků.</p>
             </div>
             <div className="space-y-1">
               <label htmlFor="book-desc" style={mutedStyle} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Popis (zobrazí se v detailu knihy před koupí)</label>

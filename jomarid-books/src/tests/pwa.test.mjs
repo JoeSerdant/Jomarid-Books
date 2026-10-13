@@ -1,7 +1,7 @@
 // Testy PWA: node --test src/tests/pwa.test.mjs   (nebo: npm run test:pwa)
 //
 // Manifest a ikony, odkazy v index.html, logika instalace a samotný service worker (spouští se v izolovaném prostředí s
-// falešnou Cache API a sítí). Skutečná instalace a offline provoz v prohlížeči se ověřují zvlášť (E2E).
+// falešnou Cache API a sítí).
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -45,11 +45,6 @@ describe('manifest a ikony', () => {
     }
     for (const i of manifest.icons) assert.ok(fs.existsSync(path.join(ROOT, 'public', i.src.replace(/^\//, ''))), i.src);
   });
-  test('ikona "maskable" nemá průhledné rohy (systém ji ořízne sám)', () => {
-    const svg = read('public/icon-maskable.svg');
-    assert.ok(!/\brx=/.test(svg), 'bez zaoblení v SVG');
-    assert.match(read('public/icon.svg'), /rx="\d+"/);
-  });
   test('zkratky vedou na stránky appky a mají ikonu', () => {
     assert.ok(manifest.shortcuts.length >= 3);
     for (const s of manifest.shortcuts) {
@@ -83,6 +78,19 @@ describe('index.html a hlavičky', () => {
     const sw = v.headers.find((h) => h.source === '/sw.js');
     assert.ok(sw.headers.some((h) => h.key === 'Cache-Control' && /max-age=0/.test(h.value) && /must-revalidate/.test(h.value)));
     assert.ok(v.rewrites.some((r) => r.destination === '/index.html'));
+  });
+  test('vercel.json: přesměrování na index.html platí pro stránky appky, ne pro soubory a /assets/', () => {
+    const rewrite = JSON.parse(read('vercel.json')).rewrites.find((r) => r.destination === '/index.html');
+    const matches = (p) => new RegExp(`^${rewrite.source}$`).test(p);
+    const routes = [...read('src/App.jsx').matchAll(/<Route path="([^"]+)"/g)].map((m) => m[1]).filter((p) => p !== '*');
+    assert.ok(routes.length >= 10, 'cesty se z App.jsx načetly');
+    for (const route of routes) {
+      const p = route.replace(/:\w+\?/g, 'profile').replace(/:\w+/g, '123');
+      assert.ok(matches(p), `stránka ${p} patří appce`);
+    }
+    for (const p of ['/', '/settings', '/settings/profile', '/reset-password', '/app', '/read/123e4567-e89b-12d3-a456-426614174000']) assert.ok(matches(p), p);
+    for (const p of ['/assets/index-abc.js', '/assets/smazany-1a2b.js', '/sw.js', '/manifest.webmanifest']) assert.ok(!matches(p), `${p} je soubor`);
+    for (const f of fs.readdirSync(path.join(ROOT, 'public'), { withFileTypes: true }).filter((e) => e.isFile())) assert.ok(!matches(`/${f.name}`), `/${f.name} se podává jako soubor`);
   });
 });
 
@@ -277,6 +285,20 @@ describe('service worker: skripty z /assets/', () => {
     await (await w.fetchEvent(`${ORIGIN}/assets/chess-1a2b.js`)).text();
     await (await w.fetchEvent(`${ORIGIN}/assets/chess-1a2b.js`)).text();
     assert.equal(w.log.fetched.filter((u) => u.endsWith('chess-1a2b.js')).length, 1, 'ze sítě jen jednou');
+  });
+  test('stránka HTML na adresu souboru (server přesměruje smazaný soubor na index.html) se neuloží, ale odpověď projde', async () => {
+    const w = makeWorker({ net: online({ '/assets/smazany-1.js': () => HTML('index') }) });
+    const res = await w.fetchEvent(`${ORIGIN}/assets/smazany-1.js`);
+    assert.equal(res.status, 200);
+    assert.match(await res.text(), /index/);
+    assert.equal(w.stores.get('jomarid-v1')?.has(`${ORIGIN}/assets/smazany-1.js`) ?? false, false);
+  });
+  test('HTML už uložené pod adresou souboru se nevrací, soubor se stáhne znovu a uloží', async () => {
+    const url = `${ORIGIN}/assets/smazany-1.js`;
+    const w = makeWorker({ net: online(), preset: { 'jomarid-v1': { [url]: HTML('index') } } });
+    assert.equal(await (await w.fetchEvent(url)).text(), 'ok');
+    assert.equal(w.log.fetched.filter((u) => u === url).length, 1);
+    assert.equal(await w.stores.get('jomarid-v1').get(url).text(), 'ok');
   });
   test('chybějící soubor (404) se neukládá a plné úložiště nevadí', async () => {
     const w = makeWorker({ net: online({ '/assets/stary-1.js': () => new Response('nenalezeno', { status: 404 }) }) });

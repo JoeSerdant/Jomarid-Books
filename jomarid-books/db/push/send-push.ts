@@ -36,7 +36,7 @@ export const isPushServiceUrl = (v: unknown) =>
   typeof v === 'string' && v.length <= 2000 && /^https:\/\/([a-z0-9-]+\.)*(fcm\.googleapis\.com|android\.googleapis\.com|push\.services\.mozilla\.com|push\.apple\.com|notify\.windows\.com)(:443)?\//i.test(v);
 
 // ---------- Texty motivačních oznámení ----------
-// Tykáme a držíme povzbudivý, hravý tón (jako Duolingo, ale s knižním humorem a bez vytýkání): chválíme, držíme palce, nikdy nestrašíme.
+// Tykáme a držíme povzbudivý, hravý tón s knižním humorem a bez vytýkání: chválíme, držíme palce, nikdy nestrašíme.
 // Bez rodových tvarů minulého času („přečetl/a“): jen přítomný čas, rozkaz a podstatná jména, ať sedí všem. Titulek do ~45 znaků, text do ~130.
 // Texty se losují z víc variant a podle denní doby (ráno, přes den, večer, pozdě večer) přibývají vlastní.
 export type Msg = { title: string; body: string; url?: string };

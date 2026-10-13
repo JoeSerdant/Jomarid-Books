@@ -1,7 +1,7 @@
 // Testy kontroly vlastních dat: node --test src/tests/accountNotices.test.mjs   (nebo: npm run test:notices)
 //
-// Hlídají hlavně dvě věci: že se každá chyba pozná (a ukáže jen tomu, koho se týká), a že se NIKDY nehlásí
-// problém "naslepo" - když se data nepodařilo načíst, nesmí z toho vyjít falešné upozornění.
+// Hlídají hlavně dvě věci: že se každá chyba pozná (a ukáže jen tomu, koho se týká), a že se při nenačtených
+// datech nehlásí falešné upozornění.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import * as N from '../accountNotices.js';
@@ -35,13 +35,15 @@ describe('účet', () => {
     assert.deepEqual(N.buildAccountNotices({ role: 'uživatel', profile: undefined }), []);
     assert.deepEqual(N.buildAccountNotices({ role: 'nakladatel' }), []);
   });
-  test('autorské jméno se chce jen po nakladateli a správci, a jen jako tip', () => {
+  test('krycí jméno se chce jen po nakladateli a správci, a jen jako tip', () => {
     const p = profile({ pen_name: '' });
     assert.deepEqual(N.buildAccountNotices({ role: 'uživatel', profile: p }), []);
     for (const role of ['nakladatel', 'správce']) {
       const out = N.buildAccountNotices({ role, profile: p });
       assert.deepEqual(ids(out), ['pen-name-missing'], role);
       assert.equal(out[0].level, N.LEVEL_INFO);
+      assert.equal(out[0].title, 'Nemáš nastavené krycí jméno');
+      assert.equal(out[0].linkLabel, 'Nastavit krycí jméno');
     }
   });
   test('správce dostává stejná upozornění jako ostatní (za svůj účet i své knihy)', () => {

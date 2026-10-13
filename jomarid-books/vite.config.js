@@ -48,8 +48,7 @@ const pwaPlugin = () => ({
 export default defineConfig({
   plugins: [react(), pwaPlugin()],
 
-  // Tailwind se kompiluje při sestavení (dřív se za běhu stahoval z CDN, což je jen pro vývoj:
-  // zpomalovalo to první vykreslení a ukázalo se nastylované až po načtení skriptu).
+  // Tailwind se kompiluje při sestavení.
   // Konfigurace je tady, aby nebyl potřeba další soubor; direktivy @tailwind jsou v index.html.
   css: {
     postcss: {

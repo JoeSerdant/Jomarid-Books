@@ -52,7 +52,6 @@ const makeClient = ({ table = {}, files = {}, bucket = true, uploadError = null,
           async upload(path, blob, opts) {
             if (!bucket) return { data: null, error: missing() };
             if (uploadError) return { data: null, error: uploadError };
-            if (opts?.upsert === false && objs.has(path)) return { data: null, error: { message: 'The resource already exists', statusCode: '409' } };
             log.uploads.push({ path, opts });
             const bytes = new Uint8Array(await blob.arrayBuffer());
             objs.set(path, corruptUpload ? bytes.slice(0, Math.max(0, bytes.length - 1)) : bytes);

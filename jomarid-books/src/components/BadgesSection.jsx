@@ -1,9 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { BOOK_BADGES } from '../constants/badges';
-import { Award, Calendar, CheckCircle, ChevronRight, Coins, Flame, Loader2, Lock, Search, Shield, ShieldCheck, ShieldOff, Sparkles, Star, TrendingUp, Users, ArrowUpDown } from 'lucide-react';
+import { Award, Coins, Search, Star, ArrowUpDown } from 'lucide-react';
 
 export const BadgesSection = ({ stats }) => {
   const { user } = useAuth();
@@ -139,8 +138,8 @@ export const BadgesSection = ({ stats }) => {
             className="w-full md:w-auto px-3 py-2 text-xs font-bold rounded-xl border outline-none cursor-pointer"
           >
             <option value="recent">Nedávno odemčené 🕒</option>
-            <option value="unlocked">Odemčené prvotně 🔓</option>
-            <option value="locked">Nezamčené prvotně 🔒</option>
+            <option value="unlocked">Odemčené nejdřív 🔓</option>
+            <option value="locked">Zamčené nejdřív 🔒</option>
             <option value="rewards">Nejvyšší odměny 💰</option>
             <option value="default">Výchozí pořadí 📜</option>
           </select>

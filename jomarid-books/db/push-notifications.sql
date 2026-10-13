@@ -54,7 +54,7 @@ create table if not exists public.push_engage_log (
   meta text,
   created_at timestamptz not null default now()
 );
--- dřívější verze povolovala jedno oznámení denně; teď jich může být víc
+-- oznámení může být za den víc (starý unikátní klíč user_id+day se odstraní)
 alter table public.push_engage_log drop constraint if exists push_engage_log_user_id_day_key;
 create index if not exists push_engage_log_day_idx on public.push_engage_log (user_id, day);
 create index if not exists push_engage_log_kind_idx on public.push_engage_log (user_id, kind, created_at desc);
@@ -135,7 +135,7 @@ exception when others then
 end $$;
 revoke execute on function public.push_dispatch(text, uuid, text, text, text, text, text, jsonb, int) from public, anon, authenticated;
 
--- 5) Spouštěče: nové oznámení čtenáři (Nastavení -> Oznámení) a nová žádost pro správce (Správa -> Upozornění)
+-- 5) Spouštěče: nové oznámení čtenáři (Nastavení -> Oznámení) a nová žádost pro správce (Admin -> Upozornění)
 create or replace function public.trg_push_user_notification() returns trigger language plpgsql security definer set search_path to 'public' as $$
 begin
   perform public.push_dispatch('user', new.user_id, new.title, new.body, '/settings/notifications', 'n-' || new.id::text);
@@ -348,7 +348,7 @@ exception when others then
 end $$;
 
 -- 10) Zkušební oznámení sobě (tlačítko v Nastavení -> Oznámení). Posílá se přímo, bez zápisu do schránky oznámení; nejvýš jednou za
---     20 vteřin. Správce si může poslat ukázku libovolného druhu motivačního oznámení (Správa -> Upozornění).
+--     20 vteřin. Správce si může poslat ukázku libovolného druhu motivačního oznámení (Admin -> Upozornění).
 create table if not exists public.push_test_log (
   user_id uuid primary key references auth.users(id) on delete cascade,
   at timestamptz not null default now()

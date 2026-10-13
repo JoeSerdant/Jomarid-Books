@@ -1,7 +1,7 @@
 // Testy procházení dlouhých seznamů: node --test src/tests/browse.test.mjs   (nebo: npm run test:browse)
 //
 // Pokrývají čistou logiku: hledání bez diakritiky, postupné zobrazování, generované obálky, převod řádků z databáze
-// na knihy, řazení a filtry knihovny (včetně srovnání se starým chováním), načítání po částech a zapamatovaný stav.
+// na knihy, řazení a filtry knihovny, načítání po částech a zapamatovaný stav.
 // Vykreslení a chování v prohlížeči se ověřuje zvlášť (E2E).
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -182,7 +182,7 @@ describe('generované obálky', () => {
 });
 
 // ---------------------------------------------------------------------------------------------------------------
-// Převod řádků a řazení: starý kód z UserLibrary.jsx slouží jako vzor, nová logika musí dát stejné výsledky.
+// Převod řádků a řazení.
 
 const USER = 'user-1';
 const GENRES = ['Román', 'Sci-Fi', 'Detektivka', 'Čtení na dobrou noc', 'Žánr bez knih?', 'Poezie'];
@@ -207,8 +207,8 @@ const makeUserBook = (rand, row) => (rand() < 0.4 ? {
   scroll_position: rand() < 0.5 ? 0 : Math.floor(rand() * 100),
 } : null);
 
-// Původní převod z UserLibrary.jsx (před úpravou), beze změn.
-const legacyMap = (singleBook, user, userBookEntry, likesCountFromTable, freshLikedIds) => {
+// Referenční převod řádku a řazení, se kterými se porovnává libraryModel.
+const expectedMap = (singleBook, user, userBookEntry, likesCountFromTable, freshLikedIds) => {
   const totalLikesCount = likesCountFromTable + (singleBook.fake_likes || 0);
   const isOwner = singleBook.author_id === user.id;
   const hasAccess = isOwner || singleBook.is_auto_assigned || userBookEntry?.status === 'active';
@@ -229,18 +229,18 @@ const legacyMap = (singleBook, user, userBookEntry, likesCountFromTable, freshLi
     isRead: userBookEntry?.is_read || false,
     scrollPosition: userBookEntry?.scroll_position || 0,
     lastOpened: userBookEntry?.updated_at ? new Date(userBookEntry.updated_at).getTime() : 0,
-    createdAt: singleBook.created_at ? new Date(singleBook.created_at).getTime() || 0 : 0, // nové pole, jen pro rozhodování shod
+    createdAt: singleBook.created_at ? new Date(singleBook.created_at).getTime() || 0 : 0, // jen pro rozhodování shod
   };
 };
-const legacySmartSort = (arr) => [...arr].sort((a, b) => {
+const expectedSmartSort = (arr) => [...arr].sort((a, b) => {
   if (a.hasAccess && b.hasAccess) {
     if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
     return b.lastOpened - a.lastOpened;
   }
   if (a.hasAccess !== b.hasAccess) return (b.hasAccess ? 1 : 0) - (a.hasAccess ? 1 : 0);
-  return b.likesCount - a.likesCount || b.createdAt - a.createdAt; // jediná změna oproti dřívějšku: shodu rozhoduje novější vydání
+  return b.likesCount - a.likesCount || b.createdAt - a.createdAt; // shodu rozhoduje novější vydání
 });
-const legacySort = (result, sortBy) => {
+const expectedSort = (result, sortBy) => {
   if (sortBy === 'alpha') return [...result].sort((a, b) => a.title.localeCompare(b.title, 'cs'));
   if (sortBy === 'rating') return [...result].sort((a, b) => b.avgRating - a.avgRating);
   if (sortBy === 'likes') return [...result].sort((a, b) => b.likesCount - a.likesCount);
@@ -248,7 +248,7 @@ const legacySort = (result, sortBy) => {
   if (sortBy === 'price_high') return [...result].sort((a, b) => b.priceCoins - a.priceCoins);
   return result;
 };
-const LEGACY_FIELDS = ['id', 'title', 'author', 'authorId', 'likesCount', 'isLiked', 'avgRating', 'ratingsCount', 'genres', 'description', 'priceCoins', 'hasAccess', 'isOwner', 'isRead', 'scrollPosition', 'lastOpened', 'createdAt'];
+const EXPECTED_FIELDS = ['id', 'title', 'author', 'authorId', 'likesCount', 'isLiked', 'avgRating', 'ratingsCount', 'genres', 'description', 'priceCoins', 'hasAccess', 'isOwner', 'isRead', 'scrollPosition', 'lastOpened', 'createdAt'];
 const pick = (o, keys) => Object.fromEntries(keys.map((k) => [k, o[k]]));
 
 const fixture = (seed, n) => {
@@ -264,13 +264,13 @@ const buildBooks = ({ rows, userBooks, likedIds, realLikes }) => rows.map((row) 
 }));
 
 describe('převod řádku z databáze na knihu', () => {
-  test('stejné hodnoty jako starý převod (500 náhodných řádků, všechny kombinace prázdných polí)', () => {
+  test('převod řádků dává očekávané hodnoty (500 náhodných řádků, všechny kombinace prázdných polí)', () => {
     for (const seed of [1, 2, 3, 4, 5]) {
       const fx = fixture(seed, 100);
       const books = buildBooks(fx);
       fx.rows.forEach((row, i) => {
-        const expected = legacyMap(row, { id: USER }, fx.userBooks.get(row.id), fx.realLikes.get(row.id), fx.likedIds);
-        assert.deepEqual(pick(books[i], LEGACY_FIELDS), expected, `seed ${seed}, kniha ${row.id}`);
+        const expected = expectedMap(row, { id: USER }, fx.userBooks.get(row.id), fx.realLikes.get(row.id), fx.likedIds);
+        assert.deepEqual(pick(books[i], EXPECTED_FIELDS), expected, `seed ${seed}, kniha ${row.id}`);
       });
     }
   });
@@ -364,7 +364,7 @@ describe('převod řádku z databáze na knihu', () => {
     assert.deepEqual(L.canonicalizeGenres([]), []);
   });
 
-  test('chybějící název nebo autor nic nerozbije (dřív hledání na takové knize spadlo)', () => {
+  test('chybějící název nebo autor nic nerozbije', () => {
     const b = L.toLibraryBook({ id: 'x', title: null, author: null }, { userId: USER });
     assert.equal(b.title, '');
     assert.equal(b.author, '');
@@ -390,11 +390,11 @@ describe('převod řádku z databáze na knihu', () => {
 });
 
 describe('řazení knihovny', () => {
-  test('základní pořadí je stejné jako dřív (500 náhodných knih včetně shod)', () => {
+  test('základní pořadí je stabilní (500 náhodných knih včetně shod)', () => {
     for (const seed of [11, 12, 13, 14, 15]) {
       const fx = fixture(seed, 100);
       const books = buildBooks(fx);
-      const expected = legacySmartSort(fx.rows.map((row) => legacyMap(row, { id: USER }, fx.userBooks.get(row.id), fx.realLikes.get(row.id), fx.likedIds)));
+      const expected = expectedSmartSort(fx.rows.map((row) => expectedMap(row, { id: USER }, fx.userBooks.get(row.id), fx.realLikes.get(row.id), fx.likedIds)));
       assert.deepEqual(L.orderLibrary(books).map((b) => b.id), expected.map((b) => b.id), `seed ${seed}`);
     }
   });
@@ -413,13 +413,13 @@ describe('řazení knihovny', () => {
     assert.deepEqual(ordered.map((b) => b.id), ['oblibena', 'nova', 'stara', 'bez-data']);
   });
 
-  test('každé řazení dává stejné pořadí jako dřív a řadí kopii', () => {
+  test('každé řazení dává správné pořadí a řadí kopii', () => {
     for (const seed of [21, 22, 23]) {
       const fx = fixture(seed, 120);
       const ordered = L.orderLibrary(buildBooks(fx));
       const before = ordered.map((b) => b.id);
       for (const key of ['smart', 'alpha', 'rating', 'likes', 'price_low', 'price_high']) {
-        assert.deepEqual(L.sortBooks(ordered, key).map((b) => b.id), legacySort(ordered, key).map((b) => b.id), `seed ${seed}, ${key}`);
+        assert.deepEqual(L.sortBooks(ordered, key).map((b) => b.id), expectedSort(ordered, key).map((b) => b.id), `seed ${seed}, ${key}`);
       }
       assert.deepEqual(ordered.map((b) => b.id), before, 'původní pole se nesmí změnit');
     }
@@ -490,13 +490,13 @@ describe('filtry knihovny', () => {
     assert.deepEqual(ids(L.filterBooks(arr, { query: '   ' })), ['1', '2', '3']);
   });
 
-  test('hledání zachová chování starého kódu pro názvy a autory (podřetězec bez ohledu na velikost písmen)', () => {
+  test('hledání najde názvy a autory (podřetězec bez ohledu na velikost písmen)', () => {
     const rand = rng(5);
     for (let i = 0; i < 60; i += 1) {
       const q = ['stíny', 'Ábel', 'autor 2', 'pseudonym', 'dom', 'ŘEK', 'xyz'][Math.floor(rand() * 7)];
       const old = books.filter((b) => b.title.toLowerCase().includes(q.toLowerCase()) || b.author.toLowerCase().includes(q.toLowerCase()));
       const next = L.filterBooks(books, { query: q });
-      for (const b of old) assert.ok(next.includes(b), `"${q}" dřív našlo ${b.id}`);
+      for (const b of old) assert.ok(next.includes(b), `"${q}" má najít ${b.id}`);
     }
   });
 
@@ -869,7 +869,7 @@ describe('načtení knihovny z databáze', () => {
       const ub = db.user_books.find((u) => u.book_id === row.id && u.user_id === USER);
       assert.equal(b.hasAccess, row.author_id === USER || !!row.is_auto_assigned || ub?.status === 'active', row.id);
     }
-    assert.deepEqual(books.map((b) => b.id), legacySmartSort(books).map((b) => b.id), 'základní pořadí');
+    assert.deepEqual(books.map((b) => b.id), expectedSmartSort(books).map((b) => b.id), 'základní pořadí');
     assert.equal(byId.get(db.foreignId).hasAccess, false, 'cizí licence se nepočítá');
     assert.equal(byId.get(db.foreignId).isRead, false);
   });

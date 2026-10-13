@@ -1,17 +1,19 @@
 # Oznámení do telefonu (Web Push): nastavení
 
-Oznámení z appky (Nastavení → Oznámení, u správce i Správa → Upozornění) se po tomhle nastavení ukážou i jako oznámení v telefonu nebo
-počítači. Nastavuje se jednou, ručně, protože appka (web) nemá k Supabase žádný klíč na správu. **Nic z toho neposílej do chatu ani do repozitáře**: tajné
+Oznámení z appky (Nastavení → Oznámení, u správce i Admin → Upozornění) se po tomhle nastavení ukážou i jako oznámení v telefonu nebo
+počítači. Nastavuje se jednou, ručně, protože appka (web) nemá k Supabase žádný klíč na správu. **Nic z toho nedávej do repozitáře ani nikam nesdílej**: tajné
 hodnoty patří jen do Supabase.
 
 Na iPhonu a iPadu oznámení fungují **jen v appce přidané na plochu** (Nastavení → Aplikace), v obyčejném Safari ne. Android a počítač (Chrome, Edge, Firefox) fungují i v prohlížeči.
 
 ## 1. SQL v databázi
-Supabase → **SQL Editor** → vlož celý soubor `db/push-notifications.sql` → Run. Je bezpečné pustit ho víckrát.
+Předpoklad: v databázi už jsou základní tabulky appky `profiles`, `books`, `user_books`, `user_daily_activity`, `user_notifications`, `admin_notifications` a funkce `app_current_role()`. Patří k základní databázi appky, ne k tomuhle souboru.
+
+Supabase → **SQL Editor** → vlož celý soubor `jomarid-books/db/push-notifications.sql` → Run. Je bezpečné pustit ho víckrát.
 
 ## 2. Klíče (VAPID)
-V appce jako správce: **Správa → Upozornění → Oznámení do telefonu → Vygenerovat klíče**. Veřejný klíč se uloží sám, **soukromý se ukáže jen jednou**:
-nech okno otevřené, než ho vložíš do Supabase v kroku 4. Veřejný klíč (potřebuješ ho v kroku 4 taky) uvidíš ve Správě → Upozornění i později a jde zkopírovat; soukromý ne.
+V appce jako správce: **Admin → Upozornění → Oznámení do telefonu → Vygenerovat klíče**. Veřejný klíč se uloží sám, **soukromý se ukáže jen jednou**:
+nech okno otevřené, než ho vložíš do Supabase v kroku 4. Veřejný klíč (potřebuješ ho v kroku 4 taky) uvidíš v Admin → Upozornění i později a jde zkopírovat; soukromý ne.
 (Znovu generovat klíče znamená, že si všichni musí oznámení zapnout znovu.)
 
 ## 3. Adresa funkce a sdílené heslo
@@ -36,7 +38,7 @@ Supabase → **Edge Functions → Secrets** → přidej:
 | `PUSH_WEBHOOK_SECRET` | `secret` z kroku 3 |
 
 ## 5. Nasazení funkce
-Supabase → **Edge Functions → Deploy a new function → Via Editor** → název **`send-push`** → vlož obsah `db/push/send-push.ts` → Deploy.
+Supabase → **Edge Functions → Deploy a new function → Via Editor** → název **`send-push`** → vlož obsah `jomarid-books/db/push/send-push.ts` → Deploy.
 Ve vlastnostech funkce **vypni „Verify JWT“** (volá ji databáze s vlastním heslem, ne přihlášený uživatel).
 
 ## 6. Zkouška
@@ -75,14 +77,13 @@ Po kroku 1–5 fungují i připomínky ve stylu „série je v ohrožení“. Ni
   ```
   Častěji: `engage_gap_minutes = 60` (nejvýš jedno za hodinu) nebo `0` (každou hodinu, kdy plánovač běží). Kratší den: třeba `engage_from = 10, engage_to = 20`.
   Denní strop zapneš např. `engage_max_per_day = 3`, `null` znamená bez stropu. Nic z toho se nenasazuje, platí od další hodiny.
-- Texty jsou v `db/push/send-push.ts` (funkce `compose`): u každého druhu je víc variant, losují se a mění se podle denní doby (ráno, přes den, večer, pozdě večer)
+- Texty jsou v `jomarid-books/db/push/send-push.ts` (funkce `compose`): u každého druhu je víc variant, losují se a mění se podle denní doby (ráno, přes den, večer, pozdě večer)
   a u popostrčení i podle dne v týdnu. Chceš je upravit? Změň texty a funkci znovu nasaď (krok 5).
 - **Nové knihy** se oznamují stejnou cestou jako ostatní připomínky (ne hned): kniha, která se právě zveřejnila, čeká ve frontě a čtenář o ní dostane
   oznámení v okně hodin a s odstupem jako ostatní (nová kniha má přednost před jemným popostrčením, ne před sérií, cílem apod.). Novinky se
   neposílají autorovi, ani tomu, kdo knihu už má, a další novinka čtenáři nejdřív za 12 hodin (hromadné vkládání knih nikoho nezaplaví).
-- Každý čtenář si připomínky a novinky vypne v **Nastavení → Oznámení** (zaškrtávátko „Připomínky a novinky“). Oznámení z appky (dary, odpovědi správce...) zůstávají.
-- Ukázky: **Správa → Upozornění → Ukázky motivačních oznámení** pošle na tvoje zařízení vzorek každého druhu s ukázkovými údaji.
-- Už máš funkci `send-push` nasazenou z dřívějška? Vlož do ní nový obsah `db/push/send-push.ts` a nasaď znovu, jinak se motivační texty neskládají.
+- Každý čtenář si připomínky a novinky vypne v **Nastavení → Oznámení** (zaškrtávátko „Připomínky a novinky“). Oznámení z appky (skrytá kniha, odstraněný komentář, změna jména, dar knihy...) zůstávají.
+- Ukázky: **Admin → Upozornění → Ukázky motivačních oznámení** pošle na tvoje zařízení vzorek každého druhu s ukázkovými údaji.
 
 ## Testy SQL (pro vývoj)
 `npm run test:sql` (nebo `bash db/tests/run.sh`) spustí `db/push-notifications.sql` na dočasném lokálním PostgreSQL proti zjednodušenému schématu Supabase

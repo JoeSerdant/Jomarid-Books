@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bell, BellOff, Loader2, Send } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { plural } from '../lib/plural';
 import { useInstallState } from '../pwa/install.js';
-import { enableMessage, pushSupport, TEST_PUSH_DELAY_SECONDS } from './pushModel.js';
+import { enableMessage, pushSupport, TEST_PUSH_DELAY_SECONDS, TEST_PUSH_HELP } from './pushModel.js';
 import { deviceState, disablePush, enablePush, fetchVapidKey, getPushPrefs, sendTestPush, setPushPrefs } from './pushClient.js';
 
 const btn = 'px-3 py-2 rounded-lg border-none cursor-pointer text-xs font-black inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed';
@@ -48,7 +49,7 @@ export default function PushSettings({ client = supabase }) {
     const res = await sendTestPush(client, undefined, { delay: TEST_PUSH_DELAY_SECONDS });
     setBusy('');
     setMessage(res.ok
-      ? { tone: 'ok', text: `Zkušební oznámení přijde za ${TEST_PUSH_DELAY_SECONDS} sekund. Teď appku zavři, přepni se jinam nebo zamkni telefon, ať ho uvidíš. Nedorazí-li, dej vědět správci.` }
+      ? { tone: 'ok', text: `Zkušební oznámení přijde za ${TEST_PUSH_DELAY_SECONDS} ${plural(TEST_PUSH_DELAY_SECONDS, 'sekundu', 'sekundy', 'sekund')}. Teď appku zavři, přepni se jinam nebo zamkni telefon, ať ho uvidíš.` }
       : { tone: res.reason === 'too-many' ? 'info' : 'error', text: res.reason === 'too-many' ? 'Počkej chvilku a zkus to znovu.' : res.reason === 'not-configured' ? enableMessage('not-configured') : 'Zkušební oznámení se nepodařilo odeslat.' });
   };
 
@@ -81,20 +82,23 @@ export default function PushSettings({ client = supabase }) {
   const { device, configured } = state;
   return wrap(
     <>
-      <Note>Nové oznámení z appky (skrytá kniha, dar knihy, odpověď správce...) ti přijde i jako oznámení v zařízení, i když appku nemáš otevřenou.</Note>
+      <Note>Nové oznámení z appky (skrytá kniha, odstraněný komentář, změna jména, dar knihy...) ti přijde i jako oznámení v zařízení, i když appku nemáš otevřenou.</Note>
       {!configured ? (
         <Note>{enableMessage('not-configured')}</Note>
       ) : device.permission === 'denied' ? (
         <Note tone="error">{enableMessage('denied')}</Note>
       ) : device.subscribed ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <span style={{ color: 'var(--text-body)' }} className="text-xs font-black flex items-center gap-1.5"><Bell size={13} /> Zapnuto v tomhle zařízení</span>
-          <button type="button" onClick={test} disabled={!!busy} style={solid} className={btn}>{busy === 'test' ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} Poslat zkušební oznámení (za {TEST_PUSH_DELAY_SECONDS} s)</button>
-          <button type="button" onClick={turnOff} disabled={!!busy} style={soft} className={btn}>{busy === 'off' ? <Loader2 size={12} className="animate-spin" /> : <BellOff size={12} />} Vypnout</button>
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span style={{ color: 'var(--text-body)' }} className="text-xs font-black flex items-center gap-1.5"><Bell size={13} /> Zapnuto v tomhle zařízení</span>
+            <button type="button" onClick={test} disabled={!!busy} style={solid} className={btn}>{busy === 'test' ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} Poslat zkušební oznámení (za {TEST_PUSH_DELAY_SECONDS} s)</button>
+            <button type="button" onClick={turnOff} disabled={!!busy} style={soft} className={btn}>{busy === 'off' ? <Loader2 size={12} className="animate-spin" /> : <BellOff size={12} />} Vypnout</button>
+          </div>
+          <Note>{TEST_PUSH_HELP}</Note>
         </div>
       ) : (
         <div className="space-y-2">
-          {device.stale && <Note>Oznámení v tomhle zařízení přestala fungovat (změna klíčů serveru nebo odpojené zařízení). Zapni je prosím znovu.</Note>}
+          {device.stale && <Note>Oznámení v tomhle zařízení přestala fungovat. Zapni je prosím znovu.</Note>}
           <button type="button" onClick={turnOn} disabled={!!busy} style={solid} className={btn}>{busy === 'on' ? <Loader2 size={12} className="animate-spin" /> : <Bell size={12} />} Zapnout oznámení v tomhle zařízení</button>
         </div>
       )}

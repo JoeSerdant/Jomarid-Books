@@ -1,5 +1,5 @@
 // Klíče VAPID (identita odesílatele Web Push): pár ECDSA P-256. Generuje se v prohlížeči správce, aby se soukromý klíč nikdy
-// neposílal přes chat ani repozitář: ukáže se jednou a správce ho vloží do Supabase (db/push/README.md).
+// nedostal do repozitáře ani jinam ven: ukáže se jednou a správce ho vloží do Supabase (db/push/README.md).
 
 const b64url = (bytes) => {
   let s = '';

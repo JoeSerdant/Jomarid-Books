@@ -3,38 +3,53 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { BOOK_BADGES } from '../constants/badges';
-import { calculateXpMultiplier, calculateLevelAndProgress, getLevelVisuals, calculateGoalMultiplier } from '../constants/leveling';
+import { sumBadgeXp } from '../constants/badgeXp';
+import { STREAK_FREEZE_PRICE, DEFAULT_BOOK_PRICE } from '../constants/economy';
+import { calculateLevelAndProgress, getLevelVisuals, computeTotalXp } from '../constants/leveling';
+import { plural } from '../lib/plural';
+import { THEMES as THEME_VARS, THEME_LABELS, FONT_SIZE_RANGE } from '../theme';
 import { FaqItem } from '../components/FaqItem';
-import { APP_VERSION_LABEL, APP_VERSION_SHORT } from '../appInfo';
+import { APP_VERSION_LABEL, APP_VERSION_SHORT, CONTACT_EMAIL } from '../appInfo';
 import { InstallNote, InstallPopup } from '../pwa/InstallParts';
 import {
-  Book, BookOpen, ChevronRight, Coins, Flame, Library, Phone,
-  ShieldCheck, Sparkles, Zap, Footprints, Scroll,
+  Book, BookOpen, ChevronRight, Coins, Flame, Library, Mail,
+  ShieldCheck, Sparkles, Zap, Footprints,
   Rocket, Swords, Building2, Target, Crown, ArrowRight, Feather, Calendar, Gamepad2,
   Type, Bookmark, Star, MessageCircle, Trophy, Loader2, TrendingUp, BarChart3,
 } from 'lucide-react';
 
 // ============================================================================
-// Reálná, ověřená data (odznaky/hry) - nic tady není vymyšlené. Texty pro
-// hero/podtitul/doporučené tituly/ukázku písma/"proč číst tady" naopak
-// přichází ze site_settings (spravuje admin), s těmihle jako záložní
-// hodnotou, kdyby se ještě nenačetly nebo admin nikdy nic neuložil.
+// Odznaky a hry jsou skutečná data aplikace. Texty hero, podtitulu, doporučených
+// titulů, ukázky písma a "proč číst tady" přicházejí ze site_settings (spravuje
+// admin); tyhle hodnoty se použijí, dokud se nenačtou nebo dokud admin nic neuloží.
 // ============================================================================
 
-const SAMPLE_BADGES = [
-  { icon: Footprints, title: 'První Průzkumník', description: 'Přečti svou úplně první knihu v knihovně.', coins: 50, xp: 100, category: 'Knihy' },
-  { icon: Flame, title: 'Týdenní Plamen', description: 'Čti sedm dní v kuse bez jediného výpadku.', coins: 150, xp: 300, category: 'Streak' },
-  { icon: Scroll, title: 'Průzkumník Svazků', description: 'Dosáhni čtenářské úrovně 4.', coins: 80, xp: 120, category: 'Úroveň' },
-  { icon: Coins, title: 'Mincový Sběratel', description: 'Nashromáždi celkem 500 Jomarid Coinů.', coins: 150, xp: 300, category: 'Sběratelství' },
-  { icon: Trophy, title: 'Mistr Odznaků', description: 'Odemkni 25 různých odznaků ze sbírky.', coins: 500, xp: 1000, category: 'Sběratelství' },
-];
+const BADGE_COUNT = BOOK_BADGES.length;
+const BADGES_TEXT = `${BADGE_COUNT} ${plural(BADGE_COUNT, 'odznak', 'odznaky', 'odznaků')}`;
+
+// Názvy kategorií odznaků stejné jako ve filtru na stránce Statistiky.
+const BADGE_CATEGORY_LABELS = { books: 'Knihy', streak: 'Streak', levels: 'Úrovně', monthly: 'Výzvy', special: 'Speciální' };
+
+// Ukázkové odznaky se berou přímo z katalogu odznaků, takže se nikdy nerozejdou s tím, co uživatel uvidí ve Statistikách.
+const SAMPLE_BADGE_IDS = ['bookworm_1', 'streak_7', 'level_4', 'coins_500', 'badge_collector_25'];
+const SAMPLE_BADGES = SAMPLE_BADGE_IDS
+  .map(id => BOOK_BADGES.find(b => b.id === id))
+  .filter(Boolean)
+  .map(b => ({
+    icon: b.icon,
+    title: b.title,
+    description: b.description,
+    coins: b.rewardCoins,
+    xp: b.rewardXp,
+    category: BADGE_CATEGORY_LABELS[b.category] || b.category,
+  }));
 
 const GAMES_PREVIEW = [
   { icon: Rocket, title: 'Jomarid Rocket Game', tagline: 'Vesmírná arkádová střílečka s vlastními vylepšeními a postupem.', detail: 'Nepřátelé občas upustí bonusovou minci navíc k tomu, co si vyděláš jen za to, že si dnes zahraješ.' },
   { icon: Swords, title: 'Warroom: Frontlines', tagline: 'Velitelská taktická hra - řiď frontu, jednotky a zdroje.', detail: 'Rozhoduješ o nasazení jednotek a zdrojích z velitelského stanu, ne v přímé palbě.' },
   { icon: Building2, title: 'City Clicker', tagline: 'Vybuduj si vlastní město klikáním.', detail: 'Čtyři zcela odlišné vizuální styly na výběr - stejné město, jiná nálada.' },
-  { icon: Target, title: 'Polygon aréna', tagline: 'Rozstřílej tvary a poskládej si vlastní stavbu tanku.', detail: 'Klasika, týmový mód, nebo klidné cvičiště bez tlaku - na výběr hned v menu.' },
-  { icon: Crown, title: 'Chess League', tagline: 'Šachy proti pěti botům rostoucí obtížnosti.', detail: 'Vlastní XP, streaky a ligový postup - silnější soupeře si odemykáte postupně, výhrou za výhrou.' },
+  { icon: Target, title: 'Polygon aréna', tagline: 'Rozstřílej tvary, poskládej si stavbu z více než 500 tanků a přežij mezi chytrými boty.', detail: 'Osm režimů od vln nepřátel po zužující se bouři a obtížnost až do Pekla.' },
+  { icon: Crown, title: 'Chess League', tagline: 'Šachy proti pěti botům s vlastní osobností - skutečný Elo rating, hodiny, nápověda, rozbor partie a ligový postup.', detail: 'Silnější soupeře si odemykáte postupně, výhrou za výhrou.' },
 ];
 
 const COIN_SOURCES = [
@@ -44,16 +59,19 @@ const COIN_SOURCES = [
   { label: 'Splněný měsíční cíl', coins: 250, icon: Target },
 ];
 
-const THEMES = [
-  { id: 'saas', name: 'Světlý', swatch: '#ffffff', accent: '#6366f1' },
-  { id: 'dark', name: 'Tmavý', swatch: '#020617', accent: '#7c3aed' },
-  { id: 'emerald', name: 'Zelená & Dřevo', swatch: '#2d1a10', accent: '#246b54' },
-];
+// Ukázkové dlaždice vzhledů: názvy a barvy se berou z theme.js.
+const THEME_TILES = ['saas', 'dark', 'emerald'].map(id => ({
+  id,
+  name: THEME_LABELS[id],
+  swatch: THEME_VARS[id]['--bg-body'],
+  accent: THEME_VARS[id]['--bg-primary'],
+}));
+const THEME_COUNT = Object.keys(THEME_LABELS).length;
 
 const DEFAULT_SETTINGS = {
   homepage_hero: {
     headline: 'Otevřete knihu a sledujte, jak stoupá vaše úroveň',
-    subtitle: 'Tři originální knižní řady, přes 100 sběratelských odznaků a vlastní herní měna, kterou si vyděláte čtením - nebo si mezitím zahrajete jednu z pěti miniher.',
+    subtitle: `Tři originální knižní řady, ${BADGE_COUNT} ${plural(BADGE_COUNT, 'sběratelský odznak', 'sběratelské odznaky', 'sběratelských odznaků')} a vlastní herní měna, kterou si vyděláte čtením - nebo si mezitím zahrajete jednu z pěti miniher.`,
   },
   homepage_featured_books: { book_ids: [] },
   homepage_font_demo: {
@@ -78,7 +96,7 @@ function todayUtcStr() {
 
 // ============================================================================
 // HLAVNÍ KOMPONENTA - načte veřejná nastavení (pro kohokoliv) a osobní data
-// (jen pro přihlášené), pak vykreslí jednu ze dvou zcela odlišných variant.
+// (jen pro přihlášené), pak vykreslí jednu ze dvou variant.
 // ============================================================================
 export const HomePage = () => {
   const { user } = useAuth();
@@ -122,11 +140,9 @@ export const HomePage = () => {
     return () => { cancelled = true; };
   }, []);
 
-  // Osobní data - jen když je někdo přihlášený. Homepage tady VŽDY jen ČTE
-  // už uloženbuá data, nikdy sama neodemyká odznaky ani nepřipočítává XP -
-  // to je výhradně práce Statistik (jediné místo, které to smí dělat), ať
-  // nikdy nemůže dojít k tomu, že by dvě různé stránky nezávisle na sobě
-  // zkoušely připsat stejnou odměnu dvakrát.
+  // Osobní data - jen když je někdo přihlášený. Homepage jen čte už uložená
+  // data a sama neodemyká odznaky ani nepřipočítává XP. To dělá výhradně
+  // stránka Statistiky, aby dvě stránky nezávisle nepřipsaly stejnou odměnu dvakrát.
   useEffect(() => {
     if (!user) { setPersonal(null); setPersonalLoading(false); return; }
     // Čeká, až doběhnou veřejná nastavení (settings) - jinak by "doporučeno"
@@ -168,18 +184,18 @@ export const HomePage = () => {
         const readToday = activityDates.includes(today);
         const streak = resolvedStreak + (readToday ? 1 : 0);
 
-        // --- XP/Level: stejný vzorec jako Statistiky, počítáno jen z dat,
-        // která už reálně existují v DB (žádné nové odemykání tady).
+        // --- XP/Level: stejný vzorec jako Statistiky (computeTotalXp), počítá
+        // se jen z už uložených odznaků.
         const totalRead = userBooks.filter(b => b.is_read).length;
-        const goalMultiplier = calculateGoalMultiplier(profile.highest_goal_completed);
-        const baseXpFromBooks = Math.round(totalRead * 100 * goalMultiplier);
-        const streakXpBonus = calculateXpMultiplier(streak);
         const unlockedBadgeIds = profile.unlocked_badges || [];
-        const badgeBonusXp = unlockedBadgeIds.reduce((sum, id) => {
-          const def = BOOK_BADGES.find(b => b.id === id);
-          return sum + (def?.rewardXp || 0);
-        }, 0);
-        const totalXp = baseXpFromBooks + (parseInt(profile.fake_xp, 10) || 0) + (parseInt(profile.bonus_xp, 10) || 0) + streakXpBonus + badgeBonusXp;
+        const totalXp = computeTotalXp({
+          totalRead,
+          highestGoalCompleted: profile.highest_goal_completed,
+          fakeXp: profile.fake_xp,
+          bonusXp: profile.bonus_xp,
+          streak,
+          badgeXp: sumBadgeXp(unlockedBadgeIds),
+        });
         const { level, xpInCurrentLevel, xpNeededForNext } = calculateLevelAndProgress(totalXp);
         const visuals = getLevelVisuals(level);
 
@@ -243,9 +259,8 @@ export const HomePage = () => {
 };
 
 // ============================================================================
-// VARIANTA PRO NEPŘIHLÁŠENÉ - marketingová stránka. Hlavní interaktivní
-// prvek (hledání knihy podle žánru) skutečně filtruje REÁLNÉ doporučené
-// knihy, ne jen kliká na tlačítko pro efekt.
+// VARIANTA PRO NEPŘIHLÁŠENÉ - marketingová stránka. Hledání podle žánru
+// filtruje doporučené knihy v sekci "Hlavní tituly".
 // ============================================================================
 const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
   const [selectedGenre, setSelectedGenre] = useState(null);
@@ -283,8 +298,8 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
       <InstallPopup />
 
       {/* ============================================================
-          1. HERO - nadpis vlevo, hledání podle žánru napravo (SKUTEČNĚ
-          filtruje reálné doporučené knihy níž, není to jen pro parádu)
+          1. HERO - nadpis vlevo, hledání podle žánru napravo (filtruje
+          doporučené knihy níž)
          ============================================================ */}
       <section className="max-w-6xl mx-auto px-4 pt-10 pb-16">
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-center">
@@ -319,8 +334,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
             </div>
           </div>
 
-          {/* HLEDÁNÍ PODLE ŽÁNRU: vybraný žánr skutečně mění, co se ukáže
-              o pár řádků níž v sekci "Hlavní tituly" - žádná fingovaná animace. */}
+          {/* HLEDÁNÍ PODLE ŽÁNRU: vybraný žánr mění, co se ukáže níž v sekci "Hlavní tituly". */}
           <div className="lg:col-span-2">
             <div
               style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}
@@ -438,9 +452,9 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 md:gap-6">
             {[
               { n: '1', title: 'Vyberte si knihu', text: 'Procházejte katalog, přečtěte si popis a hodnocení od ostatních čtenářů přímo u knihy.' },
-              { n: '2', title: 'Čtěte a vydělávejte', text: 'Za přečtené stránky získáváte XP. Za odznaky, denní přihlášení a minihry sbíráte Jomarid Coins.' },
+              { n: '2', title: 'Čtěte a vydělávejte', text: 'Za dočtené knihy a denní sérii získáváte XP, další přidávají odznaky a splněný měsíční cíl. Za odznaky, denní přihlášení a minihry sbíráte Jomarid Coins.' },
               { n: '3', title: 'Odemykejte další', text: 'Mincemi si v knihovně rovnou kupujete přístup k dalším titulům - žádné čekání na schválení.' },
-              { n: '4', title: 'Postupujte a sbírejte', text: 'Levely, denní streak, měsíční cíle a přes 100 odznaků drží motivaci i po týdnech čtení.' },
+              { n: '4', title: 'Postupujte a sbírejte', text: `Levely, denní streak, měsíční cíle a ${BADGES_TEXT} drží motivaci i po týdnech čtení.` },
             ].map((step) => (
               <div key={step.n} className="relative">
                 <span style={{ color: 'var(--border-color)' }} className="font-heading text-5xl font-extrabold block mb-3 opacity-60">{step.n}</span>
@@ -458,10 +472,10 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
       <section className="max-w-6xl mx-auto px-4 py-20">
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-start">
           <div className="lg:col-span-2">
-            <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">100 odznaků čeká na odemknutí</h2>
+            <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">{BADGES_TEXT} čeká na odemknutí</h2>
             <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed mb-6">
-              Rozdělené do pěti kategorií - od prvního přečtení přes streaky až po sběratelství
-              samo o sobě. Klikněte na kterýkoliv z pěti níže a podívejte se, co obnáší.
+              Rozdělené do pěti kategorií - od prvního přečtení přes streaky a úrovně až po
+              měsíční výzvy a speciální odznaky. Klikněte na kterýkoliv z pěti níže a podívejte se, co obnáší.
             </p>
             <div className="flex flex-wrap gap-2">
               {SAMPLE_BADGES.map((badge, idx) => {
@@ -560,7 +574,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
               <span style={{ color: 'var(--bg-primary)' }} className="text-xs font-bold tabular-nums">{demoFontSize}px</span>
             </div>
             <input
-              type="range" min={14} max={28} value={demoFontSize}
+              type="range" min={FONT_SIZE_RANGE.min} max={FONT_SIZE_RANGE.max} value={demoFontSize}
               onChange={(e) => setDemoFontSize(Number(e.target.value))}
               className="w-full mb-5 cursor-pointer"
               style={{ accentColor: 'var(--bg-primary)' }}
@@ -599,12 +613,13 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
          ============================================================ */}
       <section style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border-y py-20">
         <div className="max-w-5xl mx-auto px-4">
-          <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">Tři vzhledy, jeden switch</h2>
+          <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">Vzhled podle vašeho gusta</h2>
           <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed max-w-lg mb-10">
             V nastavení si kdykoliv přepnete vzhled celé appky - platí okamžitě a všude, od knihovny přes čtečku až po minihry.
+            Na výběr je {THEME_COUNT} {plural(THEME_COUNT, 'motiv', 'motivy', 'motivů')}, tady jsou tři z nich.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {THEMES.map(t => (
+            {THEME_TILES.map(t => (
               <div key={t.id} style={{ backgroundColor: 'var(--bg-body)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-5 flex items-center gap-4">
                 <div style={{ backgroundColor: t.swatch, borderColor: t.accent }} className="w-12 h-12 rounded-xl border-2 shrink-0" />
                 <div>
@@ -645,7 +660,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
         <div className="max-w-5xl mx-auto px-4">
           <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">Odkud se berou Jomarid Coins</h2>
           <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed max-w-lg mb-8">
-            Mincemi v knihovně přímo platíte za další tituly, nebo si za 150 koupíte
+            Mincemi v knihovně přímo platíte za další tituly, nebo si za {STREAK_FREEZE_PRICE} koupíte
             Streak Freeze - pojistku na jeden zmeškaný den bez ztráty série.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -672,11 +687,11 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
           <div className="flex-1">
             <h2 className="font-heading text-xl md:text-2xl font-bold mb-2">Máte vlastní příběh?</h2>
             <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed mb-4 max-w-2xl">
-              Jomarid Books má i nakladatelský panel pro autory - vlastní katalog vydaných titulů,
-              schvalování čtenářských žádostí a přehled reakcí na vaši práci. Přístup k roli
+              Jomarid Books má i nakladatelský panel pro autory - statistiky prodejů a čtenářů,
+              správu vydaných knih, výdělek v mincích a darování knih čtenářům. Přístup k roli
               nakladatele přiděluje tým Jomarid Books ručně, tak nám napište.
             </p>
-            <a href="mailto:wwsigmamango@gmail.com" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs no-underline hover:brightness-105 transition-all">
+            <a href={`mailto:${CONTACT_EMAIL}`} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs no-underline hover:brightness-105 transition-all">
               Napsat ohledně publikování <ArrowRight size={14} />
             </a>
           </div>
@@ -689,12 +704,14 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
       <section className="max-w-2xl mx-auto px-4 py-20">
         <h2 className="font-heading text-2xl md:text-3xl font-bold mb-8 text-center">Časté otázky</h2>
         <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="p-6 rounded-2xl border shadow-sm space-y-2">
-          <FaqItem question="Jak funguje systém gamifikace a získávání odznaků?" answer="Aplikace na pozadí sleduje vaši čtenářskou aktivitu. Kdykoliv přečtete kapitolu, udržíte denní streak nebo splníte měsíční cíl, vyhodnotí se splnění podmínek automaticky. V profilu pak hned uvidíte nově odemčené odznaky z celkové sbírky přes 100 kousků." />
+          <FaqItem question="Jak funguje systém gamifikace a získávání odznaků?" answer={`XP sbíráte za dočtené knihy, denní sérii a splněný měsíční cíl. Podmínky odznaků se vyhodnotí, když otevřete Statistiky - tam hned uvidíte nově odemčené odznaky z celkové sbírky ${BADGES_TEXT}.`} />
           <FaqItem question="Jak získám přístup ke konkrétním knihám?" answer="V knihovně vidíte celý katalog i knihy, které ještě nevlastníte. Klikem na knihu otevřete její detail s popisem, hodnocením a komentáři - a rovnou si ji tam koupíte za Jomarid Coins. Přístup se odemkne okamžitě." />
           <FaqItem question="Co jsou ty minihry a musím je hrát?" answer="Vůbec ne - je to pět volitelných her v samostatné sekci appky, čistě pro zábavu mimo čtení. Když si zahrajete alespoň chvilku, dostanete jednou denně bonusové Jomarid Coins navrch." />
-          <FaqItem question="Jak funguje Streak Freeze?" answer="Koupíte si ho v sekci Statistiky za 150 Jomarid Coins. Jakmile ho vlastníte, jeden zmeškaný den se automaticky počítá jako pokrytý a vaše série se nepřeruší." />
-          <FaqItem question="Musím něco stahovat nebo instalovat?" answer="Vůbec nic. Jomarid Books funguje kompletně ve webovém prohlížeči na počítači, tabletu i telefonu." />
+          <FaqItem question="Jak funguje Streak Freeze?" answer={`Koupíte si ho v sekci Statistiky za ${STREAK_FREEZE_PRICE} Jomarid Coins. Jakmile ho vlastníte, jeden zmeškaný den se automaticky počítá jako pokrytý a vaše série se nepřeruší.`} />
+          <FaqItem question="Musím něco stahovat nebo instalovat?" answer="Nemusíte. Jomarid Books funguje ve webovém prohlížeči na počítači, tabletu i telefonu. Chcete-li, přidejte si ji na plochu jako aplikaci (Nastavení → Aplikace). Na iPhonu je to potřeba pro oznámení." />
           <FaqItem question="Pamatuje si systém, kde jsem přestal číst?" answer="Ano. Vaše přesná pozice v otevřené knize se ukládá do cloudu, takže můžete plynule navázat na mobilu přesně tam, kde jste skončili na počítači." />
+          <FaqItem question="Zapomenuté heslo" answer="Na přihlašovací stránce otevřete odkaz pro zapomenuté heslo a pošlete žádost. Správce vám vydá dočasné heslo a předá vám ho mimo aplikaci. Po přihlášení si v Nastavení → Zabezpečení nastavíte vlastní." />
+          <FaqItem question="Nechodí mi oznámení" answer="Zkontrolujte v nastavení zařízení, jestli má prohlížeč nebo aplikace povolená oznámení a jestli není zapnutý režim Nerušit. Na iPhonu oznámení fungují jen v aplikaci přidané na plochu. Pomoct může i oznámení v Nastavení → Oznámení vypnout a znovu zapnout." />
           <FaqItem question="Jak se stanu nakladatelem a publikuji vlastní knihu?" answer="Roli nakladatele přiděluje ručně tým Jomarid Books. Napište na kontaktní e-mail v patičce stránky a domluvíme se na dalším postupu." />
           <FaqItem question="Kolik stojí založení účtu?" answer="Založení profilu a přístup do základního rozhraní čítárny je úplně zdarma." />
         </div>
@@ -714,20 +731,14 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
         </div>
       </section>
 
-
-      <div className="max-w-6xl mx-auto px-4 pb-2">
-        <SupportNote />
-      </div>
-
       <Footer />
     </div>
   );
 };
 
 // ============================================================================
-// VARIANTA PRO PŘIHLÁŠENÉ - osobní přehled ze skutečných dat účtu. Nic tady
-// není demo - "pokračovat ve čtení" vede do rozečtené knihy, streak je
-// opravdový, doporučená kniha je opravdu nevlastněná kniha z katalogu.
+// VARIANTA PRO PŘIHLÁŠENÉ - osobní přehled z dat účtu: "Pokračovat" vede do
+// rozečtené knihy, doporučená kniha je nevlastněná kniha z katalogu.
 // ============================================================================
 const LoggedInHome = ({ user, personal, loading, navigate }) => {
   const { username: accountName } = useAuth();
@@ -855,7 +866,7 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
                 style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }}
                 className="mt-5 w-full py-3 rounded-xl font-bold text-sm border-none cursor-pointer hover:opacity-90 transition-all flex items-center justify-center gap-2"
               >
-                <Coins size={15} /> {recommended.price_coins ?? 150} mincí v knihovně
+                <Coins size={15} /> {recommended.price_coins ?? DEFAULT_BOOK_PRICE} mincí v knihovně
               </button>
             </div>
           ) : (
@@ -922,8 +933,8 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
             <button onClick={() => navigate('/stats')} style={{ backgroundColor: 'var(--bg-body)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="border rounded-xl p-4 cursor-pointer hover:opacity-80 transition-all flex flex-col items-center gap-2 text-xs font-bold">
               <Trophy size={18} /> Odznaky
             </button>
-            <a href="mailto:wwsigmamango@gmail.com" style={{ backgroundColor: 'var(--bg-body)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="border rounded-xl p-4 no-underline hover:opacity-80 transition-all flex flex-col items-center gap-2 text-xs font-bold">
-              <Phone size={18} /> Podpora
+            <a href={`mailto:${CONTACT_EMAIL}`} style={{ backgroundColor: 'var(--bg-body)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="border rounded-xl p-4 no-underline hover:opacity-80 transition-all flex flex-col items-center gap-2 text-xs font-bold">
+              <Mail size={18} /> Podpora
             </a>
           </div>
         </div>
@@ -933,7 +944,6 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
       <div className="max-w-6xl mx-auto px-4 pb-2 space-y-3">
         <VersionBanner />
         <InstallNote />
-        <SupportNote account />
       </div>
       <InstallPopup />
 
@@ -942,22 +952,12 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
   );
 };
 
-// Oznámení verze 1.0 (úvodní stránka).
+// Oznámení o aktuální verzi (úvodní stránka).
 const VersionBanner = () => (
   <div style={{ backgroundColor: 'var(--bg-badge)', borderColor: 'var(--border-color)' }} className="border rounded-xl px-4 py-3 flex items-center gap-2.5 text-xs">
     <Sparkles size={15} style={{ color: 'var(--text-badge)' }} className="shrink-0" />
     <p style={{ color: 'var(--text-badge)' }} className="m-0 font-semibold">
       Jomarid Books je ve verzi {APP_VERSION_SHORT}! Díky, že čteš s námi.
-    </p>
-  </div>
-);
-
-// Kam se obrátit, kdyby se něco nechovalo, jak má. Zmínka o účtu jen pro přihlášené (host žádný postup ani mince nemá).
-const SupportNote = ({ account = false }) => (
-  <div style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }} className="border rounded-xl px-4 py-3 flex items-center gap-2.5 text-xs">
-    <MessageCircle size={15} style={{ color: 'var(--text-muted)' }} className="shrink-0" />
-    <p style={{ color: 'var(--text-muted)' }} className="m-0">
-      {account && 'Tvůj postup ve čtení a mince jsou uložené u tvého účtu. '}Kdyby se něco nechovalo, jak má, napiš nám na kontaktní e-mail dole, rádi to opravíme.
     </p>
   </div>
 );
@@ -973,14 +973,14 @@ const Footer = () => (
     </div>
     <nav aria-label="Odkazy v patičce" className="flex items-center gap-4 font-semibold">
       <Link to="/settings" style={{ color: 'var(--text-body)' }} className="no-underline hover:underline underline-offset-2">Nastavení</Link>
-      <a href="mailto:wwsigmamango@gmail.com" style={{ color: 'var(--text-body)' }} className="no-underline hover:underline underline-offset-2">Kontakt</a>
+      <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: 'var(--text-body)' }} className="no-underline hover:underline underline-offset-2">Kontakt</a>
     </nav>
     <a
-      href="mailto:wwsigmamango@gmail.com"
+      href={`mailto:${CONTACT_EMAIL}`}
       style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' }}
       className="flex items-center gap-2 no-underline hover:opacity-85 px-3 py-1.5 rounded-md transition-all font-semibold"
     >
-      <Phone size={11} /> wwsigmamango@gmail.com
+      <Mail size={11} /> {CONTACT_EMAIL}
     </a>
   </footer>
 );

@@ -187,15 +187,15 @@ export const TourEditor = () => {
             />
             {!daysValid && <p data-testid="tour-days-error" style={{ color: '#ef4444' }} className="text-[0.6875rem] font-bold m-0 pl-1">Zadej celé číslo od 0 do {TOUR_LIMITS.maxAutoDays}, jinak se uložit nedá.</p>}
             <p id="tour-auto-days-help" style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] m-0 pl-1 opacity-70 leading-relaxed">
-              0 = jen ručně v Nastavení. Starší účty, které prohlídku nikdy neviděly, ji samy nedostanou, aby se nepřipomínala dlouholetým čtenářům.
+              0 = nové účty ji samy nedostanou. Kdo ji už viděl, uvidí po zvýšení verze novou. Starší účty, které prohlídku nikdy neviděly, ji samy nedostanou, aby se nepřipomínala dlouholetým čtenářům.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-xs font-bold" data-testid="tour-version">Verze prohlídky: {normalizedDraft.version}</span>
             <button type="button" onClick={() => setField({ version: Math.min(TOUR_LIMITS.maxVersion, normalizedDraft.version + 1) })} style={inputStyle} className={smallBtn}>
-              <RotateCcw size={12} /> Zobrazit znovu všem
+              <RotateCcw size={12} /> Zobrazit znovu těm, kdo ji viděli
             </button>
-            <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] opacity-70">Zvýšením verze (a uložením) uvidí prohlídku znovu i ti, kdo ji už viděli.</span>
+            <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] opacity-70">Zvýšením verze (a uložením) se prohlídka sama spustí znovu těm, kdo ji už viděli, a novým účtům. Starším účtům, které ji nikdy neviděly, se sama nespustí.</span>
           </div>
         </div>
       </Card>
@@ -280,7 +280,7 @@ export const TourEditor = () => {
       {conflict && (
         <div className="flex flex-wrap gap-2" data-testid="tour-conflict">
           <button type="button" onClick={takeTheirs} style={inputStyle} className={smallBtn}>Načíst jeho verzi (zahodit moje úpravy)</button>
-          <button type="button" onClick={() => save(true)} style={inputStyle} className={smallBtn}>Přepsat mojí verzí</button>
+          <button type="button" onClick={() => save(true)} style={inputStyle} className={smallBtn}>Přepsat svou verzí</button>
         </div>
       )}
 

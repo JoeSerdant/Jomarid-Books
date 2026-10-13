@@ -220,8 +220,8 @@ export const GameLauncher = ({ game }) => {
   // vlastní CSS reset a stovky document.getElementById volání tak nemůžou
   // nijak zasáhnout do zbytku Reactu (a naopak).
   if (showGame) {
-    // Křížek není přes hru, ale v samostatném pruhu mimo ni: dřív ležel v rohu přes iframe a na telefonu zakrýval ovládací
-    // prvky her (např. pauzu v Rocket Game). Pruh je nahoře; na nízké obrazovce na šířku (telefon) je vpravo, ať se hře
+    // Křížek je v samostatném pruhu mimo hru, ne přes iframe, aby nezakrýval ovládací prvky her (např. pauzu v Rocket Game).
+    // Pruh je nahoře; na nízké obrazovce na šířku (telefon) je vpravo, ať se hře
     // neubírá výška. Hra se v iframu přizpůsobí zbylé ploše, takže to platí pro všechny hry, i budoucí.
     // Třídy jsou napsané celé (ne skládané): Tailwind je při sestavení hledá v textu a sestavené by nepoznal.
     return (

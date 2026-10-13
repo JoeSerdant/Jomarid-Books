@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { ROLE_READER, ROLE_PUBLISHER, ROLE_ADMIN, ROLE_LABELS } from '../constants/roles';
 import { BarChart3, Coins, Compass, Gamepad2, Library, LogOut, Search, Settings, Shield } from 'lucide-react';
 
 export const Navbar = ({ onOpenSearch }) => {
@@ -103,23 +104,23 @@ export const Navbar = ({ onOpenSearch }) => {
   }, []);
 
   const renderRoleBadge = () => {
-    if (role === 'správce') {
+    if (role === ROLE_ADMIN) {
       return (
         <span className="text-[0.5625rem] font-black uppercase text-amber-500 tracking-wider flex items-center justify-end gap-1">
-          <Shield size={10} /> Správce
+          <Shield size={10} /> {ROLE_LABELS[ROLE_ADMIN]}
         </span>
       );
     }
-    if (role === 'nakladatel') {
+    if (role === ROLE_PUBLISHER) {
       return (
         <span className="text-[0.5625rem] font-black uppercase text-emerald-500 tracking-wider flex items-center justify-end gap-1">
-          <Compass size={10} /> Nakladatel
+          <Compass size={10} /> {ROLE_LABELS[ROLE_PUBLISHER]}
         </span>
       );
     }
     return (
       <span style={{ color: 'var(--text-muted)' }} className="text-[0.5625rem] font-bold uppercase opacity-60">
-        Čtenář
+        {ROLE_LABELS[ROLE_READER]}
       </span>
     );
   };

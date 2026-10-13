@@ -1,8 +1,7 @@
 // Chess League - mini-hra zobrazená v iframe (srcDoc) ze Games.jsx.
 //
-// Dřív tu byl celý hotový dokument v jediném řetězci. Teď je hra rozdělená do čitelných souborů ve
-// složce chess/ a tenhle soubor je jen poskládá do jednoho HTML dokumentu (Vite je načte jako text
-// přes ?raw, takže tu není žádný extra build krok):
+// Hra je rozdělená do souborů ve složce chess/; tenhle soubor je poskládá do jednoho HTML dokumentu
+// (Vite je načte jako text přes ?raw, takže tu není žádný extra build krok):
 //
 //   index.html  - kostra dokumentu + most pro odměny (JOMARID-BRIDGE)
 //   style.css   - vzhled

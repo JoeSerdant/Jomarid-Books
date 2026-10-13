@@ -3,14 +3,17 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { fetchBookText } from '../bookText/bookText';
-import { FONT_FAMILIES, LINE_HEIGHTS, TEXT_WIDTHS, ALIGNMENTS, PAGE_BREAKS, loadReaderPrefs, saveReaderPref, readerTypography } from '../theme';
+import {
+  FONT_FAMILIES, LINE_HEIGHTS, TEXT_WIDTHS, ALIGNMENTS, PAGE_BREAKS, FONT_SIZE_RANGE, AUTO_ADVANCE_RANGE, READER_PREFS_EVENT,
+  loadReaderPrefs, saveReaderPref, readerTypography,
+} from '../theme';
 import {
   BookMarked, Loader2, Star, X, Settings2, List, Minimize2, Maximize2,
   Play, Pause, Clock, ChevronRight, ChevronLeft, Highlighter, Trash2,
 } from 'lucide-react';
 
 // ============================================================================
-// Čtecí nastavení - beze změny oproti dřívější verzi, pořád localStorage.
+// Pomocné konstanty a funkce: barvy zvýraznění, kapitoly, zvýraznění v textu.
 // ============================================================================
 
 const HIGHLIGHT_COLORS = {
@@ -65,22 +68,13 @@ function splitContentWithHighlights(content, highlights) {
 // Spočítá hranice stránek (jako pole {start, end} - index do PŮVODNÍHO
 // textu) tak, že se skutečně změří ve skryté kopii stejné šířky/písma/
 // řádkování jako viditelná stránka, kolik znaků se do jedné výšky stránky
-// vejde. Nezávisí na tom, jak přesně prohlížeč počítá CSS sloupce - to se
-// ukázalo být křehké (dvakrát za sebou se to rozešlo s tím, co appka čekala,
-// že se zobrazuje) - tady appka sama binárně hledá přesný zlom, takže žádná
-// nesrovnalost mezi "kolik stránek appka myslí, že existuje" a tím, co se
-// doopravdy vykreslí, nemůže vzniknout.
-// <<PAGINATOR-START>>
+// vejde. Nespoléhá na to, jak přesně prohlížeč počítá CSS sloupce (to je
+// křehké): appka sama půlením hledá přesný zlom, takže počet stránek, který
+// appka čeká, se nemůže rozejít s tím, co se doopravdy vykreslí.
 // ============================================================================
-// STRÁNKOVÁNÍ (v2)
+// STRÁNKOVÁNÍ
 //
-// Dřív se pro každou stránku vykresloval ve skrytém uzlu celý ZBYTEK knihy
-// (jen aby se zjistilo, jestli už nejsme na konci) a pak se hledalo půlením,
-// takže čas rostl s druhou mocninou délky knihy (300 kB = 13 s, na telefonu
-// minuty) a UI po celou dobu stálo. Navíc se zalamovalo jen na mezeře, takže
-// 95 % stránek skončilo uprostřed věty.
-//
-// Teď: na každou stránku se vykreslí jen malý výřez textu (o něco delší než
+// Na každou stránku se vykreslí jen malý výřez textu (o něco delší než
 // stránka), prohlížeč ho rozloží JEDNOU a první řádek, který se už nevejde,
 // se najde půlením přes Range.getBoundingClientRect() - bez dalšího
 // vykreslování. Zlom se pak posune na konec věty / odstavce, pokud je blízko.
@@ -226,7 +220,6 @@ export function pageIndexForOffset(pages, offset) {
   }
   return pages[ans].end <= offset && ans < pages.length - 1 ? ans + 1 : ans;
 }
-// <<PAGINATOR-END>>
 
 // --- Mezipaměť stránkování: stejná kniha + stejné nastavení + stejná velikost plochy = stejné stránky, takže
 // se při dalším otevření nic nepočítá. Platnost hlídá podpis (délka a otisk textu, velikost plochy, nastavení)
@@ -286,7 +279,7 @@ export const ReaderPage = () => {
   const [liveProgress, setLiveProgress] = useState(0);
 
   // Nastavení čtečky sdílí Nastavení (ozubené kolečko) i tahle stránka: obojí čte a zapisuje stejné klíče
-  // a změna z jednoho místa se hned projeví i v druhém (událost jomarid-reader-prefs).
+  // a změna z jednoho místa se hned projeví i v druhém (událost READER_PREFS_EVENT).
   const [prefs, setPrefs] = useState(loadReaderPrefs);
   const setPref = useCallback((name, value) => {
     saveReaderPref(name, value);
@@ -294,8 +287,8 @@ export const ReaderPage = () => {
   }, []);
   useEffect(() => {
     const sync = () => setPrefs(p => { const n = loadReaderPrefs(); return JSON.stringify(n) === JSON.stringify(p) ? p : n; });
-    window.addEventListener('jomarid-reader-prefs', sync);
-    return () => window.removeEventListener('jomarid-reader-prefs', sync);
+    window.addEventListener(READER_PREFS_EVENT, sync);
+    return () => window.removeEventListener(READER_PREFS_EVENT, sync);
   }, []);
   const fontSize = prefs.fontSize;
   const fontFamilyKey = prefs.fontFamily;
@@ -597,8 +590,7 @@ export const ReaderPage = () => {
   }, [user, id]);
 
   // Aktuální procento se odvozuje ze ZAČÁTKU aktuální stránky (jako podíl
-  // celého textu) - stejná 0-100 škála, jakou appka používala i dřív u
-  // scrollování, takže žádná změna DB schématu není potřeba.
+  // celého textu), stupnice 0-100.
   useEffect(() => {
     if (!book?.content || paginating || pages.length === 0 || pages[0].end === 0) return;
     const page = pages[currentPage - 1];
@@ -1024,9 +1016,9 @@ export const ReaderPage = () => {
                     <span style={{ color: 'var(--text-body)' }} className="text-[0.625rem] font-bold">{fontSize}px</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => setFontSize(f => Math.max(14, f - 1))} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="w-8 h-8 shrink-0 rounded-lg border-none cursor-pointer font-black text-xs">A-</button>
-                    <input type="range" min={14} max={28} value={fontSize} onChange={e => setFontSize(Number(e.target.value))} className="flex-1 min-w-0" style={{ accentColor: 'var(--bg-primary)' }} />
-                    <button onClick={() => setFontSize(f => Math.min(28, f + 1))} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="w-8 h-8 shrink-0 rounded-lg border-none cursor-pointer font-black text-sm">A+</button>
+                    <button onClick={() => setFontSize(f => Math.max(FONT_SIZE_RANGE.min, f - 1))} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="w-8 h-8 shrink-0 rounded-lg border-none cursor-pointer font-black text-xs">A-</button>
+                    <input type="range" min={FONT_SIZE_RANGE.min} max={FONT_SIZE_RANGE.max} value={fontSize} onChange={e => setFontSize(Number(e.target.value))} className="flex-1 min-w-0" style={{ accentColor: 'var(--bg-primary)' }} />
+                    <button onClick={() => setFontSize(f => Math.min(FONT_SIZE_RANGE.max, f + 1))} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="w-8 h-8 shrink-0 rounded-lg border-none cursor-pointer font-black text-sm">A+</button>
                   </div>
                 </div>
 
@@ -1093,7 +1085,7 @@ export const ReaderPage = () => {
 
                 <div>
                   <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-2">Rychlost auto-listování (s/stránku)</span>
-                  <input type="range" min={8} max={60} value={autoAdvanceSeconds} onChange={e => setAutoAdvanceSeconds(Number(e.target.value))} className="w-full" style={{ accentColor: 'var(--bg-primary)' }} />
+                  <input type="range" min={AUTO_ADVANCE_RANGE.min} max={AUTO_ADVANCE_RANGE.max} value={autoAdvanceSeconds} onChange={e => setAutoAdvanceSeconds(Number(e.target.value))} className="w-full" style={{ accentColor: 'var(--bg-primary)' }} />
                 </div>
               </div>
             )}

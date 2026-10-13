@@ -1,6 +1,6 @@
 // Testy motivů a vlastních barev: node --test src/tests/theme.test.mjs   (nebo: npm run test:theme)
 //
-// Hlídají hlavně to, co se dřív rozbilo nebo co se snadno rozbije znovu:
+// Hlídají hlavně:
 //  - psaní hex kódu znak po znaku (zkratka #abc se nesmí rozbalit uprostřed psaní),
 //  - čitelnost: text na pozadí i na zvýraznění má vždy kontrast aspoň 4,5:1 (u libovolné dvojice barev),
 //  - první přepnutí na „Vlastní“ vychází z barev, které uživatel právě vidí (a náhled dlaždice to ukazuje),
@@ -49,7 +49,7 @@ describe('zápis hex kódu', () => {
     assert.equal(T.completeHex(' #abcdef '), '#abcdef');
     for (const v of ['#1e2', '1e2', '#1e2f3', '#abcdefa', 'zzzzzz', '', null, 5]) assert.equal(T.completeHex(v), null, String(v));
   });
-  test('psaní znak po znaku: až poslední znak kód potvrdí (dřív #1e2 skočilo na #11ee22 a zbytek se zahodil)', () => {
+  test('psaní znak po znaku: až poslední znak kód potvrdí (#1e2 se nesmí uprostřed psaní rozbalit na #11ee22)', () => {
     const r = rng(7);
     for (let i = 0; i < 200; i++) {
       const code = randomHex(r);
@@ -71,7 +71,7 @@ describe('odvozený motiv', () => {
     atLeast('--text-secondary', '--bg-secondary', 4.5);
     atLeast('--text-badge', '--bg-badge', 4.5);
     atLeast('--text-primary', '--bg-primary', 4.5);
-    // Text na zvýraznění nikdy nesmí být horší než bílý (ten byl dřív natvrdo a na světlých zvýrazněních nebyl čitelný).
+    // Text na zvýraznění nikdy nesmí být horší než bílý.
     assert.ok(T.contrast(v['--text-primary'], v['--bg-primary']) >= T.contrast('#ffffff', v['--bg-primary']) - EPS, name + ': text-primary horší než bílá');
   };
 

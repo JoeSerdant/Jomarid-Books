@@ -147,6 +147,9 @@ export default function App() {
 
                 {/* Administrace */}
                 <Route path="/admin" element={<ProtectedAdminRoute><AdminDashboard /></ProtectedAdminRoute>} />
+
+                {/* Neznámá adresa (překlep, starý odkaz) vede na úvodní stránku */}
+                <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
               </Suspense>
               </PageErrorBoundary>

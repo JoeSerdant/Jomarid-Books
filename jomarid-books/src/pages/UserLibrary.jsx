@@ -23,7 +23,7 @@ export const UserLibrary = () => {
   const [coins, setCoins] = useState(0);
   const [dailyBonus, setDailyBonus] = useState(null);
   // Otevřený detail si pamatuje jen id: knihu bere vždy z aktuálního seznamu, takže po nákupu, lajku nebo změně
-  // vlastnictví ukazuje čerstvé údaje (dřív zůstala v okně zastaralá kopie a nabízela koupit už vlastněnou knihu).
+  // vlastnictví ukazuje čerstvé údaje.
   const [detailId, setDetailId] = useState(null);
   const openDetail = useCallback((book) => setDetailId(book.id), []);
 
@@ -188,7 +188,7 @@ export const UserLibrary = () => {
   if (loading) return (
     <div role="status" className="flex flex-col items-center justify-center min-h-[60vh]">
       <Loader2 className="animate-spin mb-4" size={40} style={{ color: 'var(--bg-primary)' }} />
-      <p className="text-sm font-black uppercase tracking-wider">Otevírám tvůj čtenářský trezor...</p>
+      <p className="text-sm font-black uppercase tracking-wider">Otevírám tvoji knihovnu...</p>
       {loadedCount > 0 && <p style={{ color: 'var(--text-muted)' }} className="text-xs font-bold mt-2 m-0 tabular-nums">Načteno {loadedCount.toLocaleString('cs-CZ')} knih</p>}
     </div>
   );
@@ -209,7 +209,7 @@ export const UserLibrary = () => {
         <div className="flex justify-between items-end gap-3 border-b pb-2 sm:pb-6" style={{ borderColor: 'var(--border-color)' }}>
           <div className="min-w-0">
             <span className="bg-amber-500/10 text-amber-500 text-[0.625rem] font-black uppercase px-2.5 py-1 rounded-full border border-amber-500/20 hidden sm:inline-flex items-center gap-1 mb-2">
-              <Sparkles size={10} /> Prémiová knihovna
+              <Sparkles size={10} /> Knihovna
             </span>
             <h2 className="text-2xl sm:text-4xl font-black uppercase tracking-tight m-0">Tvoje Knihovna</h2>
           </div>
@@ -312,7 +312,7 @@ export const AuthorPage = () => {
 
       {state.status === 'loading' && <div className="flex items-center gap-2 text-xs font-bold py-10 justify-center" style={{ color: 'var(--text-muted)' }}><Loader2 size={16} className="animate-spin" /> Načítám...</div>}
       {state.status === 'notfound' && <p style={{ color: 'var(--text-muted)' }} className="text-sm text-center py-10 m-0">Tenhle autor tu není. Možná už nepublikuje, nebo je odkaz špatný.</p>}
-      {state.status === 'missing' && <p style={{ color: 'var(--text-muted)' }} className="text-sm text-center py-10 m-0">Stránky autorů se zapnou po aktualizaci databáze.</p>}
+      {state.status === 'missing' && <p style={{ color: 'var(--text-muted)' }} className="text-sm text-center py-10 m-0">Stránky autorů teď nejsou k dispozici.</p>}
       {state.status === 'error' && <p role="alert" className="text-sm text-center py-10 m-0 text-red-500 font-bold">Autora se nepodařilo načíst. Zkus to za chvíli.</p>}
 
       {state.status === 'ok' && (

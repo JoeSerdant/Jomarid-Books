@@ -212,7 +212,7 @@ describe('klient: zapnutí a vypnutí', () => {
     assert.deepEqual(await sendTestPush(makeEnv({ rpcError: { message: 'forbidden' } }).client, 'comeback'), { ok: false, reason: 'forbidden' });
     assert.deepEqual(await sendTestPush(makeEnv({ rpcError: { message: 'too_many' } }).client, 'comeback'), { ok: false, reason: 'too-many' });
     const plain = makeEnv(); await sendTestPush(plain.client);
-    assert.deepEqual(plain.log.rpc, [['send_test_push', undefined]], 'bez druhu se volá jako dřív');
+    assert.deepEqual(plain.log.rpc, [['send_test_push', undefined]], 'bez druhu se volá bez parametrů');
   });
   test('zkušební oznámení se zpožděním: předá se jen kladné zpoždění a nejvýš 30 vteřin', async () => {
     const e = makeEnv();

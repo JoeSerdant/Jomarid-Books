@@ -6,13 +6,15 @@
 // nikdy nepoužívají. Všechno, co se z databáze načte, projde normalizeTour(), takže poškozená nebo cizí hodnota
 // prohlídku nerozbije a texty se nikdy nevykreslují jako HTML (jen jako text).
 
+import { ROLE_READER, ROLE_PUBLISHER, ROLE_ADMIN, ROLE_LABELS } from '../constants/roles.js';
+
 export const TOUR_SETTINGS_KEY = 'onboarding_tour';
 
 export const TOUR_LIMITS = { maxSteps: 15, title: 80, text: 400, maxVersion: 9999, maxAutoDays: 3650 };
 
 export const SET_KEYS = ['reader', 'publisher', 'admin'];
-export const SET_LABELS = { reader: 'Čtenář', publisher: 'Nakladatel', admin: 'Správce' };
-export const setKeyForRole = (role) => (role === 'nakladatel' ? 'publisher' : role === 'správce' ? 'admin' : 'reader');
+export const SET_LABELS = { reader: ROLE_LABELS[ROLE_READER], publisher: ROLE_LABELS[ROLE_PUBLISHER], admin: ROLE_LABELS[ROLE_ADMIN] };
+export const setKeyForRole = (role) => (role === ROLE_PUBLISHER ? 'publisher' : role === ROLE_ADMIN ? 'admin' : 'reader');
 
 // Zvýraznitelné prvky. route = stránka, na které prvek je (prohlídka na ni přejde, když na ní uživatel ještě není),
 // at = jak začíná adresa, na které prvek už je (nepřecházet zbytečně). Bez route je prvek vidět na každé stránce.
@@ -54,18 +56,20 @@ const PUBLISHER_STEPS = [
   s('welcome', 'none', 'Vítej v Jomarid Books', 'Jsi tu jako nakladatel, takže ti kromě čtení ukážeme i to, kde vydáš a spravuješ své knihy. Prohlídku můžeš kdykoli přeskočit a znovu spustit v Nastavení.'),
   s('library', 'nav-library', 'Knihovna', 'Tady čteš knihy jako každý čtenář: celý katalog i filtr Moje knihy, kde máš i své vlastní knihy.'),
   s('studio', 'nav-studio', 'Studio', 'Tvůj panel nakladatele: statistiky prodejů a čtenářů, správa knih a vydávání nových.'),
-  s('studio-tabs', 'publisher-tabs', 'Co ve Studiu najdeš', 'Přehled ukazuje prodeje a čtenáře, v Mých knihách knihy spravuješ a stahuješ z prodeje, ve Vydat / upravit knihu vydáš nebo upravíš. V Licencích a profilu daruješ knihu čtenáři a vidíš jméno, pod kterým se tvé knihy zobrazují.'),
+  s('studio-tabs', 'publisher-tabs', 'Co ve Studiu najdeš', 'Přehled ukazuje prodeje a čtenáře. V záložce Moje knihy knihy spravuješ a stahuješ z prodeje, v záložce Vydat / upravit knihu vydáš nebo upravíš. V záložce Licence a profil daruješ knihu čtenáři a vidíš jméno, pod kterým se tvé knihy zobrazují.'),
   s('stats', 'nav-stats', 'Statistiky', 'Tvoje čtenářské statistiky, odznaky a žebříček.'),
   s('coins', 'nav-coins', 'Jomarid Coins', 'Mince dostáváš odznaky, každodenním přihlášením a hrami a také z prodeje svých knih. Za mince můžeš kupovat další knihy.'),
   s('settings', 'nav-settings', 'Nastavení', 'Tady si appku přizpůsobíš a zkontroluješ svůj účet i knihy.'),
-  s('settings-checks', 'settings-checks', 'Kontrola účtu a knih', 'V záložce Kontrola účtu uvidíš, co u tvých knih ještě chybí (text, popis, žánr) a jestli máš nastavené autorské jméno. Ve Vzhledu a Čtečce si appku přizpůsobíš.'),
+  s('settings-checks', 'settings-checks', 'Kontrola účtu a knih', 'V záložce Kontrola účtu uvidíš, co u tvých knih ještě chybí (text, popis, žánr) a jestli máš nastavené krycí jméno. Ve Vzhledu a Čtečce si appku přizpůsobíš.'),
   s('done', 'none', 'To je vše', 'Prohlídku najdeš kdykoli v Nastavení v záložce Prohlídka appky. Ať se daří!'),
 ];
 
+// Správce má kroky čtenáře a navíc krok Administrace těsně před Nastavením.
+const ADMIN_AT = READER_STEPS.findIndex((st) => st.id === 'settings');
 const ADMIN_STEPS = [
-  ...READER_STEPS.slice(0, 7),
+  ...READER_STEPS.slice(0, ADMIN_AT),
   s('admin', 'nav-admin', 'Administrace', 'Správa účtů, knih, domovské stránky a také této prohlídky. Otevřená upozornění mají u záložky číslo.'),
-  ...READER_STEPS.slice(7),
+  ...READER_STEPS.slice(ADMIN_AT),
 ];
 
 const DEFAULT_SETS = { reader: READER_STEPS, publisher: PUBLISHER_STEPS, admin: ADMIN_STEPS };
