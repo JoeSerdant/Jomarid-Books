@@ -14,7 +14,7 @@ import { InstallNote, InstallPopup } from '../pwa/InstallParts';
 import {
   Book, BookOpen, ChevronRight, Coins, Flame, Library, Mail,
   ShieldCheck, Sparkles, Zap, Footprints,
-  Rocket, Swords, Building2, Target, Crown, ArrowRight, Feather, Calendar, Gamepad2,
+  Rocket, Swords, Building2, Target, Crown, Smile, ArrowRight, Feather, Calendar, Gamepad2,
   Type, Bookmark, Star, MessageCircle, Trophy, Loader2, TrendingUp, BarChart3,
 } from 'lucide-react';
 
@@ -50,6 +50,7 @@ const GAMES_PREVIEW = [
   { icon: Building2, title: 'City Clicker', tagline: 'Vybuduj si vlastní město klikáním.', detail: 'Čtyři zcela odlišné vizuální styly na výběr - stejné město, jiná nálada.' },
   { icon: Target, title: 'Polygon aréna', tagline: 'Rozstřílej tvary, poskládej si stavbu z více než 500 tanků a přežij mezi chytrými boty.', detail: 'Osm režimů od vln nepřátel po zužující se bouři a obtížnost až do Pekla.' },
   { icon: Crown, title: 'Chess League', tagline: 'Šachy proti pěti botům s vlastní osobností - skutečný Elo rating, hodiny, nápověda, rozbor partie a ligový postup.', detail: 'Silnější soupeře si odemykáte postupně, výhrou za výhrou.' },
+  { icon: Smile, title: 'Kouloví Kámoši', tagline: 'Pouštěj do misky měkké koule a spojuj stejné, ať vyroste ta největší.', detail: 'Pět režimů od klasiky po zemětřesení a obchod s vylepšeními za herní mince.' },
 ];
 
 const COIN_SOURCES = [
@@ -71,7 +72,7 @@ const THEME_COUNT = Object.keys(THEME_LABELS).length;
 const DEFAULT_SETTINGS = {
   homepage_hero: {
     headline: 'Otevřete knihu a sledujte, jak stoupá vaše úroveň',
-    subtitle: `Tři originální knižní řady, ${BADGE_COUNT} ${plural(BADGE_COUNT, 'sběratelský odznak', 'sběratelské odznaky', 'sběratelských odznaků')} a vlastní herní měna, kterou si vyděláte čtením - nebo si mezitím zahrajete jednu z pěti miniher.`,
+    subtitle: `Tři originální knižní řady, ${BADGE_COUNT} ${plural(BADGE_COUNT, 'sběratelský odznak', 'sběratelské odznaky', 'sběratelských odznaků')} a vlastní herní měna, kterou si vyděláte čtením - nebo si mezitím zahrajete jednu ze šesti miniher.`,
   },
   homepage_featured_books: { book_ids: [] },
   homepage_font_demo: {
@@ -524,7 +525,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
          ============================================================ */}
       <section style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border-y py-20">
         <div className="max-w-5xl mx-auto px-4">
-          <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">Pět miniher, jedna herní měna</h2>
+          <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">Šest miniher, jedna herní měna</h2>
           <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed max-w-lg mb-10">
             Odskočte si od čtení, kdykoliv budete chtít. Za zahrání si navíc jednou denně připíšete
             bonusové Jomarid Coins - stejné mince, za které kupujete knihy.
@@ -706,7 +707,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
         <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="p-6 rounded-2xl border shadow-sm space-y-2">
           <FaqItem question="Jak funguje systém gamifikace a získávání odznaků?" answer={`XP sbíráte za dočtené knihy (víc při splněných vyšších měsíčních cílech), za denní sérii a za odznaky. Podmínky odznaků se vyhodnotí, když otevřete Statistiky - tam hned uvidíte nově odemčené odznaky z celkové sbírky ${BADGES_TEXT}.`} />
           <FaqItem question="Jak získám přístup ke konkrétním knihám?" answer="V knihovně vidíte celý katalog i knihy, které ještě nevlastníte. Klikem na knihu otevřete její detail s popisem, hodnocením a komentáři - a rovnou si ji tam koupíte za Jomarid Coins. Přístup se odemkne okamžitě." />
-          <FaqItem question="Co jsou ty minihry a musím je hrát?" answer="Vůbec ne - je to pět volitelných her v samostatné sekci appky, čistě pro zábavu mimo čtení. Když si zahrajete alespoň chvilku, dostanete jednou denně bonusové Jomarid Coins navrch." />
+          <FaqItem question="Co jsou ty minihry a musím je hrát?" answer="Vůbec ne - je to šest volitelných her v samostatné sekci appky, čistě pro zábavu mimo čtení. Když si zahrajete alespoň chvilku, dostanete jednou denně bonusové Jomarid Coins navrch." />
           <FaqItem question="Jak funguje Streak Freeze?" answer={`Koupíte si ho v sekci Statistiky za ${STREAK_FREEZE_PRICE} Jomarid Coins. Jakmile ho vlastníte, jeden zmeškaný den se automaticky počítá jako pokrytý a vaše série se nepřeruší.`} />
           <FaqItem question="Musím něco stahovat nebo instalovat?" answer="Nemusíte. Jomarid Books funguje ve webovém prohlížeči na počítači, tabletu i telefonu. Chcete-li, přidejte si ji na plochu jako aplikaci (Nastavení → Aplikace). Na iPhonu je to potřeba pro oznámení." />
           <FaqItem question="Pamatuje si systém, kde jsem přestal číst?" answer="Ano. Vaše přesná pozice v otevřené knize se ukládá do cloudu, takže můžete plynule navázat na mobilu přesně tam, kde jste skončili na počítači." />

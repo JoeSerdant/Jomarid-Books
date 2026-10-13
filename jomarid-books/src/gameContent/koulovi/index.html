@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kouloví Kámoši</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&display=swap" rel="stylesheet">
+<style>
+/*__CSS__*/
+</style>
+<script>/* JOMARID-BRIDGE */
+(function () {
+  var GAME_ID = 'koulovikamosi';
+  var inFrame = false;
+  try { inFrame = !!window.parent && window.parent !== window; } catch (e) { inFrame = false; }
+  var pending = 0, reasons = {}, timer = null, capNotified = false;
+
+  function toast(text, warn) {
+    try {
+      var el = document.createElement('div');
+      el.textContent = text;
+      el.setAttribute('style', 'position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-20px);z-index:2147483000;pointer-events:none;padding:9px 16px;border-radius:999px;font:800 13px system-ui,-apple-system,Segoe UI,sans-serif;letter-spacing:.3px;white-space:nowrap;opacity:0;transition:opacity .25s,transform .25s;box-shadow:0 6px 24px rgba(0,0,0,.35);color:' + (warn ? '#e5e7eb' : '#1a1200') + ';background:' + (warn ? 'rgba(55,65,81,.95)' : 'linear-gradient(135deg,#ffd76a,#f59e0b)') + ';');
+      document.documentElement.appendChild(el);
+      requestAnimationFrame(function () { el.style.opacity = '1'; el.style.transform = 'translateX(-50%) translateY(0)'; });
+      setTimeout(function () { el.style.opacity = '0'; setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 300); }, 2600);
+    } catch (e) {}
+  }
+
+  function flush() {
+    timer = null;
+    if (!pending || !inFrame) { pending = 0; reasons = {}; return; }
+    var top = 'event', topAmt = 0;
+    for (var k in reasons) { if (reasons[k] > topAmt) { top = k; topAmt = reasons[k]; } }
+    var amount = pending; pending = 0; reasons = {};
+    try { window.parent.postMessage({ source: 'jomarid-game', type: 'coin', game: GAME_ID, amount: amount, reason: top }, '*'); } catch (e) {}
+  }
+
+  // Hra jen POSILA ZADOST o odmenu - o tom, kolik Jomarid Coins se skutecne udeli,
+  // rozhoduje server (denni stropy). Vice udalosti v rychlem sledu se sloucí do jedne zpravy.
+  window.jomaridReward = function (reason, amount, immediate) {
+    if (!inFrame) return;
+    amount = Math.floor(Number(amount));
+    if (!isFinite(amount) || amount < 1) return;
+    var r = reason || 'event';
+    pending += amount;
+    reasons[r] = (reasons[r] || 0) + amount;
+    if (immediate) { if (timer) clearTimeout(timer); flush(); }
+    else if (!timer) { timer = setTimeout(flush, 1200); }
+  };
+
+  window.addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (!d || d.source !== 'jomarid-host' || d.type !== 'coin-result') return;
+    if (ev.source !== window.parent) return;
+    if (d.granted > 0) toast('\uD83D\uDD36 +' + d.granted + ' Jomarid Coins');
+    else if (d.capped && !capNotified) { capNotified = true; toast('\uD83D\uDD36 Denn\u00ED limit odm\u011Bn z t\u00E9to hry je vy\u010Derp\u00E1n', true); }
+  });
+
+  window.addEventListener('pagehide', function () { if (timer) clearTimeout(timer); flush(); });
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target.closest('#btn-back-to-jomarid') : null;
+    if (t) { if (timer) clearTimeout(timer); flush(); }
+  }, true);
+})();
+</script>
+</head>
+<body>
+<div id="stage">
+<canvas id="c" width="540" height="960"></canvas>
+<div id="menu" class="ov">
+ <h1>Kouloví<br>Kámoši</h1>
+ <div class="mas" id="mas"></div><div style="font-size:1.8em">🪙 <b id="cn">0</b></div>
+ <div class="stats"><h2>MOJE STATISTIKY</h2>
+  <div class="row"><div><b id="sT">0</b><i>Dnes</i></div><div><b id="sW">0</b><i>Tento týden</i></div><div><b id="sA">0</b><i>Celkem</i></div></div>
+  <div class="small">Her: <span id="sG">0</span> · Sloučení: <span id="sM">0</span></div></div>
+ <button id="cont" class="hide" style="background:#5be04a;font-size:1.8em">Pokračovat</button><button id="play">Hrát</button><button id="shopb" class="sec">Obchod</button><button id="snd" class="sec" style="font-size:1.1em">🔊</button>
+</div>
+<div id="modes" class="ov hide"><h1 style="font-size:3em">Herní módy</h1><div id="ml" class="stats" style="background:#2f95ea;width:22em"></div><button id="mback" class="sec">Zpět</button></div>
+<div id="shop" class="ov hide"><h1 style="font-size:3em">Obchod</h1><div style="font-size:1.8em">🪙 <b id="cn2">0</b></div><div id="items" class="stats" style="background:#2f95ea"></div><button id="shopx" class="sec">Zpět</button></div>
+<div id="over" class="ov over hide">
+ <h1 id="oT" style="font-size:3.4em">Konec hry</h1>
+ <div style="font-size:2.4em">Skóre: <b id="oS">0</b></div>
+ <div id="oB" style="font-size:1.6em;color:#ffd92e"></div>
+ <button id="again">Znovu</button><button id="tomenu" class="sec">Menu</button>
+</div>
+</div>
+<!--__SCRIPTS__-->
+</body>
+</html>
