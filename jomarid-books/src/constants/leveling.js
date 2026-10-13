@@ -11,8 +11,6 @@ export const calculateXpMultiplier = (streakCount) => {
 };
 
 export const calculateLevelAndProgress = (totalXp) => {
-  if (totalXp >= 1000000) return { level: 100, xpInCurrentLevel: 100, xpNeededForNext: 100 };
-
   const getRequiredXp = (lvl) => (lvl <= 1 ? 0 : Math.round(100 * Math.pow(1.5, lvl - 1)));
 
   let currentLevel = 1;

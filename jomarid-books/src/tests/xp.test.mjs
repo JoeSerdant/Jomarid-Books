@@ -45,7 +45,10 @@ describe('společný výpočet XP', () => {
     assert.deepEqual(calculateLevelAndProgress(0), { level: 1, xpInCurrentLevel: 0, xpNeededForNext: 150 });
     assert.deepEqual(calculateLevelAndProgress(149), { level: 1, xpInCurrentLevel: 149, xpNeededForNext: 150 });
     assert.deepEqual(calculateLevelAndProgress(150), { level: 2, xpInCurrentLevel: 0, xpNeededForNext: 75 });
-    assert.deepEqual(calculateLevelAndProgress(1000000), { level: 100, xpInCurrentLevel: 100, xpNeededForNext: 100 });
+    // milion XP už není zkratka na úroveň 100: křivka pokračuje plynule (úroveň 24 začíná kolem 1,12 milionu)
+    assert.deepEqual(calculateLevelAndProgress(1000000), { level: 23, xpInCurrentLevel: 251817, xpNeededForNext: 374091 });
+    assert.deepEqual(calculateLevelAndProgress(1200000), { level: 24, xpInCurrentLevel: 77726, xpNeededForNext: 561137 });
+    assert.equal(calculateLevelAndProgress(1e9).level, 40);
   });
 
   test('computeTotalXp má pevné součty', () => {

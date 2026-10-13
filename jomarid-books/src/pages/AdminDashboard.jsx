@@ -1387,9 +1387,8 @@ export const AdminDashboard = () => {
 
   const handleSaveFakeXp = async () => {
     if (!activeUser) return;
-    let xpNum = parseInt(userFakeXpInput) || 0;
-    if (xpNum >= 1000000) xpNum = 1000000;
-    
+    const xpNum = Math.max(0, parseInt(userFakeXpInput, 10) || 0);
+
     setActionLoading(true);
     const { error } = await supabase.from('profiles').update({ fake_xp: xpNum }).eq('id', activeUser.id);
 
@@ -2223,7 +2222,7 @@ export const AdminDashboard = () => {
                           <div className="truncate text-sm font-black">{p.email}</div>
                           {p.fake_xp > 0 && (
                             <div className="text-[0.625rem] font-black flex items-center gap-1 mt-0.5" style={{ color: 'var(--bg-primary)' }}>
-                              <Award size={10}/> {p.fake_xp >= 1000000 ? "Level 100 (Max)" : `+${p.fake_xp} Admin XP`}
+                              <Award size={10}/> {`+${p.fake_xp} Admin XP`}
                             </div>
                           )}
                         </td>
@@ -2365,7 +2364,6 @@ export const AdminDashboard = () => {
                           Uložit XP
                         </button>
                       </div>
-                      <span className="text-[0.5625rem] opacity-40 font-bold block">* Zadej hodnotu ≥ 1 000 000 pro okamžitý skok na Level 100.</span>
                     </div>
 
                     <div style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-color)' }} className="p-3 rounded-xl space-y-2 border border-solid">
