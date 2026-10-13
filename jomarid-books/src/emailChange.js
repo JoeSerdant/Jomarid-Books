@@ -1,6 +1,7 @@
 // Změna e-mailu přes správce: čistá logika (bez Reactu) pro Nastavení a Admin. Funkce v databázi: db/email-change.sql.
 
-export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Stejný výraz jako v db/email-change.sql: tečky jen mezi částmi domény (ne na začátku, na konci ani dvě za sebou).
+export const EMAIL_RE = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
 export const EMAIL_MAX = 254;
 
 // Porovnává se vždy bez mezer na krajích a bez ohledu na velikost písmen.
@@ -30,8 +31,8 @@ export const ADMIN_EMAIL_ERRORS = {
   invalid_email: 'Neplatný e-mail.',
   same_email: 'Účet už tenhle e-mail má.',
   email_taken: 'Tenhle e-mail už používá jiný účet.',
-  email_mismatch: 'Žádost mezitím uživatel změnil nebo zrušil. Obnov upozornění.',
-  cannot_change_own_email: 'Vlastní e-mail si změnit nejde - požádej druhého správce, nebo použij SQL Editor v Supabase.',
+  email_mismatch: 'Tenhle e-mail není ten, o který uživatel žádal. Obnov upozornění a zkus to znovu.',
+  cannot_change_own_email: 'Vlastní e-mail si změnit nejde - požádej druhého správce, nebo ho změň v Supabase (Authentication → Users).',
   profile_email_not_synced: 'E-mail se nepodařilo zapsat do profilu, nic se nezměnilo. Zkus to znovu.',
 };
 

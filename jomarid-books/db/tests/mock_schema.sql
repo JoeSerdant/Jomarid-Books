@@ -7,6 +7,8 @@ do $$ begin
   if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated nologin; end if;
 end $$;
 grant usage on schema public to anon, authenticated;
+-- Jako v Supabase: nové funkce v public smí zavolat anon i authenticated, dokud jim to 'revoke' nevezme (test pak pozná, když revoke anon chybí).
+alter default privileges in schema public grant execute on functions to anon, authenticated;
 create schema auth;
 create table auth.users (id uuid primary key, email varchar(255), email_confirmed_at timestamptz, email_change varchar(255), email_change_token_new varchar(255), email_change_token_current varchar(255) default '',
   email_change_sent_at timestamptz, email_change_confirm_status smallint default 0, raw_user_meta_data jsonb, updated_at timestamptz);
@@ -24,7 +26,8 @@ create table public.books (id uuid primary key default gen_random_uuid(), title 
 create table public.user_books (id uuid primary key default gen_random_uuid(), user_id uuid not null, book_id uuid not null, status text, is_read boolean default false, scroll_position numeric(5,2), updated_at timestamptz default now(), first_completed_at timestamptz);
 create table public.user_daily_activity (id bigint generated always as identity primary key, user_id uuid, activity_date date, unique (user_id, activity_date));
 create table public.user_notifications (id uuid primary key default gen_random_uuid(), user_id uuid not null, kind text not null, title text not null, body text, payload jsonb not null default '{}', created_at timestamptz not null default now(), read_at timestamptz);
-create table public.admin_notifications (id uuid primary key default gen_random_uuid(), kind text not null, status text not null default 'open', user_id uuid, title text not null, body text, payload jsonb not null default '{}', created_at timestamptz not null default now(), handled_at timestamptz, handled_by uuid);
+create table public.admin_notifications (id uuid primary key default gen_random_uuid(), kind text not null, status text not null default 'open', user_id uuid, title text not null, body text, payload jsonb not null default '{}', created_at timestamptz not null default now(), handled_at timestamptz, handled_by uuid,
+  constraint admin_notifications_status_check check (status in ('open', 'done', 'dismissed')));
 create table public.system_logs (id bigint generated always as identity primary key, created_at timestamptz not null default now(), log_type text not null, message text not null);
 create function public.app_current_role() returns text language sql stable security definer set search_path to 'public' as $$ select role from public.profiles where id = auth.uid() $$;
 -- Jako ve skutečné databázi: vrátí id přihlášeného správce, jinak vyhodí 'forbidden'.

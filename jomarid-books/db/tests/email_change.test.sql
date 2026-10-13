@@ -55,9 +55,6 @@ delete from public.profiles where id between tt.eu(0) and tt.eu(899);
 delete from auth.identities where user_id between tt.eu(0) and tt.eu(899);
 delete from auth.users where id between tt.eu(0) and tt.eu(899);
 truncate public.admin_notifications, public.user_notifications, public.system_logs, net.calls restart identity;
--- stav jako ve skutečné tabulce: admin_notifications.status smí být jen open / done / dismissed
-alter table public.admin_notifications drop constraint if exists admin_notifications_status_check;
-alter table public.admin_notifications add constraint admin_notifications_status_check check (status in ('open', 'done', 'dismissed'));
 select tt.mk(1, 'admin@x.cz', 'admin', 'správce');
 select tt.mk(2, 'Jana@Example.cz', 'jana', p_meta => '{"email":"Jana@Example.cz","sub":"x"}');
 select tt.mk(3, 'petr@x.cz', 'petr', p_confirmed => null, p_provider_id => 'petr@x.cz');
@@ -69,10 +66,15 @@ select tt.mk(8, 'p8@x.cz', 'profil');
 select tt.mk(9, 'tomas@x.cz', 'tomas');
 select tt.mk(10, 'lenka@x.cz', 'lenka');
 select tt.mk(11, 'marek@x.cz', 'marek');
+-- účty bez profilu (AuthContext ho doplní až při přihlášení): 12 drží e-mail jen v auth.users, 13 se mění
+select tt.mk(12, 'jenusers@x.cz', 'bezprofilu12');
+select tt.mk(13, 'bezprofilu@x.cz', 'bezprofilu13');
+delete from public.profiles where id in (tt.eu(12), tt.eu(13));
+delete from auth.identities where user_id = tt.eu(12);
 -- adresa jen v identitě a adresa jen v profilu cizího účtu
 update auth.identities set identity_data = jsonb_build_object('email', 'ident@x.cz') where user_id = tt.eu(7);
 update public.profiles set email = 'profil@x.cz' where id = tt.eu(8);
--- nedokončená změna e-mailu přes odkaz (stará cesta) u Jany: po změně správcem musí zmizet
+-- nedokončená změna přes odkaz (sloupce email_change*) u Jany: po změně správcem se musí vyčistit
 update auth.users set email_change = 'zbytek@x.cz', email_change_token_new = 'tok1', email_change_token_current = 'tok2', email_change_sent_at = now(), email_change_confirm_status = 1 where id = tt.eu(2);
 -- další (ne e-mailová) identita Evy: změna e-mailu se jí nedotkne
 insert into auth.identities (provider_id, user_id, identity_data, provider) values ('g-123', tt.eu(4), '{"email":"eva@x.cz","sub":"g-123"}', 'google');
@@ -91,7 +93,7 @@ select tt.fails($$select public.my_email_change_request()$$, 'not_authenticated'
 select tt.fails($$select public.cancel_my_email_change_request()$$, 'not_authenticated', 'zrušení žádosti bez přihlášení: not_authenticated');
 select tt.as_eu(2);
 select tt.fails(format('select public.request_email_change(%L)', v), 'invalid_email', 'neplatný e-mail ' || coalesce('„' || left(v, 20) || '“', 'null'))
-  from unnest(array['', '   ', 'bez-zavinace', 'a b@x.cz', 'a@b', 'a@@b.cz', '@x.cz', 'a@.', repeat('a', 250) || '@x.cz', null]) as v;
+  from unnest(array['', '   ', 'bez-zavinace', 'a b@x.cz', 'a@b', 'a@@b.cz', '@x.cz', 'a@.', 'a@b..c', 'a@.b.c', 'a@b.c.', repeat('a', 250) || '@x.cz', null]) as v;
 select tt.fails($$select public.request_email_change('jana@example.cz')$$, 'same_email', 'stejný e-mail jako dosavadní (jiná velikost písmen): same_email');
 select tt.fails($$select public.request_email_change('  JANA@EXAMPLE.CZ ')$$, 'same_email', 'stejný e-mail s mezerami a velkými písmeny: same_email');
 select public.request_email_change('  Nova@Example.CZ ', '  prosím, překlep v původním  ') as r \gset
@@ -160,6 +162,20 @@ select tt.fails($$select public.request_email_change('k5@x.cz')$$, 'too_many_req
 reset role;
 select tt.ok((select count(*) from public.admin_notifications where user_id = tt.eu(5)) = 4, 'limit nezapsal nic navíc');
 
+-- společný strop: nejvýš 200 otevřených žádostí všech uživatelů dohromady
+insert into public.admin_notifications (kind, user_id, title)
+  select 'email_change_request', gen_random_uuid(), 'Zahlcení'
+    from generate_series(1, 199 - (select count(*) from public.admin_notifications where kind = 'email_change_request' and status = 'open')::int);
+select tt.ok((select count(*) from public.admin_notifications where kind = 'email_change_request' and status = 'open') = 199, 'příprava stropu: 199 otevřených žádostí');
+set role authenticated; select tt.as_eu(11);
+select public.request_email_change('marek-strop@x.cz') as r \gset
+select tt.ok((:'r'::jsonb ->> 'ok')::boolean, 'pod stropem (199 otevřených) jde žádost poslat');
+select tt.as_eu(9);
+select tt.fails($$select public.request_email_change('tomas-strop@x.cz')$$, 'too_many_requests', 'při 200 otevřených žádostech všech uživatelů dohromady: too_many_requests');
+reset role;
+delete from public.admin_notifications where kind = 'email_change_request' and (title = 'Zahlcení' or user_id = tt.eu(11));
+select tt.ok((select count(*) from public.admin_notifications where kind = 'email_change_request' and user_id = tt.eu(9)) = 0, 'strop nic nezapsal a úklid vrátil stav před zkouškou');
+
 -- obsazený e-mail: čtenář chybu nedostane, správce uvidí conflict
 set role authenticated; select tt.as_eu(4);
 select public.request_email_change('Drzitel@X.cz') as r \gset
@@ -182,13 +198,14 @@ select tt.as_eu(1);
 select tt.fails(format('select public.admin_change_email(%L, %L)', tt.eu(1), 'nove@x.cz'), 'cannot_change_own_email', 'správce nemění vlastní e-mail: cannot_change_own_email');
 select tt.fails(format('select public.admin_change_email(%L, %L)', tt.eu(999), 'nove@x.cz'), 'user_not_found', 'neznámý účet: user_not_found');
 select tt.fails(format('select public.admin_change_email(%L, %L)', tt.eu(3), v), 'invalid_email', 'admin_change_email: neplatný e-mail ' || coalesce('„' || left(v, 20) || '“', 'null'))
-  from unnest(array['', 'nesmysl', 'a@b', 'a b@x.cz', repeat('a', 250) || '@x.cz', null]) as v;
+  from unnest(array['', 'nesmysl', 'a@b', 'a b@x.cz', 'a@b..c', 'a@.b.c', 'a@b.c.', repeat('a', 250) || '@x.cz', null]) as v;
 select tt.fails(format('select public.admin_change_email(%L, %L)', tt.eu(999), 'nesmysl'), 'invalid_email', 'neplatný e-mail se kontroluje dřív než účet');
 select tt.fails(format('select public.admin_change_email(%L, %L)', tt.eu(2), 'JANA@example.cz'), 'same_email', 'stejný e-mail (jiná velikost písmen): same_email');
 select tt.fails(format('select public.admin_change_email(%L, %L)', tt.eu(3), v), 'email_taken', 'e-mail cizího účtu ' || v || ': email_taken')
   from unnest(array['drzitel@x.cz', 'DRZITEL@x.cz', '  Drzitel@X.cz ']) as v;
 select tt.fails(format('select public.admin_change_email(%L, %L)', tt.eu(3), 'ident@x.cz'), 'email_taken', 'e-mail jen v auth.identities cizího účtu: email_taken');
 select tt.fails(format('select public.admin_change_email(%L, %L)', tt.eu(3), 'Profil@x.cz'), 'email_taken', 'e-mail jen v profiles cizího účtu: email_taken');
+select tt.fails(format('select public.admin_change_email(%L, %L)', tt.eu(3), 'JenUsers@x.cz'), 'email_taken', 'e-mail jen v auth.users cizího účtu (bez identity a profilu): email_taken');
 select tt.fails(format('select public.admin_change_email(%L, %L, %L)', tt.eu(4), 'drzitel@x.cz', tt.req_id(4)), 'email_taken', 'žádost s obsazeným e-mailem (conflict) nejde provést: email_taken');
 select tt.fails(format('select public.admin_change_email(%L, %L, %L)', tt.eu(3), 'petr-new@x.cz', gen_random_uuid()), 'notification_not_found', 'neexistující upozornění: notification_not_found');
 select tt.fails(format('select public.admin_change_email(%L, %L, %L)', tt.eu(3), 'other@example.cz', tt.req_id(2)), 'notification_not_found', 'upozornění jiného uživatele: notification_not_found');
@@ -196,7 +213,7 @@ reset role;
 insert into public.admin_notifications (kind, user_id, title) values ('password_help', tt.eu(3), 'Žádost o heslo');
 set role authenticated; select tt.as_eu(1);
 select tt.fails(format('select public.admin_change_email(%L, %L, %L)', tt.eu(3), 'petr-new@x.cz', tt.req_id(3)), 'email_mismatch', 'e-mail v žádosti se musí shodovat s tím, co správce zadá: email_mismatch');
-select tt.fails(format('select public.admin_change_email(%L, %L, %L)', tt.eu(2), 'jiny@example.cz', tt.req_id(2)), 'email_mismatch', 'žádost nahrazená novou s jiným e-mailem: email_mismatch');
+select tt.fails(format('select public.admin_change_email(%L, %L, %L)', tt.eu(2), 'jiny@example.cz', tt.req_id(2)), 'email_mismatch', 'správce zadá jiný e-mail, než o jaký žádost je (čeká other@example.cz): email_mismatch');
 select tt.fails(format('select public.admin_change_email(%L, %L, %L)', tt.eu(5), 'karel-nove@x.cz', tt.req_id(5)), 'already_handled', 'už vyřízená (zrušená) žádost: already_handled');
 reset role;
 select tt.fails(format('select public.admin_change_email(%L, %L, %L)', tt.eu(3), 'petr-new@x.cz', (select id from public.admin_notifications where kind = 'password_help')), 'notification_not_found', 'upozornění jiného druhu: notification_not_found');
@@ -333,6 +350,13 @@ select public.admin_reject_email_change(tt.req_id(11), '  Tuhle schránku nemá�
 reset role;
 select tt.ok((select count(*) = 1 and bool_and(body = 'Tuhle schránku nemáš ověřenou.') from public.user_notifications where user_id = tt.eu(11) and kind = 'email_change_rejected'), 'zadaný důvod se čtenáři předá (oříznutý o mezery)');
 select tt.ok((select count(*) from public.user_notifications where user_id = tt.eu(11)) = 1 and (select count(*) from public.user_notifications where user_id = tt.eu(2) and kind = 'email_change_rejected') = 0, 'upozornění o zamítnutí dostane jen autor žádosti');
+
+-- účet bez profilu: e-mail se změní, profil se nevytvoří, v deníku je zkrácené id místo uživatelského jména
+set role authenticated; select tt.as_eu(1);
+select public.admin_change_email(tt.eu(13), 'bezprofilu-new@x.cz');
+reset role;
+select tt.ok((select email = 'bezprofilu-new@x.cz' from auth.users where id = tt.eu(13)) and not exists (select 1 from public.profiles where id = tt.eu(13)), 'účet bez profilu: e-mail se změní a profil se nevytvoří');
+select tt.ok((select message from public.system_logs order by id desc limit 1) = 'Správce změnil e-mail účtu „00000000“.', 'účet bez profilu: v deníku je zkrácené id místo uživatelského jména');
 
 -- ===== oprávnění =====
 select tt.ok((select bool_and(not has_function_privilege('anon', s, 'execute') and has_function_privilege('authenticated', s, 'execute'))

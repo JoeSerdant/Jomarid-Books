@@ -169,7 +169,7 @@ insert into public.user_notifications (user_id, kind, title, body) values (pg_te
 select pg_temp.ok((select body->>'audience' = 'user' and (body->>'user_id')::uuid = pg_temp.u(20) and body->>'title' = 'Dostal jsi knihu' and body->>'url' = '/settings/notifications' and body->>'kind' is null from net.calls order by id desc limit 1), 'oznámení čtenáře: spouštěč pošle titulek, text a cíl');
 truncate net.calls restart identity;
 insert into public.admin_notifications (kind, status, title, body) values ('password_help', 'open', 'Žádost o heslo', 'Uživatel pomoc');
-insert into public.admin_notifications (kind, status, title, body) values ('x', 'handled', 'Vyřízené', null);
+insert into public.admin_notifications (kind, status, title, body) values ('x', 'done', 'Vyřízené', null);
 select pg_temp.ok((select count(*) from net.calls) = 1 and (select body->>'audience' from net.calls) = 'admins' and (select body->>'url' from net.calls) = '/admin', 'otevřené upozornění správci: jedno volání pro správce; vyřízené nic');
 
 truncate net.calls restart identity;

@@ -659,7 +659,7 @@ export const ChangeEmailDialog = ({ target, onClose, onDone }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[130] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3" onClick={() => { if (!busy) onClose(); }}>
+    <div className="fixed inset-0 z-[130] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3" onClick={(e) => { e.stopPropagation(); if (!busy) onClose(); }}>
       <div
         role="dialog"
         aria-modal="true"
@@ -891,7 +891,7 @@ export const NotificationsTab = ({ onCountChange, currentUserId, onOpenAccount, 
         const isPassword = n.kind === 'password_request';
         const isEmail = n.kind === EMAIL_REQUEST_KIND;
         const isOwnRequest = !!u && u.id === currentUserId;
-        const ownRequestTitle = isOwnRequest ? 'Vlastní žádost nevyřídíš - nech to na druhém správci.' : undefined;
+        const ownRequestTitle = isOwnRequest ? 'Vlastní žádost nevyřídíš - nech to na druhém správci, nebo ji zruš v Nastavení → Zrušit žádost.' : undefined;
         return (
           <div key={n.id} data-testid="notification">
           <Card className="space-y-3">
@@ -925,7 +925,7 @@ export const NotificationsTab = ({ onCountChange, currentUserId, onOpenAccount, 
                 <span style={{ color: 'var(--text-muted)' }} className="font-bold">Nový e-mail: </span><b className="break-all">{n.payload?.new_email || '-'}</b>
               </p>
             )}
-            {isEmail && n.status === 'open' && n.payload?.conflict && <InlineMessage type="error">Tenhle e-mail už používá jiný účet, změnu nepůjde provést.</InlineMessage>}
+            {isEmail && n.status === 'open' && n.payload?.conflict && <InlineMessage type="error">V době žádosti tenhle e-mail už používal jiný účet - změna se nejspíš nepovede.</InlineMessage>}
             {isEmail && n.status === 'dismissed' && n.payload?.cancelled && <InlineMessage>Uživatel žádost zrušil.</InlineMessage>}
 
             {n.body && <p style={{ backgroundColor: 'var(--bg-secondary)' }} className="text-sm m-0 rounded-lg px-3 py-2 leading-relaxed whitespace-pre-wrap break-words">„{n.body}“</p>}
@@ -1166,7 +1166,7 @@ export const LogsTab = ({ download = downloadTextFile }) => {
   );
 };
 
-export const AccountsTab = ({ currentUserId, preset, onChanged }) => {
+export const AccountsTab = ({ currentUserId, preset, onChanged, onPresetEmailChanged }) => {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [role, setRole] = useState('all');
@@ -1282,6 +1282,7 @@ export const AccountsTab = ({ currentUserId, preset, onChanged }) => {
           onEmailChanged={(oldEmail, newEmail) => {
             // Hledání podle starého e-mailu by už účet nenašlo.
             if (newEmail && sameEmail(searchInput, oldEmail)) { setSearchInput(newEmail); setSearch(newEmail); setPage(0); }
+            onPresetEmailChanged?.(oldEmail, newEmail); // předvolba z Upozornění by po návratu na záložku hledala starý e-mail
           }}
         />
       )}
@@ -1305,6 +1306,13 @@ export const AdminDashboard = () => {
       if (!error && typeof data === 'number') setPendingCount(data);
     })();
   }, []);
+  // Změna e-mailu z detailu účtu uzavře i otevřenou žádost toho uživatele: odznak v záložce a v liště se přepočítá.
+  const refreshPending = async () => {
+    const { data, error } = await supabase.rpc('admin_open_notifications_count');
+    if (error || typeof data !== 'number') return;
+    setPendingCount(data);
+    window.dispatchEvent(new CustomEvent('jomarid-admin-notifications', { detail: data }));
+  };
   const { user: adminUser } = useAuth();
   const [accountsPreset, setAccountsPreset] = useState(null); // filtr předaný z Přehledu do záložky Účty
   const [bulkGrantOpen, setBulkGrantOpen] = useState(false); // potvrzení hromadného rozdání knihy
@@ -1964,7 +1972,12 @@ export const AdminDashboard = () => {
       )}
 
       {activeTab === 'accounts' && (
-        <AccountsTab currentUserId={adminUser?.id} preset={accountsPreset} onChanged={refreshData} />
+        <AccountsTab
+          currentUserId={adminUser?.id}
+          preset={accountsPreset}
+          onChanged={() => { refreshData(); refreshPending(); }}
+          onPresetEmailChanged={(oldEmail, newEmail) => setAccountsPreset(p => (p && oldEmail && sameEmail(p.search, oldEmail) ? { ...p, search: newEmail } : p))}
+        />
       )}
 
       {/* ZÁLOŽKA: SPRÁVA KNIH */}

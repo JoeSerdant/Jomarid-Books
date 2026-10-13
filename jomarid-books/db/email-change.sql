@@ -3,8 +3,9 @@
 -- Předpoklady, které v databázi už jsou: tabulky profiles, admin_notifications, user_notifications, system_logs, funkce notif_require_admin()
 -- a trigger trg_sync_profile_email na auth.users (kopíruje změněný e-mail do profiles.email).
 --
--- Uživatel zůstane po změně přihlášený, heslo se nemění. Změna e-mailu přes Nastavení (odkaz v e-mailu) z appky zmizela;
--- zavolat ji jde jen přímo přes API, a vyžaduje potvrzení odkazem z nové schránky.
+-- Uživatel zůstane po změně přihlášený, heslo se nemění. Appka e-mail neumí změnit sama, jen přes žádost správci.
+-- Supabase Auth ale e-mail přes API (updateUser) změnit umí; jestli to chce potvrzení odkazem z nové schránky, záleží na nastavení
+-- projektu (Authentication → Providers → Email: Confirm email, Secure email change). Tenhle soubor tu cestu neblokuje (to by chtělo spouštěč na auth.users).
 
 -- Nejvýš jedna otevřená žádost na uživatele (chrání i před dvěma souběžnými žádostmi).
 create unique index if not exists admin_notifications_one_open_email_request
@@ -24,7 +25,7 @@ declare
   v_id uuid;
 begin
   if v_uid is null then raise exception 'not_authenticated'; end if;
-  if char_length(v_new) > 254 or v_new !~ '^[^\s@]+@[^\s@]+\.[^\s@]+$' then raise exception 'invalid_email'; end if;
+  if char_length(v_new) > 254 or v_new !~ '^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$' then raise exception 'invalid_email'; end if;
   select email into v_old from auth.users where id = v_uid;
   if not found then raise exception 'not_authenticated'; end if;
   if lower(coalesce(v_old, '')) = v_new then raise exception 'same_email'; end if;
@@ -33,6 +34,10 @@ begin
   end if;
   if (select count(*) from public.admin_notifications
        where user_id = v_uid and kind = 'email_change_request' and created_at > now() - interval '24 hours') >= 3 then
+    raise exception 'too_many_requests';
+  end if;
+  -- Strop otevřených žádostí všech uživatelů dohromady (aby spousta účtů nezahltila správce upozorněními).
+  if (select count(*) from public.admin_notifications where kind = 'email_change_request' and status = 'open') >= 200 then
     raise exception 'too_many_requests';
   end if;
   -- Obsazený e-mail se čtenáři neprozradí (jinak by šlo zjišťovat, kdo je zaregistrovaný); upozornění to dostane jen správce.
@@ -87,7 +92,7 @@ declare
   v_req public.admin_notifications%rowtype;
 begin
   if p_user = v_admin then raise exception 'cannot_change_own_email'; end if;
-  if char_length(v_new) > 254 or v_new !~ '^[^\s@]+@[^\s@]+\.[^\s@]+$' then raise exception 'invalid_email'; end if;
+  if char_length(v_new) > 254 or v_new !~ '^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$' then raise exception 'invalid_email'; end if;
   select email into v_old from auth.users where id = p_user for update;
   if not found then raise exception 'user_not_found'; end if;
   if lower(coalesce(v_old, '')) = v_new then raise exception 'same_email'; end if;
@@ -103,7 +108,7 @@ begin
     select * into v_req from public.admin_notifications where id = p_notification for update;
     if not found or v_req.kind <> 'email_change_request' or v_req.user_id is distinct from p_user then raise exception 'notification_not_found'; end if;
     if v_req.status <> 'open' then raise exception 'already_handled'; end if;
-    -- žádost se mezitím mohla zrušit a nahradit novou s jiným e-mailem
+    -- správce zadal jiný e-mail, než o jaký čtenář v téhle žádosti požádal
     if lower(coalesce(v_req.payload ->> 'new_email', '')) <> v_new then raise exception 'email_mismatch'; end if;
   end if;
 

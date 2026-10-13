@@ -43,11 +43,11 @@ describe('čisté funkce', () => {
   });
 
   test('isValidEmail: platné adresy', () => {
-    for (const ok of ['a@b.cz', ' A@B.CZ ', 'jan.novak+knihy@sub.example.com', 'a@b.c']) assert.equal(isValidEmail(ok), true, ok);
+    for (const ok of ['a@b.cz', ' A@B.CZ ', 'jan.novak+knihy@sub.example.com', 'a@b.c', 'a.b+tag@sub.example.co.uk', 'x@y.cz']) assert.equal(isValidEmail(ok), true, ok);
   });
 
   test('isValidEmail: neplatné adresy', () => {
-    for (const bad of ['', '   ', 'abc', 'a@b', 'a@.', '@b.cz', 'a@', 'a b@c.cz', 'a@b c.cz', 'a@@b.cz', null, undefined]) {
+    for (const bad of ['', '   ', 'abc', 'a@b', 'a@.', '@b.cz', 'a@', 'a b@c.cz', 'a@b c.cz', 'a@@b.cz', 'a@b..c', 'a@.b.c', 'a@b.c.', null, undefined]) {
       assert.equal(isValidEmail(bad), false, String(bad));
     }
   });
@@ -134,6 +134,14 @@ describe('shoda SQL a klienta', () => {
     }
   });
 
+  test('regulární výraz e-mailu v SQL je stejný jako EMAIL_RE', () => {
+    for (const fn of ['request_email_change', 'admin_change_email']) {
+      const m = bodies[fn].match(/v_new !~ '([^']*)'/);
+      assert.ok(m, `${fn}: chybí kontrola e-mailu regulárním výrazem`);
+      assert.equal(m[1], EMAIL_RE.source, fn);
+    }
+  });
+
   test('kódy chyb žádosti čtenáře jsou v REQUEST_ERRORS', () => {
     for (const fn of ['request_email_change', 'my_email_change_request', 'cancel_my_email_change_request']) {
       for (const code of codesOf(fn)) assert.ok(code in REQUEST_ERRORS, `${fn}: ${code}`);
@@ -147,6 +155,7 @@ describe('shoda SQL a klienta', () => {
     const adminText = stripJsComments(read('src/pages/AdminDashboard.jsx'));
     const block = adminText.match(/const ADMIN_ERRORS = \{([\s\S]*?)\n\};/);
     assert.ok(block, 'v AdminDashboard.jsx chybí ADMIN_ERRORS');
+    assert.match(block[1], /\.\.\.ADMIN_EMAIL_ERRORS/, 'ADMIN_ERRORS nezahrnuje ADMIN_EMAIL_ERRORS');
     const adminCodes = new Set([...block[1].matchAll(/^\s*(\w+)\s*:/gm)].map((m) => m[1]));
     for (const code of EXISTING_ADMIN_CODES) assert.ok(adminCodes.has(code), `ADMIN_ERRORS nemá ${code}`);
     for (const fn of ['admin_change_email', 'admin_reject_email_change']) {
@@ -231,7 +240,7 @@ describe('shoda klienta', () => {
       assert.match(settings, new RegExp(`rpc\\('${fn}'`), fn);
     }
     assert.match(settings, /from '\.\.\/emailChange'/);
-    assert.match(settings, /verifyPassword\(user\.email, emailPw\)/);
+    assert.match(settings, /verifyPassword\(await currentEmail\(\), emailPw\)/);
   });
 
   test('doručená pošta má ikony pro oba druhy oznámení o e-mailu', () => {

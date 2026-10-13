@@ -322,18 +322,27 @@ const SecurityTab = ({ user }) => {
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailMsg, setEmailMsg] = useState(null);
   const [cancelBusy, setCancelBusy] = useState(false);
-  // poslední žádost o změnu e-mailu tohoto účtu (null, když žádná není nebo funkce v databázi chybí)
-  const [emailRequest, setEmailRequest] = useState(null);
+  // poslední žádost o změnu e-mailu tohoto účtu (undefined, dokud nepřijde první odpověď; null, když žádná není nebo funkce v databázi chybí)
+  const [emailRequest, setEmailRequest] = useState(undefined);
+  const [emailLoadFailed, setEmailLoadFailed] = useState(false);
   const alive = useRef(true);
 
   const loadEmailRequest = async () => {
     const { data, error } = await supabase.rpc('my_email_change_request');
     if (!alive.current) return;
     if (error) {
-      if (isMissingRpc(error)) setEmailRequest(null);
+      if (isMissingRpc(error)) { setEmailLoadFailed(false); setEmailRequest(null); }
+      else setEmailLoadFailed(true);
       return;
     }
+    setEmailLoadFailed(false);
     setEmailRequest(data || null);
+  };
+
+  const retryEmailRequest = () => {
+    setEmailLoadFailed(false);
+    setEmailRequest(undefined);
+    loadEmailRequest();
   };
 
   useEffect(() => {
@@ -349,6 +358,14 @@ const SecurityTab = ({ user }) => {
   const [signOutBusy, setSignOutBusy] = useState(false);
   const [signOutMsg, setSignOutMsg] = useState(null);
 
+  // Správce mohl e-mail změnit, zatímco je relace otevřená: pro kontrolu hesla ho proto bereme ze serveru.
+  const currentEmail = async () => {
+    try {
+      const { data } = await supabase.auth.getUser();
+      return data?.user?.email || user.email;
+    } catch { return user.email; }
+  };
+
   const changePassword = async (e) => {
     e.preventDefault();
     setPwMsg(null);
@@ -357,7 +374,7 @@ const SecurityTab = ({ user }) => {
     if (problem) return setPwMsg({ type: 'error', text: problem });
     setPwBusy(true);
     try {
-      if (!(await verifyPassword(user.email, curPw))) return setPwMsg({ type: 'error', text: 'Současné heslo nesedí.' });
+      if (!(await verifyPassword(await currentEmail(), curPw))) return setPwMsg({ type: 'error', text: 'Současné heslo nesedí.' });
       const { error } = await supabase.auth.updateUser({ password: newPw });
       if (error) return setPwMsg({ type: 'error', text: mapAuthError(error) });
       setCurPw(''); setNewPw(''); setConfPw('');
@@ -375,14 +392,15 @@ const SecurityTab = ({ user }) => {
     if (!emailPw) return setEmailMsg({ type: 'error', text: 'Pro potvrzení zadej své heslo.' });
     setEmailBusy(true);
     try {
-      if (!(await verifyPassword(user.email, emailPw))) return setEmailMsg({ type: 'error', text: 'Heslo nesedí.' });
+      if (!(await verifyPassword(await currentEmail(), emailPw))) return setEmailMsg({ type: 'error', text: 'Heslo nesedí.' });
       const { error } = await supabase.rpc('request_email_change', { p_new_email: normalizeEmail(newEmail), p_note: emailNote.trim() });
       if (error) {
         if (isMissingRpc(error)) return setEmailMsg({ type: 'error', text: 'Změna e-mailu teď není dostupná. Zkus to později.' });
+        if (String(error.message || '').includes('request_already_open')) await loadEmailRequest();
         return setEmailMsg({ type: 'error', text: explainEmailError(error, REQUEST_ERRORS, 'Žádost se nepodařilo odeslat. Zkus to znovu.') });
       }
       setNewEmail(''); setEmailPw(''); setEmailNote('');
-      setEmailMsg({ type: 'success', text: 'Žádost je u správce. Až e-mail změní, objeví se tu oznámení a příště se přihlásíš novým. Do té doby se přihlašuj dál současným. Odpověď může chvíli trvat, žádost neposílej víckrát.' });
+      setEmailMsg({ type: 'success', text: 'Žádost je u správce. Až e-mail změní, objeví se oznámení v Nastavení → Oznámení a příště se přihlásíš novým. Do té doby se přihlašuj dál současným. Odpověď může chvíli trvat, žádost neposílej víckrát.' });
       await loadEmailRequest();
     } finally { if (alive.current) setEmailBusy(false); }
   };
@@ -406,7 +424,7 @@ const SecurityTab = ({ user }) => {
     setResetMsg(null);
     setResetBusy(true);
     try {
-      const { error } = await supabase.rpc('request_password_help', { p_email: user.email, p_username: accountName || '', p_note: 'Žádost z Nastavení (uživatel je přihlášený).' });
+      const { error } = await supabase.rpc('request_password_help', { p_email: await currentEmail(), p_username: accountName || '', p_note: 'Žádost z Nastavení (uživatel je přihlášený).' });
       if (error) return setResetMsg({ type: 'error', text: 'Žádost se nepodařilo odeslat. Zkus to znovu.' });
       setResetMsg({ type: 'success', text: 'Žádost je u správce. Až ti vydá dočasné heslo, dostaneš ho od něj mimo aplikaci. Po přihlášení si nastavíš vlastní. Odpověď může chvíli trvat, žádost neposílej víckrát.' });
     } finally { setResetBusy(false); }
@@ -441,7 +459,14 @@ const SecurityTab = ({ user }) => {
       </Section>
 
       <Section title="Změna e-mailu" description={`Teď se přihlašuješ přes ${user.email}. E-mail ti změní správce, stejně jako dočasné heslo: pošli mu žádost.`}>
-        {emailRequest?.status === 'open' ? (
+        {emailLoadFailed ? (
+          <div className="space-y-3">
+            <Notice type="error">Stav žádosti se nepodařilo načíst. Zkus to znovu.</Notice>
+            <ActionButton variant="ghost" onClick={retryEmailRequest}>Zkusit znovu</ActionButton>
+          </div>
+        ) : emailRequest === undefined ? (
+          <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 opacity-80">Načítám…</p>
+        ) : emailRequest?.status === 'open' ? (
           <div className="space-y-3">
             <Notice>Čeká se na správce: žádost o změnu e-mailu na {emailRequest.new_email}.</Notice>
             <ActionButton variant="ghost" busy={cancelBusy} onClick={cancelEmailRequest}>Zrušit žádost</ActionButton>
@@ -1105,7 +1130,7 @@ const InboxTab = () => {
       <PushSettings />
       {error && <Notice type="error">{error}</Notice>}
       {items.length === 0 ? (
-        <p style={{ color: 'var(--text-muted)' }} className="text-sm m-0 py-6 text-center leading-relaxed">Zatím nemáš žádná oznámení. Ozveme se, když správce zasáhne do tvé knihy, komentáře nebo uživatelského jména, nebo když ti autor daruje knihu.</p>
+        <p style={{ color: 'var(--text-muted)' }} className="text-sm m-0 py-6 text-center leading-relaxed">Zatím nemáš žádná oznámení. Ozveme se, když správce zasáhne do tvé knihy, komentáře, uživatelského jména nebo e-mailu, nebo když ti autor daruje knihu.</p>
       ) : (
         <>
           <div className="flex items-center justify-between gap-3">
