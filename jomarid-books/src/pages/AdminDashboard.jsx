@@ -9,6 +9,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { usePagedList } from '../browse/usePagedList';
 import { LoadMore } from '../browse/BrowseParts';
 import { fetchAllByKey, keysetQuery } from '../browse/libraryData';
+import { cleanGenres, GENRES_PER_BOOK, GENRE_MAX_LENGTH } from '../browse/libraryModel';
+import { plural } from '../lib/plural';
+import { ROLE_READER, ROLE_PUBLISHER, ROLE_ADMIN, ROLE_LABELS } from '../constants/roles';
+import { DEFAULT_BOOK_PRICE } from '../constants/economy';
+import { USERNAME_MIN, USERNAME_MAX } from '../lib/username';
+import { BOOK_BADGES } from '../constants/badges';
+import { DEFAULT_MONTHLY_GOAL } from '../constants/leveling';
 import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle, LayoutDashboard, UserCog, Loader2, CheckCircle2, X, ChevronLeft, ChevronRight, Ban, KeyRound, Trash2, ShieldCheck, Bell, Copy, Flag, Eye, EyeOff, Download } from 'lucide-react';
 
 // ============================================================================
@@ -37,7 +44,7 @@ const relativeTime = (iso) => {
   return `před ${Math.floor(months / 12)} r.`;
 };
 
-const ROLE_LABELS = { 'uživatel': 'Čtenář', nakladatel: 'Nakladatel', 'správce': 'Správce' };
+const daysText = (n) => `${n} ${plural(n, 'den', 'dny', 'dní')}`;
 
 // Zdroje mincí se ve coin_transactions poznají podle prefixu před dvojtečkou.
 const SOURCE_LABELS = {
@@ -67,7 +74,7 @@ const ADMIN_ERRORS = {
   notification_not_found: 'Upozornění už neexistuje (mohlo být mezitím smazáno).',
   invalid_status: 'Neplatný stav upozornění.',
   already_handled: 'Tohle upozornění už bylo vyřízeno.',
-  username_invalid: 'Neplatné uživatelské jméno (3-20 znaků, a-z, číslice, . _ -).',
+  username_invalid: `Neplatné uživatelské jméno (${USERNAME_MIN}-${USERNAME_MAX} znaků, a-z, číslice, . _ -).`,
   username_reserved: 'Tohle jméno je rezervované.',
   username_taken: 'Tohle jméno už někdo používá.',
 };
@@ -216,10 +223,10 @@ export const OverviewTab = ({ onOpenAccounts, onOpenBooks }) => {
   const earned30 = sources.reduce((s, r) => s + Number(r.earned_30d), 0);
   const spent30 = sources.reduce((s, r) => s + Number(r.spent_30d), 0);
   const issues = [
-    users.no_profile > 0 && { key: 'np', label: `${users.no_profile} účtů bez profilu`, onClick: () => onOpenAccounts({ role: 'bez_profilu' }) },
-    users.banned > 0 && { key: 'ban', label: `${users.banned} zablokovaných`, onClick: () => onOpenAccounts({ status: 'banned' }) },
-    users.unconfirmed > 0 && { key: 'unc', label: `${users.unconfirmed} nepotvrzených e-mailů`, onClick: () => onOpenAccounts({ status: 'unconfirmed' }) },
-    books.missing_author > 0 && { key: 'ma', label: `${books.missing_author} knih bez propojeného autora`, onClick: onOpenBooks },
+    users.no_profile > 0 && { key: 'np', label: `${users.no_profile} ${plural(users.no_profile, 'účet bez profilu', 'účty bez profilu', 'účtů bez profilu')}`, onClick: () => onOpenAccounts({ role: 'bez_profilu' }) },
+    users.banned > 0 && { key: 'ban', label: `${users.banned} ${plural(users.banned, 'zablokovaný', 'zablokovaní', 'zablokovaných')}`, onClick: () => onOpenAccounts({ status: 'banned' }) },
+    users.unconfirmed > 0 && { key: 'unc', label: `${users.unconfirmed} ${plural(users.unconfirmed, 'nepotvrzený e-mail', 'nepotvrzené e-maily', 'nepotvrzených e-mailů')}`, onClick: () => onOpenAccounts({ status: 'unconfirmed' }) },
+    books.missing_author > 0 && { key: 'ma', label: `${books.missing_author} ${plural(books.missing_author, 'kniha bez propojeného autora', 'knihy bez propojeného autora', 'knih bez propojeného autora')}`, onClick: onOpenBooks },
   ].filter(Boolean);
 
   return (
@@ -296,7 +303,7 @@ export const OverviewTab = ({ onOpenAccounts, onOpenBooks }) => {
               {reading.top_books.map(b => <li key={b.id}><span className="font-bold">{b.title}</span> <span style={{ color: 'var(--text-muted)' }} className="text-xs">· {b.reads}×</span></li>)}
             </ol>
           )}
-          <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] m-0 mt-3 opacity-70">Knih v katalogu: {books.total} ({books.paid} placených, {books.auto_assigned} zdarma pro všechny)</p>
+          <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] m-0 mt-3 opacity-70">Knih v katalogu: {books.total} (placených {books.paid}, zdarma pro všechny {books.auto_assigned})</p>
         </Card>
         <Card>
           <h3 className="text-sm font-black uppercase tracking-wider mb-3">Nejvíc mincí</h3>
@@ -311,7 +318,7 @@ export const OverviewTab = ({ onOpenAccounts, onOpenBooks }) => {
 };
 
 const PAGE_SIZE = 20;
-const ROLE_FILTERS = [['all', 'Všechny role'], ['uživatel', 'Čtenáři'], ['nakladatel', 'Nakladatelé'], ['správce', 'Správci'], ['bez_profilu', 'Bez profilu']];
+const ROLE_FILTERS = [['all', 'Všechny role'], [ROLE_READER, 'Čtenáři'], [ROLE_PUBLISHER, 'Nakladatelé'], [ROLE_ADMIN, 'Správci'], ['bez_profilu', 'Bez profilu']];
 const STATUS_FILTERS = [['all', 'Jakýkoliv stav'], ['banned', 'Zablokovaní'], ['unconfirmed', 'Nepotvrzený e-mail'], ['inactive30', 'Neaktivní 30 dní']];
 const SORTS = [['created_desc', 'Nejnovější'], ['created_asc', 'Nejstarší'], ['last_login_desc', 'Naposledy přihlášení'], ['coins_desc', 'Nejvíc mincí'], ['email_asc', 'E-mail A-Z']];
 
@@ -382,7 +389,7 @@ const AccountDetail = ({ userId, currentUserId, onClose, onChanged }) => {
   const profile = detail?.profile;
   const stats = detail?.stats;
   const isSelf = userId === currentUserId;
-  const isAdminTarget = profile?.role === 'správce';
+  const isAdminTarget = profile?.role === ROLE_ADMIN;
   const hasBooks = (stats?.published_books || 0) > 0;
   const isBanned = !!account?.is_banned;
 
@@ -419,7 +426,7 @@ const AccountDetail = ({ userId, currentUserId, onClose, onChanged }) => {
                   <dt style={{ color: 'var(--text-muted)' }} className="font-bold">Vytvořen</dt><dd className="m-0 font-semibold">{formatDate(account.created_at)}</dd>
                   <dt style={{ color: 'var(--text-muted)' }} className="font-bold">Naposledy přihlášen</dt><dd className="m-0 font-semibold">{account.last_sign_in_at ? `${formatDateTime(account.last_sign_in_at)} (${relativeTime(account.last_sign_in_at)})` : 'nikdy'}</dd>
                   {profile && <><dt style={{ color: 'var(--text-muted)' }} className="font-bold">Mince</dt><dd className="m-0 font-semibold">{formatNumber(profile.coins)}</dd></>}
-                  {profile && <><dt style={{ color: 'var(--text-muted)' }} className="font-bold">Série (streak)</dt><dd className="m-0 font-semibold">{profile.current_streak ?? 0} dní</dd></>}
+                  {profile && <><dt style={{ color: 'var(--text-muted)' }} className="font-bold">Série (streak)</dt><dd className="m-0 font-semibold">{daysText(profile.current_streak ?? 0)}</dd></>}
                 </dl>
                 {!profile && <div className="mt-3"><InlineMessage>Účet zatím nemá profil - založí se, jakmile se poprvé přihlásí.</InlineMessage></div>}
               </div>
@@ -444,9 +451,9 @@ const AccountDetail = ({ userId, currentUserId, onClose, onChanged }) => {
                   <div className="flex items-end gap-2 flex-wrap">
                     <label className="block flex-1 min-w-[140px]">
                       <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-1">Uživatelské jméno</span>
-                      <input aria-label="Uživatelské jméno" value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} maxLength={20} autoCapitalize="none" spellCheck={false} disabled={busy} style={selectStyle} className="w-full p-2.5 border rounded-lg text-xs font-bold outline-none disabled:opacity-50" />
+                      <input aria-label="Uživatelské jméno" value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} maxLength={USERNAME_MAX} autoCapitalize="none" spellCheck={false} disabled={busy} style={selectStyle} className="w-full p-2.5 border rounded-lg text-xs font-bold outline-none disabled:opacity-50" />
                     </label>
-                    <SmallButton busy={busy} disabled={nameDraft.trim() === (profile.username || '') || nameDraft.trim().length < 3} onClick={() => run(() => supabase.rpc('admin_set_username', { p_user: userId, p_username: nameDraft.trim() }), 'Jméno přejmenováno.')}>
+                    <SmallButton busy={busy} disabled={nameDraft.trim() === (profile.username || '') || nameDraft.trim().length < USERNAME_MIN} onClick={() => run(() => supabase.rpc('admin_set_username', { p_user: userId, p_username: nameDraft.trim() }), 'Jméno přejmenováno.')}>
                       <UserCog size={13} /> Přejmenovat
                     </SmallButton>
                   </div>
@@ -533,7 +540,7 @@ const AccountDetail = ({ userId, currentUserId, onClose, onChanged }) => {
 // ============================================================================
 // Admin: Upozornění (žádosti o heslo...) a vydání dočasného hesla
 // ============================================================================
-// Dočasné heslo se ukáže JEDNOU hned po vydání (nikde se neukládá). Uživatel se odhlásí ze všech
+// Dočasné heslo se ukáže jednou hned po vydání (nikde se neukládá). Uživatel se odhlásí ze všech
 // zařízení a při příštím přihlášení si musí nastavit vlastní heslo.
 export const TempPasswordDialog = ({ target, onClose, onIssued }) => {
   const [step, setStep] = useState('confirm'); // 'confirm' | 'result'
@@ -671,7 +678,7 @@ export const NotificationsTab = ({ onCountChange, currentUserId, onOpenAccount }
   };
 
   if (missing) {
-    return <InlineMessage type="error">Upozornění potřebují novější databázi (v Supabase chybí funkce, kterou appka volá). Obnov stránku; nepomůže-li to, dej vědět tvůrci appky.</InlineMessage>;
+    return <InlineMessage type="error">Upozornění teď nejdou načíst. Obnov stránku.</InlineMessage>;
   }
 
   const hasHandled = (items || []).some(n => n.status !== 'open');
@@ -767,7 +774,7 @@ export const NotificationsTab = ({ onCountChange, currentUserId, onOpenAccount }
 };
 
 // ============================================================================
-// Admin: Syslog (auditní log) - filtry na serveru, hledání, období, stránkování a export do CSV
+// Admin: Systémový log (auditní log) - filtry na serveru, hledání, období, stránkování a export do CSV
 // ============================================================================
 const LOG_TYPES = ['INFO', 'SUCCESS', 'WARN', 'DANGER', 'ERROR'];
 const LOG_PERIODS = [['24h', 'Posledních 24 h', 86400000], ['7d', 'Posledních 7 dní', 7 * 86400000], ['30d', 'Posledních 30 dní', 30 * 86400000], ['all', 'Celá historie', null]];
@@ -884,9 +891,9 @@ export const LogsTab = ({ download = downloadTextFile }) => {
       if (!data || data.length < LOG_EXPORT_PAGE) break;
       if (from + LOG_EXPORT_PAGE >= LOG_EXPORT_MAX) truncated = true;
     }
-    download(`syslog_${new Date().toISOString().slice(0, 10)}.csv`, buildLogsCsv(all));
+    download(`system-log_${new Date().toISOString().slice(0, 10)}.csv`, buildLogsCsv(all));
     // Export dat je sám citlivá akce: zapíše se do logu.
-    await supabase.from('system_logs').insert([{ log_type: 'INFO', message: `Správce exportoval syslog do CSV (${all.length} záznamů).` }]);
+    await supabase.from('system_logs').insert([{ log_type: 'INFO', message: `Správce exportoval systémový log do CSV (${all.length} ${plural(all.length, 'záznam', 'záznamy', 'záznamů')}).` }]);
     setMsg({ type: 'success', text: truncated ? `Exportováno ${all.length} nejnovějších záznamů (nejvýš ${LOG_EXPORT_MAX}). Zúžením filtru získáš starší.` : `Exportováno záznamů: ${all.length}.` });
     setExporting(false);
   };
@@ -1049,7 +1056,7 @@ export const AccountsTab = ({ currentUserId, preset, onChanged }) => {
                   </span>
                   <span style={{ color: 'var(--text-muted)' }} className="text-xs flex sm:block gap-3 sm:text-right sm:w-40 shrink-0">
                     <span className="block">přihlášen {relativeTime(r.last_sign_in_at)}</span>
-                    <span className="block opacity-80">{formatNumber(r.coins)} mincí · {r.books_read} přečteno</span>
+                    <span className="block opacity-80">{formatNumber(r.coins)} {plural(r.coins, 'mince', 'mince', 'mincí')} · {r.books_read} přečteno</span>
                   </span>
                 </button>
               </li>
@@ -1087,8 +1094,8 @@ export const AdminDashboard = () => {
   
   // --- Stavy rozhraní (UX) ---
   const [activeTab, setActiveTab] = useState(() => peekAdminTabRequest() || 'overview'); // po náhledu prohlídky rovnou záložka Prohlídka appky; overview | notifications | accounts | books | homepage | tour | users | logs
-  const [pendingCount, setPendingCount] = useState(0); // otevrena upozorneni (odznak na zalozce)
-  const [logCount, setLogCount] = useState(0); // pocet zaznamu v syslogu (karta v Prehledu)
+  const [pendingCount, setPendingCount] = useState(0); // otevřená upozornění (odznak na záložce)
+  const [logCount, setLogCount] = useState(0); // počet záznamů v systémovém logu (karta nahoře)
   useEffect(() => {
     (async () => {
       const { data, error } = await supabase.rpc('admin_open_notifications_count');
@@ -1114,7 +1121,7 @@ export const AdminDashboard = () => {
   const [content, setContent] = useState('');
   const [fakeLikes, setFakeLikes] = useState(0); 
   const [isAutoAssigned, setIsAutoAssigned] = useState(false); 
-  const [priceCoins, setPriceCoins] = useState(150); 
+  const [priceCoins, setPriceCoins] = useState(DEFAULT_BOOK_PRICE); 
   const [genresInput, setGenresInput] = useState('');
   const [descriptionInput, setDescriptionInput] = useState('');
   const [editingBookId, setEditingBookId] = useState(null);
@@ -1152,7 +1159,7 @@ export const AdminDashboard = () => {
   const refreshData = async () => {
     setGlobalLoading(true);
     try {
-      // 1. Knihy, 2. skryté knihy a 3. profily se čtou současně (jsou na sobě nezávislé).
+      // Knihy, skryté knihy a profily se čtou současně (jsou na sobě nezávislé).
       const [booksRes, hiddenRes, profilesRes] = await Promise.all([
         readAllRows('books', 'id, title, author, author_display, author_id, fake_likes, is_auto_assigned, price_coins, book_likes(count)'),
         readAllRows('books', 'id, is_hidden'),
@@ -1176,14 +1183,14 @@ export const AdminDashboard = () => {
       const { count: logsTotal } = await supabase.from('system_logs').select('id', { count: 'exact', head: true });
       setLogCount(typeof logsTotal === 'number' ? logsTotal : 0);
 
-      // 4. Posledních 50 komentářů napříč knihami - pro moderaci (viz sekce Komentáře).
+      // Posledních 50 komentářů napříč knihami - pro moderaci (viz Moderace komentářů).
       const { data: c } = await supabase
         .from('book_comments')
         .select('id, content, author_name, book_id, created_at')
         .order('created_at', { ascending: false })
         .limit(50);
 
-      // 5. Nastavení domovské stránky
+      // Nastavení domovské stránky
       const { data: settings } = await supabase.from('site_settings').select('key, value');
       const settingsMap = {};
       (settings || []).forEach(row => { settingsMap[row.key] = row.value; });
@@ -1215,7 +1222,7 @@ export const AdminDashboard = () => {
           fake_likes: fikes,
           is_auto_assigned: book.is_auto_assigned || false,
           isHidden: hiddenMap.get(book.id) || false,
-          price_coins: book.price_coins ?? 150,
+          price_coins: book.price_coins ?? DEFAULT_BOOK_PRICE,
           likesCount: realLikes + fikes 
         };
       }) || [];
@@ -1244,7 +1251,7 @@ export const AdminDashboard = () => {
     }
   };
 
-  // Inicializace a real-time poslech na systémové logy
+  // Data se načtou při otevření administrace.
   useEffect(() => {
     refreshData();
   }, []);
@@ -1263,7 +1270,7 @@ export const AdminDashboard = () => {
   const filteredProfiles = useMemo(() => {
     return profiles.filter(p => {
       const matchesSearch = p.email?.toLowerCase().includes(searchUser.toLowerCase());
-      const matchesRole = filterRole === 'all' || (p.role || 'uživatel') === filterRole;
+      const matchesRole = filterRole === 'all' || (p.role || ROLE_READER) === filterRole;
       return matchesSearch && matchesRole;
     });
   }, [profiles, searchUser, filterRole]);
@@ -1297,30 +1304,25 @@ export const AdminDashboard = () => {
 
   const saveBook = async (e) => {
     e.preventDefault();
-    if (!title) return alert('Doplňte název knihy.');
+    if (!title) return alert('Doplň název knihy.');
     setActionLoading(true);
 
-    // POZOR: 'content' už NENÍ sloupec v 'books' - text knihy žije v samostatné
-    // tabulce 'book_contents', která má vlastní (přísnější) RLS. 'books' zůstává
-    // volně čitelná pro procházení knihovny/nákup, ale bez samotného textu.
-    // Kdyby autor uz ma nastavene kryci jmeno (viz Nakladatelský panel),
-    // rovnou se pouzije i tady - jinak by kniha po preprirazeni admin em
-    // ukazovala skutecne uzivatelske jmeno, dokud by ji nakladatel sam
-    // znovu neulozil. author_id se hleda stejne opatrne jako jednorazovy
-    // dopocet v migraci: jednoznacna shoda se rovnou pouzije, pri kolizi
-    // (vic uctu se stejnou predponou e-mailu) se da prednost nakladatel/
-    // správce roli, a kdyby bylo nejednoznacno i mezi nimi, radsi se nic
-    // nehada a author_id zustane prazdne, nez aby se kniha omylem prirad
-    // ila spatnemu uctu.
+    // Text knihy se neukládá do tabulky books, ale do Storage (bucket "book-texts", viz src/bookText/bookText.js);
+    // books zůstává volně čitelná pro procházení knihovny a nákup.
+    // Autor se hledá mezi účty podle uživatelského jména (nebo předpony e-mailu). Jednoznačná shoda se použije
+    // rovnou, i s krycím jménem (viz Nakladatelský panel), jinak by kniha ukazovala skutečné uživatelské jméno,
+    // dokud ji nakladatel sám znovu neuloží. Při shodě víc účtů dostane přednost nakladatel nebo správce.
+    // Je-li nejednoznačná i tahle volba, author_id zůstane prázdné: radši knihu nepřiřadit, než ji omylem
+    // přiřadit cizímu účtu.
     const targetUsername = (author || '').trim();
     const matchingProfiles = profiles.filter(p => p.email && (p.username || p.email.split('@')[0]) === targetUsername);
     let resolvedProfile = null;
     if (matchingProfiles.length === 1) {
       resolvedProfile = matchingProfiles[0];
     } else if (matchingProfiles.length > 1) {
-      const preferred = matchingProfiles.filter(p => p.role === 'nakladatel' || p.role === 'správce');
+      const preferred = matchingProfiles.filter(p => p.role === ROLE_PUBLISHER || p.role === ROLE_ADMIN);
       if (preferred.length === 1) resolvedProfile = preferred[0];
-      // jinak nejednoznacne i mezi preferovanymi rolemi - author_id zustane null
+      // jinak je to nejednoznačné i mezi preferovanými rolemi: author_id zůstane null
     }
     const payload = { 
       title, 
@@ -1330,7 +1332,7 @@ export const AdminDashboard = () => {
       fake_likes: parseInt(fakeLikes) || 0,
       is_auto_assigned: isAutoAssigned,
       price_coins: Math.max(0, parseInt(priceCoins, 10) || 0),
-      genres: genresInput.split(',').map(g => g.trim()).filter(Boolean),
+      genres: cleanGenres(genresInput.split(',')),
       description: descriptionInput || null
     };
 
@@ -1341,19 +1343,19 @@ export const AdminDashboard = () => {
         if (contentErr) alert('Kniha uložena, ale text se nepodařilo uložit: ' + contentErr.message);
         await safeLog('SUCCESS', `Upravena kniha: ${title} (Auto-přiřazení: ${isAutoAssigned ? 'ANO' : 'NE'}, Cena: ${payload.price_coins} mincí)`);
         setEditingBookId(null);
-        setTitle(''); setAuthor(''); setContent(''); setFakeLikes(0); setIsAutoAssigned(false); setPriceCoins(150); setGenresInput(''); setDescriptionInput('');
+        setTitle(''); setAuthor(''); setContent(''); setFakeLikes(0); setIsAutoAssigned(false); setPriceCoins(DEFAULT_BOOK_PRICE); setGenresInput(''); setDescriptionInput('');
         refreshData();
       } else {
         alert('Chyba při úpravě: ' + error.message);
       }
     } else {
-      if (!content) { setActionLoading(false); return alert('Doplňte text knihy.'); }
+      if (!content) { setActionLoading(false); return alert('Doplň text knihy.'); }
       const { data: newBook, error } = await supabase.from('books').insert([payload]).select('id').single();
       if (!error && newBook) {
         const { error: contentErr } = await saveBookText(supabase, newBook.id, content);
         if (contentErr) alert('Kniha vytvořena, ale text se nepodařilo uložit: ' + contentErr.message);
         await safeLog('SUCCESS', `Uložená nová kniha: ${title} (Auto-přiřazení: ${isAutoAssigned ? 'ANO' : 'NE'}, Cena: ${payload.price_coins} mincí)`);
-        setTitle(''); setAuthor(''); setContent(''); setFakeLikes(0); setIsAutoAssigned(false); setPriceCoins(150); setGenresInput(''); setDescriptionInput('');
+        setTitle(''); setAuthor(''); setContent(''); setFakeLikes(0); setIsAutoAssigned(false); setPriceCoins(DEFAULT_BOOK_PRICE); setGenresInput(''); setDescriptionInput('');
         refreshData();
       } else {
         alert('Chyba při ukládání: ' + (error?.message || 'neznámá chyba'));
@@ -1374,7 +1376,7 @@ export const AdminDashboard = () => {
       setContent(contentRow?.text || '');
       setFakeLikes(data.fake_likes || 0);
       setIsAutoAssigned(data.is_auto_assigned || false);
-      setPriceCoins(data.price_coins ?? 150);
+      setPriceCoins(data.price_coins ?? DEFAULT_BOOK_PRICE);
       setGenresInput(Array.isArray(data.genres) ? data.genres.join(', ') : '');
       setDescriptionInput(data.description || '');
       setActiveTab('books'); 
@@ -1385,9 +1387,8 @@ export const AdminDashboard = () => {
 
   const handleSaveFakeXp = async () => {
     if (!activeUser) return;
-    let xpNum = parseInt(userFakeXpInput) || 0;
-    if (xpNum >= 1000000) xpNum = 1000000;
-    
+    const xpNum = Math.max(0, parseInt(userFakeXpInput, 10) || 0);
+
     setActionLoading(true);
     const { error } = await supabase.from('profiles').update({ fake_xp: xpNum }).eq('id', activeUser.id);
 
@@ -1486,19 +1487,19 @@ export const AdminDashboard = () => {
     }
   };
 
+  // Role se mění stejnou funkcí jako v záložce Účty. Ta hlídá, že správce nezmění roli sám sobě.
   const toggleRole = async (uId, currentRole) => {
-    let nextRole = 'uživatel';
-    if (currentRole === 'uživatel') nextRole = 'nakladatel';
-    else if (currentRole === 'nakladatel') nextRole = 'správce';
-    else if (currentRole === 'správce') nextRole = 'uživatel';
+    const nextRole = currentRole === ROLE_READER ? ROLE_PUBLISHER : currentRole === ROLE_PUBLISHER ? ROLE_ADMIN : ROLE_READER;
 
-    const { error } = await supabase.from('profiles').update({ role: nextRole }).eq('id', uId);
-    if (!error) {
-      await safeLog('WARN', `Změna role uživatele ${uId} na ${nextRole}`);
-      refreshData();
+    setActionLoading(true);
+    const { error } = await supabase.rpc('admin_set_role', { p_user_id: uId, p_role: nextRole });
+    if (error) {
+      alert(mapAdminError(error));
     } else {
-      alert('Chyba při změně role: ' + error.message);
+      await safeLog('WARN', `Změna role uživatele ${uId} na ${nextRole}`);
+      await refreshData();
     }
+    setActionLoading(false);
   };
 
   // Skrytá kniha zmizí z katalogu pro čtenáře; autor a správce ji dál vidí. Autor ji může zase zveřejnit sám.
@@ -1531,7 +1532,7 @@ export const AdminDashboard = () => {
   };
 
   const revokeAllLicenses = async (uId, uEmail) => {
-    if (!confirm(`🚨 OPRAVDU CHCETE ODEBRAT VŠECHNY LICENCE uživateli ${uEmail}? Uživatel ztratí přístup ke všem knihám.`)) return;
+    if (!confirm(`Opravdu chceš uživateli ${uEmail} odebrat všechny licence? Uživatel ztratí přístup ke všem knihám.`)) return;
     setActionLoading(true);
     const { error } = await supabase.from('user_books').delete().eq('user_id', uId);
     if (!error) {
@@ -1574,12 +1575,12 @@ export const AdminDashboard = () => {
     setActionLoading(false);
   };
 
-  const incompleteListsAlert = () => alert('Seznam knih nebo účtů se nepodařilo načíst celý, hromadná akce by pracovala s neúplnými daty. Obnov data tlačítkem Sync Data a zkus to znovu.');
+  const incompleteListsAlert = () => alert('Seznam knih nebo účtů se nepodařilo načíst celý, hromadná akce by pracovala s neúplnými daty. Obnov data tlačítkem Obnovit data a zkus to znovu.');
 
   const assignAllBooksToUser = async () => {
     if (!activeUser || books.length === 0) return;
     if (loadProblem) return incompleteListsAlert();
-    if (!confirm(`Opravdu chcete uživateli ${activeUser.email} okamžitě odemknout ÚPLNĚ VŠECHNY knihy?`)) return;
+    if (!confirm(`Opravdu chceš uživateli ${activeUser.email} okamžitě odemknout všechny knihy?`)) return;
 
     setActionLoading(true);
     try {
@@ -1609,10 +1610,10 @@ export const AdminDashboard = () => {
     }
   };
 
-  // Rozdání knihy VŠEM účtům je nevratné a ničí její cenu, proto se místo prostého
+  // Rozdání knihy všem účtům je nevratné a ničí její cenu, proto se místo prostého
   // "OK / Zrušit" musí opsat název knihy (viz TypedConfirm dole).
   const assignSelectedBookToAllUsers = () => {
-    if (!selectedBookId) return alert('Nejprve zvolte knihu z rozevíracího seznamu.');
+    if (!selectedBookId) return alert('Nejprve vyber knihu z rozevíracího seznamu.');
     const selectedBook = books.find(b => b.id === selectedBookId);
     if (!selectedBook) return;
     if (loadProblem) return incompleteListsAlert();
@@ -1662,10 +1663,10 @@ export const AdminDashboard = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-4 border-b border-solid gap-4" style={{ borderColor: 'var(--border-color)' }}>
         <div>
           <h1 className="text-2xl font-black tracking-tight flex items-center gap-2">
-            <Shield size={26} className="text-red-500 animate-pulse" /> Core Admin Panel 2026
+            <Shield size={26} className="text-red-500 animate-pulse" /> Administrace
           </h1>
           <p className="text-xs font-semibold opacity-70" style={{ color: 'var(--text-muted)' }}>
-            Komplexní správa licencí, autorských práv, uživatelských klanů a systémových logů.
+            Účty, knihy, domovská stránka, prohlídka, licence a systémový log.
           </p>
         </div>
         <div className="flex items-center gap-2 self-stretch sm:self-auto">
@@ -1675,7 +1676,7 @@ export const AdminDashboard = () => {
             variant="secondary"
             className="flex items-center justify-center gap-2 px-4 py-2 text-xs font-black uppercase tracking-wider border rounded-lg hover:opacity-80 transition-all cursor-pointer disabled:opacity-50"
           >
-            <RefreshCw size={14} className={globalLoading ? "animate-spin" : ""} /> Sync Data
+            <RefreshCw size={14} className={globalLoading ? "animate-spin" : ""} /> Obnovit data
           </Button>
         </div>
       </div>
@@ -1692,22 +1693,22 @@ export const AdminDashboard = () => {
         <Card className="flex items-center gap-4 py-4 relative overflow-hidden">
           <div className="p-3 rounded-xl bg-blue-500/10 text-blue-500"><Database size={22}/></div>
           <div>
-            <h4 style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider opacity-60">Katalog Titulů</h4>
-            <p className="text-xl font-black">{books.length} Knih v DB</p>
+            <h4 style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider opacity-60">Knihy</h4>
+            <p className="text-xl font-black">{books.length} {plural(books.length, 'kniha', 'knihy', 'knih')}</p>
           </div>
         </Card>
         <Card style={{ backgroundColor: 'var(--bg-secondary)' }} className="flex items-center gap-4 py-4">
           <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-500"><Users size={22}/></div>
           <div>
-            <h4 style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider opacity-60">Komunita</h4>
-            <p className="text-xl font-black">{profiles.length} Čtenářů</p>
+            <h4 style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider opacity-60">Účty</h4>
+            <p className="text-xl font-black">{profiles.length} {plural(profiles.length, 'účet', 'účty', 'účtů')}</p>
           </div>
         </Card>
         <Card className="flex items-center gap-4 py-4">
           <div className="p-3 rounded-xl bg-purple-500/10 text-purple-500"><Terminal size={22}/></div>
           <div>
-            <h4 style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider opacity-60">Live Stream Log</h4>
-            <p className="text-xl font-black">{logCount} Záznamů</p>
+            <h4 style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider opacity-60">Systémový log</h4>
+            <p className="text-xl font-black">{logCount} {plural(logCount, 'záznam', 'záznamy', 'záznamů')}</p>
           </div>
         </Card>
       </div>
@@ -1721,8 +1722,8 @@ export const AdminDashboard = () => {
           { id: 'books', label: 'Knihovna & Editace', icon: <Database size={14} /> },
           { id: 'homepage', label: 'Domovská stránka', icon: <Layout size={14} /> },
           { id: 'tour', label: 'Prohlídka appky', icon: <Sparkles size={14} /> },
-          { id: 'users', label: 'Licence & odměny', icon: <Users size={14} /> },
-          { id: 'logs', label: 'Systémový Syslog', icon: <Terminal size={14} /> }
+          { id: 'users', label: 'Licence, XP a mince', icon: <Users size={14} /> },
+          { id: 'logs', label: 'Systémový log', icon: <Terminal size={14} /> }
         ].map(tab => (
           <button
             key={tab.id}
@@ -1743,7 +1744,7 @@ export const AdminDashboard = () => {
       {/* INDIKÁTOR AKČNÍHO LOADINGU */}
       {actionLoading && (
         <div className="w-full bg-yellow-500 text-black text-center text-xs font-black py-1 rounded animate-pulse uppercase tracking-widest">
-          Probíhá zápis do databáze Supabase... Čekejte prosím.
+          Probíhá zápis do databáze Supabase... Počkej prosím.
         </div>
       )}
 
@@ -1763,7 +1764,7 @@ export const AdminDashboard = () => {
         <AccountsTab currentUserId={adminUser?.id} preset={accountsPreset} onChanged={refreshData} />
       )}
 
-      {/* 2. ZÁLOŽKA: SPRÁVA KNIH */}
+      {/* ZÁLOŽKA: SPRÁVA KNIH */}
       {activeTab === 'books' && (
         <div className="space-y-6">
         {books.some(b => !b.authorId && !b.is_auto_assigned) && (
@@ -1786,7 +1787,7 @@ export const AdminDashboard = () => {
                   >
                     <option value="">-- Vyber správný účet --</option>
                     {profiles.map(p => (
-                      <option key={p.id} value={p.id}>{p.email} ({p.role})</option>
+                      <option key={p.id} value={p.id}>{p.email} ({ROLE_LABELS[p.role] || p.role})</option>
                     ))}
                   </select>
                   <button
@@ -1855,6 +1856,7 @@ export const AdminDashboard = () => {
 
                 <div className="space-y-1">
                   <label style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Žánry (oddělené čárkou)</label>
+                  <p style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-medium pl-1 m-0 opacity-70">Nejvýš {GENRES_PER_BOOK} {plural(GENRES_PER_BOOK, 'žánr', 'žánry', 'žánrů')}, každý nejvýš {GENRE_MAX_LENGTH} {plural(GENRE_MAX_LENGTH, 'znak', 'znaky', 'znaků')}. Co je navíc, se při uložení zahodí.</p>
                   <input 
                     type="text" 
                     placeholder="např. Sci-Fi, Dobrodružství" 
@@ -1892,7 +1894,7 @@ export const AdminDashboard = () => {
 
                 <BookTextField
                   key={editingBookId || 'nova-kniha'} id="admin-book-text" value={content} onChange={setContent} required labelStyle={{ color: 'var(--text-muted)' }}
-                  placeholder="Sem vložte čistý text knihy, kapitoly nebo markdown, nebo přetáhněte soubor .txt / .md..."
+                  placeholder="Sem vlož čistý text knihy, kapitoly nebo markdown, nebo přetáhni soubor .txt / .md..."
                 />
                 
                 <Button type="submit" disabled={actionLoading} className="w-full py-3 uppercase tracking-wider font-black">
@@ -1902,7 +1904,7 @@ export const AdminDashboard = () => {
                 {editingBookId && (
                   <button 
                     type="button" 
-                    onClick={() => { setEditingBookId(null); setTitle(''); setAuthor(''); setContent(''); setFakeLikes(0); setIsAutoAssigned(false); setPriceCoins(150); setGenresInput(''); }}
+                    onClick={() => { setEditingBookId(null); setTitle(''); setAuthor(''); setContent(''); setFakeLikes(0); setIsAutoAssigned(false); setPriceCoins(DEFAULT_BOOK_PRICE); setGenresInput(''); }}
                     style={{ color: 'var(--text-muted)' }}
                     className="w-full py-2 text-xs hover:underline uppercase cursor-pointer bg-transparent border-none font-bold tracking-wide"
                   >
@@ -1952,7 +1954,7 @@ export const AdminDashboard = () => {
                           )}
                           {!b.is_auto_assigned && (
                             <span className="bg-amber-500/20 text-amber-500 font-black px-1.5 py-0.5 rounded text-[0.5625rem] uppercase tracking-wide flex items-center gap-0.5">
-                              <Coins size={10} /> {b.price_coins ?? 150}
+                              <Coins size={10} /> {b.price_coins ?? DEFAULT_BOOK_PRICE}
                             </span>
                           )}
                         </span>
@@ -2041,7 +2043,7 @@ export const AdminDashboard = () => {
         </div>
       )}
 
-      {/* 2b. ZÁLOŽKA: DOMOVSKÁ STRÁNKA */}
+      {/* ZÁLOŽKA: DOMOVSKÁ STRÁNKA */}
       {activeTab === 'homepage' && (
         <div className="space-y-6">
           <Card>
@@ -2167,10 +2169,10 @@ export const AdminDashboard = () => {
         </div>
       )}
 
-      {/* 2c. ZÁLOŽKA: PROHLÍDKA APPKY */}
+      {/* ZÁLOŽKA: PROHLÍDKA APPKY */}
       {activeTab === 'tour' && <TourEditor />}
 
-      {/* 3. ZÁLOŽKA: UŽIVATELÉ A LICENCE */}
+      {/* ZÁLOŽKA: LICENCE, XP A MINCE */}
       {activeTab === 'users' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-7 space-y-4">
@@ -2193,23 +2195,23 @@ export const AdminDashboard = () => {
                   className="bg-transparent border-none outline-none text-xs font-bold font-sans cursor-pointer"
                 >
                   <option value="all">Všechny role</option>
-                  <option value="uživatel">Uživatelé</option>
-                  <option value="nakladatel">Nakladatelé</option>
-                  <option value="správce">Správci</option>
+                  <option value={ROLE_READER}>Čtenáři</option>
+                  <option value={ROLE_PUBLISHER}>Nakladatelé</option>
+                  <option value={ROLE_ADMIN}>Správci</option>
                 </select>
               </div>
             </div>
 
             <Card className="overflow-hidden p-0">
               <div style={{ borderColor: 'var(--border-color)' }} className="p-4 border-b font-black text-xs uppercase tracking-wider">
-                Databáze čtenářských účtů a oprávnění
+                Účty a jejich role
               </div>
               <div className="max-h-[450px] overflow-y-auto">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-muted)' }} className="font-black uppercase border-b opacity-80 sticky top-0 z-10">
                       <th className="p-3">Uživatel</th>
-                      <th className="p-3">Role systému</th>
+                      <th className="p-3">Role</th>
                       <th className="p-3 text-right">Řízení</th>
                     </tr>
                   </thead>
@@ -2220,7 +2222,7 @@ export const AdminDashboard = () => {
                           <div className="truncate text-sm font-black">{p.email}</div>
                           {p.fake_xp > 0 && (
                             <div className="text-[0.625rem] font-black flex items-center gap-1 mt-0.5" style={{ color: 'var(--bg-primary)' }}>
-                              <Award size={10}/> {p.fake_xp >= 1000000 ? "Level 100 (Max)" : `+${p.fake_xp} Admin XP`}
+                              <Award size={10}/> {`+${p.fake_xp} Admin XP`}
                             </div>
                           )}
                         </td>
@@ -2229,7 +2231,7 @@ export const AdminDashboard = () => {
                             style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }} 
                             className={`text-[0.5625rem] px-2.5 py-0.5 rounded-full uppercase border border-solid font-black shadow-sm tracking-wider`}
                           >
-                            {p.role || 'uživatel'}
+                            {ROLE_LABELS[p.role || ROLE_READER] || p.role}
                           </span>
                         </td>
                         <td className="p-3 text-right flex justify-end items-center gap-2">
@@ -2242,9 +2244,9 @@ export const AdminDashboard = () => {
                           </Button>
                           <Button 
                             variant="secondary"
-                            onClick={() => toggleRole(p.id, p.role)} 
+                            onClick={() => toggleRole(p.id, p.role || ROLE_READER)} disabled={p.id === adminUser?.id} 
                             className="p-1.5 border border-solid rounded-lg cursor-pointer" 
-                            title="Cyklovat roli (Uživatel -> Nakladatel -> Správce)"
+                            title={p.id === adminUser?.id ? 'Vlastní roli nejde změnit' : 'Změnit roli (Čtenář → Nakladatel → Správce → Čtenář)'}
                           >
                             <Shield size={13}/>
                           </Button>
@@ -2274,7 +2276,7 @@ export const AdminDashboard = () => {
               
               <div className="space-y-4">
                 <div className="space-y-1.5">
-                  <label className="text-[0.625rem] font-black uppercase tracking-wider block opacity-70">1. Vyberte knihu z registru</label>
+                  <label className="text-[0.625rem] font-black uppercase tracking-wider block opacity-70">Vyber knihu z registru</label>
                   
                   {/* Vyhledávací a filtrovací pole pro rychlé prohledávání registru knih */}
                   <div className="flex gap-2 items-center p-2 mb-1.5 rounded-lg border border-solid bg-[var(--bg-primary)]" style={{ borderColor: 'var(--border-color)' }}>
@@ -2295,7 +2297,7 @@ export const AdminDashboard = () => {
                     className="w-full p-3 border rounded-lg font-bold text-xs outline-none cursor-pointer shadow-sm"
                   >
                     <option value="" style={{ background: 'var(--bg-secondary)' }}>
-                      -- ({filteredBooks.length}) Titulů odpovídá filtru --
+                      -- Knih podle filtru: {filteredBooks.length} --
                     </option>
                     {filteredBooks.map(b => (
                       <option key={b.id} value={b.id} style={{ background: 'var(--bg-secondary)' }}>
@@ -2362,7 +2364,6 @@ export const AdminDashboard = () => {
                           Uložit XP
                         </button>
                       </div>
-                      <span className="text-[0.5625rem] opacity-40 font-bold block">* Zadejte hodnotu ≥ 1 000 000 pro okamžitý skok na Level 100.</span>
                     </div>
 
                     <div style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-color)' }} className="p-3 rounded-xl space-y-2 border border-solid">
@@ -2403,9 +2404,9 @@ export const AdminDashboard = () => {
                         <Award size={11} /> Herní postup (jen pro přehled)
                       </label>
                       <div className="grid grid-cols-2 gap-2 text-[0.6875rem] font-bold">
-                        <span style={{ color: 'var(--text-muted)' }}>Odznaky: <span style={{ color: 'var(--text-body)' }}>{(activeUser.unlocked_badges || []).length} / 100</span></span>
-                        <span style={{ color: 'var(--text-muted)' }}>Nejvyšší splněný cíl: <span style={{ color: 'var(--text-body)' }}>{activeUser.highest_goal_completed ?? 25}</span></span>
-                        <span style={{ color: 'var(--text-muted)' }} className="col-span-2">Vlajkový odznak: <span style={{ color: 'var(--text-body)' }}>{activeUser.featured_badge || '—'}</span></span>
+                        <span style={{ color: 'var(--text-muted)' }}>Odznaky: <span style={{ color: 'var(--text-body)' }}>{(activeUser.unlocked_badges || []).length} / {BOOK_BADGES.length}</span></span>
+                        <span style={{ color: 'var(--text-muted)' }}>Nejvyšší splněný cíl: <span style={{ color: 'var(--text-body)' }}>{activeUser.highest_goal_completed ?? DEFAULT_MONTHLY_GOAL}</span></span>
+                        <span style={{ color: 'var(--text-muted)' }} className="col-span-2">Vystavený odznak: <span style={{ color: 'var(--text-body)' }}>{activeUser.featured_badge || '—'}</span></span>
                       </div>
                       <div className="flex items-center justify-between pt-1">
                         <span className="text-[0.6875rem] font-bold" style={{ color: 'var(--text-muted)' }}>Streak Freeze: <span style={{ color: 'var(--text-body)' }}>{activeUser.streak_freezes ?? 0}</span></span>
@@ -2443,7 +2444,7 @@ export const AdminDashboard = () => {
                   </div>
                 ) : (
                   <div className="text-center py-6 text-xs font-bold opacity-50 italic border border-dashed rounded-xl p-4" style={{ borderColor: 'var(--border-color)' }}>
-                    Pro individuální přidělení licencí nebo zápis XP vyberte uživatele ze sousední tabulky.
+                    Pro individuální přidělení licencí nebo zápis XP vyber uživatele v tabulce vedle.
                   </div>
                 )}
               </div>
@@ -2452,13 +2453,13 @@ export const AdminDashboard = () => {
         </div>
       )}
 
-      {/* 4. ZÁLOŽKA: SYSTÉMOVÉ LOGY (FULL CORE SYSLOG) */}
+      {/* ZÁLOŽKA: SYSTÉMOVÝ LOG */}
       {activeTab === 'logs' && <LogsTab />}
 
       <TypedConfirm
         open={bulkGrantOpen}
         title="Rozdat knihu všem"
-        description={`Kniha "${books.find(b => b.id === selectedBookId)?.title || ''}" se okamžitě odemkne ZDARMA všem ${profiles.length} načteným účtům. Její cena tím pro ně přestane platit a zpět to nejde vzít.`}
+        description={`Kniha "${books.find(b => b.id === selectedBookId)?.title || ''}" se okamžitě odemkne ZDARMA všem načteným účtům (${profiles.length}). Její cena tím pro ně přestane platit a zpět to nejde vzít.`}
         expected={books.find(b => b.id === selectedBookId)?.title || ''}
         confirmLabel="Rozdat všem"
         onConfirm={runBulkGrant}

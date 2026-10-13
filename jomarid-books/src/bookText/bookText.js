@@ -1,7 +1,7 @@
 // Text knih ve Storage. Každá kniha je jeden soubor <id knihy>.txt v soukromém bucketu "book-texts"; přístup hlídají
-// pravidla v databázi (stejná jako dřív u tabulky book_contents: správce, autor, držitel aktivní licence, automaticky
-// přidělené knihy). Stará tabulka book_contents zůstává jako záloha: čte se z ní, dokud text ve Storage není, a zápis
-// do ní se použije jen když bucket vůbec neexistuje (SQL ještě nebylo spuštěno).
+// pravidla v databázi (správce, autor, držitel aktivní licence, automaticky přidělené knihy). Tabulka book_contents
+// je záloha: čte se z ní, dokud text ve Storage není, a zápis do ní se použije jen když bucket vůbec neexistuje
+// (bucket i jeho pravidla se zakládají SQL přímo v Supabase, v repu nejsou).
 //
 // Text se ukládá a čte BEZ jakékoli úpravy (ani konců řádků, ani znaku BOM), protože zvýraznění v čtečce jsou
 // uložená jako číselné pozice v textu. Čistá logika bez Reactu, jde testovat v Node (src/tests/bookText.test.mjs).
@@ -14,7 +14,7 @@ export const bookTextPath = (bookId) => `${bookId}.txt`;
 
 const store = (client) => client.storage.from(BOOK_TEXT_BUCKET);
 
-/** Bucket ještě neexistuje (SQL nebylo spuštěno) nebo Storage není dostupný: dá se spadnout zpět na tabulku. */
+/** Bucket neexistuje nebo Storage není dostupný: dá se spadnout zpět na tabulku. */
 export const isBucketMissing = (error) => {
   if (!error) return false;
   return /bucket not found/i.test(String(error.message || '')) || (/bucket/i.test(String(error.message || '')) && String(error.statusCode ?? error.status) === '404');
@@ -39,20 +39,10 @@ export const downloadBookText = async (client, bookId) => {
   try { return { text: await decodeExact(res.data) }; } catch (e) { return { error: e }; }
 };
 
-/** Soubor už ve Storage je (nahrání bez přepisu skončí chybou 409). */
-export const isAlreadyExists = (error) => {
-  if (!error) return false;
-  const status = String(error.statusCode ?? error.status ?? '');
-  return status === '409' || /already exists|duplicate/i.test(String(error.message || ''));
-};
-
-/**
- * Nahraje text do Storage. Bez mezipaměti, ať editor nikdy nenačte starší verzi.
- * upsert=false (přesun) soubor jen vytvoří a existující nepřepíše, takže nemůže smazat novější úpravu.
- */
-export const uploadBookText = async (client, bookId, text, { upsert = true } = {}) => {
+/** Nahraje text do Storage a přepíše existující soubor. Bez mezipaměti, ať editor nikdy nenačte starší verzi. */
+export const uploadBookText = async (client, bookId, text) => {
   try {
-    const { error } = await store(client).upload(bookTextPath(bookId), new Blob([text], { type: MIME }), { upsert, contentType: MIME, cacheControl: '0' });
+    const { error } = await store(client).upload(bookTextPath(bookId), new Blob([text], { type: MIME }), { upsert: true, contentType: MIME, cacheControl: '0' });
     return { error: error || null };
   } catch (e) { return { error: e }; }
 };
@@ -80,7 +70,7 @@ export const fetchBookText = async (client, bookId) => {
 
 /**
  * Uloží text knihy do Storage a smaže starou kopii z tabulky (ať nezůstane zastaralá ani nezabírá místo).
- * Jen když bucket vůbec neexistuje, uloží se do staré tabulky jako dřív. Vrací { error, where }.
+ * Jen když bucket vůbec neexistuje, uloží se do tabulky book_contents. Vrací { error, where }.
  */
 export const saveBookText = async (client, bookId, text) => {
   const up = await uploadBookText(client, bookId, text);

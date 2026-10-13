@@ -212,7 +212,7 @@ select pg_temp.ok(pg_temp.pick(25)->>'kind' = 'gentle_nudge', 'další novinka n
 delete from public.push_engage_log where user_id = pg_temp.u(25);
 select pg_temp.logged(25, 'new_book', 24, 'cccccccc-0000-0000-0000-0000000000aa');
 select pg_temp.logged(25, 'gentle_nudge', 3); -- naposledy přišlo popostrčení, takže střídání nebrání
-select pg_temp.ok(pg_temp.pick(25)->>'kind' = 'new_book', 'po 24 hodinách se další novinka oznámí (dřív to bylo po 2 dnech)');
+select pg_temp.ok(pg_temp.pick(25)->>'kind' = 'new_book', 'po 24 hodinách se další novinka oznámí');
 insert into public.push_engage_log (user_id, day, kind, meta, created_at) values (pg_temp.u(27), '2026-09-01', 'new_book', 'cccccccc-0000-0000-0000-000000000001', '2026-09-01 17:30:00+02');
 select pg_temp.ok(pg_temp.pick(27)->>'kind' = 'gentle_nudge', 'stejnou knihu čtenář podruhé nedostane');
 select pg_temp.act(26, '2026-10-09');

@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { clearPersonalBrowseState } from '../browse/browseStore';
 import { cleanupOnLogout } from '../push/pushClient';
+import { ROLE_READER, ROLE_ADMIN } from '../constants/roles';
 
 export const ThemeContext = createContext(null);
 export const AuthContext = createContext(null);
@@ -42,7 +43,7 @@ export function AuthProvider({ children }) {
      if (error && error.code === 'PGRST116') {
        const { data: newProfile, error: insertError } = await supabase
          .from('profiles')
-         .insert([{ id: sessionUser.id, email: sessionUser.email, role: 'uživatel' }])
+         .insert([{ id: sessionUser.id, email: sessionUser.email, role: ROLE_READER }])
          .select()
          .single();
       
@@ -60,7 +61,7 @@ export function AuthProvider({ children }) {
        console.error('Profil se nepodařilo synchronizovat:', error);
        setRole(null);
      } else {
-       setRole(data?.role || 'uživatel');
+       setRole(data?.role || ROLE_READER);
        setUsername(data?.username || (sessionUser.email ? sessionUser.email.split('@')[0] : ''));
        setMustChange(!!data?.must_change_password);
      }
@@ -114,7 +115,7 @@ export const ProtectedAdminRoute = ({ children }) => {
  const { user, role, loading } = useAuth();
  if (loading) return <div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin" /></div>;
  if (!user) return <Navigate to="/login" replace />;
- if (role !== 'správce') return <Navigate to="/app" replace />;
+ if (role !== ROLE_ADMIN) return <Navigate to="/app" replace />;
  return children;
 };
 

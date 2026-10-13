@@ -4,7 +4,10 @@ import { Smartphone, Share, ArrowLeft, User, ShieldCheck, Palette, Database, Che
 import { useAuth, useTheme } from '../contexts/AuthContext';
 import { supabase, verifyPassword, validateNewPassword, mapAuthError } from '../lib/supabase';
 import { BOOK_BADGES } from '../constants/badges';
-import { loadAccountNotices, countWarnings, plural, LEVEL_WARN } from '../accountNotices';
+import { ROLE_PUBLISHER, ROLE_ADMIN, ROLE_LABELS } from '../constants/roles';
+import { USERNAME_RE, USERNAME_MIN, USERNAME_MAX } from '../lib/username';
+import { loadAccountNotices, countWarnings, LEVEL_WARN } from '../accountNotices';
+import { plural } from '../lib/plural';
 import { useTour } from '../tour/TourProvider';
 import { activeSteps } from '../tour/tourModel';
 import { readSeenVersion } from '../tour/tourSeen';
@@ -14,10 +17,12 @@ import {
   loadReaderPrefs, saveReaderPref, resetReaderPrefs, readerTypography, loadMotionPref, saveMotionPref,
   CUSTOM_THEME_KEY, EXPERIMENTAL_THEME_KEY, usesCustomColors, CUSTOM_PRESETS, ACCENT_MIN_CONTRAST, resolveTheme, deriveTheme, completeHex, normalizeHex, readableAccent, customColorsPreview, contrast,
   ACCENTS, THEME_LABELS, UI_SCALES, UI_DENSITIES, loadUiScale, loadUiDensity, saveUiScale, saveUiDensity, withAccent,
+  READER_PREFS_EVENT,
 } from '../theme';
 import { readLibraryPrefs, writeLibraryPref } from '../browse/browseStore';
 import { SORT_OPTIONS, STATUS_FILTERS } from '../browse/libraryModel';
 import { useSyncStatus } from '../settings/settingsSyncStore';
+import { SETTINGS_TABLE, isMissingTable } from '../settings/settingsSync';
 import { APP_VERSION_LABEL } from '../appInfo';
 import PushSettings from '../push/PushSettings';
 import { cleanupOnLogout } from '../push/pushClient';
@@ -94,11 +99,8 @@ const Toggle = ({ checked, onChange, disabled, label }) => (
 );
 
 // ---- Záložka: Profil ----
-const ROLE_LABELS = { 'uživatel': 'Čtenář', nakladatel: 'Nakladatel', 'správce': 'Správce' };
-
-const USERNAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{1,18}[A-Za-z0-9]$/;
 const USERNAME_ERRORS = {
-  username_invalid: 'Jméno musí mít 3-20 znaků: písmena a-z bez diakritiky, číslice, tečka, podtržítko nebo pomlčka (na začátku a na konci jen písmeno nebo číslice).',
+  username_invalid: `Jméno musí mít ${USERNAME_MIN}-${USERNAME_MAX} znaků: písmena a-z bez diakritiky, číslice, tečka, podtržítko nebo pomlčka (na začátku a na konci jen písmeno nebo číslice).`,
   username_reserved: 'Tohle jméno je rezervované. Zvol jiné.',
   username_taken: 'Tohle jméno už někdo používá.',
 };
@@ -108,7 +110,7 @@ const USERNAME_HINTS = {
   available: 'Jméno je volné.',
   taken: USERNAME_ERRORS.username_taken,
   reserved: USERNAME_ERRORS.username_reserved,
-  invalid: 'Zatím neplatné: 3-20 znaků, a-z bez diakritiky, číslice, tečka, podtržítko, pomlčka.',
+  invalid: `Zatím neplatné: ${USERNAME_MIN}-${USERNAME_MAX} znaků, a-z bez diakritiky, číslice, tečka, podtržítko, pomlčka.`,
   error: 'Dostupnost se nepodařilo zjistit. Zkus to za chvíli.',
 };
 
@@ -157,7 +159,7 @@ const UsernameSection = ({ profile, onSaved }) => {
   if (!('username' in profile)) {
     return (
       <Section title="Uživatelské jméno" description="Takhle tě vidí ostatní čtenáři.">
-        <Notice type="info">Uživatelská jména se zapnou po aktualizaci databáze.</Notice>
+        <Notice type="info">Uživatelské jméno teď nejde nastavit. Zkus to později.</Notice>
       </Section>
     );
   }
@@ -166,8 +168,8 @@ const UsernameSection = ({ profile, onSaved }) => {
   return (
     <Section title="Uživatelské jméno" description="Takhle tě vidí ostatní - například v žebříčku. Ukáže se i u tvých knih, pokud nemáš krycí jméno.">
       <form onSubmit={save} className="space-y-3">
-        <Field label="Jméno (3-20 znaků)">
-          <TextInput value={value} onChange={e => setValue(e.target.value)} maxLength={20} autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-describedby="username-hint" />
+        <Field label={`Jméno (${USERNAME_MIN}-${USERNAME_MAX} znaků)`}>
+          <TextInput value={value} onChange={e => setValue(e.target.value)} maxLength={USERNAME_MAX} autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-describedby="username-hint" />
         </Field>
         <p id="username-hint" aria-live="polite" style={{ color: tone }} className="text-xs font-bold m-0 min-h-[16px]">{USERNAME_HINTS[check]}</p>
         {msg && <Notice type={msg.type}>{msg.text}</Notice>}
@@ -267,7 +269,7 @@ const ProfileTab = ({ user, role }) => {
       </Section>
 
       {canEdit && <UsernameSection profile={profile} onSaved={(name) => { setProfile(p => ({ ...p, username: name })); refreshProfile?.(); }} />}
-      {canEdit && (role === 'nakladatel' || role === 'správce') && <PenNameSection profile={profile} onSaved={(pen) => setProfile(p => ({ ...p, pen_name: pen }))} />}
+      {canEdit && (role === ROLE_PUBLISHER || role === ROLE_ADMIN) && <PenNameSection profile={profile} onSaved={(pen) => setProfile(p => ({ ...p, pen_name: pen }))} />}
 
       <Section title="Veřejná viditelnost" description="Co o tobě uvidí ostatní čtenáři.">
         <div className="flex items-center justify-between gap-4">
@@ -365,7 +367,7 @@ const SecurityTab = ({ user }) => {
     try {
       const { error } = await supabase.rpc('request_password_help', { p_email: user.email, p_username: accountName || '', p_note: 'Žádost z Nastavení (uživatel je přihlášený).' });
       if (error) return setResetMsg({ type: 'error', text: 'Žádost se nepodařilo odeslat. Zkus to znovu.' });
-      setResetMsg({ type: 'success', text: 'Žádost je u správce. Až ti vydá dočasné heslo, dostaneš ho od něj mimo aplikaci. Po přihlášení si nastavíš vlastní.' });
+      setResetMsg({ type: 'success', text: 'Žádost je u správce. Až ti vydá dočasné heslo, dostaneš ho od něj mimo aplikaci. Po přihlášení si nastavíš vlastní. Odpověď může chvíli trvat, žádost neposílej víckrát.' });
     } finally { setResetBusy(false); }
   };
 
@@ -758,8 +760,8 @@ const ReaderTab = () => {
   // Změna ze čtečky (rychlé přepínače) nebo z jiné záložky se projeví i tady.
   useEffect(() => {
     const sync = () => setPrefs(p => { const n = loadReaderPrefs(); return JSON.stringify(n) === JSON.stringify(p) ? p : n; });
-    window.addEventListener('jomarid-reader-prefs', sync);
-    return () => window.removeEventListener('jomarid-reader-prefs', sync);
+    window.addEventListener(READER_PREFS_EVENT, sync);
+    return () => window.removeEventListener(READER_PREFS_EVENT, sync);
   }, []);
 
   const update = (name, value) => {
@@ -776,6 +778,8 @@ const ReaderTab = () => {
 
   return (
     <div className="space-y-4">
+      <SyncNote />
+
       <div
         data-testid="reader-preview"
         lang={typo.lang}
@@ -846,6 +850,7 @@ const EXPORT_SOURCES = [
   { key: 'likes', table: 'book_likes', column: 'user_id' },
   { key: 'coin_transactions', table: 'coin_transactions', column: 'user_id' },
   { key: 'daily_activity', table: 'user_daily_activity', column: 'user_id' },
+  { key: 'settings', table: SETTINGS_TABLE, column: 'user_id', optional: true }, // tabulka nemusí existovat
 ];
 
 // Supabase vrací nanejvýš 1000 řádků na dotaz - proto se čte po stránkách.
@@ -863,7 +868,7 @@ async function fetchAll(table, column, value) {
 
 const DELETE_ERRORS = {
   admin_cannot_self_delete: 'Účet správce si sám smazat nejde - napřed předej správu jinému správci.',
-  has_published_books: 'Máš vydané knihy. Napřed je smaž, nebo požádej správce o jejich převod - jinak by zůstaly bez vlastníka.',
+  has_published_books: 'Máš vydané knihy. Smazat jdou jen ty, které ještě nemají čtenáře. U ostatních požádej správce o převod na jiný účet (kontakt najdeš na úvodní stránce).',
   not_authenticated: 'Přihlášení vypršelo, přihlas se prosím znovu.',
 };
 
@@ -883,8 +888,9 @@ const DataTab = ({ user, role }) => {
       const data = {};
       const errors = [];
       results.forEach((r, i) => {
-        const { key, table } = EXPORT_SOURCES[i];
+        const { key, table, optional } = EXPORT_SOURCES[i];
         if (r.status === 'fulfilled') data[key] = key === 'profile' ? (r.value[0] || null) : r.value;
+        else if (optional && isMissingTable(r.reason)) return; // chybějící volitelná tabulka není chyba exportu
         else errors.push(`${table}: ${r.reason?.message || 'chyba čtení'}`);
       });
       const payload = {
@@ -903,7 +909,7 @@ const DataTab = ({ user, role }) => {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       setExportMsg(errors.length
-        ? { type: 'info', text: `Export je stažený, ale ${errors.length} část(í) se nepodařilo načíst (najdeš je v souboru pod "errors").` }
+        ? { type: 'info', text: `Export je stažený, ale nepodařilo se načíst ${errors.length} ${plural(errors.length, 'část', 'části', 'částí')} (podrobnosti najdeš v souboru pod "errors").` }
         : { type: 'success', text: 'Export je stažený.' });
     } catch (err) {
       setExportMsg({ type: 'error', text: 'Export se nepovedl: ' + (err?.message || 'neznámá chyba') });
@@ -928,7 +934,7 @@ const DataTab = ({ user, role }) => {
 
   return (
     <div className="space-y-4">
-      <Section title="Stáhnout moje data" description="Soubor JSON se vším, co appka o tobě eviduje: profil, rozečtené knihy, záložky, zvýraznění, hodnocení, komentáře, lajky, mince i aktivita. Texty knih v něm nejsou.">
+      <Section title="Stáhnout moje data" description="Soubor JSON s hlavními údaji účtu: profil (včetně odznaků), rozečtené knihy, záložky, zvýraznění, hodnocení, komentáře, lajky, pohyby mincí, denní aktivita a nastavení. Texty knih a oznámení v něm nejsou.">
         <ActionButton busy={exportBusy} onClick={exportData}><Download size={13} /> Stáhnout data</ActionButton>
         {exportMsg && <Notice type={exportMsg.type}>{exportMsg.text}</Notice>}
       </Section>
@@ -936,11 +942,11 @@ const DataTab = ({ user, role }) => {
       <Section
         danger
         title="Smazat účet"
-        description="Nevratně smaže tvůj účet i všechna data: rozečtené knihy, záložky, zvýraznění, hodnocení, komentáře, mince i odznaky. Zpět to nejde vzít."
+        description="Nevratně smaže tvůj účet i všechna data: profil, odznaky, rozečtené knihy, záložky, zvýraznění, hodnocení, komentáře, lajky, mince, aktivitu a nastavení. Zpět to nejde vzít."
       >
-        {(role === 'správce' || role === 'nakladatel') && (
+        {(role === ROLE_ADMIN || role === ROLE_PUBLISHER) && (
           <Notice type="info">
-            {role === 'správce' ? 'Účet správce si sám smazat nejde.' : 'Pokud máš vydané knihy, nejdřív je musíš smazat nebo nechat převést.'}
+            {role === ROLE_ADMIN ? 'Účet správce si sám smazat nejde.' : 'Vydané knihy musíš před smazáním účtu smazat (jdou jen ty bez čtenářů) nebo nechat převést na jiný účet. Převod udělá správce.'}
           </Notice>
         )}
         <Field label={`Pro potvrzení napiš svůj e-mail (${user.email})`}>
@@ -1029,7 +1035,7 @@ const InboxTab = () => {
     setBusy(false);
   };
 
-  if (missing) return <Notice type="info">Oznámení se zapnou po aktualizaci databáze.</Notice>;
+  if (missing) return <Notice type="info">Oznámení teď nejsou k dispozici. Zkus to později.</Notice>;
   if (items === null) return <div className="flex items-center gap-2 text-xs font-bold" style={{ color: 'var(--text-muted)' }}><Loader2 size={14} className="animate-spin" /> Načítám...</div>;
 
   return (
@@ -1037,12 +1043,12 @@ const InboxTab = () => {
       <PushSettings />
       {error && <Notice type="error">{error}</Notice>}
       {items.length === 0 ? (
-        <p style={{ color: 'var(--text-muted)' }} className="text-sm m-0 py-6 text-center leading-relaxed">Zatím nemáš žádná oznámení. Ozveme se, když správce zasáhne do tvé knihy nebo komentáře, nebo když ti autor daruje knihu.</p>
+        <p style={{ color: 'var(--text-muted)' }} className="text-sm m-0 py-6 text-center leading-relaxed">Zatím nemáš žádná oznámení. Ozveme se, když správce zasáhne do tvé knihy, komentáře nebo uživatelského jména, nebo když ti autor daruje knihu.</p>
       ) : (
         <>
           <div className="flex items-center justify-between gap-3">
-            <span style={{ color: 'var(--text-muted)' }} className="text-xs font-bold">{items.length} {items.length === 1 ? 'oznámení' : items.length < 5 ? 'oznámení' : 'oznámení'}</span>
-            <ActionButton variant="secondary" busy={busy} onClick={removeRead}>Smazat přečtená</ActionButton>
+            <span style={{ color: 'var(--text-muted)' }} className="text-xs font-bold">{items.length} oznámení</span>
+            <ActionButton variant="ghost" busy={busy} onClick={removeRead}>Smazat přečtená</ActionButton>
           </div>
           <ul className="list-none p-0 m-0 space-y-2">
             {items.map(n => {
@@ -1094,7 +1100,7 @@ const useAccountNotices = (user, role, refreshKey) => {
 
 const ChecksTab = ({ state, role, onRecheck }) => {
   const { status, notices, partial } = state;
-  const hasBooks = role === 'nakladatel' || role === 'správce';
+  const hasBooks = role === ROLE_PUBLISHER || role === ROLE_ADMIN;
   const recheck = (
     <button
       type="button"

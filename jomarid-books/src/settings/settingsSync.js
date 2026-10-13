@@ -6,13 +6,13 @@
 // Čistá logika je tady a jde testovat v Node (src/tests/settings.test.mjs); React je jen v SettingsSyncRunner.jsx.
 
 import {
-  ACCENT_KEY, CUSTOM_THEME_STORAGE, MOTION_KEY, READER_STORAGE, THEME_KEY, UI_DENSITY_KEY, UI_SCALE_KEY,
-  completeHex, saveCustomColors,
+  ACCENT_KEY, CUSTOM_THEME_STORAGE, CUSTOM_VARS_STORAGE, MOTION_KEY, READER_STORAGE, THEME_KEY, UI_DENSITY_KEY, UI_SCALE_KEY,
+  completeHex, notifyReaderPrefs, saveCustomColors,
 } from '../theme.js';
 import { REMEMBER_PREF_KEY, SORT_PREF_KEY, STATUS_PREF_KEY, VIEW_KEY } from '../browse/browseStore.js';
 import { notifySettingsApplied } from './settingsEvents.js';
 
-const SEARCH_PREFS_KEY = 'jomarid-search-prefs'; // filtry vyhledávacího okna (stejný klíč jako v SearchModal.jsx)
+export const SEARCH_PREFS_KEY = 'jomarid-search-prefs'; // filtry vyhledávacího okna (SearchModal.jsx importuje klíč odsud)
 const META_KEY = 'jomarid-settings-sync'; // {userId, serverAt, dirty}: co z účtu se naposledy použilo a zda je co odeslat
 export const SETTINGS_TABLE = 'user_settings';
 export const SETTINGS_VERSION = 1;
@@ -63,7 +63,9 @@ export const applySettings = (data, storage = defaultStorage()) => {
   let custom = null;
   try { custom = JSON.parse(clean.items[CUSTOM_THEME_STORAGE]); } catch { /* chybí nebo je rozbité */ }
   if (custom && completeHex(custom.bg) && completeHex(custom.accent)) saveCustomColors({ bg: custom.bg, accent: custom.accent });
-  else { try { storage.removeItem(CUSTOM_THEME_STORAGE); } catch { /* nevadí */ } }
+  else { // účet vlastní barvy nemá: pryč jdou i odvozené proměnné, které index.html čte před vykreslením
+    for (const key of [CUSTOM_THEME_STORAGE, CUSTOM_VARS_STORAGE]) { try { storage.removeItem(key); } catch { /* nevadí */ } }
+  }
   return true;
 };
 
@@ -90,7 +92,6 @@ export const isMissingTable = (error) => {
 
 const readMeta = (storage) => { try { const m = JSON.parse(storage?.getItem(META_KEY)); return m && typeof m === 'object' ? m : null; } catch { return null; } };
 const writeMeta = (storage, meta) => { try { storage?.setItem(META_KEY, JSON.stringify(meta)); } catch { /* nevadí */ } };
-export const clearSyncMeta = (storage = defaultStorage()) => { try { storage?.removeItem(META_KEY); } catch { /* nevadí */ } };
 
 /**
  * Řadič synchronizace. status: 'off' (nepřihlášený) | 'syncing' | 'synced' | 'unavailable' (chybí tabulka) | 'error'.
@@ -151,6 +152,7 @@ export const createSettingsSync = ({
         applying = true;
         try { applySettings(remote.data, storage); } finally { applying = false; }
         writeMeta(storage, { userId: uid, serverAt: remote.updated_at, dirty: false });
+        notifyReaderPrefs(); // čtečka a záložka Čtečka v Nastavení poslouchají vlastní událost
         notifySettingsApplied();
         setStatus('synced');
       } else if (action === 'push') {

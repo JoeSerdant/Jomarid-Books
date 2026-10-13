@@ -2,7 +2,7 @@
 //
 // Ukládá se na dvě místa: do localStorage (hned a bez sítě) a do metadat účtu u Supabase Auth (user_metadata), takže
 // se prohlídka po přihlášení na jiném zařízení neukazuje znovu. Metadata nejsou tajná a uživatel si je může přepsat,
-// což nevadí - nejhorší následek je, že si prohlídku vypne nebo zobrazí znovu sám sobě. Žádná změna databáze není potřeba.
+// což nevadí - nejhorší následek je, že si prohlídku vypne nebo zobrazí znovu sám sobě.
 
 export const SEEN_META_KEY = 'tour_seen_version';
 export const seenStorageKey = (userId) => `jomarid-tour-seen:${userId}`;

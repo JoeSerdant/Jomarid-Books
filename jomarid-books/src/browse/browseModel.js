@@ -1,6 +1,8 @@
 // Společné pomůcky pro procházení dlouhých seznamů (knihovna, studio, administrace): postupné zobrazování po částech,
 // hledání bez ohledu na diakritiku, generované obálky a skloňování. Čistá logika bez Reactu, jde testovat v Node.
 
+import { plural } from '../lib/plural.js';
+
 // Kolik položek se ukáže najednou. 60 se beze zbytku dělí počtem sloupců mřížky (2 až 6), takže rozbalená část nikdy
 // nekončí poloprázdným řádkem; seznam (řádky) je nižší a stačí mu míň.
 export const PAGE_SIZE = { grid: 60, list: 30 };
@@ -54,12 +56,7 @@ export const nextVisibleCount = (visible, total, pageSize) => clampVisible(whole
 export const nextChunkSize = (visible, total, pageSize) => Math.max(0, Math.min(Math.max(1, whole(pageSize)), whole(total) - whole(visible)));
 
 /** Počet se správným tvarem: "1 kniha", "3 knihy", "5 knih", "22 knihy", "25 knih", "112 knih". */
-export const czCount = (n, one, few, many) => {
-  const last = n % 10;
-  const lastTwo = n % 100;
-  const form = n === 1 ? one : last >= 2 && last <= 4 && !(lastTwo >= 12 && lastTwo <= 14) ? few : many;
-  return `${n} ${form}`;
-};
+export const czCount = (n, one, few, many) => `${n} ${plural(n, one, few, many)}`;
 
 // ---- generované obálky ----
 // Knihy nemají obrázek obálky. Místo stejně šedých dlaždic se z názvu odvodí barva, takže se knihy na první pohled

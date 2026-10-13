@@ -20,6 +20,10 @@ const makeStorage = (init = {}) => {
 };
 const setStorage = (s) => Object.defineProperty(globalThis, 'localStorage', { value: s, configurable: true, writable: true });
 beforeEach(() => setStorage(makeStorage()));
+// Zdroj bez komentářů (/* */, JSX {/* */} i řádkové //), aby kontroly textu zdroje nesplnil jen komentář.
+const readCode = (...parts) => fs.readFileSync(path.join(ROOT, ...parts), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/(^|\s)\/\/.*$/gm, '$1');
 
 describe('hotové motivy', () => {
   const KEYS = Object.keys(T.THEMES.saas).sort();
@@ -88,7 +92,7 @@ describe('akcentní barva', () => {
     for (const [tk, theme] of Object.entries(T.THEMES)) {
       for (const ak of Object.keys(T.ACCENTS)) {
         const v = T.withAccent(theme, ak);
-        if (ak !== 'default') assert.ok(T.contrast(v['--bg-primary'], v['--bg-body']) >= T.ACCENT_MIN_CONTRAST - 1e-9, `${tk}/${ak}: zvýraznění na pozadí`); // vestavěné zvýraznění Dřeva a zeleně je už dnes splývavé
+        if (ak !== 'default') assert.ok(T.contrast(v['--bg-primary'], v['--bg-body']) >= T.ACCENT_MIN_CONTRAST - 1e-9, `${tk}/${ak}: zvýraznění na pozadí`); // vestavěné zvýraznění Dřeva a zeleně je splývavé
         assert.ok(T.contrast(v['--text-primary'], v['--bg-primary']) >= 4.5, `${tk}/${ak}: text na zvýraznění`);
         assert.ok(T.contrast(v['--text-badge'], v['--bg-badge']) >= 4.5, `${tk}/${ak}: štítek`);
         for (const k of Object.keys(theme)) if (!['--bg-primary', '--text-primary', '--bg-badge', '--text-badge'].includes(k)) assert.equal(v[k], theme[k], `${tk}/${ak}: ${k} se nemění`);
@@ -201,6 +205,31 @@ describe('synchronizace nastavení: snímek a použití', () => {
     assert.ok(!S.SYNC_KEYS.some((k) => /state|seen|recent|sync/.test(k)), 'stav knihovny, prohlídka a poslední hledání jsou osobní a zůstávají v zařízení');
     assert.equal(new Set(S.SYNC_KEYS).size, S.SYNC_KEYS.length, 'žádný klíč dvakrát');
   });
+  test('filtry vyhledávání: klíč je definovaný jen v settingsSync.js, synchronizuje se a okno hlásí změny i znovu čte po stažení z účtu', () => {
+    assert.equal(S.SEARCH_PREFS_KEY, 'jomarid-search-prefs');
+    assert.ok(S.SYNC_KEYS.includes(S.SEARCH_PREFS_KEY));
+    assert.deepEqual(S.collectSettings(makeStorage({ [S.SEARCH_PREFS_KEY]: '{"scope":"catalog"}' })), { v: 1, items: { 'jomarid-search-prefs': '{"scope":"catalog"}' } });
+    const src = readCode('src', 'components', 'SearchModal.jsx');
+    assert.ok(!src.includes('jomarid-search-prefs'), 'SearchModal si klíč nedefinuje znovu');
+    assert.match(src, /import \{ SEARCH_PREFS_KEY \} from ['"]\.\.\/settings\/settingsSync(\.js)?['"]/);
+    assert.match(src, /localStorage\.setItem\(SEARCH_PREFS_KEY, json\)[\s\S]*?notifySettingsChanged\(\);/, 'změna filtrů se uloží a ohlásí synchronizaci');
+    assert.match(src, /savedPrefsRef\.current = json;/, 'uložená podoba filtrů se pamatuje');
+    assert.match(src, /addEventListener\(SETTINGS_APPLIED, reread\)/, 'po stažení nastavení z účtu se filtry přečtou znovu');
+    assert.match(src, /setPrefs\(next\)/, 'přečtené filtry se použijí');
+    assert.match(src, /removeEventListener\(SETTINGS_APPLIED, reread\)/, 'posluchač se při odmontování odpojí');
+  });
+  test('čtečka: název události i meze posuvníků jsou jen v theme.js', () => {
+    assert.equal(T.READER_PREFS_EVENT, 'jomarid-reader-prefs');
+    const src = readCode('src', 'pages', 'ReaderPage.jsx');
+    const modal = readCode('src', 'components', 'SettingsModal.jsx');
+    assert.ok(!src.includes('jomarid-reader-prefs'), 'ReaderPage používá READER_PREFS_EVENT');
+    assert.ok(!modal.includes('jomarid-reader-prefs'), 'SettingsModal používá READER_PREFS_EVENT');
+    assert.match(src, /addEventListener\(READER_PREFS_EVENT,/);
+    assert.match(modal, /addEventListener\(READER_PREFS_EVENT,/);
+    assert.ok(!/min=\{(14|8)\}|max=\{(28|60)\}/.test(src), 'meze velikosti písma a automatického listování jsou z theme.js');
+    assert.ok(!/Math\.(max|min)\(\s*(14|28)\s*,/.test(src), 'tlačítka A- a A+ berou meze z theme.js');
+    assert.ok(!/\b(min|max)=\{\s*\d+\s*\}/.test(modal), 'posuvníky v Nastavení berou meze z theme.js');
+  });
   test('data z účtu jsou cizí vstup: neznámé klíče, divné typy, příliš dlouhé hodnoty a novější verze se zahodí', () => {
     assert.equal(S.sanitizeRemote(null), null);
     assert.equal(S.sanitizeRemote([]), null);
@@ -231,6 +260,17 @@ describe('synchronizace nastavení: snímek a použití', () => {
     assert.equal(st.getItem('jomarid-books-theme-custom'), null);
     S.applySettings({ v: 1, items: { 'jomarid-books-theme-custom': JSON.stringify({ bg: 'zelená', accent: '#fff' }) } }, st);
     assert.equal(st.getItem('jomarid-books-theme-custom'), null, 'neplatná barva se nezapíše');
+  });
+  test('účet bez vlastních barev smaže i odvozenou kopii pro index.html (nezůstanou barvy předchozího účtu)', () => {
+    const st = makeStorage(); setStorage(st);
+    const withCustom = { v: 1, items: { 'jomarid-books-theme': 'custom', 'jomarid-books-theme-custom': JSON.stringify({ bg: '#0b1020', accent: '#60a5fa' }) } };
+    for (const without of [{ 'jomarid-books-theme': 'custom' }, { 'jomarid-books-theme': 'custom', 'jomarid-books-theme-custom': '{rozbité' }]) {
+      S.applySettings(withCustom, st);
+      assert.ok(st.getItem(T.CUSTOM_VARS_STORAGE), 'kopie se zapsala spolu s barvami');
+      S.applySettings({ v: 1, items: without }, st);
+      assert.equal(st.getItem(T.CUSTOM_THEME_STORAGE), null);
+      assert.equal(st.getItem(T.CUSTOM_VARS_STORAGE), null);
+    }
   });
   test('kdo vyhrává po přihlášení', () => {
     const local = { items: { 'jomarid-books-theme': 'dark' } };
@@ -313,6 +353,17 @@ describe('synchronizace nastavení: řadič', () => {
     assert.equal(storage.getItem('jomarid-motion'), null);
     assert.equal(applied, 1);
     assert.equal(sync.status, 'synced');
+  });
+
+  test('po stažení nastavení z účtu se čtečka dozví o nových volbách, a to dřív než o ostatních změnách', async () => {
+    const { sync } = setup({ client: { rows: { u1: { updated_at: 'T5', data: { v: 1, items: { reader_font_size: '22' } } } } } });
+    const events = [];
+    let fontSizeSeen = null;
+    globalThis.window = { dispatchEvent: (e) => { events.push(e.type); if (e.type === T.READER_PREFS_EVENT) fontSizeSeen = T.loadReaderPrefs().fontSize; } };
+    try { await sync.start('u1'); } finally { delete globalThis.window; }
+    assert.equal(events.filter((t) => t === T.READER_PREFS_EVENT).length, 1);
+    assert.equal(fontSizeSeen, 22, 'událost přijde až po zapsání nastavení');
+    assert.ok(events.indexOf(T.READER_PREFS_EVENT) < events.indexOf('jomarid-settings-applied'));
   });
 
   test('použití nastavení z účtu se nevrací zpátky jako "změna" (žádná smyčka)', async () => {
@@ -400,6 +451,17 @@ describe('synchronizace nastavení: řadič', () => {
     assert.equal(client.rows.u1.data.items['jomarid-accent'], undefined, 'nastavení u1 se u2 nenahrálo ani nepřepsalo');
   });
 
+  test('odhlášení s neodeslanou změnou: záznam o synchronizaci zůstává, takže se změna odešle při dalším přihlášení téhož uživatele', async () => {
+    const { client, sync, storage } = setup({ client: { rows: { u1: { updated_at: 'T5', data: { v: 1, items: { 'jomarid-books-theme': 'dark' } } } } } });
+    await sync.start('u1');
+    storage.setItem('jomarid-accent', 'rose'); sync.changed();
+    sync.stop();
+    assert.deepEqual(JSON.parse(storage.getItem('jomarid-settings-sync')), { userId: 'u1', serverAt: 'T5', dirty: true });
+    await sync.start('u1');
+    assert.equal(client.rows.u1.data.items['jomarid-accent'], 'rose');
+    assert.equal(JSON.parse(storage.getItem('jomarid-settings-sync')).dirty, false);
+  });
+
   test('flush bez neodeslaných změn nic neposílá', async () => {
     const { client, sync } = setup({ client: { rows: { u1: { updated_at: 'T5', data: { v: 1, items: { 'jomarid-books-theme': 'dark' } } } } } });
     await sync.start('u1');
@@ -410,12 +472,12 @@ describe('synchronizace nastavení: řadič', () => {
 });
 
 describe('verze aplikace', () => {
-  test('verze v appInfo.js odpovídá package.json (i v package-lock.json) a popisek z ní vychází', () => {
+  test('verze je jen v appInfo.js (package.json ani zámek ji nenesou) a popisek z ní vychází', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
     const lock = JSON.parse(fs.readFileSync(path.join(ROOT, 'package-lock.json'), 'utf8'));
-    assert.equal(APP_VERSION, pkg.version);
-    assert.equal(lock.version, pkg.version);
-    assert.equal(lock.packages[''].version, pkg.version);
+    assert.equal(pkg.version, undefined);
+    assert.equal(lock.version, undefined);
+    assert.equal(lock.packages[''].version, undefined);
     assert.match(APP_VERSION, /^\d+\.\d+\.\d+$/);
     assert.ok(APP_VERSION.startsWith(APP_VERSION_SHORT + '.'));
     assert.equal(APP_VERSION_LABEL, 'Verze ' + APP_VERSION_SHORT);

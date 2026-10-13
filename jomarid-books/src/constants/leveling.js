@@ -1,7 +1,8 @@
-// Sdílené výpočty úrovně/XP - vytaženo z UserStats.jsx, ať existuje jen JEDNA
-// pravda o tom, jak se počítá level. Cokoliv, co ukazuje uživatelův level
-// (Statistiky, domovská stránka po přihlášení, žebříček...), musí čerpat
-// odsud, ne mít vlastní kopii vzorce.
+// Sdílené výpočty úrovně/XP: jediné místo, kde se počítá level. Cokoliv, co ukazuje
+// úroveň (Statistiky, domovská stránka po přihlášení, žebříček...), čerpá odsud.
+
+// Výchozí měsíční cíl (počet knih); bonus za splněný cíl začíná až nad ním.
+export const DEFAULT_MONTHLY_GOAL = 25;
 
 export const calculateXpMultiplier = (streakCount) => {
   if (streakCount >= 50) return streakCount * 50;
@@ -10,8 +11,6 @@ export const calculateXpMultiplier = (streakCount) => {
 };
 
 export const calculateLevelAndProgress = (totalXp) => {
-  if (totalXp >= 1000000) return { level: 100, xpInCurrentLevel: 100, xpNeededForNext: 100 };
-
   const getRequiredXp = (lvl) => (lvl <= 1 ? 0 : Math.round(100 * Math.pow(1.5, lvl - 1)));
 
   let currentLevel = 1;
@@ -62,6 +61,15 @@ export const getLevelVisuals = (lvl) => {
 // splněných v jednom měsíci = +2 % XP za knihu natrvalo. Server hodnotu zvedá
 // jen při skutečném splnění (viz award_goal_completion v migraci).
 export const calculateGoalMultiplier = (highestGoalCompleted) => {
-  const g = parseInt(highestGoalCompleted, 10) || 25;
-  return g > 25 ? 1 + (g - 25) * 0.02 : 1;
+  const g = parseInt(highestGoalCompleted, 10) || DEFAULT_MONTHLY_GOAL;
+  return g > DEFAULT_MONTHLY_GOAL ? 1 + (g - DEFAULT_MONTHLY_GOAL) * 0.02 : 1;
 };
+
+// Celkové XP: dočtené knihy (s násobkem za splněný cíl) + XP za sérii + bonusy z profilu + XP z odznaků.
+// badgeXp spočítej přes sumBadgeXp() (constants/badgeXp.js).
+export const computeTotalXp = ({ totalRead = 0, highestGoalCompleted, fakeXp, bonusXp, streak = 0, badgeXp = 0 }) =>
+  Math.round((totalRead * 100) * calculateGoalMultiplier(highestGoalCompleted))
+  + (parseInt(fakeXp, 10) || 0)
+  + (parseInt(bonusXp, 10) || 0)
+  + calculateXpMultiplier(streak)
+  + badgeXp;

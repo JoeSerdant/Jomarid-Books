@@ -34,7 +34,7 @@ export const InstallNote = () => {
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
         <Smartphone size={15} style={{ color: 'var(--text-muted)' }} className="shrink-0" />
         <p style={{ color: 'var(--text-body)' }} className="m-0 flex-1 min-w-[12rem]">
-          <strong>Jomarid Books máš i jako aplikaci.</strong> Spustíš ji z plochy, bez adresního řádku, a otevře se i bez připojení.
+          <strong>Jomarid Books máš i jako aplikaci.</strong> Spustíš ji z plochy, bez adresního řádku, a otevře se i bez připojení (knihy se ale načítají z internetu).
         </p>
         {canPrompt && <button type="button" onClick={install} style={{ ...solid, border: 'none' }} className={btn}><Download size={13} /> Nainstalovat</button>}
         {!canPrompt && ios && <button type="button" onClick={() => setSteps((s) => !s)} aria-expanded={steps} style={{ ...solid, border: 'none' }} className={btn}>Jak na to</button>}
@@ -74,7 +74,7 @@ export const InstallPopup = () => {
         <span style={solid} className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-black">J</span>
         <div className="min-w-0">
           <p className="m-0 text-sm font-black">Nechceš si nainstalovat Jomarid Books?</p>
-          <p style={{ color: 'var(--text-muted)' }} className="m-0 mt-1 text-xs leading-relaxed">Otevře se jako appka z plochy, bez adresního řádku, a funguje i bez připojení.</p>
+          <p style={{ color: 'var(--text-muted)' }} className="m-0 mt-1 text-xs leading-relaxed">Otevře se jako appka z plochy, bez adresního řádku. Bez připojení se spustí, ale knihy se načítají z internetu.</p>
         </div>
       </div>
       {state.ios && !state.canPrompt && steps && <div className="mt-3"><IosSteps /></div>}

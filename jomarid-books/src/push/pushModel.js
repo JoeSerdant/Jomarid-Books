@@ -4,6 +4,8 @@ import { isIosDevice } from '../pwa/installModel.js';
 export const VAPID_SETTINGS_KEY = 'push_vapid_public'; // site_settings: { key: "<veřejný klíč VAPID>" }
 // Zkušební oznámení se odešle až za tolik vteřin: stihneš appku zavřít, přepnout se jinam nebo zamknout telefon a oznámení opravdu uvidíš.
 export const TEST_PUSH_DELAY_SECONDS = 10;
+// Trvalá nápověda vedle tlačítka zkušebního oznámení: co zkontrolovat, když nepřišlo.
+export const TEST_PUSH_HELP = 'Nepřišlo? Zkontroluj, že jsou povolená oznámení pro prohlížeč nebo appku a že není zapnuté Nerušit. Na iPhonu musí být appka přidaná na plochu. Pomůže i oznámení tady vypnout a znovu zapnout.';
 
 /**
  * Jde v tomhle prohlížeči zapnout oznámení? reason: 'ok' | 'ios-needs-install' (iPhone a iPad je umí jen v appce přidané na
@@ -41,14 +43,14 @@ export const sameApplicationServerKey = (sub, keyBytes) => {
 /** Text pro uživatele podle výsledku zapnutí. */
 export const enableMessage = (status) => ({
   enabled: 'Oznámení jsou v tomhle zařízení zapnutá.',
-  denied: 'Oznámení jsou v prohlížeči zablokovaná. Povol je v nastavení webu (ikona vedle adresy) a zkus to znovu.',
+  denied: 'Oznámení jsou zablokovaná. Povol je v nastavení webu (ikona vedle adresy) nebo v nastavení zařízení u prohlížeče či appky Jomarid Books a zkus to znovu.',
   dismissed: 'Oznámení nejsou povolená. Zapneš je kdykoli později.',
-  'not-configured': 'Oznámení do zařízení se zapnou po nastavení serveru (to dělá správce).',
+  'not-configured': 'Oznámení do zařízení teď nejsou k dispozici. Zkus to později.',
   'no-sw': 'Appka se ještě nenačetla do offline režimu. Zkus to za chvíli, nebo stránku obnov.',
   error: 'Oznámení se nepodařilo zapnout. Zkus to znovu.',
 }[status] || '');
 
-/** Druhy motivačních oznámení (shodují se s db/push-notifications.sql a db/push/send-push.ts): pro ukázky ve Správě. */
+/** Druhy motivačních oznámení (shodují se s db/push-notifications.sql a db/push/send-push.ts): pro ukázky v Admin → Upozornění. */
 export const PUSH_KINDS = [
   { kind: 'streak_risk', label: 'Série v ohrožení' },
   { kind: 'streak_milestone', label: 'Milník série' },

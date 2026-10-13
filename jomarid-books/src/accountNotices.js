@@ -2,28 +2,27 @@
 //
 // Každý přihlášený uživatel (čtenář, nakladatel i správce) tu vidí jen to, co může opravit sám: chybějící jméno
 // u účtu a u nakladatelů i nedodělané knihy. Nic z toho se nepočítá na serveru ani se nikam neukládá - jde o čtení
-// z tabulek, ke kterým už appka přistupuje (profiles, books, book_contents a soubory textů ve Storage), takže žádná změna databáze není potřeba.
+// z tabulek, ke kterým už appka přistupuje (profiles, books, book_contents a soubory textů ve Storage).
 //
 // Logika je rozdělená na dvě části, ať jde první otestovat bez prohlížeče a bez databáze:
 //   buildAccountNotices - čistá funkce: z načtených dat udělá seznam upozornění
 //   loadAccountNotices  - načte data (klient Supabase se předává zvenku, tenhle soubor ho neimportuje)
 //
-// Zásada: když se něco nepodaří načíst, upozornění na to se NEvymýšlí (chybějící data ≠ chybějící text knihy);
+// Když se něco nepodaří načíst, upozornění se nevytváří (chybějící data ≠ chybějící text knihy);
 // kontrola se jen označí jako neúplná.
+
+import { findBookTexts } from './bookText/bookText.js';
+import { plural } from './lib/plural.js';
+import { ROLE_PUBLISHER, ROLE_ADMIN } from './constants/roles.js';
 
 export const LEVEL_WARN = 'warn';  // je potřeba opravit
 export const LEVEL_INFO = 'info';  // tip nebo připomenutí
 
 // Role, které můžou mít vlastní knihy.
-import { findBookTexts } from './bookText/bookText.js';
-
-export const ROLES_WITH_BOOKS = ['nakladatel', 'správce'];
+export const ROLES_WITH_BOOKS = [ROLE_PUBLISHER, ROLE_ADMIN];
 
 export const MAX_ITEMS = 5; // kolik názvů knih se ukáže v jednom upozornění, zbytek se jen spočítá
 const CONTENT_CHUNK = 40;   // kolik knih se ptáme na text najednou (limit délky adresy dotazu)
-
-// Česká množná čísla: 1 kniha, 2-4 knihy, 5 a víc knih (i 0).
-export const plural = (n, one, few, many) => (n === 1 ? one : n >= 2 && n <= 4 ? few : many);
 
 const isBlank = (v) => typeof v !== 'string' || v.trim() === '';
 const titleOf = (b) => (typeof b?.title === 'string' && b.title.trim() ? b.title.trim() : 'Bez názvu');
@@ -57,16 +56,16 @@ export const buildAccountNotices = ({ role, profile, books, bookIdsWithContent }
       out.push({
         id: 'username-missing', level: LEVEL_WARN,
         title: 'Chybí uživatelské jméno',
-        detail: 'Bez něj se v žebříčku a na dalších místech ukáže začátek tvého e-mailu (před zavináčem).',
+        detail: 'Bez něj se v žebříčku ukážeš jako Anonym a na dalších místech (třeba v nabídce nebo na úvodní stránce) se použije začátek tvého e-mailu před zavináčem.',
         to: '/settings/profile', linkLabel: 'Nastavit jméno',
       });
     }
     if (ROLES_WITH_BOOKS.includes(role) && isBlank(profile.pen_name)) {
       out.push({
         id: 'pen-name-missing', level: LEVEL_INFO,
-        title: 'Nemáš nastavené autorské jméno',
-        detail: 'Autorské jméno se ukazuje u tvých knih. Nastav si ho, ať čtenáři vidí, kdo knihy napsal.',
-        to: '/settings/profile', linkLabel: 'Nastavit autorské jméno',
+        title: 'Nemáš nastavené krycí jméno',
+        detail: 'Krycí jméno se ukazuje u tvých knih místo uživatelského jména. Nastav si ho, ať čtenáři vidí, kdo knihy napsal.',
+        to: '/settings/profile', linkLabel: 'Nastavit krycí jméno',
       });
     }
   }

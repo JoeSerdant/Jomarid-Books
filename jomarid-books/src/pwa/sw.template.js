@@ -3,7 +3,8 @@
    - Zpracovává jen GET požadavky na vlastní adresu. Databáze (Supabase), písma a cizí skripty se nikdy neukládají ani
      nezdržují: data se vždy berou z internetu, aby čtenář neviděl zastaralý stav knihovny, mincí ani postupu.
    - Stránky (navigace): nejdřív síť (vždy nejnovější verze), a když není připojení nebo je moc pomalé, uložený obal appky.
-   - Soubory v /assets/ mají v názvu otisk obsahu, takže se po stažení berou z úložiště (jsou neměnné).
+   - Soubory v /assets/ mají v názvu otisk obsahu, takže se po stažení berou z úložiště (jsou neměnné). Odpověď typu HTML
+     se mezi ně neukládá ani se z něj nevrací: místo souboru ji může vrátit server, který všechny adresy přesměrovává na index.html, nebo přihlašovací stránka Wi-Fi.
    - Při nové verzi se staré úložiště smaže a nový service worker se ujme stránek hned.
    - Oznámení do zařízení (Web Push): událost push vždy ukáže oznámení (iPhone to vyžaduje u každého pushe), klepnutí otevře
      appku na cílové stránce. Cíl smí být jen cesta v téhle appce. */
@@ -60,9 +61,9 @@ const networkFirstShell = async (request) => {
 const cacheFirst = async (request) => {
   const cache = await caches.open(CACHE);
   const hit = await cache.match(request);
-  if (hit) return hit;
+  if (hit && !isHtml(hit)) return hit;
   const res = await fetch(request);
-  if (res.ok) { try { await cache.put(request, res.clone()); } catch { /* plné úložiště: soubor se přesto použije */ } }
+  if (res.ok && !isHtml(res)) { try { await cache.put(request, res.clone()); } catch { /* plné úložiště: soubor se přesto použije */ } }
   return res;
 };
 

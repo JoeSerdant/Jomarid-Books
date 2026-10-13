@@ -4,30 +4,32 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase, validateNewPassword, mapAuthError } from '../lib/supabase';
 import { Button, Card } from '../components/ui';
 import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
+import { USERNAME_RE, USERNAME_MIN, USERNAME_MAX } from '../lib/username';
 
 const INPUT_STYLE = { backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' };
 const INPUT_CLASS = 'w-full p-3 border rounded-lg text-sm font-bold outline-none transition-colors placeholder:opacity-50';
 
-const USERNAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{1,18}[A-Za-z0-9]$/;
 const NAME_HINTS = {
   idle: 'Nepovinné. Když ho nevyplníš, vytvoříme ho z e-mailu; změnit ho půjde v Nastavení.',
   checking: 'Zjišťuju, jestli je volné...',
   available: 'Jméno je volné.',
   taken: 'Tohle jméno už někdo používá.',
   reserved: 'Tohle jméno je rezervované. Zvol jiné.',
-  invalid: 'Zatím neplatné: 3-20 znaků, a-z bez diakritiky, číslice, tečka, podtržítko, pomlčka.',
+  invalid: `Zatím neplatné: ${USERNAME_MIN}-${USERNAME_MAX} znaků, a-z bez diakritiky, číslice, tečka, podtržítko, pomlčka.`,
   error: 'Dostupnost teď nejde ověřit - jméno se zkusí použít při vytvoření účtu.',
 };
+
+const ACCOUNT_EXISTS_TEXT = 'Účet s tímto e-mailem už existuje. Přihlas se, nebo si na přihlášení vyber „Zapomenuté heslo“.';
+const NO_MAIL_HINT = 'Nic nepřišlo? Mrkni do spamu a hromadné pošty, e-mail může dorazit i za pár minut.';
 
 const TITLES = { login: 'Vstup do čítárny', signup: 'Vytvořit nový účet', forgot: 'Zapomenuté heslo' };
 const SUBMIT_LABELS = { login: 'Odemknout čítárnu', signup: 'Zaregistrovat se', forgot: 'Poslat žádost správci' };
 
-// Srozumitelná hláška podle toho, CO se doopravdy stalo - dřív se všechny chyby
-// přihlášení schovávaly za "Neplatný e-mail nebo heslo", takže třeba nepotvrzený
-// e-mail vypadal úplně stejně jako překlep v hesle.
+// Hláška podle toho, CO se doopravdy stalo: nepotvrzený e-mail se uživateli
+// nesmí zobrazit stejně jako překlep v hesle.
 const loginErrorText = (err) => {
   const msg = String(err?.message || '').toLowerCase();
-  if (msg.includes('email not confirmed')) return 'E-mail zatím není potvrzený - klikni na odkaz v potvrzovacím e-mailu.';
+  if (msg.includes('email not confirmed')) return `E-mail zatím není potvrzený - klikni na odkaz v potvrzovacím e-mailu. ${NO_MAIL_HINT}`;
   if (err?.status === 429 || msg.includes('rate limit') || msg.includes('too many')) return 'Příliš mnoho pokusů. Zkus to za chvíli.';
   return 'Neplatný e-mail nebo přístupové heslo.';
 };
@@ -74,7 +76,7 @@ export const LoginPage = () => {
     try {
       if (mode === 'signup') {
         const wanted = username.trim();
-        if (wanted && !USERNAME_RE.test(wanted)) { setError('Uživatelské jméno: 3-20 znaků, a-z bez diakritiky, číslice, tečka, podtržítko nebo pomlčka. Nebo pole nech prázdné.'); return; }
+        if (wanted && !USERNAME_RE.test(wanted)) { setError(`Uživatelské jméno: ${USERNAME_MIN}-${USERNAME_MAX} znaků, a-z bez diakritiky, číslice, tečka, podtržítko nebo pomlčka. Nebo pole nech prázdné.`); return; }
         if (wanted && (nameCheck === 'taken' || nameCheck === 'reserved')) { setError('Tohle uživatelské jméno nejde použít. Zvol jiné, nebo pole nech prázdné.'); return; }
         // Vybrané jméno jde v user_metadata; server ho při založení profilu znovu ověří (platné, volné, nerezervované).
         const { data, error: signUpError } = await supabase.auth.signUp(wanted ? { email, password, options: { data: { username: wanted } } } : { email, password });
@@ -84,12 +86,12 @@ export const LoginPage = () => {
         // ale "prázdného" uživatele bez identit - bez téhle kontroly by appka hlásila
         // úspěšnou registraci, i když se nic nevytvořilo.
         if (Array.isArray(data?.user?.identities) && data.user.identities.length === 0) {
-          setError('Účet s tímto e-mailem už existuje. Přihlas se, nebo požádej správce o dočasné heslo (odkaz „Zapomněl jsi heslo?“).');
+          setError(ACCOUNT_EXISTS_TEXT);
           return;
         }
         if (!data?.session) {
           switchMode('login');
-          setNotice('Účet je vytvořený. Poslali jsme ti potvrzovací e-mail - klikni na odkaz v něm a pak se přihlas.');
+          setNotice('Účet je vytvořený. Poslali jsme ti potvrzovací e-mail - klikni na odkaz v něm a pak se přihlas. ' + NO_MAIL_HINT);
         }
         setPassword('');
       } else if (mode === 'forgot') {
@@ -98,7 +100,7 @@ export const LoginPage = () => {
         // tenhle formulář zjišťovat, kdo je registrovaný.
         const { error: helpError } = await supabase.rpc('request_password_help', { p_email: email, p_username: username, p_note: note.trim() || null });
         if (helpError) throw helpError;
-        setNotice('Žádost je odeslaná správci. Pokud e-mail i uživatelské jméno sedí, správce ti vydá dočasné heslo a předá ti ho mimo aplikaci. Po přihlášení si nastavíš vlastní.');
+        setNotice('Žádost je odeslaná správci. Pokud e-mail i uživatelské jméno sedí, správce ti vydá dočasné heslo a předá ti ho mimo aplikaci. Po přihlášení si nastavíš vlastní. Odpověď může chvíli trvat, žádost neposílej víckrát.');
         setUsername('');
         setNote('');
       } else {
@@ -109,7 +111,7 @@ export const LoginPage = () => {
       const msg = String(err?.message || '').toLowerCase();
       if (mode === 'signup') {
         setError(msg.includes('already registered') || msg.includes('already been registered')
-          ? 'Účet s tímto e-mailem už existuje. Přihlas se, nebo požádej správce o dočasné heslo (odkaz „Zapomněl jsi heslo?“).'
+          ? ACCOUNT_EXISTS_TEXT
           : (err.message || 'Chyba při vytváření účtu.'));
       } else if (mode === 'forgot') {
         setError(err?.status === 429 || msg.includes('rate limit') ? 'Příliš mnoho pokusů. Zkus to za chvíli.' : 'Žádost se nepodařilo odeslat. Zkus to znovu.');
@@ -134,14 +136,14 @@ export const LoginPage = () => {
           <input type="email" placeholder="E-mailová adresa" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" style={INPUT_STYLE} className={INPUT_CLASS} required />
           {mode === 'forgot' && (
             <>
-              <input type="text" placeholder="Uživatelské jméno" value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} maxLength={20} style={INPUT_STYLE} className={INPUT_CLASS} required />
+              <input type="text" placeholder="Uživatelské jméno" value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} maxLength={USERNAME_MAX} style={INPUT_STYLE} className={INPUT_CLASS} required />
               <textarea placeholder="Vzkaz pro správce (nepovinné): jak tě pozná, kde ti může odpovědět..." value={note} onChange={e => setNote(e.target.value)} rows={3} maxLength={500} style={INPUT_STYLE} className={`${INPUT_CLASS} resize-none font-medium`} />
             </>
           )}
           {mode !== 'forgot' && (
             <input
               type="password"
-              placeholder={mode === 'signup' ? 'Zvolte si heslo' : 'Přístupové heslo'}
+              placeholder={mode === 'signup' ? 'Zvol si heslo' : 'Přístupové heslo'}
               value={password}
               onChange={e => setPassword(e.target.value)}
               autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
@@ -152,7 +154,7 @@ export const LoginPage = () => {
           )}
           {mode === 'signup' && (
             <div>
-              <input type="text" placeholder="Uživatelské jméno (nepovinné)" value={username} onChange={e => setUsername(e.target.value)} autoComplete="off" autoCapitalize="none" spellCheck={false} maxLength={20} aria-describedby="signup-username-hint" style={INPUT_STYLE} className={INPUT_CLASS} />
+              <input type="text" placeholder="Uživatelské jméno (nepovinné)" value={username} onChange={e => setUsername(e.target.value)} autoComplete="off" autoCapitalize="none" spellCheck={false} maxLength={USERNAME_MAX} aria-describedby="signup-username-hint" style={INPUT_STYLE} className={INPUT_CLASS} />
               <p id="signup-username-hint" aria-live="polite" style={{ color: nameCheck === 'available' ? '#10b981' : (nameCheck === 'idle' || nameCheck === 'checking' || nameCheck === 'error') ? 'var(--text-muted)' : '#ef4444' }} className="text-[0.6875rem] font-bold m-0 mt-1.5 px-1 leading-snug">{NAME_HINTS[nameCheck]}</p>
             </div>
           )}
@@ -172,7 +174,7 @@ export const LoginPage = () => {
         <div style={{ borderColor: 'var(--border-color)' }} className="mt-4 pt-4 border-t text-center space-y-2">
           {mode === 'login' && (
             <button type="button" onClick={() => switchMode('forgot')} style={{ color: 'var(--text-muted)' }} className="block w-full text-xs font-bold hover:underline bg-transparent border-none cursor-pointer">
-              Zapomněl jsi heslo?
+              Zapomenuté heslo?
             </button>
           )}
           <button
@@ -181,7 +183,7 @@ export const LoginPage = () => {
             style={{ color: 'var(--bg-primary)' }}
             className="block w-full text-xs font-bold hover:underline bg-transparent border-none cursor-pointer tracking-wide uppercase"
           >
-            {mode === 'login' ? 'Nemáte účet? Zaregistrujte se zde' : mode === 'signup' ? 'Už máte účet? Přihlaste se' : 'Zpět na přihlášení'}
+            {mode === 'login' ? 'Nemáš účet? Zaregistruj se zde' : mode === 'signup' ? 'Už máš účet? Přihlas se' : 'Zpět na přihlášení'}
           </button>
         </div>
       </Card>
@@ -293,8 +295,8 @@ export const ResetPasswordPage = () => {
       <h2 className="text-lg font-black uppercase tracking-tight m-0">Odkaz nefunguje</h2>
       <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">
         {LINK_EXPIRED
-          ? 'Odkaz pro obnovu hesla vypršel nebo už byl použit. Heslo se teď obnovuje přes správce: na přihlášení klikni na „Zapomněl jsi heslo?“.'
-          : 'Tenhle odkaz je neplatný, vypršel, nebo už byl použit. Heslo se teď obnovuje přes správce: na přihlášení klikni na „Zapomněl jsi heslo?“.'}
+          ? 'Odkaz pro obnovu hesla vypršel nebo už byl použit. Heslo se teď obnovuje přes správce: na přihlášení klikni na „Zapomenuté heslo“.'
+          : 'Tenhle odkaz je neplatný, vypršel, nebo už byl použit. Heslo se teď obnovuje přes správce: na přihlášení klikni na „Zapomenuté heslo“.'}
       </p>
       <Link to="/login" className="inline-block no-underline"><Button type="button" className="uppercase tracking-wider">Zpět na přihlášení</Button></Link>
     </div>

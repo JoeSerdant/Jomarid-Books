@@ -3,13 +3,13 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { BOOK_BADGES } from '../constants/badges';
-import { calculateXpMultiplier, calculateLevelAndProgress, getLevelVisuals, calculateGoalMultiplier } from '../constants/leveling';
+import { calculateLevelAndProgress, getLevelVisuals, calculateGoalMultiplier, computeTotalXp, DEFAULT_MONTHLY_GOAL } from '../constants/leveling';
+import { sumBadgeXp } from '../constants/badgeXp';
+import { STREAK_FREEZE_PRICE } from '../constants/economy';
+import { plural } from '../lib/plural';
 import { BadgesSection } from '../components/BadgesSection';
-import { Award, Calendar, CheckCircle, ChevronRight, Coins, Flame, Loader2, Lock, Shield, ShieldCheck, ShieldOff, Sparkles, TrendingUp, Trophy, Users } from 'lucide-react';
+import { Calendar, CheckCircle, ChevronRight, Coins, Flame, Loader2, Lock, Shield, ShieldCheck, ShieldOff, Sparkles, TrendingUp, Trophy, Users } from 'lucide-react';
 
-// ==========================================
-// 3. HLAVNÍ KOMPONENTA USER STATS
-// ==========================================
 export const UserStats = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -17,14 +17,14 @@ export const UserStats = () => {
   const [buyingFreeze, setBuyingFreeze] = useState(false);
   
   const [isEditingGoal, setIsEditingGoal] = useState(false);
-  const [newGoalInput, setNewGoalInput] = useState('25');
+  const [newGoalInput, setNewGoalInput] = useState(String(DEFAULT_MONTHLY_GOAL));
   const [goalError, setGoalError] = useState('');
   const [activeTab, setActiveTab] = useState('streak');
 
   const [stats, setStats] = useState({
     streak: 0,
     monthlyRead: 0,
-    monthlyGoal: 25,
+    monthlyGoal: DEFAULT_MONTHLY_GOAL,
     totalRead: 0,
     weeklyActivity: [],
     readingTrend: [],
@@ -39,10 +39,9 @@ export const UserStats = () => {
     showInLeaderboard: true,
     unlockedBadges: [],
     jomaridCoins: 0,
-    lifetimeCoins: 0,
     streakFreezes: 0,
     frozenDates: [],
-    highestGoalCompleted: 25,
+    highestGoalCompleted: DEFAULT_MONTHLY_GOAL,
     featuredBadge: null,
     goalLocked: false,
     goalLockedCompletely: false,
@@ -73,7 +72,7 @@ export const UserStats = () => {
 
       // Paralelní stažení profilu, knih, denní aktivity a vyřešení streaku
       // (resolve_streak() sám dožene libovolné množství uplynulých dní od
-      // posledního vyřešení - klient už žádnou historii sám neprochází).
+      // posledního vyřešení - klient historii sám neprochází).
       const [profileRes, booksRes, activityRes, streakRes] = await Promise.all([
         supabase.from('profiles').select('fake_xp, bonus_xp, show_in_leaderboard, unlocked_badges, monthly_goal, last_goal_change_date, coins, lifetime_coins_earned, streak_freezes, frozen_dates, current_streak, highest_goal_completed, featured_badge').eq('id', user.id).maybeSingle(),
         supabase.from('user_books').select('updated_at, first_completed_at, is_read').eq('user_id', user.id).eq('is_read', true),
@@ -88,8 +87,8 @@ export const UserStats = () => {
       // 1. ZÁKLADNÍ METRIKY - měsíční postup i trend čtou first_completed_at
       // (kdy byla kniha SKUTEČNĚ poprvé dočtena), ne updated_at (to se
       // přepisuje při každé synchronizaci pozice, včetně OPAKOVANÉHO čtení
-      // už jednou dočtené knihy - to by jinak uměle nafouklo měsíční postup
-      // i graf trendu, aniž bys přečetl jedinou NOVOU knihu).
+      // už jednou dočtené knihy - to by uměle nafouklo měsíční postup
+      // i graf trendu, i když nepřibyla žádná nová kniha).
       const totalRead = userBooks.length;
       const monthlyRead = userBooks.filter(ub => {
         if (!ub.first_completed_at) return false;
@@ -112,21 +111,21 @@ export const UserStats = () => {
       }
 
       // 2. MĚSÍČNÍ CÍL A ZAMYKÁNÍ ZMĚNY
-      // Cíl lze v appce zvýšit KDYKOLIV, dokud jsi v tomhle měsíci nedosáhl
-      // aspoň poloviny současného cíle - pak už se cíl nedá změnit vůbec
+      // Cíl lze v appce zvýšit KDYKOLIV, dokud v tomhle měsíci nemáš
+      // aspoň polovinu současného cíle - pak už se cíl nedá změnit vůbec
       // (ani nahoru, ani dolů) až do dalšího měsíce. Server (trigger)
-      // vynucuje totéž, tohle je jen pro UI (zobrazit zámek dřív, než se
-      // o změnu vůbec pokusíš).
-      const currentGoal = profileData.monthly_goal || parseInt(localStorage.getItem(`monthly_goal_${user.id}`), 10) || 25;
+      // vynucuje totéž, tohle je jen pro UI (zámek se ukáže ještě před
+      // pokusem o změnu).
+      const currentGoal = profileData.monthly_goal || parseInt(localStorage.getItem(`monthly_goal_${user.id}`), 10) || DEFAULT_MONTHLY_GOAL;
       // Nejvyšší cíl, který jsi SKUTEČNĚ SPLNIL - ne nejvyšší, který sis nastavil.
-      const highestGoalCompleted = parseInt(profileData.highest_goal_completed, 10) || 25;
+      const highestGoalCompleted = parseInt(profileData.highest_goal_completed, 10) || DEFAULT_MONTHLY_GOAL;
       const lastGoalChange = profileData.last_goal_change_date ? new Date(profileData.last_goal_change_date) : null;
       const isChangedThisMonth = lastGoalChange && lastGoalChange.getFullYear() === currentYear && lastGoalChange.getMonth() === currentMonth;
       const isLockedByProgress = profileData.monthly_goal != null && monthlyRead >= Math.ceil(profileData.monthly_goal / 2);
       const isGoalLocked = isChangedThisMonth || isLockedByProgress;
       // 3. STREAK - vyřešeno na serveru (resolve_streak(), zavoláno výš). Klient
-      // už žádnou historii sám neprochází ani nespotřebovává pojistky - jen
-      // přečte, co server už natrvalo rozhodl, a pro ZOBRAZENÍ připočte dnešek
+      // historii sám neprochází ani nespotřebovává pojistky - jen
+      // přečte, co server natrvalo rozhodl, a pro ZOBRAZENÍ připočte dnešek
       // (pokud se dnes už četlo), aniž by ho trvale zapisoval - to se stane samo
       // při příštím resolve_streak(), až dnešek jednou skutečně celý uplyne.
       const streakResult = streakRes?.data;
@@ -162,28 +161,30 @@ export const UserStats = () => {
       let newlyUnlockedBadges = [];
 
       // XP/level BEZ odznáčkového bonusu - potřeba dopředu, aby šlo vyhodnotit
-      // odznáčky z kategorie "levels" (dřív se level do evalContextu vůbec nedostal).
-      // Bonus se počítá z NEJVYŠŠÍHO SPLNĚNÉHO cíle (highestGoalCompleted), ne z
-      // nastaveného - jinak by stačilo si dát cíl 500 a nikdy ho neplnit. Hodnotu
-      // zvedá jen server, ve chvíli, kdy dočteš knihu a v měsíci dosáhneš cíle;
-      // jednou získaný bonus se pak už nesnižuje. Vzorec je ve sdíleném leveling.js.
-      const goalMultiplier = calculateGoalMultiplier(highestGoalCompleted);
-      const baseXpFromBooks = Math.round((totalRead * 100) * goalMultiplier);
-      const streakXpBonus = calculateXpMultiplier(streak);
-      const fakeXpFromDB = parseInt(profileData.fake_xp, 10) || 0;
-      const bonusXpFromDB = parseInt(profileData.bonus_xp, 10) || 0;
-      // POZOR: coins je teď SKUTEČNÁ utratitelná měna (nákup knih ji snižuje), takže se
-      // s ní nesmí zacházet jako s odvozenou hodnotou, kterou lze při každém načtení přepsat -
-      // to by smazalo utracené i nalogované mince. lifetime_coins_earned je oddělený součet,
-      // který nikdy neklesá (i po utracení), a slouží jen k vyhodnocení odznáčků "nasbíral jsi X mincí".
+      // odznáčky z kategorie "levels". Bonus za cíl se počítá z NEJVYŠŠÍHO SPLNĚNÉHO
+      // cíle (highestGoalCompleted), ne z nastaveného - jinak by stačilo si dát cíl
+      // 500 a nikdy ho neplnit. Hodnotu zvedá jen server, ve chvíli, kdy dočteš knihu
+      // a v měsíci dosáhneš cíle; jednou získaný bonus se pak už nesnižuje. Vzorec je
+      // ve sdíleném leveling.js (computeTotalXp).
+      // coins je skutečná utratitelná měna (nákup knih ji snižuje), proto se nesmí
+      // přepisovat odvozenou hodnotou při každém načtení - to by smazalo utracené i
+      // získané mince. lifetime_coins_earned je oddělený součet, který nikdy neklesá
+      // (ani po utracení) a slouží jen k vyhodnocení odznáčků typu "nasbírej X mincí".
       const dbCoins = parseInt(profileData.coins, 10) || 0;
       const dbLifetimeCoins = parseInt(profileData.lifetime_coins_earned, 10) || 0;
 
-      const xpBeforeBadges = baseXpFromBooks + fakeXpFromDB + bonusXpFromDB + streakXpBonus;
+      const xpBeforeBadges = computeTotalXp({
+        totalRead,
+        highestGoalCompleted,
+        fakeXp: profileData.fake_xp,
+        bonusXp: profileData.bonus_xp,
+        streak,
+        badgeXp: 0
+      });
       const { level: levelBeforeBadges } = calculateLevelAndProgress(xpBeforeBadges);
 
-      // DŘÍV: evalContext neobsahoval level/jomaridCoins/unlockedBadges, takže odznáčky
-      // kategorie "levels" a "special" (coins_*, badge_collector_*) nikdy nemohly splnit podmínku.
+      // evalContext nese level, mince (celoživotní součet) a už odemčené odznáčky, aby šlo
+      // vyhodnotit i odznáčky kategorií "levels" a "special" (coins_*, badge_collector_*).
       const evalContext = {
         totalRead, streak, monthlyRead, monthlyGoal: currentGoal,
         level: levelBeforeBadges,
@@ -196,9 +197,9 @@ export const UserStats = () => {
 
         if (isAlreadyUnlocked) {
           // XP se (na rozdíl od mincí) nikam neukládá jako běžící zůstatek - počítá
-          // se vždy nanovo z CELÉHO seznamu odemknutých odznáčků. Bez týhle větve by
+          // se vždy nanovo z CELÉHO seznamu odemknutých odznáčků. Bez této větve by
           // příspěvek starých odznáčků k XP při příštím načtení zmizel a level by
-          // uživateli neprávem klesl zpátky dolů.
+          // neprávem klesl.
           badgeBonusXp += (badge.rewardXp || 0);
         } else if (badge.condition(evalContext)) {
           // Trvale odemknout nový odznak. Pole se mutuje na místě (push), takže
@@ -214,16 +215,12 @@ export const UserStats = () => {
       const { level, xpInCurrentLevel, xpNeededForNext } = calculateLevelAndProgress(totalXp);
       const visuals = getLevelVisuals(level);
 
-      // ODZNÁČKY + MINCE: dřív appka sama počítala kolik mincí odznak nese a rovnou
-      // to zapsala do profiles.coins - což mimo jiné znamenalo, že kdokoliv se
-      // znalostí devtools mohl zavolat stejný update s libovolným číslem. Teď se jen
-      // POŠLE seznam id odznáčků, které klient vyhodnotil jako nově splněné, a
-      // grant_badge_rewards() na serveru sama dohledá, kolik ten konkrétní odznak
-      // SKUTEČNĚ nese (z tabulky badge_rewards) a připíše přesně tolik - klient tedy
-      // může nanejvýš "předstírat", že si zaslouží konkrétní odznak, ale nikdy už
-      // nemůže poslat vlastní částku.
+      // ODZNÁČKY + MINCE: klient na server jen POŠLE seznam id odznáčků, které
+      // vyhodnotil jako nově splněné. grant_badge_rewards() na serveru sama dohledá,
+      // kolik ten konkrétní odznak SKUTEČNĚ nese (z tabulky badge_rewards), a připíše
+      // přesně tolik. Klient tak může nanejvýš "předstírat", že si zaslouží konkrétní
+      // odznak, ale nikdy nepošle vlastní částku.
       let calculatedCoins = dbCoins;
-      let calculatedLifetimeCoins = dbLifetimeCoins;
 
       if (newlyUnlockedBadges.length > 0) {
         try {
@@ -234,12 +231,11 @@ export const UserStats = () => {
           if (grantResult) {
             savedUnlockedBadges = grantResult.unlocked_badges || savedUnlockedBadges;
             calculatedCoins = grantResult.coins ?? calculatedCoins;
-            calculatedLifetimeCoins = grantResult.lifetime_coins_earned ?? calculatedLifetimeCoins;
           }
         } catch (grantErr) {
           console.error('Nepodařilo se připsat odměnu za odznáčky:', grantErr);
-          // Zápis selhal - odznáčky se v DB neodemkly, takže se příště (correctně)
-          // zkusí odemknout znovu. Pro zobrazení v TÉHLE session necháváme
+          // Zápis selhal - odznáčky se na serveru neodemkly, takže se příště
+          // správně zkusí odemknout znovu. Pro zobrazení v TÉHLE session necháváme
           // savedUnlockedBadges tak, jak je (s nově odemknutými odznáčky lokálně),
           // aby uživatel aspoň hned viděl, co si vysloužil.
         }
@@ -249,7 +245,7 @@ export const UserStats = () => {
         streak, monthlyRead, monthlyGoal: currentGoal, totalRead, weeklyActivity: weeklyActivityGenerated, readingTrend,
         xp: xpInCurrentLevel, level, levelName: visuals.name, levelBadgeClass: visuals.badge, levelBoxClass: visuals.box,
         xpNeededForNext, daysRemainingInMonth, currentMonthName, showInLeaderboard: profileData.show_in_leaderboard ?? true,
-        unlockedBadges: savedUnlockedBadges, jomaridCoins: calculatedCoins, lifetimeCoins: calculatedLifetimeCoins, goalLocked: isGoalLocked, goalLockedCompletely: isLockedByProgress, goalProgress: monthlyRead,
+        unlockedBadges: savedUnlockedBadges, jomaridCoins: calculatedCoins, goalLocked: isGoalLocked, goalLockedCompletely: isLockedByProgress, goalProgress: monthlyRead,
         streakFreezes: displayStreakFreezes, frozenDates: displayFrozenDates, highestGoalCompleted, featuredBadge: profileData.featured_badge || null
       });
 
@@ -257,15 +253,11 @@ export const UserStats = () => {
       // Žebříček bere server (leaderboard_profiles): jen uživatelské jméno a statistiky, žádné e-maily ostatních.
       let allProfiles = null;
       const lbRes = await supabase.rpc('leaderboard_profiles');
-      if (!lbRes.error && Array.isArray(lbRes.data)) allProfiles = lbRes.data;
-      else {
-        // starší databáze bez funkce leaderboard_profiles
-        const { data: legacyProfiles } = await supabase.from('profiles').select('id, email, fake_xp, bonus_xp, unlocked_badges, featured_badge, highest_goal_completed').eq('show_in_leaderboard', true);
-        allProfiles = legacyProfiles;
-      }
+      if (lbRes.error) console.error('Nepodařilo se načíst žebříček:', lbRes.error);
+      else if (Array.isArray(lbRes.data)) allProfiles = lbRes.data;
       if (allProfiles && allProfiles.length > 0) {
         const [allBooksRes, allActsRes] = await Promise.all([
-          supabase.from('user_books').select('user_id, updated_at').eq('is_read', true),
+          supabase.from('user_books').select('user_id, updated_at, first_completed_at').eq('is_read', true),
           supabase.from('user_daily_activity').select('user_id, activity_date')
         ]);
         
@@ -292,28 +284,26 @@ export const UserStats = () => {
           }
 
           const uMRead = uBooks.filter(b => {
-            if(!b.updated_at) return false;
-            const d = new Date(b.updated_at);
+            if (!b.first_completed_at) return false;
+            const d = new Date(b.first_completed_at);
             return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
           }).length;
 
-          // Stejný vzorec jako pro přihlášeného uživatele výš (goalMultiplier +
-          // XP z odznáčků) - jinak by žebříček podle XP/úrovně systematicky
-          // podhodnocoval každého se sbírkou odznáčků nebo zvýšeným
-          // splněným cílem, protože by to prostě nepočítal vůbec.
-          const uGoalMultiplier = calculateGoalMultiplier(p.highest_goal_completed);
-          const uBadgeBonusXp = Array.isArray(p.unlocked_badges)
-            ? p.unlocked_badges.reduce((sum, id) => {
-                const badgeDef = BOOK_BADGES.find(bd => bd.id === id);
-                return sum + (badgeDef?.rewardXp || 0);
-              }, 0)
-            : 0;
-
-          const uXpTotal = Math.round(uBooks.length * 100 * uGoalMultiplier) + (parseInt(p.fake_xp, 10) || 0) + (parseInt(p.bonus_xp, 10) || 0) + calculateXpMultiplier(uStreak) + uBadgeBonusXp;
+          // Stejný vzorec jako pro přihlášeného uživatele výš (včetně XP z odznáčků
+          // a násobku za splněný cíl), aby žebříček podle XP/úrovně nepodhodnocoval
+          // nikoho se sbírkou odznáčků nebo zvýšeným splněným cílem.
+          const uXpTotal = computeTotalXp({
+            totalRead: uBooks.length,
+            highestGoalCompleted: p.highest_goal_completed,
+            fakeXp: p.fake_xp,
+            bonusXp: p.bonus_xp,
+            streak: uStreak,
+            badgeXp: sumBadgeXp(p.unlocked_badges)
+          });
           const { level: uLvl } = calculateLevelAndProgress(uXpTotal);
 
           return {
-            email: p.username || (p.email ? p.email.split('@')[0] : 'Anonym'),
+            email: p.username || 'Anonym',
             streak: uStreak,
             level: uLvl,
             totalRead: uBooks.length,
@@ -387,7 +377,7 @@ export const UserStats = () => {
         } catch (refreshErr) {
           console.error('Nepodařilo se ověřit aktuální zůstatek:', refreshErr);
         }
-        alert(`Nemáš dost Jomarid Coinů. Streak Freeze stojí 150, ty máš ${realBalance}.`);
+        alert(`Nemáš dost Jomarid Coinů. Streak Freeze stojí ${STREAK_FREEZE_PRICE}, ty máš ${realBalance}.`);
       } else {
         alert('Nákup se nezdařil: ' + msg);
       }
@@ -438,10 +428,10 @@ export const UserStats = () => {
   const progressPercent = Math.min(100, Math.round((stats.monthlyRead / stats.monthlyGoal) * 100));
   const xpPercent = Math.min(100, Math.round((stats.xp / stats.xpNeededForNext) * 100));
   const categories = [
-    { id: 'streak', label: 'Plamínky 🔥', icon: Flame, suffix: 'dní' },
+    { id: 'streak', label: 'Plamínky 🔥', icon: Flame, suffix: n => plural(n, 'den', 'dny', 'dní') },
     { id: 'level', label: 'Úroveň 🏆', icon: Trophy, suffix: 'lvl' },
-    { id: 'totalRead', label: 'Celkem knih 📚', icon: CheckCircle, suffix: 'knih' },
-    { id: 'monthlyRead', label: 'Tento měsíc 📅', icon: Calendar, suffix: 'knih' },
+    { id: 'totalRead', label: 'Celkem knih 📚', icon: CheckCircle, suffix: n => plural(n, 'kniha', 'knihy', 'knih') },
+    { id: 'monthlyRead', label: 'Tento měsíc 📅', icon: Calendar, suffix: n => plural(n, 'kniha', 'knihy', 'knih') },
     { id: 'xp', label: 'Celkové XP ⭐', icon: Sparkles, suffix: 'XP' }
   ];
 
@@ -477,7 +467,7 @@ export const UserStats = () => {
         </span>
       </div>
       <h1 className="text-3xl font-black tracking-tight mb-1" style={{ color: 'var(--text-body)' }}>Moje Statistiky</h1>
-      <p style={{ color: 'var(--text-muted)' }} className="text-sm font-medium opacity-80">Každá přečtená kapitola tě posouvá v žebříčku.</p>
+      <p style={{ color: 'var(--text-muted)' }} className="text-sm font-medium opacity-80">XP dostáváš za dočtené knihy (víc při splněných vyšších cílech), za denní sérii a za odznaky. Odznaky se vyhodnotí, když otevřeš tuhle stránku.</p>
     </div>
     
     {/* LEVEL BAR */}
@@ -507,7 +497,7 @@ export const UserStats = () => {
           <div className="flex justify-between items-start">
             <div className="space-y-1 text-left">
               <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider">Aktuální Streak</h3>
-              <p className="text-4xl font-black text-amber-600 flex items-baseline gap-1 m-0">{stats.streak} <span style={{ color: 'var(--text-muted)' }} className="text-xs uppercase font-bold opacity-60">dní</span></p>
+              <p className="text-4xl font-black text-amber-600 flex items-baseline gap-1 m-0">{stats.streak} <span style={{ color: 'var(--text-muted)' }} className="text-xs uppercase font-bold opacity-60">{plural(stats.streak, 'den', 'dny', 'dní')}</span></p>
             </div>
             <div className="p-3 bg-amber-500/10 text-amber-600 rounded-xl"><Flame size={24} className={stats.streak > 0 ? "fill-amber-500" : ""} /></div>
           </div>
@@ -533,7 +523,7 @@ export const UserStats = () => {
                 <div className="h-full rounded-full transition-all duration-500" style={{ width: `${progressPercent}%`, backgroundColor: 'var(--bg-primary)' }}></div>
               </div>
               <div style={{ color: 'var(--text-muted)' }} className="flex justify-between text-[0.625rem] font-black uppercase opacity-80">
-                <span>{progressPercent}% splněno</span><span>{stats.daysRemainingInMonth === 0 ? "Poslední den!" : `Zbývá ${stats.daysRemainingInMonth} dní`}</span>
+                <span>{progressPercent}% splněno</span><span>{stats.daysRemainingInMonth === 0 ? "Poslední den!" : `${plural(stats.daysRemainingInMonth, 'Zbývá', 'Zbývají', 'Zbývá')} ${stats.daysRemainingInMonth} ${plural(stats.daysRemainingInMonth, 'den', 'dny', 'dní')}`}</span>
               </div>
             </div>
           </div>
@@ -580,7 +570,7 @@ export const UserStats = () => {
           <div className="flex justify-between items-start">
             <div className="space-y-1 text-left">
               <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider">Celková knihovna</h3>
-              <p style={{ color: 'var(--text-body)' }} className="text-4xl font-black m-0">{stats.totalRead} <span style={{ color: 'var(--text-muted)' }} className="text-xs uppercase font-bold opacity-60">knih</span></p>
+              <p style={{ color: 'var(--text-body)' }} className="text-4xl font-black m-0">{stats.totalRead} <span style={{ color: 'var(--text-muted)' }} className="text-xs uppercase font-bold opacity-60">{plural(stats.totalRead, 'kniha', 'knihy', 'knih')}</span></p>
             </div>
             <div style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' }} className="p-3 rounded-xl"><CheckCircle size={24} /></div>
           </div>
@@ -646,11 +636,11 @@ export const UserStats = () => {
         </div>
         <button
           onClick={handleBuyStreakFreeze}
-          disabled={buyingFreeze || stats.jomaridCoins < 150}
-          style={{ backgroundColor: stats.jomaridCoins < 150 ? 'var(--bg-secondary)' : 'var(--bg-primary)', color: stats.jomaridCoins < 150 ? 'var(--text-muted)' : 'var(--text-primary)' }}
+          disabled={buyingFreeze || stats.jomaridCoins < STREAK_FREEZE_PRICE}
+          style={{ backgroundColor: stats.jomaridCoins < STREAK_FREEZE_PRICE ? 'var(--bg-secondary)' : 'var(--bg-primary)', color: stats.jomaridCoins < STREAK_FREEZE_PRICE ? 'var(--text-muted)' : 'var(--text-primary)' }}
           className="px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer border-none shadow-sm whitespace-nowrap disabled:cursor-not-allowed flex items-center gap-1.5"
         >
-          {buyingFreeze ? <Loader2 size={14} className="animate-spin" /> : <>Koupit za 150 <Coins size={12} /></>}
+          {buyingFreeze ? <Loader2 size={14} className="animate-spin" /> : <>Koupit za {STREAK_FREEZE_PRICE} <Coins size={12} /></>}
         </button>
       </div>
 
@@ -689,7 +679,7 @@ export const UserStats = () => {
                   </div>
                   <div className="text-right font-black text-sm flex items-center gap-1">
                     <span>{row[activeTab].toLocaleString()}</span>
-                    <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase opacity-60">{cat?.suffix}</span>
+                    <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase opacity-60">{typeof cat?.suffix === 'function' ? cat.suffix(row[activeTab]) : cat?.suffix}</span>
                   </div>
                 </div>
               );

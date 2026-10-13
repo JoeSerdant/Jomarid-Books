@@ -1,4 +1,4 @@
-/* style.css - vzhled Chess League. Styl zůstává stejný jako dřív (tmavě modrá, fialový akcent,
+/* style.css - vzhled Chess League (tmavě modrá, fialový akcent,
    tlusté karty se spodním stínem, Baloo 2 + Nunito, krémovo-zelená šachovnice).
    --blue/--red/--gold nesou vlastní význam (sekundární akce, prohry, odměny) a --board-light /
    --board-dark (barvy šachovnice) se NEMĚNÍ ani ve světlém motivu - to je herní barva. */
@@ -74,7 +74,7 @@ body {
 button { font-family: inherit; color: inherit; }
 
 /* Odkaz zpět do aplikace: uvnitř aplikace ho nahrazuje její vlastní tlačítko zavření,
-   takže se tu schová (dřív překrýval čítače a tlačítko zpět). Samostatně otevřená hra ho má. */
+   takže se tu schová, aby nepřekrýval čítače a tlačítko zpět. Samostatně otevřená hra ho má. */
 html.embedded #btn-back-to-jomarid { display: none !important; }
 html.standalone .topbar, html.standalone .dash-topbar { padding-left: 132px; }
 html.standalone .brand { padding-top: 36px; }

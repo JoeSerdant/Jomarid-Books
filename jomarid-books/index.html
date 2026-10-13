@@ -50,8 +50,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-      /* Pozadi bere promenne motivu z <html> (nastavuje je App). Drive tu bylo pevne bg-slate-50 na body,
-         takze plocha mimo obsah (napr. pri oddaleni na mobilu) byla vzdy svetla, at byl motiv jakykoliv. */
+      /* Pozadí bere proměnné motivu z <html> (nastavuje je App), aby plocha mimo obsah (např. při oddálení na mobilu)
+         odpovídala motivu. */
       html { background-color: var(--bg-body, #f8fafc); }
       /* Přilepená horní lišta nesmí zakrývat prvek, na který se doscrolluje (fokus klávesnicí, odkazy na kotvy). */
       html { scroll-padding-top: calc(var(--navbar-h, 0px) + 8px); scroll-padding-bottom: 4.5rem; /* ať prvek v ohnisku nezakryje tlačítko "nahoru" */ }
@@ -80,8 +80,8 @@
       }
       h1, h2, h3, h4, .font-heading { font-family: 'Plus Jakarta Sans', sans-serif; }
 
-      /* Tailwind - kompilovaný při sestavení (vite.config.js). Na konci bloku: pořadí vůči výše uvedeným
-         pravidlům zůstává stejné jako dřív, kdy se jeho styly vkládaly za běhu až za ně. */
+      /* Tailwind - kompilovaný při sestavení (vite.config.js). Je na konci bloku, aby jeho pravidla
+         měla přednost před výše uvedenými. */
       @tailwind base;
       @tailwind components;
       @tailwind utilities;

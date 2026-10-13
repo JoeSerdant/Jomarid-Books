@@ -1,10 +1,11 @@
 // Testy kontroly vlastních dat: node --test src/tests/accountNotices.test.mjs   (nebo: npm run test:notices)
 //
-// Hlídají hlavně dvě věci: že se každá chyba pozná (a ukáže jen tomu, koho se týká), a že se NIKDY nehlásí
-// problém "naslepo" - když se data nepodařilo načíst, nesmí z toho vyjít falešné upozornění.
+// Hlídají hlavně dvě věci: že se každá chyba pozná (a ukáže jen tomu, koho se týká), a že se při nenačtených
+// datech nehlásí falešné upozornění.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import * as N from '../accountNotices.js';
+import { plural } from '../lib/plural.js';
 
 const ids = (notices) => notices.map((n) => n.id);
 const profile = (extra = {}) => ({ id: 'u1', username: 'jana', pen_name: 'Jana Nováková', ...extra });
@@ -13,8 +14,24 @@ const allWithContent = (books) => books.map((b) => b.id);
 
 describe('plural', () => {
   test('české tvary podle počtu', () => {
-    const f = (n) => N.plural(n, 'kniha', 'knihy', 'knih');
-    assert.deepEqual([0, 1, 2, 3, 4, 5, 11, 12, 21, 100].map(f), ['knih', 'kniha', 'knihy', 'knihy', 'knihy', 'knih', 'knih', 'knih', 'knih', 'knih']);
+    const f = (n) => plural(n, 'kniha', 'knihy', 'knih');
+    const ONE = 'kniha'; const FEW = 'knihy'; const MANY = 'knih';
+    const expected = new Map([
+      [0, MANY], [1, ONE], [2, FEW], [4, FEW], [5, MANY],
+      [11, MANY], [12, MANY], [14, MANY],
+      [21, MANY], [22, FEW], [23, FEW], [24, FEW], [25, MANY],
+      [101, MANY], [102, FEW], [111, MANY], [112, MANY], [114, MANY],
+    ]);
+    for (const [n, word] of expected) assert.equal(f(n), word, String(n));
+  });
+  test('záporné číslo se bere jako jeho velikost, číslo jako text jako číslo, neplatný vstup jako nula', () => {
+    const f = (n) => plural(n, 'kniha', 'knihy', 'knih');
+    assert.equal(f(-1), 'kniha');
+    assert.equal(f(-3), 'knihy');
+    assert.equal(f('1'), 'kniha');
+    assert.equal(f('3'), 'knihy');
+    assert.equal(f('12'), 'knih');
+    for (const bad of [undefined, null, NaN, 'abc']) assert.equal(f(bad), 'knih', String(bad));
   });
 });
 
@@ -35,13 +52,17 @@ describe('účet', () => {
     assert.deepEqual(N.buildAccountNotices({ role: 'uživatel', profile: undefined }), []);
     assert.deepEqual(N.buildAccountNotices({ role: 'nakladatel' }), []);
   });
-  test('autorské jméno se chce jen po nakladateli a správci, a jen jako tip', () => {
+  test('krycí jméno se chce jen po nakladateli a správci, a jen jako tip', () => {
     const p = profile({ pen_name: '' });
     assert.deepEqual(N.buildAccountNotices({ role: 'uživatel', profile: p }), []);
     for (const role of ['nakladatel', 'správce']) {
       const out = N.buildAccountNotices({ role, profile: p });
       assert.deepEqual(ids(out), ['pen-name-missing'], role);
       assert.equal(out[0].level, N.LEVEL_INFO);
+      assert.equal(out[0].title, 'Nemáš nastavené krycí jméno');
+      assert.equal(out[0].linkLabel, 'Nastavit krycí jméno');
+      assert.match(out[0].detail, /Krycí jméno/);
+      assert.doesNotMatch(out[0].detail, /utorsk/);
     }
   });
   test('správce dostává stejná upozornění jako ostatní (za svůj účet i své knihy)', () => {

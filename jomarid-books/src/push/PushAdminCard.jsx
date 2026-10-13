@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Copy, KeyRound, Loader2, Send } from 'lucide-react';
 import { Card } from '../components/ui';
+import { plural } from '../lib/plural';
 import { PUSH_KINDS, TEST_PUSH_DELAY_SECONDS, VAPID_SETTINGS_KEY } from './pushModel.js';
 import { fetchVapidKey, sendTestPush } from './pushClient.js';
 import { generateVapidKeys } from './vapid.js';
@@ -22,7 +23,7 @@ const KeyBox = ({ label, value }) => {
   );
 };
 
-/** Správa -> Upozornění: klíče pro oznámení do zařízení (celý postup: db/push/README.md). */
+/** Admin -> Upozornění: klíče pro oznámení do zařízení (celý postup: db/push/README.md). */
 export default function PushAdminCard({ client }) {
   const [saved, setSaved] = useState(null); // null = zjišťuje se, true/false
   const [savedKey, setSavedKey] = useState(null); // uložený veřejný klíč (není tajný, jde kdykoli znovu zkopírovat)
@@ -37,9 +38,9 @@ export default function PushAdminCard({ client }) {
     setPreview({
       busy: '',
       tone: res.ok ? 'ok' : res.reason === 'too-many' ? 'info' : 'error',
-      text: res.ok ? `Ukázka „${label}“ přijde za ${TEST_PUSH_DELAY_SECONDS} sekund na tvoje zařízení s povolenými oznámeními. Teď appku zavři nebo se přepni jinam, ať ji uvidíš.`
+      text: res.ok ? `Ukázka „${label}“ přijde za ${TEST_PUSH_DELAY_SECONDS} ${plural(TEST_PUSH_DELAY_SECONDS, 'sekundu', 'sekundy', 'sekund')} na tvoje zařízení s povolenými oznámeními. Teď appku zavři nebo se přepni jinam, ať ji uvidíš.`
         : res.reason === 'too-many' ? 'Počkej pár vteřin před další ukázkou.'
-        : res.reason === 'not-configured' ? 'Server pro oznámení ještě není nastavený (spusť db/push-notifications.sql).'
+        : res.reason === 'not-configured' ? 'Odesílání oznámení ještě není nastavené (viz jomarid-books/db/push/README.md).'
         : res.reason === 'forbidden' ? 'Ukázky smí posílat jen správce.' : 'Ukázku se nepodařilo odeslat.',
     });
   };
@@ -65,7 +66,7 @@ export default function PushAdminCard({ client }) {
       <h3 className="text-sm font-black uppercase tracking-wider mb-1 mt-0 flex items-center gap-2"><KeyRound size={15} /> Oznámení do telefonu</h3>
       <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-1 mb-3 leading-relaxed">
         Aby se oznámení z appky ukázala i v telefonu, potřebuje server pár klíčů. Veřejný se uloží sám, soukromý se ukáže jen jednou: vlož ho do Supabase
-        (Edge Functions → Secrets jako <code>VAPID_PRIVATE_KEY</code>). Celý postup je v souboru <code>db/push/README.md</code> v repozitáři.
+        (Edge Functions → Secrets jako <code>VAPID_PRIVATE_KEY</code>). Celý postup je v souboru <code>jomarid-books/db/push/README.md</code> v repozitáři.
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={generate} disabled={busy || saved === null} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className={btn}>
@@ -93,8 +94,8 @@ export default function PushAdminCard({ client }) {
       <div className="mt-5 pt-4 border-t" style={{ borderColor: 'var(--border-color)' }}>
         <h4 className="text-xs font-black uppercase tracking-wider m-0 mb-1">Ukázky motivačních oznámení</h4>
         <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-1 mb-3 leading-relaxed">
-          Čtenářům chodí během dne povzbuzení podle toho, co se hodí (série, rozečtená kniha, cíl, pochvala...). Četnost se nastavuje v databázi (db/push/README.md). Tady si každý druh vyzkoušíš s ukázkovými údaji;
-          odešle se za 10 sekund na tvoje zařízení, kde máš v Nastavení → Oznámení zapnutá oznámení, takže stihneš appku zavřít nebo se přepnout jinam a ukázku opravdu uvidíš. Texty se pokaždé losují z víc variant.
+          Čtenářům chodí během dne povzbuzení podle toho, co se hodí (série, rozečtená kniha, cíl, pochvala...). Četnost se nastavuje v databázi (viz jomarid-books/db/push/README.md). Tady si každý druh vyzkoušíš s ukázkovými údaji;
+          odešle se za {TEST_PUSH_DELAY_SECONDS} {plural(TEST_PUSH_DELAY_SECONDS, 'sekundu', 'sekundy', 'sekund')} na tvoje zařízení, kde máš v Nastavení → Oznámení zapnutá oznámení, takže stihneš appku zavřít nebo se přepnout jinam a ukázku opravdu uvidíš. Texty se pokaždé losují z víc variant.
         </p>
         <div className="flex flex-wrap gap-2" data-testid="push-kinds">
           {PUSH_KINDS.map(({ kind, label }) => (

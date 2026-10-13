@@ -362,7 +362,7 @@ test('úspěchy: nové úspěchy mají podmínky, hell5 vyžaduje Peklo', () => 
   assert.ok(!by.hell5.ok({ diff: 'hard', life: { level: 40 } })); assert.ok(by.hell5.ok({ diff: 'hell', life: { level: 25 } }));
 });
 
-/* ---------- regresní testy k revizi režimů ---------- */
+/* ---------- režimy: okrajové případy ---------- */
 test('Hon na bossy: boss poražený až po smrti hráče nic nezapočítá', () => {
   const { arena } = fresh({ seed: 31 });
   arena.setDiff('easy'); arena.mode = 'rush'; arena.startGame(true);

@@ -1,7 +1,7 @@
 // Testy prohlídky appky: node --test src/tests/tour.test.mjs   (nebo: npm run test:tour)
 //
 // Pokrývají čistou logiku: obsah a ověřování uložených dat, pravidla automatického spuštění, umístění karty
-// a zapamatování "už viděl". Vykreslení a chování v prohlížeči se ověřuje zvlášť (E2E).
+// a zapamatování "už viděl".
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import * as M from '../tour/tourModel.js';
@@ -60,6 +60,19 @@ describe('výchozí obsah', () => {
     }
     assert.ok(/prodej/.test(text('publisher', 'coins')));
     assert.ok(/daruješ/.test(text('publisher', 'studio-tabs')) && !/nastavíš autorské/.test(text('publisher', 'studio-tabs')));
+  });
+  test('texty používají názvy záložek a polí tak, jak se jmenují v appce', () => {
+    const text = (key, id) => tour.sets[key].find((x) => x.id === id).text;
+    for (const label of ['Moje knihy', 'Vydat / upravit', 'Licence a profil']) assert.ok(text('publisher', 'studio-tabs').includes(label), label);
+    assert.ok(/krycí jméno/.test(text('publisher', 'settings-checks')) && !/autorsk/.test(text('publisher', 'settings-checks')));
+  });
+  test('administrace je ve výchozích krocích správce hned před Nastavením, ostatní kroky jako u čtenáře', () => {
+    const ids = tour.sets.admin.map((x) => x.id);
+    assert.equal(ids[ids.indexOf('admin') + 1], 'settings');
+    assert.deepEqual(ids.filter((id) => id !== 'admin'), tour.sets.reader.map((x) => x.id));
+  });
+  test('názvy sad odpovídají názvům rolí v rozhraní', () => {
+    assert.deepEqual(M.SET_LABELS, { reader: 'Čtenář', publisher: 'Nakladatel', admin: 'Správce' });
   });
   test('každý cíl prohlídky má v komponentách odpovídající data-tour (a naopak)', () => {
     const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
