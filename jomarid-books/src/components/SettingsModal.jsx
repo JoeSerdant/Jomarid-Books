@@ -514,7 +514,7 @@ const SecurityTab = ({ user }) => {
         {emailMsg && <Notice type={emailMsg.type}>{emailMsg.text}</Notice>}
       </Section>
 
-      <Section title="Přihlášená zařízení" description="Odhlásí tě všude - na telefonu, v jiných prohlížečích i tady. Hodí se, když ses přihlásil na cizím zařízení.">
+      <Section title="Přihlášená zařízení" description="Odhlásí tě všude - na telefonu, v jiných prohlížečích i tady. Hodí se, když je tvůj účet přihlášený na cizím zařízení.">
         {!confirmSignOut ? (
           <ActionButton variant="ghost" onClick={() => setConfirmSignOut(true)}>Odhlásit ze všech zařízení</ActionButton>
         ) : (
@@ -773,7 +773,7 @@ const AppearanceTab = () => {
           </div>
           <ToggleRow
             title="Pamatovat si polohu a filtry"
-            description="Po návratu ze čtečky se knihovna vrátí na místo, kde jsi skončil, a ke stejnému hledání a filtrům. Když je vypnuté, knihovna se otevře vždy od začátku s výchozími volbami."
+            description="Po návratu ze čtečky se knihovna vrátí na původní místo a ke stejnému hledání a filtrům. Když je vypnuté, knihovna se otevře vždy od začátku s výchozími volbami."
             checked={lib.remember} onChange={v => setLibPref('remember', v)}
           />
         </div>
@@ -843,7 +843,7 @@ const AppTab = () => {
           {offlineReady === null ? 'Zjišťuji stav...' : offlineReady ? 'Offline kopie obalu aplikace je připravená.' : 'Offline kopie zatím není k dispozici (třeba při prvním otevření nebo v anonymním okně).'}
         </Notice>
         <div className="space-y-1.5">
-          <ActionButton variant="ghost" busy={busy} onClick={async () => { setBusy(true); setResetMsg(''); const out = await resetApp(); if (out === 'offline') { setBusy(false); setResetMsg('Bez připojení k internetu se aplikace obnovit nedá, přišel bys o offline kopii. Zkus to znovu, až budeš online.'); } }}><RefreshCw size={14} /> Obnovit aplikaci</ActionButton>
+          <ActionButton variant="ghost" busy={busy} onClick={async () => { setBusy(true); setResetMsg(''); const out = await resetApp(); if (out === 'offline') { setBusy(false); setResetMsg('Bez připojení k internetu se aplikace obnovit nedá, protože by se ztratila offline kopie. Zkus to znovu, až budeš online.'); } }}><RefreshCw size={14} /> Obnovit aplikaci</ActionButton>
           <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">Smaže uloženou offline kopii a načte nejnovější verzi. Použij, kdyby se appka chovala jako po staré verzi.</p>
           {resetMsg && <Notice type="error">{resetMsg}</Notice>}
         </div>
@@ -1225,7 +1225,7 @@ const ChecksTab = ({ state, role, onRecheck }) => {
   return (
     <div className="space-y-3">
       <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">
-        {hasBooks ? 'Rychlá kontrola tvého účtu a tvých knih.' : 'Rychlá kontrola tvého účtu.'} Ukazuje jen to, co můžeš opravit sám.
+        {hasBooks ? 'Rychlá kontrola tvého účtu a tvých knih.' : 'Rychlá kontrola tvého účtu.'} Ukazuje jen to, co můžeš opravit.
       </p>
       {notices.length === 0
         ? <Notice type="success">Všechno je v pořádku, není co opravovat.</Notice>

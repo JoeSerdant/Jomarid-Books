@@ -395,7 +395,7 @@ export const UserStats = () => {
     // už nejde změnit vůbec (ani nahoru, ani dolů) - server (trigger) totéž
     // vynucuje nezávisle na téhle kontrole, tohle je jen rychlejší zpětná vazba.
     if (stats.goalLockedCompletely) {
-      return setGoalError(`Cíl už nejde změnit - dosáhl jsi ${stats.goalProgress} z ${stats.monthlyGoal} (aspoň polovina). Zkus to zas příští měsíc.`);
+      return setGoalError(`Cíl už nejde změnit - máš splněno ${stats.goalProgress} z ${stats.monthlyGoal} (aspoň polovina). Zkus to zas příští měsíc.`);
     }
     // Jinak lze zvýšit vždy. Snížit jen pokud tenhle měsíc ještě nebyl cíl měněný.
     if (goalNum < stats.monthlyGoal && stats.goalLocked) {
@@ -537,7 +537,7 @@ export const UserStats = () => {
                 </div>
                 <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] opacity-70">
                   {stats.goalLockedCompletely ? (
-                    `Cíl už nejde měnit - dosáhl jsi ${stats.goalProgress} z ${stats.monthlyGoal} (aspoň polovina). Zas příští měsíc.`
+                    `Cíl už nejde měnit - máš splněno ${stats.goalProgress} z ${stats.monthlyGoal} (aspoň polovina). Zas příští měsíc.`
                   ) : (() => {
                     const n = parseInt(newGoalInput, 10);
                     const cur = Math.round(calculateGoalMultiplier(stats.highestGoalCompleted) * 100);

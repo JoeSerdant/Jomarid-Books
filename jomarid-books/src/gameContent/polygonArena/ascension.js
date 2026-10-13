@@ -14,7 +14,7 @@ Object.assign(CLASSES, {
     barrels: ring(6, { len: 1.1, w: 0.85, dmg: 1.35, spd: 0.7, size: 1.3, kind: 'bomb', lob: true, blast: 68, flare: true, recoil: 1.4 }, true) }),
   leviatan: C({ name: 'Leviatan', tier: 5, info: 'Obří trup, zdrcující náraz', reload: 1.3, hp: 2.0, ram: 2.6, size: 1.5, speed: 0.78,
     barrels: [B({ len: 1.0, w: 1.0, dmg: 1.9, spd: 0.8 }), B({ a: PI, len: 1.0, w: 1.0, dmg: 1.9, spd: 0.8, delay: 0.5 })] }),
-  nekonecno: C({ name: 'Nekonečno', tier: 5, info: 'Jediný paprsek – neprorazíte ho', reload: 3.0, zoom: 0.6, range: 2.3, speed: 0.82,
+  nekonecno: C({ name: 'Nekonečno', tier: 5, info: 'Jediný paprsek - neprorazíš ho', reload: 3.0, zoom: 0.6, range: 2.3, speed: 0.82,
     barrels: [B({ len: 3.4, w: 0.42, dmg: 3.6, spd: 3.4, pierce: 99, streak: true, size: 0.85 })] }),
   rojtisice: C({ name: 'Roj tisíce', tier: 5, info: 'Nekonečný příval dronů', reload: 0.55, maxDrones: 20,
     barrels: ring(6, { kind: 'drone', len: 1.1, w: 0.7, dmg: 0.55, spd: 0.8, size: 0.72, flare: true }, true) }),

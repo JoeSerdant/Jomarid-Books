@@ -161,7 +161,7 @@ const League = (function () {
     { key: "r1000", icon: "📈", name: "Rating 1000", hint: "Dosáhni ratingu 1000.", test: (s) => s.peak >= 1000 },
     { key: "r1300", icon: "🚀", name: "Rating 1300", hint: "Dosáhni ratingu 1300.", test: (s) => s.peak >= 1300 },
     { key: "r1600", icon: "🏆", name: "Rating 1600", hint: "Dosáhni ratingu 1600.", test: (s) => s.peak >= 1600 },
-    { key: "fox", icon: "🦊", name: "Přelstil jsi lišku", hint: "Poraz Fenwicka.", test: (s) => s.wins.medium > 0 },
+    { key: "fox", icon: "🦊", name: "Přelstěná liška", hint: "Poraz Fenwicka.", test: (s) => s.wins.medium > 0 },
     { key: "owl", icon: "🦉", name: "Moudřejší než sova", hint: "Poraz Profesora Hůůů.", test: (s) => s.wins.hard > 0 },
     { key: "dragon", icon: "🐉", name: "Přemožitel draka", hint: "Poraz Draka.", test: (s) => s.wins.expert > 0 },
     { key: "gold", icon: "🥇", name: "Zlatá liga", hint: "Získej 300 XP.", test: (s) => s.xp >= 300 },

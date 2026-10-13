@@ -880,7 +880,7 @@
               div({ className: "panel-title" }, "Zahájení"),
               opening ? div({ className: "opening-name" }, opening) : div({ className: "opening-empty" }, session.playerColor === "w" ? "Zatím se nehrálo — táhni jako první!" : "Zatím se nehrálo."),
               div({ className: "mode-pill " + (session.rated ? "rated" : "practice") }, session.rated ? "🏅 Hodnocená partie" : "🎓 Cvičná partie"),
-              div({ className: "mode-note" }, session.rated ? "Vrácení tahu a nápověda změní partii na cvičnou — rating se pak nezmění a nedostaneš Coiny." : "Použil jsi pomoc: rating se nezmění, XP je poloviční a bez Coinů.")),
+              div({ className: "mode-note" }, session.rated ? "Vrácení tahu a nápověda změní partii na cvičnou — rating se pak nezmění a nedostaneš Coiny." : "Pomoc byla použita: rating se nezmění, XP je poloviční a bez Coinů.")),
             h(MoveListPanel, { moves: session.moves, viewIdx, onView: view_, showNav: true })))));
   }
 
@@ -898,7 +898,7 @@
       if (info.result === "win" && canvasRef.current) return Confetti.burst(canvasRef.current, 2600);
     }, []);
     const cfg = {
-      win: { emoji: "🎉", title: "Vítězství!", sub: "Přehrál jsi " + bot.name + ". Skvělá hra!" },
+      win: { emoji: "🎉", title: "Vítězství!", sub: bot.name + " je poražen" + (bot.fem ? "a" : "") + ". Skvělá hra!" },
       loss: { emoji: info.reason === "resign" ? "🏳️" : info.reason === "timeout" ? "⏱️" : "😅", title: info.reason === "resign" ? "Vzdáno" : info.reason === "timeout" ? "Došel čas" : "Tak blízko!", sub: bot.name + " tě tentokrát dostal" + (bot.fem ? "a" : "") + ". Chceš odvetu?" },
       draw: { emoji: "🤝", title: "Remíza", sub: "Vyrovnaný boj s " + bot.name + "." }
     }[info.result];
@@ -918,7 +918,7 @@
             div({ className: "rating-change" }, span({ className: "rc-num" }, shown), span({ className: "rc-delta " + deltaCls }, s.delta > 0 ? "▲ +" + s.delta : s.delta < 0 ? "▼ −" + Math.abs(s.delta) : "• ±0")),
             div({ className: "rc-note" }, "Před zápasem ", s.ratingBefore, " · očekávaná šance ", pct(s.expected), " · K ", s.k, s.provisional ? " · kalibrace " + Math.min(s.ratedGamesAfter, League.PROVISIONAL_GAMES) + "/" + League.PROVISIONAL_GAMES : ""),
             s.newPeak && div({ className: "badge-new" }, "🏆 Nový osobní rekord!"))
-          : div({ className: "rc-note" }, "🎓 Cvičná partie (použil jsi vrácení tahu nebo nápovědu): rating zůstává ", s.ratingBefore, ".")),
+          : div({ className: "rc-note" }, "🎓 Cvičná partie (s vrácením tahu nebo nápovědou): rating zůstává ", s.ratingBefore, ".")),
       div({ className: "xp-card" },
         div({ className: "xp-row" }, span(null, "XP ze zápasu"), span({ className: "xp-total" }, "+", s.xpBase)),
         s.questBonus.map((q) => div({ key: q.key, className: "xp-row" }, span(null, q.icon, " Výzva: ", q.label), span({ className: "xp-total" }, "+", q.reward))),
