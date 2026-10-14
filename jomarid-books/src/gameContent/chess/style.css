@@ -188,8 +188,8 @@ html.standalone .brand { padding-top: 36px; }
 }
 .dash-body { display: grid; grid-template-columns: 1fr; gap: 24px; max-width: 1080px; margin: 0 auto; }
 .dash-body.single { max-width: 620px; }
+.dash-body.solo { max-width: 720px; }
 .dash-main { min-width: 0; }
-.dash-rail { display: flex; flex-direction: column; gap: 16px; }
 
 @media (min-width: 900px) {
   .side-nav {
@@ -210,8 +210,6 @@ html.standalone .brand { padding-top: 36px; }
   .nav-item .nav-icon { font-size: 18px; }
   .nav-item.active { box-shadow: inset 3px 0 0 var(--green); }
   .dash-shell { padding: 20px 30px 40px; }
-  .dash-body { grid-template-columns: 1fr 340px; }
-  .dash-body.single { grid-template-columns: 1fr; }
 }
 
 /* ---------- Hero card ---------- */
@@ -242,39 +240,14 @@ html.standalone .brand { padding-top: 36px; }
 .delta-chip.flat { background: var(--bg-soft); color: var(--ink-soft); }
 :root[data-theme="light"] .delta-chip.up { color: #15803d; }
 
-/* ---------- Rail cards: league / quests ---------- */
-.rail-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
-.rail-card-title { font-family: var(--font-display); font-weight: 800; font-size: 14px; color: var(--ink); }
+/* ---------- Pomocné prvky ---------- */
 .link-btn {
   background: none; border: none; cursor: pointer; font-family: var(--font-display);
   font-weight: 800; font-size: 11px; letter-spacing: 0.3px; color: var(--blue); padding: 4px; flex-shrink: 0;
 }
 
-.league-tier-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-.league-tier-icon { font-size: 30px; line-height: 1; }
-.league-tier-name { font-family: var(--font-display); font-weight: 800; font-size: 15px; }
-.league-tier-sub { color: var(--ink-soft); font-size: 12.5px; font-weight: 600; margin-top: 2px; }
-
 .progress-track { height: 10px; border-radius: 999px; background: var(--bg-soft); border: 2px solid var(--border); overflow: hidden; }
-.progress-track.sm { height: 7px; border-width: 1px; margin-top: 5px; }
 .progress-fill { height: 100%; background: var(--green); border-radius: 999px; transition: width .3s ease; }
-
-.tier-list { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
-.tier-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: var(--bg-soft); font-size: 13.5px; font-weight: 700; color: var(--ink-soft); }
-.tier-row.reached { background: var(--green-soft); color: var(--green-dark); }
-:root:not([data-theme="light"]) .tier-row.reached { color: var(--purple); }
-.tier-row .tier-min { margin-left: auto; font-size: 12px; }
-
-.quest-list { display: flex; flex-direction: column; gap: 14px; }
-.quest-row { display: flex; align-items: center; gap: 10px; }
-.quest-row.done { opacity: 0.7; }
-.quest-icon { font-size: 20px; width: 26px; text-align: center; flex-shrink: 0; }
-.quest-body { flex: 1; min-width: 0; }
-.quest-label { font-size: 13px; font-weight: 700; margin-bottom: 2px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.quest-reward { font-family: var(--font-display); font-weight: 800; font-size: 12px; color: var(--gold-dark); flex-shrink: 0; }
-.quest-tag { font-family: var(--font-display); font-size: 10px; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: var(--green-soft); color: var(--green-dark); letter-spacing: .3px; }
-:root:not([data-theme="light"]) .quest-tag { color: var(--purple); }
-.quest-note { color: var(--ink-soft); font-size: 12.5px; margin: 12px 0 0; line-height: 1.45; }
 
 /* ---------- Match history ---------- */
 .section-head { font-family: var(--font-display); font-weight: 800; font-size: 15px; color: var(--ink); margin: 26px 0 12px; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
@@ -410,12 +383,6 @@ button.history-row:hover { background: var(--bg-soft); }
 .rating-chart .dot { fill: var(--card-bg); stroke: var(--green); stroke-width: 3; }
 .rating-chart .dot.win { stroke: var(--good); } .rating-chart .dot.loss { stroke: var(--red); } .rating-chart .dot.draw { stroke: var(--gold); }
 
-.badge-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
-.badge-tile { background: var(--card-bg); border: 2px solid var(--border); border-radius: 16px; padding: 12px 8px 10px; text-align: center; }
-.badge-tile .ic { font-size: 28px; line-height: 1; margin-bottom: 4px; }
-.badge-tile .nm { font-family: var(--font-display); font-weight: 800; font-size: 12.5px; line-height: 1.2; }
-.badge-tile .hn { font-size: 10.5px; font-weight: 600; color: var(--ink-soft); margin-top: 3px; line-height: 1.25; }
-.badge-tile.off { opacity: .5; filter: grayscale(1); }
 .ladder { display: flex; flex-direction: column; gap: 8px; }
 .ladder-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 14px; background: var(--bg-soft); border: 2px solid transparent; }
 .ladder-row.me { background: var(--green-soft); border-color: var(--green); }
@@ -675,7 +642,6 @@ button.history-row:hover { background: var(--bg-soft); }
 .acc-cell span { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); }
 .acc-counts { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 10px; font-size: 12.5px; font-weight: 700; color: var(--ink-soft); }
 .acc-counts i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: 0; }
-.streak-row { display:flex; align-items:center; justify-content:center; gap:8px; font-family: var(--font-display); font-weight:700; color: var(--ink-soft); margin-bottom: 18px;}
 
 .end-actions { display: flex; gap: 10px; width: 100%; max-width: 360px; flex-wrap: wrap; }
 .end-actions .btn { flex: 1 1 0; }

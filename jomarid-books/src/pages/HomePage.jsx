@@ -49,7 +49,7 @@ const GAMES_PREVIEW = [
   { icon: Swords, title: 'Warroom: Frontlines', tagline: 'Velitelská taktická hra - řiď frontu, jednotky a zdroje.', detail: 'Rozhoduješ o nasazení jednotek a zdrojích z velitelského stanu, ne v přímé palbě.' },
   { icon: Building2, title: 'City Clicker', tagline: 'Vybuduj si vlastní město klikáním.', detail: 'Čtyři zcela odlišné vizuální styly na výběr - stejné město, jiná nálada.' },
   { icon: Target, title: 'Polygon aréna', tagline: 'Rozstřílej tvary, poskládej si stavbu z více než 500 tanků a přežij mezi chytrými boty.', detail: 'Osm režimů od vln nepřátel po zužující se bouři a obtížnost až do Pekla.' },
-  { icon: Crown, title: 'Chess League', tagline: 'Šachy proti pěti botům s vlastní osobností - skutečný Elo rating, hodiny, nápověda, rozbor partie a ligový postup.', detail: 'Silnější soupeře si odemykáš postupně, výhrou za výhrou.' },
+  { icon: Crown, title: 'Chess League', tagline: 'Šachy proti pěti botům s vlastní osobností - skutečný Elo rating, hodiny, nápověda a rozbor partie.', detail: 'Silnější soupeře si odemykáš postupně, výhrou za výhrou.' },
   { icon: Smile, title: 'Kouloví Kámoši', tagline: 'Pouštěj do misky měkké koule a spojuj stejné, ať vyroste ta největší.', detail: 'Pět režimů od klasiky po zemětřesení a obchod s vylepšeními za herní mince.' },
 ];
 

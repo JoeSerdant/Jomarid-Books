@@ -3,6 +3,8 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import vm from 'node:vm';
+import { fileURLToPath } from 'node:url';
 import { loadGame, plain, DIR, SOURCES } from './load.mjs';
 
 const get = loadGame();
@@ -178,34 +180,41 @@ describe('Elo, XP a uložený postup', () => {
   test('rating už neroste za porážky (dřív byl 800 + 2xXP)', () => {
     let s = L.defaultSave();
     for (let i = 0; i < 6; i++) s = L.finishGame(s, { botIdx: 2, result: 'loss', reason: 'checkmate', color: 'w', plies: 40, tc: 'none', rated: true, moves: [] }, bots, '2026-01-01', '2025-12-31').save;
-    assert.ok(s.rating < 800 && s.xp > 0);
+    assert.ok(s.rating < 800);
     assert.equal(plain(s.record).l, 6);
   });
   test('migrace starého postupu a odolnost proti rozbitým datům', () => {
-    const legacy = { xp: 500, streak: 3, unlockedIndex: 3, wins: { beginner: 4, easy: 3, medium: 2, hard: 0, expert: 0 }, theme: 'system', recentGames: [{ botKey: 'easy', result: 'win', date: '2025-01-01', xpGained: 25 }] };
+    const legacy = { xp: 500, streak: 3, lastPlayedDate: '2025-01-01', questClaims: { date: '2025-01-01', keys: ['play'] }, unlockedIndex: 3, wins: { beginner: 4, easy: 3, medium: 2, hard: 0, expert: 0 }, theme: 'system', recentGames: [{ botKey: 'easy', result: 'win', date: '2025-01-01', xpGained: 25 }] };
     const s = plain(L.migrate(legacy, bots.map((b) => b.rating)));
-    assert.equal(s.v, 2); assert.equal(s.rating, 1050); assert.equal(s.xp, 500); assert.equal(s.unlockedIndex, 3); assert.equal(s.theme, 'dark');
+    assert.equal(s.v, 2); assert.equal(s.rating, 1050); assert.equal(s.unlockedIndex, 3); assert.equal(s.theme, 'dark');
+    // denní výzvy, série dní a XP s ligami ve hře nejsou: z uloženého postupu se zahodí
+    for (const k of ['xp', 'streak', 'lastPlayedDate', 'questClaims']) assert.ok(!(k in s), k);
+    assert.ok(!('xpGained' in s.recentGames[0]) && s.recentGames[0].botKey === 'easy');
     assert.deepEqual(plain(L.migrate(s, bots.map((b) => b.rating))), s); // idempotentní
     assert.equal(L.migrate(null, []).rating, 800);
     const store = { x: '{rozbite' }; const storage = { getItem: () => store.x, setItem: (k, v) => { store.x = v; }, removeItem: () => {} };
     assert.equal(L.loadSave(storage, []).rating, 800);
   });
-  test('konec partie: rating, XP, výzvy, série, odemknutí', () => {
+  test('konec partie: rating, odemknutí soupeře a série výher (bez XP, výzev a série dní)', () => {
     const g = { botIdx: 0, result: 'win', reason: 'checkmate', color: 'w', plies: 40, tc: 'none', rated: true, moves: ['e2e4'] };
-    const r = L.finishGame(L.defaultSave(), g, bots, '2026-10-03', '2026-10-02');
+    const r = L.finishGame(L.defaultSave(), g, bots, '2026-10-03');
     assert.ok(r.summary.delta >= 1 && r.summary.delta < 20);
     assert.equal(r.save.rating, 800 + r.summary.delta); assert.equal(r.save.ratedGames, 1); assert.equal(r.save.unlockedIndex, 1);
-    const keys = r.summary.questBonus.map((q) => q.key);
-    for (const k of ['play', 'win', 'xp']) assert.ok(keys.includes(k));
-    assert.equal(r.save.xp, r.summary.xpGained);
-    const again = L.finishGame(r.save, { ...g, botIdx: 1 }, bots, '2026-10-03', '2026-10-02');
-    assert.ok(!again.summary.questBonus.some((q) => ['play', 'win', 'xp'].includes(q.key)), 'výzvy se platí jednou denně');
-    const next = L.finishGame(again.save, { ...g, result: 'loss' }, bots, '2026-10-04', '2026-10-03');
-    assert.equal(next.save.streak, 2); assert.equal(next.save.winStreak, 0);
+    assert.equal(r.summary.newlyUnlocked, true);
+    assert.equal(r.save.winStreak, 1);
+    const again = L.finishGame(r.save, { ...g, botIdx: 1 }, bots, '2026-10-03');
+    assert.equal(again.save.winStreak, 2); assert.equal(again.save.bestWinStreak, 2);
+    const next = L.finishGame(again.save, { ...g, result: 'loss' }, bots, '2026-10-04');
+    assert.equal(next.save.winStreak, 0); assert.equal(next.save.bestWinStreak, 2);
+    for (const o of [r, again, next]) {
+      for (const k of ['xp', 'streak', 'lastPlayedDate', 'questClaims']) assert.ok(!(k in o.save), k);
+      for (const k of ['xpBase', 'xpGained', 'questBonus', 'streak', 'promoted', 'tierBefore', 'tierAfter']) assert.ok(!(k in o.summary), k);
+      assert.ok(!('xpGained' in o.save.recentGames[0]));
+    }
   });
-  test('cvičná partie nemění rating a dává poloviční XP', () => {
-    const u = L.finishGame(L.defaultSave(), { botIdx: 0, result: 'win', reason: 'checkmate', color: 'w', plies: 40, tc: 'none', rated: false, moves: [] }, bots, '2026-10-03', '2026-10-02');
-    assert.equal(u.save.rating, 800); assert.equal(u.save.ratedGames, 0); assert.equal(u.summary.xpBase, 13); assert.equal(u.save.ratingHistory.length, 0);
+  test('cvičná partie nemění rating', () => {
+    const u = L.finishGame(L.defaultSave(), { botIdx: 0, result: 'win', reason: 'checkmate', color: 'w', plies: 40, tc: 'none', rated: false, moves: [] }, bots, '2026-10-03');
+    assert.equal(u.save.rating, 800); assert.equal(u.save.ratedGames, 0); assert.equal(u.save.ratingHistory.length, 0);
   });
   test('přesnost a kategorie tahů', () => {
     assert.ok(L.winPercent(300) > 74 && L.winPercent(300) < 76);
@@ -213,13 +222,14 @@ describe('Elo, XP a uložený postup', () => {
     assert.ok(L.moveAccuracy(50, 50) > 99.9 && L.moveAccuracy(80, 20) < 15);
     assert.equal(L.classify(0, true), 'best'); assert.equal(L.classify(15, false), 'inaccuracy'); assert.equal(L.classify(40, false), 'blunder');
   });
-  test('odznaky se odvozují z postupu', () => {
-    const fresh = plain(L.getBadges(L.defaultSave()));
-    assert.ok(fresh.length >= 10 && fresh.every((b) => !b.earned));
-    const s = L.defaultSave(); s.record.w = 3; s.bestWinStreak = 3; s.peak = 1010; s.wins.hard = 1; s.xp = 350;
-    const got = plain(L.getBadges(s)).filter((b) => b.earned).map((b) => b.key);
-    for (const k of ['first_win', 'streak3', 'r1000', 'owl', 'gold']) assert.ok(got.includes(k), k);
-    assert.ok(!got.includes('dragon') && !got.includes('streak5'));
+  test('šachy nemají vlastní denní výzvy, série dní, XP, ligy ani odznaky (to dělá Jomarid Books)', () => {
+    for (const k of ['getDailyQuests', 'getBadges', 'getLeagueInfo', 'computeXp', 'LEAGUE_TIERS']) assert.equal(typeof L[k], 'undefined', k);
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const ui = fs.readFileSync(path.join(here, '..', 'ui.js'), 'utf8');
+    for (const re of [/Dnešní výzvy/, /Tvoje liga/, /Odznaky/, /\bXP\b/, /save\.streak/, /QuestsCard|LeagueCard|BadgesCard/]) assert.doesNotMatch(ui, re, String(re));
+    const tabs = ui.match(/const navItems = (\[.*\]);/);
+    assert.ok(tabs);
+    assert.deepEqual(Array.from(vm.runInNewContext(tabs[1]), (t) => t[0]), ['play', 'rating', 'settings']);
   });
   test('boti: rostoucí rating, hlášky ke všem událostem, lidské tempo', () => {
     const ratings = plain(B.BOTS.map((b) => b.rating));

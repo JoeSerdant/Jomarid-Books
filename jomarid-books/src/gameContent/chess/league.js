@@ -1,4 +1,4 @@
-/* league.js - hodnocení (Elo), XP, ligy, denní výzvy a uložený postup. Čistá logika bez DOM,
+/* league.js - hodnocení (Elo), soupeři a uložený postup. Čistá logika bez DOM,
    proto jde celá otestovat v Node. Úložiště se předává zvenku (getItem/setItem). */
 const League = (function () {
   const SAVE_KEY = "chessLeague.save.v1"; // klíč zůstává, aby hráči nepřišli o postup
@@ -101,76 +101,6 @@ const League = (function () {
     return { acc: { w: mean(acc.w), b: mean(acc.b) }, counts, perPly, graph };
   }
 
-  // ---------- XP, ligy ----------
-  const LEAGUE_TIERS = [
-    { name: "Bronzová liga", icon: "🥉", min: 0 },
-    { name: "Stříbrná liga", icon: "🥈", min: 120 },
-    { name: "Zlatá liga", icon: "🥇", min: 300 },
-    { name: "Safírová liga", icon: "💠", min: 600 },
-    { name: "Diamantová liga", icon: "💎", min: 1000 }
-  ];
-  function getLeagueInfo(xp) {
-    let idx = 0;
-    for (let i = 0; i < LEAGUE_TIERS.length; i++) if (xp >= LEAGUE_TIERS[i].min) idx = i;
-    const current = LEAGUE_TIERS[idx];
-    const next = LEAGUE_TIERS[idx + 1] || null;
-    const progress = next ? Math.max(0, Math.min(1, (xp - current.min) / (next.min - current.min))) : 1;
-    return { idx, current, next, progress };
-  }
-  function computeXp(botIndex, result) {
-    const base = 10;
-    if (result === "win") return base + 15 + botIndex * 10;
-    if (result === "draw") return base + 8 + botIndex * 4;
-    return base;
-  }
-
-  // ---------- Denní výzvy (nově za splnění dostaneš XP) ----------
-  const SPECIAL_QUESTS = [
-    { key: "sp_black", icon: "♟️", label: "Vyhraj dnes za černé", target: 1, reward: 20, count: (g) => g.filter((x) => x.result === "win" && x.color === "b" && x.rated).length },
-    { key: "sp_three", icon: "🎲", label: "Odehraj dnes 3 zápasy", target: 3, reward: 15, count: (g) => g.length },
-    { key: "sp_quick", icon: "⚡", label: "Vyhraj dnes do 30 tahů", target: 1, reward: 20, count: (g) => g.filter((x) => x.result === "win" && x.rated && Math.ceil(x.plies / 2) <= 30).length },
-    { key: "sp_clock", icon: "⏱️", label: "Vyhraj dnes zápas na hodiny", target: 1, reward: 20, count: (g) => g.filter((x) => x.result === "win" && x.rated && x.tc && x.tc !== "none").length },
-    { key: "sp_upset", icon: "🔥", label: "Poraz soupeře s vyšším ratingem", target: 1, reward: 25, count: (g) => g.filter((x) => x.result === "win" && x.rated && x.oppRating > x.ratingBefore).length }
-  ];
-  function dayHash(dateStr) {
-    let h = 0;
-    for (let i = 0; i < dateStr.length; i++) h = (h * 31 + dateStr.charCodeAt(i)) >>> 0;
-    return h;
-  }
-  function getDailyQuests(save, today) {
-    const todays = (save.recentGames || []).filter((g) => g.date === today);
-    const winsToday = todays.filter((g) => g.result === "win").length;
-    const xpToday = todays.reduce((sum, g) => sum + (g.xpGained || 0), 0);
-    const special = SPECIAL_QUESTS[dayHash(today) % SPECIAL_QUESTS.length];
-    const claimed = save.questClaims && save.questClaims.date === today ? save.questClaims.keys : [];
-    const list = [
-      { key: "play", icon: "♟️", label: "Odehraj dnes zápas", current: Math.min(todays.length, 1), target: 1, reward: 5 },
-      { key: "win", icon: "🎯", label: "Vyhraj dnes zápas", current: Math.min(winsToday, 1), target: 1, reward: 10 },
-      { key: "xp", icon: "⚡", label: "Získej dnes 20 XP", current: Math.min(xpToday, 20), target: 20, reward: 15 },
-      { key: special.key, icon: special.icon, label: special.label, current: Math.min(special.count(todays), special.target), target: special.target, reward: special.reward, special: true }
-    ];
-    return list.map((q) => ({ ...q, done: q.current >= q.target, claimed: claimed.includes(q.key) }));
-  }
-
-  // ---------- Odznaky (odvozené z postupu, nic dalšího se neukládá) ----------
-  const BADGES = [
-    { key: "first_win", icon: "🥇", name: "První výhra", hint: "Vyhraj zápas.", test: (s) => s.record.w > 0 || BOT_KEYS.some((k) => s.wins[k] > 0) },
-    { key: "calibrated", icon: "🎯", name: "Kalibrace hotová", hint: "Odehraj " + PROVISIONAL_GAMES + " hodnocených zápasů.", test: (s) => s.ratedGames >= PROVISIONAL_GAMES },
-    { key: "streak3", icon: "🔥", name: "Série 3 výher", hint: "Vyhraj 3 hodnocené zápasy v řadě.", test: (s) => s.bestWinStreak >= 3 },
-    { key: "streak5", icon: "⚔️", name: "Série 5 výher", hint: "Vyhraj 5 hodnocených zápasů v řadě.", test: (s) => s.bestWinStreak >= 5 },
-    { key: "r1000", icon: "📈", name: "Rating 1000", hint: "Dosáhni ratingu 1000.", test: (s) => s.peak >= 1000 },
-    { key: "r1300", icon: "🚀", name: "Rating 1300", hint: "Dosáhni ratingu 1300.", test: (s) => s.peak >= 1300 },
-    { key: "r1600", icon: "🏆", name: "Rating 1600", hint: "Dosáhni ratingu 1600.", test: (s) => s.peak >= 1600 },
-    { key: "fox", icon: "🦊", name: "Přelstěná liška", hint: "Poraz Fenwicka.", test: (s) => s.wins.medium > 0 },
-    { key: "owl", icon: "🦉", name: "Moudřejší než sova", hint: "Poraz Profesora Hůůů.", test: (s) => s.wins.hard > 0 },
-    { key: "dragon", icon: "🐉", name: "Přemožitel draka", hint: "Poraz Draka.", test: (s) => s.wins.expert > 0 },
-    { key: "gold", icon: "🥇", name: "Zlatá liga", hint: "Získej 300 XP.", test: (s) => s.xp >= 300 },
-    { key: "diamond", icon: "💎", name: "Diamantová liga", hint: "Získej 1000 XP.", test: (s) => s.xp >= 1000 }
-  ];
-  function getBadges(save) {
-    return BADGES.map((b) => ({ key: b.key, icon: b.icon, name: b.name, hint: b.hint, earned: !!b.test(save) }));
-  }
-
   // ---------- Uložený postup ----------
   function emptyRecord() { return { w: 0, d: 0, l: 0 }; }
   const BOT_KEYS = ["beginner", "easy", "medium", "hard", "expert"];
@@ -179,15 +109,14 @@ const League = (function () {
     BOT_KEYS.forEach((k) => { botStats[k] = emptyRecord(); });
     return {
       v: SAVE_VERSION,
-      xp: 0, streak: 0, lastPlayedDate: null, unlockedIndex: 0,
+      unlockedIndex: 0,
       wins: { beginner: 0, easy: 0, medium: 0, hard: 0, expert: 0 },
       sound: true, theme: "dark", playerColor: "w", tc: "none",
       highlights: true, botChat: true, autoQueen: false,
       recentGames: [],
       rating: START_RATING, peak: START_RATING, ratedGames: 0,
       ratingHistory: [], record: emptyRecord(), botStats,
-      winStreak: 0, bestWinStreak: 0,
-      questClaims: { date: null, keys: [] }
+      winStreak: 0, bestWinStreak: 0
     };
   }
 
@@ -205,7 +134,8 @@ const League = (function () {
     merged.botStats = { ...base.botStats, ...(raw.botStats || {}) };
     BOT_KEYS.forEach((k) => { merged.botStats[k] = { ...emptyRecord(), ...merged.botStats[k] }; });
     merged.record = { ...emptyRecord(), ...(raw.record || {}) };
-    merged.questClaims = raw.questClaims && Array.isArray(raw.questClaims.keys) ? raw.questClaims : base.questClaims;
+    // Denní výzvy, série dní a XP s ligami už ve hře nejsou (to dělá Jomarid Books samotný); zbylé hodnoty ze starého postupu se zahodí.
+    ['xp', 'streak', 'lastPlayedDate', 'questClaims'].forEach((k) => { delete merged[k]; });
     if (!raw.v || raw.v < 2) {
       merged.rating = seedRating(raw, botRatings || []);
       merged.peak = merged.rating;
@@ -215,6 +145,7 @@ const League = (function () {
     }
     merged.v = SAVE_VERSION;
     if (!Array.isArray(merged.recentGames)) merged.recentGames = [];
+    merged.recentGames = merged.recentGames.map((g) => { const c = Object.assign({}, g); delete c.xpGained; return c; });
     if (!Array.isArray(merged.ratingHistory)) merged.ratingHistory = [];
     merged.rating = Math.max(RATING_FLOOR, Math.round(Number(merged.rating)) || START_RATING);
     merged.peak = Math.max(merged.rating, Math.round(Number(merged.peak)) || merged.rating);
@@ -237,11 +168,10 @@ const League = (function () {
   // ---------- Dokončení partie ----------
   // g: { botIdx, botKey, result: win|loss|draw, reason, color, plies, tc, rated, moves, accuracy? }
   // bots: [{ key, rating }]. Vrací nový postup a souhrn pro obrazovku po zápase.
-  function finishGame(save, g, bots, today, yesterday) {
+  function finishGame(save, g, bots, today) {
     const s = JSON.parse(JSON.stringify(save));
     const bot = bots[g.botIdx];
     const score = g.result === "win" ? 1 : g.result === "draw" ? 0.5 : 0;
-    const xpBefore = s.xp;
     const summary = { rated: !!g.rated, result: g.result };
 
     // hodnocení
@@ -267,16 +197,6 @@ const League = (function () {
     summary.ratingAfter = s.rating;
     summary.ratedGamesAfter = s.ratedGames;
 
-    // XP (cvičná partie dává polovinu)
-    const xpBase = Math.round(computeXp(g.botIdx, g.result) * (g.rated ? 1 : 0.5));
-    summary.xpBase = xpBase;
-
-    // série dní
-    if (s.lastPlayedDate === today) { /* dnes už hrál */ }
-    else if (s.lastPlayedDate === yesterday) s.streak += 1;
-    else s.streak = 1;
-    s.lastPlayedDate = today;
-
     // odemykání dalšího soupeře a výhry
     summary.newlyUnlocked = false;
     if (g.result === "win") {
@@ -286,37 +206,19 @@ const League = (function () {
 
     // historie zápasů
     s.recentGames.unshift({
-      botKey: bot.key, result: g.result, reason: g.reason || null, date: today, xpGained: xpBase,
+      botKey: bot.key, result: g.result, reason: g.reason || null, date: today,
       delta: summary.delta, rated: !!g.rated, color: g.color, plies: g.plies, tc: g.tc || "none",
       ratingBefore: summary.ratingBefore, oppRating: bot.rating, moves: (g.moves || []).join(" "),
       acc: g.accuracy == null ? null : Math.round(g.accuracy)
     });
     s.recentGames = s.recentGames.slice(0, RECENT_CAP);
 
-    // výzvy: za nově splněné dostane hráč XP navíc (jednou denně za každou)
-    if (!s.questClaims || s.questClaims.date !== today) s.questClaims = { date: today, keys: [] };
-    const bonus = [];
-    for (const q of getDailyQuests(s, today)) {
-      if (q.done && !s.questClaims.keys.includes(q.key)) {
-        s.questClaims.keys.push(q.key);
-        bonus.push({ key: q.key, label: q.label, icon: q.icon, reward: q.reward });
-      }
-    }
-    // výzva "Získej 20 XP" se počítá z xpGained té hry, takže po přičtení bonusů ji nezvyšujeme znovu
-    const questXp = bonus.reduce((sum, b) => sum + b.reward, 0);
-    summary.questBonus = bonus;
-    summary.xpGained = xpBase + questXp;
-    s.xp += summary.xpGained;
-    summary.streak = s.streak;
-    const tierBefore = getLeagueInfo(xpBefore), tierAfter = getLeagueInfo(s.xp);
-    summary.tierBefore = tierBefore.current; summary.tierAfter = tierAfter.current;
-    summary.promoted = tierAfter.idx > tierBefore.idx;
     return { save: s, summary };
   }
 
   return {
-    SAVE_KEY, GAME_KEY, START_RATING, RATING_FLOOR, PROVISIONAL_GAMES, TIME_CONTROLS, LEAGUE_TIERS, CATEGORY_LABELS, BOT_KEYS,
+    SAVE_KEY, GAME_KEY, START_RATING, RATING_FLOOR, PROVISIONAL_GAMES, TIME_CONTROLS, CATEGORY_LABELS, BOT_KEYS,
     expectedScore, kFactor, ratingChange, ratingTitle, winPercent, moveAccuracy, classify, summarizeAnalysis,
-    getLeagueInfo, computeXp, getDailyQuests, getBadges, defaultSave, migrate, loadSave, persistSave, loadGame, persistGame, finishGame
+    defaultSave, migrate, loadSave, persistSave, loadGame, persistGame, finishGame
   };
 })();

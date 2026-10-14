@@ -8,7 +8,7 @@
 //   rules.js    - šachová pravidla pro rozhraní (legální tahy, mat/pat, SAN)
 //   search.js   - rychlý engine pro boty a rozbor (běží i jako Web Worker, proto je celý v jednom souboru)
 //   book.js     - kniha zahájení a české názvy zahájení
-//   league.js   - Elo, XP, ligy, výzvy, uložený postup
+//   league.js   - Elo rating, soupeři, uložený postup
 //   bots.js     - soupeři: síla, osobnost, hlášky, tempo, vzdávání, remízy
 //   session.js  - řadič jedné partie (hodiny, tah bota, nápověda, uložení)
 //   ui.js       - React rozhraní
