@@ -44,22 +44,23 @@ test('Peklo je zapsané na všech místech: karta, start, uložený rekord, menu
   assert.match(html, /inferno: 'Peklo'/);
 });
 
-test('Peklo: čísla odpovídají zadání (štít půlka, asteroidy hustěji, power-upů míň, víc nepřátel)', () => {
+test('Peklo: čísla odpovídají zadání (asteroidy hustěji, power-upů míň, víc nepřátel)', () => {
   const m = html.match(/const INFERNO = (\{[\s\S]*?\n\});/);
   assert.ok(m, 'konstanty Pekla');
   const I = vm.runInNewContext('(' + m[1] + ')');
-  assert.equal(I.shieldBlock, 0.5);
   assert.ok(I.dmgTakenMult > 1);
   assert.ok(I.powerupMult < 1 && I.pickupMult < 1);
   assert.ok(I.extraEnemies > 0 && I.gapMult < 1 && I.maxLeft > 2);
   assert.ok(I.asteroidBurst >= 2 && I.asteroidGapMult < 1 && I.asteroidChance > 0.0012 && I.asteroidScoreMin < 500 && I.asteroidDuration > 12000 && I.eventCooldown < 16000);
 });
 
-test('štít: normálně pohltí zásah celý, jen v Pekle část projde a asteroid ho probíjí', () => {
+test('štít vykryje jen 50 % poškození ve všech režimech, v Pekle ho asteroid probíjí celý', () => {
+  assert.match(html, /const SHIELD_BLOCK = 0\.5;/);
   assert.match(html, /takeDamage\(amount, iframes, shieldBlock\)/);
-  assert.match(html, /if \(block >= 1\) return false;/);
-  assert.match(html, /const shieldBlock = this\.inferno \? \(piercing \? 0 : INFERNO\.shieldBlock\) : 1;/);
+  assert.match(html, /const shieldBlock = \(this\.inferno && piercing\) \? 0 : SHIELD_BLOCK;/);
   assert.match(html, /this\.damagePlayer\(dmg, e\.indestructible \? 900 : 400, e\.type === 'asteroid'\)/);
+  assert.doesNotMatch(html, /if \(this\.shieldTimer > 0 \|\| this\.invulnTimer > 0\) return false;/, 'starý štít, který pohltil všechno');
+  assert.match(html, /štít ti na chvíli pohltí polovinu zásahů/);
 });
 
 test('v Pekle se do vlny nepočítají asteroidy, takže nepřátelé chodí i během pole asteroidů', () => {

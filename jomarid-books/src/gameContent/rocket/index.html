@@ -991,7 +991,7 @@ h2 {
             <button class="mode-card inferno" id="btn-start-inferno">
                 <span class="mode-icon">😈</span>
                 <span class="mode-name">Peklo</span>
-                <span class="mode-desc">Hordy nepřátel, málo power-upů, štít kryje jen půlku</span>
+                <span class="mode-desc">Hordy nepřátel, málo power-upů, asteroidy probíjejí štít</span>
                 <span class="mode-rec" id="rec-inferno">Rekord 0</span>
             </button>
             <button class="mode-card blitz" id="btn-start-blitz">
@@ -1788,10 +1788,10 @@ class Player {
     takeDamage(amount, iframes, shieldBlock) {
         if (this.invulnTimer > 0) return false;
 
-        // Štít běžně pohltí zásah celý; shieldBlock < 1 (Peklo) ho pohltí jen z části a zbytek projde
+        // Štít pohltí jen část zásahu (shieldBlock) a zbytek projde; 1 by znamenalo celý zásah
         let dmg = amount;
         if (this.shieldTimer > 0) {
-            const block = shieldBlock === undefined ? 1 : shieldBlock;
+            const block = shieldBlock === undefined ? SHIELD_BLOCK : shieldBlock;
             if (block >= 1) return false;
             dmg = Math.round(amount * (1 - block));
         }
@@ -2547,6 +2547,13 @@ class Boss {
 }
 
 //======================================================================
+//  ŠTÍT
+//======================================================================
+//  Štít vykryje jen polovinu poškození, zbytek projde. V Pekle ho navíc asteroidy probíjejí celé.
+
+const SHIELD_BLOCK = 0.5;
+
+//======================================================================
 //  PEKLO
 //======================================================================
 //  Režim Těžká (víc života nepřátel a bossů, dvojnásobné mince) a navrch tohle. Všechna čísla jsou na jednom místě.
@@ -2558,7 +2565,6 @@ const INFERNO = {
     dmgTakenMult: 1.6,       // loď dostává víc poškození
     powerupMult: 0.35,       // šance na power-up ze zničeného nepřítele
     pickupMult: 0.5,         // šance na bonusovou minci
-    shieldBlock: 0.5,        // štít vykryje jen polovinu poškození (jinak všechno); asteroidy ho probíjejí celé
     asteroidChance: 0.0035,  // pole asteroidů začíná častěji (jinak 0,0012 na snímek)
     asteroidScoreMin: 250,   // a dřív (jinak od skóre 500)
     asteroidDuration: 16000, // trvá déle (jinak 12 s)
@@ -3194,8 +3200,8 @@ class GameManager {
         let realAmount = this.daily ? Math.round(amount * this.daily.dmgTakenMult) : amount;
         if (this.inferno) realAmount = Math.round(realAmount * INFERNO.dmgTakenMult);
 
-        // Peklo: štít kryje jen část zásahu, asteroidy ho probíjejí celé
-        const shieldBlock = this.inferno ? (piercing ? 0 : INFERNO.shieldBlock) : 1;
+        // Štít kryje jen část zásahu (SHIELD_BLOCK); v Pekle ho asteroidy probíjejí celé
+        const shieldBlock = (this.inferno && piercing) ? 0 : SHIELD_BLOCK;
 
         const before = this.player.hp;
         const wouldDie = this.player.takeDamage(realAmount, iframes, shieldBlock);
@@ -4113,7 +4119,7 @@ Object.assign(GameManager.prototype, {
             case 8:
                 this.powerups.push(new Powerup(this.width * 0.35, 120, 'shield'));
                 this.powerups.push(new Powerup(this.width * 0.65, 120, 'heal'));
-                this.setTutText('Obranné power-upy: 🛡️ štít ti na chvíli zajistí nezranitelnost, ❤️ doplní život. Poslední vteřina štítu bliká.');
+                this.setTutText('Obranné power-upy: 🛡️ štít ti na chvíli pohltí polovinu zásahů, ❤️ doplní život. Poslední vteřina štítu bliká.');
                 break;
 
             case 9: {
