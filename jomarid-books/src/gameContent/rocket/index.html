@@ -991,7 +991,7 @@ h2 {
             <button class="mode-card inferno" id="btn-start-inferno">
                 <span class="mode-icon">😈</span>
                 <span class="mode-name">Peklo</span>
-                <span class="mode-desc">Hordy nepřátel, málo power-upů, asteroidy probíjejí štít</span>
+                <span class="mode-desc">Hordy odolnějších nepřátel, málo power-upů, asteroidy probíjejí štít</span>
                 <span class="mode-rec" id="rec-inferno">Rekord 0</span>
             </button>
             <button class="mode-card blitz" id="btn-start-blitz">
@@ -2563,6 +2563,8 @@ const INFERNO = {
     gapMult: 0.55,           // pauza mezi vlnami se zkrátí na tuto část
     maxLeft: 6,              // další vlna přijde, když na obrazovce zbývá nejvýš tolik nepřátel (jinak 2); asteroidy se nepočítají
     dmgTakenMult: 1.6,       // loď dostává víc poškození
+    enemyHpMult: 1.5,        // nepřátelé mají víc života (navíc k bonusu Těžké)
+    bossHpMult: 1.25,        // bossové taky, jen mírněji (už v Těžké mají o 45 % víc)
     powerupMult: 0.35,       // šance na power-up ze zničeného nepřítele
     pickupMult: 0.5,         // šance na bonusovou minci
     asteroidChance: 0.0035,  // pole asteroidů začíná častěji (jinak 0,0012 na snímek)
@@ -2845,6 +2847,7 @@ class GameManager {
     get diffMult() {
         let m = (this.isHardMode ? 1.5 : 1) * (1 + this.phase * 0.09);
         if (this.daily) m *= this.daily.enemyHpMult;
+        if (this.inferno) m *= INFERNO.enemyHpMult;
         return m;
     }
 
@@ -3448,6 +3451,7 @@ class GameManager {
     spawnBossInstance(level) {
         let hardMul = this.isHardMode ? 1.45 : 1;
         if (this.daily) hardMul *= this.daily.bossHpMult;
+        if (this.inferno) hardMul *= INFERNO.bossHpMult;
 
         this.boss = new Boss(this, level, hardMul);
         this.bossActive = true;

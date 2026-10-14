@@ -44,11 +44,12 @@ test('Peklo je zapsané na všech místech: karta, start, uložený rekord, menu
   assert.match(html, /inferno: 'Peklo'/);
 });
 
-test('Peklo: čísla odpovídají zadání (asteroidy hustěji, power-upů míň, víc nepřátel)', () => {
+test('Peklo: čísla odpovídají zadání (víc a odolnější nepřátelé, asteroidy hustěji, power-upů míň)', () => {
   const m = html.match(/const INFERNO = (\{[\s\S]*?\n\});/);
   assert.ok(m, 'konstanty Pekla');
   const I = vm.runInNewContext('(' + m[1] + ')');
   assert.ok(I.dmgTakenMult > 1);
+  assert.ok(I.enemyHpMult > 1 && I.bossHpMult > 1);
   assert.ok(I.powerupMult < 1 && I.pickupMult < 1);
   assert.ok(I.extraEnemies > 0 && I.gapMult < 1 && I.maxLeft > 2);
   assert.ok(I.asteroidBurst >= 2 && I.asteroidGapMult < 1 && I.asteroidChance > 0.0012 && I.asteroidScoreMin < 500 && I.asteroidDuration > 12000 && I.eventCooldown < 16000);
