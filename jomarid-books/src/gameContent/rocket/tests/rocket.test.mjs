@@ -74,3 +74,27 @@ test('tajné kódy: starý dává mince, IMAGINEFLEXITSTVOJIMMENEM hvězdný pra
   assert.match(html, /const code = secretInput\.value\.trim\(\)\.toUpperCase\(\);/);
   assert.match(html, /Storage\.data\.stardust = Math\.min\(\(Storage\.data\.stardust \|\| 0\) \+ 1000000, 1000000000\)/);
 });
+
+test('strom Vzestupu: nové uzly za hvězdný prach mají cenu, strop, uložení a napojení do hry', () => {
+  const m = html.match(/const PRESTIGE_TREE = (\[[\s\S]*?\n\]);/);
+  assert.ok(m, 'PRESTIGE_TREE');
+  const tree = vm.runInNewContext(m[1]);
+  const byId = Object.fromEntries(tree.map((n) => [n.id, n]));
+  for (const id of ['armor', 'startShield', 'heal', 'loot', 'discount', 'combo']) {
+    const n = byId[id];
+    assert.ok(n, id);
+    assert.ok(n.max >= 4 && n.max <= 10, `${id}: max`);
+    assert.ok(n.cost(0) > 0 && n.cost(n.max - 1) > n.cost(0), `${id}: cena roste`);
+    assert.match(html, new RegExp(`${id}: 0[,\\s]`), `${id} v uložených výchozích hodnotách`);
+  }
+  assert.equal(new Set(tree.map((n) => n.id)).size, tree.length, 'unikátní id');
+  assert.match(html, /prestigeBonus\('armor', 0\.02\)/);
+  assert.match(html, /prestigeLevel\('startShield'\) \* 1500/);
+  assert.match(html, /prestigeBonus\('heal', 0\.1\)/);
+  assert.match(html, /prestigeBonus\('loot', 0\.03\)/);
+  assert.match(html, /prestigeBonus\('discount', 0\.03\)/);
+  assert.match(html, /prestigeBonus\('combo', 0\.1\)/);
+  // stropy, ať se hra nerozbije: pancíř nejvýš -20 %, sleva nejvýš -15 %
+  assert.ok(byId.armor.max * 0.02 <= 0.2 && byId.discount.max * 0.03 <= 0.15);
+});
+
