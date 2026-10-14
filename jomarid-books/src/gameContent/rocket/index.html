@@ -668,6 +668,9 @@ h2 {
 .mode-card.hard .mode-rec { color: #ff9500; }
 .mode-card.inferno { border-color: rgba(255, 51, 51, 0.55); }
 .mode-card.inferno .mode-rec { color: #ff4d4d; }
+.mode-card.insane { border-color: rgba(255, 0, 90, 0.7); background: linear-gradient(160deg, rgba(120, 0, 30, 0.38), var(--panel) 70%); }
+.mode-card.insane .mode-name { color: #ff4d7a; }
+.mode-card.insane .mode-rec { color: #ff4d7a; }
 .mode-card.blitz { border-color: rgba(255, 196, 0, 0.4); }
 .mode-card.blitz .mode-rec { color: var(--gold); }
 .mode-card.rush { border-color: rgba(255, 0, 204, 0.4); }
@@ -994,6 +997,12 @@ h2 {
                 <span class="mode-desc">Hordy odolnějších nepřátel, málo power-upů, asteroidy probíjejí štít</span>
                 <span class="mode-rec" id="rec-inferno">Rekord 0</span>
             </button>
+            <button class="mode-card insane hidden" id="btn-start-insane">
+                <span class="mode-icon">💀</span>
+                <span class="mode-name">Insane Peklo</span>
+                <span class="mode-desc">Pro ty, co si mysleli, že Peklo je lehké</span>
+                <span class="mode-rec" id="rec-insane">Rekord 0</span>
+            </button>
             <button class="mode-card blitz" id="btn-start-blitz">
                 <span class="mode-icon">⚡</span>
                 <span class="mode-name">Blesková vlna</span>
@@ -1107,14 +1116,14 @@ const Storage = {
             fireRate: 1, hp: 1, damage: 1, bombs: 1,
             tripleDuration: 1, shieldDuration: 1, rapidDuration: 1, healPower: 1
         },
-        best: { normal: 0, hard: 0, inferno: 0, blitz: 0, rush: 0, zen: 0 },
+        best: { normal: 0, hard: 0, inferno: 0, insane: 0, blitz: 0, rush: 0, zen: 0 },
         daily: { date: '', score: 0 },
         muted: false,
         tutorialDone: false,
         ascension: 0,
         stardust: 0,
         cycleCoins: 0,
-        prestige: { hull: 0, aura: 0, magnet: 0, luck: 0, capital: 0, armor: 0, startShield: 0, heal: 0, loot: 0, discount: 0, combo: 0, bomb: 0, zenUnlocked: false, dailyUnlocked: false },
+        prestige: { hull: 0, aura: 0, magnet: 0, luck: 0, capital: 0, armor: 0, startShield: 0, heal: 0, loot: 0, discount: 0, combo: 0, bomb: 0, zenUnlocked: false, dailyUnlocked: false, insaneUnlocked: false },
         achievements: {},
         stats: {
             totalKills: 0, totalBossKills: 0, totalCoinsEarned: 0, totalPlaytime: 0,
@@ -1684,6 +1693,7 @@ class Player {
         this.trailTimer = 0;
 
         this.speed = 5.8;
+        this.insane = false;    // Insane Peklo zapíná hra až po vytvoření lodi (start); násobky se použijí v applyStats
     }
 
     applyStats() {
@@ -1716,6 +1726,17 @@ class Player {
         this.rapidTime = Math.round((6000 + ((u.rapidDuration || 1) - 1) * 500) * auraMul);
         this.healAmount = Math.round((25 + (((u.healPower || 1) - 1) * 10)) * (1 + prestigeBonus('heal', 0.1)));
         this.maxBombs = Math.min(7, 1 + Math.floor(((u.bombs || 1) - 1) / 3) + relicBombs + prestigeBombs);
+
+        // Insane Peklo: slabší loď, kratší power-upy a menší léčení
+        if (this.insane) {
+            this.maxHp = Math.max(1, Math.round(this.maxHp * INSANE.hpMult));
+            this.dmg = Math.max(1, Math.round(this.dmg * INSANE.dmgMult * 10) / 10);
+            this.baseFireRate = Math.round(this.baseFireRate * INSANE.fireRateMult);
+            this.tripleTime = Math.round(this.tripleTime * INSANE.powerupTimeMult);
+            this.shieldTime = Math.round(this.shieldTime * INSANE.powerupTimeMult);
+            this.rapidTime = Math.round(this.rapidTime * INSANE.powerupTimeMult);
+            this.healAmount = Math.max(1, Math.round(this.healAmount * INSANE.healMult));
+        }
     }
 
     update(dt, input, game) {
@@ -1923,8 +1944,11 @@ class Enemy {
                 this.fireTimer -= dt;
 
                 if (this.fireTimer <= 0 && this.y > 40 && this.y < game.height * 0.62) {
-                    this.fireTimer = U.rand(1500, 2400);
-                    this.shootAt(game, game.player, 4.6, 8);
+                    // Insane Peklo: destroyer střílí dvakrát častěji a ve vějíři
+                    const ins = game.insane;
+                    this.fireTimer = U.rand(1500, 2400) * (ins ? INSANE.destroyerFireMult : 1);
+                    if (ins) this.shootFan(game, game.player, 4.6, 7, INSANE.destroyerShots);
+                    else this.shootAt(game, game.player, 4.6, 8);
                 }
                 break;
             }
@@ -1943,8 +1967,16 @@ class Enemy {
     }
 
     shootAt(game, target, speed, dmg) {
-        const a = Math.atan2(target.y - this.y, target.x - this.x);
-        game.bullets.push(new Bullet(this.x, this.y + 10, Math.cos(a) * speed, Math.sin(a) * speed, dmg, '#ff6600', true, 6));
+        this.shootFan(game, target, speed, dmg, 1);
+    }
+
+    // n střel do vějíře kolem směru na cíl (jedna jde přímo)
+    shootFan(game, target, speed, dmg, n) {
+        const base = Math.atan2(target.y - this.y, target.x - this.x);
+        for (let i = 0; i < n; i++) {
+            const a = base + (i - (n - 1) / 2) * 0.2;
+            game.bullets.push(new Bullet(this.x, this.y + 10, Math.cos(a) * speed, Math.sin(a) * speed, dmg, '#ff6600', true, 6));
+        }
         game.particles.push(new Particle(this.x, this.y + 12, '#ffaa44', 1.2, 2.5, 0.12));
         Sounds.enemyShoot();
     }
@@ -2099,6 +2131,59 @@ const BOSS_TYPES = [
         rage: 'pulse',
         hpMul: 1.35,
         desc: 'Poslední zkouška - zvládá vše.'
+    },
+    {
+        name: 'ODSTŘELOVAČ',
+        color: '#00ffa6',
+        attacks: ['snipe', 'burst', 'fan'],
+        rage: 'snipe',
+        hpMul: 1.4,
+        desc: 'Míří s předstihem a nemíjí.'
+    },
+    {
+        name: 'HRADBA',
+        color: '#9cff3c',
+        attacks: ['wall', 'radial', 'pulse'],
+        rage: 'wall',
+        hpMul: 1.45,
+        desc: 'Staví zdi střel s jedinou mezerou.'
+    },
+    {
+        name: 'ROJNICE',
+        color: '#ffd23c',
+        attacks: ['minions', 'rain', 'fan', 'spiral'],
+        rage: 'minions',
+        hpMul: 1.5,
+        desc: 'Zaplaví obrazovku rychlíky a deštěm střel.'
+    },
+    {
+        name: 'ZÁTMA',
+        color: '#7a5cff',
+        attacks: ['beam', 'wall', 'spiral', 'charge'],
+        rage: 'beam',
+        hpMul: 1.55,
+        desc: 'Paprsky, zdi a nálety bez oddechu.'
+    },
+    {
+        name: 'LEVIATAN',
+        color: '#ff6a00',
+        attacks: ['pulse', 'charge', 'radial', 'wall', 'snipe'],
+        rage: 'pulse',
+        hpMul: 1.65,
+        desc: 'Těžký a nezastavitelný, tlakové vlny přichází jedna za druhou.'
+    },
+    {
+        // Poslední boss, opakuje se: rychlý, bez prodlev, střídá všechny útoky a mění barvy
+        name: 'GLITCH',
+        color: '#00ffcc',
+        attacks: ['burst', 'fan', 'radial', 'spiral', 'rain', 'charge', 'minions', 'beam', 'pulse', 'wall', 'snipe'],
+        rage: 'radial',
+        hpMul: 1.9,
+        rate: 1.35,
+        recoverMul: 0.35,
+        moveMul: 0.3,
+        glitch: true,
+        desc: 'Chyba v systému - rychlý, všechny útoky v jednom.'
     }
 ];
 
@@ -2144,6 +2229,9 @@ class Boss {
     }
 
     get hpPct() { return U.clamp(this.hp / this.maxHp, 0, 1); }
+
+    // Rychlost cyklu: vlastní rychlost bosse × Insane Peklo
+    rate(game) { return (this.def.rate || 1) * (game.insane ? INSANE.bossRate : 1); }
     get indestructible() { return false; }
 
     // Vyšší fáze a vyšší level zrychlují celý cyklus
@@ -2188,6 +2276,13 @@ class Boss {
         this.ty = U.rand(100, 100 + 50 + this.phase * 22);
     }
 
+    glitchJump(game) {
+        for (let i = 0; i < 14; i++) game.particles.push(new Particle(this.x, this.y, this.bulletColor(), U.rand(2, 6), U.rand(2, 4), 0.05));
+        this.x = this.tx;
+        this.y = this.ty;
+        for (let i = 0; i < 14; i++) game.particles.push(new Particle(this.x, this.y, this.bulletColor(), U.rand(2, 6), U.rand(2, 4), 0.05));
+    }
+
     moveToTarget(dt, game, rate) {
         const f = dt / 16;
         const k = Math.min(1, (rate || 0.055) * f);
@@ -2202,6 +2297,10 @@ class Boss {
         if (this.hitFlash > 0) this.hitFlash -= dt;
 
         this.checkPhase(game);
+
+        // Rychlejší boss (GLITCH, Insane Peklo) má celý cyklus kratší; nádech jen z části, aby šel pořád přečíst
+        const rate = this.rate(game);
+        dt *= this.state === 'TELEGRAPH' ? Math.min(1.3, 1 + (rate - 1) * 0.4) : rate;
         this.stateT -= dt;
 
         switch (this.state) {
@@ -2238,7 +2337,9 @@ class Boss {
                 this.moveToTarget(dt, game, 0.03);
                 if (this.stateT <= 0) {
                     this.pickPosition(game);
-                    this.setState('MOVE', U.rand(650, 1000) * this.tempo);
+                    // GLITCH občas přeskočí na nové místo; nikdy ne přímo k lodi
+                    if (this.def.glitch && Math.random() < 0.35 && U.dist(this.tx, this.ty, game.player.x, game.player.y) > 150) this.glitchJump(game);
+                    this.setState('MOVE', U.rand(650, 1000) * this.tempo * (this.def.moveMul || 1));
                 }
                 break;
         }
@@ -2265,7 +2366,7 @@ class Boss {
         this.attackStep = 0;
         this.shotTimer = 0;
 
-        const telegraph = Math.max(220, (name === 'charge' || name === 'beam' || name === 'pulse' ? 600 : 440) * this.tempo);
+        const telegraph = Math.max(220, (name === 'charge' || name === 'beam' || name === 'pulse' || name === 'snipe' ? 600 : 440) * this.tempo);
         this.setState('TELEGRAPH', telegraph);
         Sounds.telegraph();
     }
@@ -2302,22 +2403,36 @@ class Boss {
 
     endAttack() {
         this.attack = null;
-        this.setState('RECOVER', U.rand(420, 760) * this.tempo);
+        this.setState('RECOVER', U.rand(420, 760) * this.tempo * (this.def.recoverMul || 1));
     }
 
     //---------------------------------------------------------------- útoky
 
     fire(game, angle, speed, dmg, r) {
-        game.bullets.push(new Bullet(
+        const b = new Bullet(
             this.x + Math.cos(angle) * (this.r * 0.6),
             this.y + Math.sin(angle) * (this.r * 0.6),
             Math.cos(angle) * speed,
             Math.sin(angle) * speed,
             dmg === undefined ? 9 : dmg,
-            this.color,
+            this.bulletColor(),
             true,
             r || 6
-        ));
+        );
+        b.fromBoss = true;
+        game.bullets.push(b);
+    }
+
+    // GLITCH střílí střely, které mění barvu
+    bulletColor() {
+        return this.def.glitch ? 'hsl(' + Math.floor((this.t * 0.25) % 360) + ',100%,60%)' : this.color;
+    }
+
+    // Střela z libovolného místa (déšť shora), pořád jako střela bosse
+    fireRaw(game, x, y, vx, vy, dmg) {
+        const b = new Bullet(x, y, vx, vy, dmg, this.bulletColor(), true, 6);
+        b.fromBoss = true;
+        game.bullets.push(b);
     }
 
     angleToPlayer(game) {
@@ -2404,7 +2519,7 @@ class Boss {
             case 'rain': {
                 if (this.shotTimer <= 0) {
                     this.shotTimer = 135;
-                    game.bullets.push(new Bullet(U.rand(15, game.width - 15), -10, 0, 4.4 + this.phase * 0.4, 8, this.color, true, 6));
+                    this.fireRaw(game, U.rand(15, game.width - 15), -10, 0, 4.4 + this.phase * 0.4, 8);
                     this.attackStep++;
                 }
                 if (this.attackT > 1600) this.endAttack();
@@ -2448,6 +2563,43 @@ class Boss {
                 break;
             }
 
+            // Zeď: řada pomalých střel přes celou šířku s mezerou poblíž hráče - je potřeba ji najít a projet
+            case 'wall': {
+                const rows = this.phase;
+                if (this.shotTimer <= 0) {
+                    this.shotTimer = 760 * this.tempo;
+                    const cols = 11;
+                    const step = game.width / cols;
+                    const gap = U.clamp(Math.round(game.player.x / step - 0.5) + Math.floor(U.rand(-2, 3)), 0, cols - 2);
+
+                    for (let i = 0; i < cols; i++) {
+                        if (i === gap || i === gap + 1) continue;
+                        this.fireRaw(game, step * (i + 0.5), this.y + 36, 0, 3.4, 8);
+                    }
+
+                    Sounds.enemyShoot();
+                    this.attackStep++;
+                }
+                if (this.attackStep >= rows) this.endAttack();
+                break;
+            }
+
+            // Odstřelovač: rychlé střely, míří před loď podle toho, kam se pohybuje
+            case 'snipe': {
+                const shots = 2 + this.phase;
+                if (this.shotTimer <= 0) {
+                    this.shotTimer = 360 * this.tempo;
+                    const p = game.player;
+                    const lead = U.clamp((p.x - p.prevX) * 12, -90, 90);
+                    const a = Math.atan2(p.y - this.y, p.x + lead - this.x);
+                    this.fire(game, a, 9.4, 11, 5);
+                    Sounds.enemyShoot();
+                    this.attackStep++;
+                }
+                if (this.attackStep >= shots) this.endAttack();
+                break;
+            }
+
             case 'minions':
                 if (this.attackT > 600) this.endAttack();
                 break;
@@ -2479,6 +2631,10 @@ class Boss {
         ctx.save();
         ctx.translate(this.x, this.y);
 
+        // GLITCH se chvěje a občas se na okamžik rozpadne na posunuté kousky
+        const glitchy = !!this.def.glitch;
+        if (glitchy && Math.random() < 0.18) ctx.translate(U.rand(-5, 5), U.rand(-3, 3));
+
         // Aura sílí s fází, takže je stav bosse čitelný i periferně
         const auraR = this.r + 16 + Math.sin(this.t * 0.004) * 4;
         const aura = ctx.createRadialGradient(0, 0, this.r * 0.5, 0, 0, auraR);
@@ -2489,7 +2645,7 @@ class Boss {
         ctx.arc(0, 0, auraR, 0, Math.PI * 2);
         ctx.fill();
 
-        let body = this.color;
+        let body = glitchy ? this.bulletColor() : this.color;
         if (this.hitFlash > 0) body = '#ffffff';
         else if (telegraphing && Math.floor(this.t / 90) % 2) body = '#ffffff';
         else if (charging) body = '#ffdddd';
@@ -2574,6 +2730,43 @@ const INFERNO = {
     asteroidBurst: 2,        // a po dvou
     eventCooldown: 8000,     // pauza mezi událostmi (jinak 16 s)
     coinMult: 1.5            // mince navíc k bonusu Těžké
+};
+
+//======================================================================
+//  INSANE PEKLO
+//======================================================================
+//  Platí v něm všechno z Pekla. Čísla v první polovině mají stejný tvar jako INFERNO a hra je bere místo nich
+//  (g.hell), takže je to rovnou o stupeň tvrdší. Druhá polovina jsou věci, které má jen tenhle režim.
+
+const INSANE = {
+    extraEnemies: 0.9,
+    gapMult: 0.4,
+    maxLeft: 9,
+    dmgTakenMult: 1.6,
+    enemyHpMult: 2.55,       // 1,5 z Pekla × 1,7 (o 70 % víc než v Pekle)
+    bossHpMult: 2.19,        // 1,25 z Pekla × 1,75 (o 75 % víc než v Pekle)
+    powerupMult: 0.12,       // power-upy jsou vyloženě vzácné
+    pickupMult: 0.3,
+    asteroidChance: 0.006,
+    asteroidScoreMin: 150,
+    asteroidDuration: 20000,
+    asteroidGapMult: 0.5,
+    asteroidBurst: 3,
+    eventCooldown: 5000,
+    coinMult: 2.5,
+
+    bossRate: 1.5,           // bossové mají celý cyklus (pohyb, nádech, útok, oddech) o polovinu rychlejší; nádech jen z části, ať je čitelný
+    destroyerFireMult: 0.5,  // destroyer střílí dvakrát častěji
+    destroyerShots: 3,       // a rovnou třemi střelami do vějíře
+    heavyWeight: 3,          // útvary s tanky a destroyery se losují třikrát častěji
+    heavyMinPhaseDrop: 1,    // a přicházejí o fázi dřív
+    tankUpgrade: 0.2,        // základní a rychlý nepřítel se s touto šancí změní na tank
+    destroyerUpgrade: 0.12,  // tank se s touto šancí změní na destroyer
+    powerupTimeMult: 0.6,    // power-upy trvají kratší dobu
+    healMult: 0.6,           // a léčí míň
+    hpMult: 0.8,             // loď má míň života
+    dmgMult: 0.85,           // slabší palbu
+    fireRateMult: 1.2        // a pomalejší střelbu (delší prodleva mezi výstřely)
 };
 
 //======================================================================
@@ -2693,8 +2886,8 @@ class Director {
 
     update(dt) {
         const g = this.game;
-        // Boss Rush je čistě souboj s bossy - běžné vlny sem nepatří
-        if (g.bossActive || g.tutActive || g.mode === 'rush') return;
+        // Boss Rush je čistě souboj s bossy - běžné vlny sem nepatří. V Insane Pekle chodí nepřátelé i během souboje s bossem.
+        if ((g.bossActive && !g.insane) || g.tutActive || g.mode === 'rush') return;
 
         for (let i = this.queue.length - 1; i >= 0; i--) {
             const s = this.queue[i];
@@ -2709,7 +2902,7 @@ class Director {
 
         // Další vlna přijde až se uvolní místo - obrazovka se nezanese. V Pekle se asteroidy nepočítají, takže nepřátelé chodí i během pole asteroidů.
         const left = g.inferno ? g.enemies.filter(e => e.type !== 'asteroid').length : g.enemies.length;
-        if (this.gap <= 0 && this.queue.length === 0 && left <= (g.inferno ? INFERNO.maxLeft : 2)) {
+        if (this.gap <= 0 && this.queue.length === 0 && left <= (g.inferno ? g.hell.maxLeft : 2)) {
             this.nextWave();
         }
     }
@@ -2718,10 +2911,17 @@ class Director {
         const g = this.game;
         const phase = g.phase;
 
-        let pool = FORMATIONS.filter(f => f.minPhase <= phase);
+        // Insane Peklo: útvary s tanky a destroyery přicházejí dřív a losují se několikrát častěji
+        const heavy = f => f.build(g, 1).some(o => o.type === 'tank' || o.type === 'destroyer');
+        let pool = FORMATIONS.filter(f => f.minPhase - (g.insane && heavy(f) ? INSANE.heavyMinPhaseDrop : 0) <= phase);
         if (pool.length > 1 && this.lastName) {
             const filtered = pool.filter(f => f.name !== this.lastName);
             if (filtered.length) pool = filtered;
+        }
+        if (g.insane) {
+            const weighted = [];
+            pool.forEach(f => { for (let i = 0; i < (heavy(f) ? INSANE.heavyWeight : 1); i++) weighted.push(f); });
+            pool = weighted;
         }
 
         const form = U.pick(pool);
@@ -2730,9 +2930,17 @@ class Director {
 
         this.queue = form.build(g, phase);
 
+        // Insane Peklo: část slabších nepřátel se změní na těžší (tanky od 2. fáze, destroyery od 3.), ať začátek nekončí hned
+        if (g.insane) {
+            this.queue.forEach(o => {
+                if (o.type === 'tank' && phase >= 3 && Math.random() < INSANE.destroyerUpgrade) o.type = 'destroyer';
+                else if ((o.type === 'basic' || o.type === 'fast') && phase >= 2 && Math.random() < INSANE.tankUpgrade) o.type = 'tank';
+            });
+        }
+
         // Peklo: ke každé vlně přibudou nepřátelé navíc, vedle původních a o chvilku později
         if (g.inferno && this.queue.length) {
-            const extra = Math.ceil(this.queue.length * INFERNO.extraEnemies);
+            const extra = Math.ceil(this.queue.length * g.hell.extraEnemies);
             const base = this.queue.slice();
             for (let i = 0; i < extra; i++) {
                 const o = U.pick(base);
@@ -2743,7 +2951,7 @@ class Director {
         const rush = g.currentEvent === 'rush';
         let gap = Math.max(450, 1700 - phase * 95) * (rush ? 0.42 : 1);
         if (g.mode === 'blitz') gap *= 0.7;
-        if (g.inferno) gap *= INFERNO.gapMult;
+        if (g.inferno) gap *= g.hell.gapMult;
         if (g.daily) gap /= g.daily.spawnMult;
         this.gap = gap;
     }
@@ -2759,7 +2967,7 @@ class Director {
 //  HERNÍ MANAŽER
 //======================================================================
 
-const BOSS_THRESHOLDS = [150, 650, 1400, 2400, 3600, 5000, 6600, 8400, 10400, 12600];
+const BOSS_THRESHOLDS = [150, 650, 1400, 2400, 3600, 5000, 6600, 8400, 10400, 12600, 15000, 17600, 20400];
 
 //======================================================================
 //  DENNÍ VÝZVA
@@ -2840,14 +3048,23 @@ class GameManager {
         return U.clamp(Math.max(byScore, Math.min(byTime, 6)), 1, 12);
     }
 
+    // Peklo i Insane Peklo; hell je sada čísel, která platí (INSANE má stejný tvar jako INFERNO)
     get inferno() {
-        return this.mode === 'inferno';
+        return this.mode === 'inferno' || this.mode === 'insane';
+    }
+
+    get insane() {
+        return this.mode === 'insane';
+    }
+
+    get hell() {
+        return this.insane ? INSANE : INFERNO;
     }
 
     get diffMult() {
         let m = (this.isHardMode ? 1.5 : 1) * (1 + this.phase * 0.09);
         if (this.daily) m *= this.daily.enemyHpMult;
-        if (this.inferno) m *= INFERNO.enemyHpMult;
+        if (this.inferno) m *= this.hell.enemyHpMult;
         return m;
     }
 
@@ -3016,8 +3233,8 @@ class GameManager {
         Sounds.init();
         if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
 
-        this.mode = ['normal', 'hard', 'inferno', 'blitz', 'rush', 'zen', 'daily'].includes(mode) ? mode : 'normal';
-        this.isHardMode = (this.mode === 'hard' || this.mode === 'inferno');
+        this.mode = ['normal', 'hard', 'inferno', 'insane', 'blitz', 'rush', 'zen', 'daily'].includes(mode) ? mode : 'normal';
+        this.isHardMode = (this.mode === 'hard' || this.inferno);
         this.daily = (this.mode === 'daily') ? dailyModifierForToday() : null;
         this.tutActive = false;
         this.holdFire = false;
@@ -3028,6 +3245,14 @@ class GameManager {
         this.resetGameData();
         this.state = 'PLAY';
         this.player.shieldTimer = prestigeLevel('startShield') * 1500;
+
+        // Insane Peklo oslabí loď: přepočítá se hned po vytvoření a znovu při každém applyStats během běhu
+        if (this.insane) {
+            this.player.insane = true;
+            this.player.applyStats();
+            this.player.hp = this.player.maxHp;
+            this.lastPlayerHp = this.player.hp;
+        }
 
         // Denní modifikátor upraví lodˇ až po jejím vytvoření - jednorázově, ne jako trvalá vylepšení
         if (this.daily) {
@@ -3052,7 +3277,7 @@ class GameManager {
         document.getElementById('hud-streak').classList.toggle('hidden', this.mode !== 'rush');
 
         this.lastTime = performance.now();
-        if (this.inferno && Storage.data.tutorialDone) this.showEvent('PEKLO', '#ff3333');
+        if (this.inferno && Storage.data.tutorialDone) this.showEvent(this.insane ? 'INSANE PEKLO' : 'PEKLO', this.insane ? '#ff0055' : '#ff3333');
 
         if (!Storage.data.tutorialDone) {
             this.startTutorialDialog();
@@ -3149,7 +3374,7 @@ class GameManager {
         document.getElementById('go-metric-label').innerText = isRush ? 'PORAŽENÍ BOSSOVÉ V ŘADĚ' : 'SKÓRE';
         document.getElementById('go-score').innerText = U.num(primary);
 
-        const modeNames = { normal: 'Normální obtížnost', hard: 'Těžká obtížnost', inferno: 'Peklo', blitz: 'Blesková vlna', rush: 'Boss Rush', daily: 'Denní výzva' + (this.daily ? ' · ' + this.daily.name : ''), zen: 'Zen' };
+        const modeNames = { normal: 'Normální obtížnost', hard: 'Těžká obtížnost', inferno: 'Peklo', insane: 'Insane Peklo', blitz: 'Blesková vlna', rush: 'Boss Rush', daily: 'Denní výzva' + (this.daily ? ' · ' + this.daily.name : ''), zen: 'Zen' };
         document.getElementById('go-sub').innerText =
             (modeNames[this.mode] || modeNames.normal) + ' · rekord ' + U.num(Math.max(prevBest, primary));
 
@@ -3196,20 +3421,20 @@ class GameManager {
         }
     }
 
-    damagePlayer(amount, iframes, piercing) {
+    damagePlayer(amount, iframes, piercing, fromBoss) {
         // Zásah vykrytý štítem se stále počítá jako zásah - achievement "Bez škrábnutí"
         // má znamenat skutečné uhýbání, ne tankování za štítem
         if (this.boss) this.bossNoHit = false;
 
         let realAmount = this.daily ? Math.round(amount * this.daily.dmgTakenMult) : amount;
-        if (this.inferno) realAmount = Math.round(realAmount * INFERNO.dmgTakenMult);
+        if (this.inferno) realAmount = Math.round(realAmount * this.hell.dmgTakenMult);
 
         // Pancíř ze stromu Vzestupu snižuje všechno přijaté poškození (nejvýš o 20 %), zásah ale zůstane zásahem
         const armor = prestigeBonus('armor', 0.02);
         if (armor) realAmount = Math.max(1, Math.round(realAmount * (1 - armor)));
 
-        // Štít kryje jen část zásahu (SHIELD_BLOCK); v Pekle ho asteroidy probíjejí celé
-        const shieldBlock = (this.inferno && piercing) ? 0 : SHIELD_BLOCK;
+        // Štít kryje jen část zásahu (SHIELD_BLOCK); v Pekle ho asteroidy probíjejí celé a v Insane Pekle i všechno od bossů
+        const shieldBlock = ((this.inferno && piercing) || (this.insane && fromBoss)) ? 0 : SHIELD_BLOCK;
 
         const before = this.player.hp;
         const wouldDie = this.player.takeDamage(realAmount, iframes, shieldBlock);
@@ -3276,7 +3501,7 @@ class GameManager {
         // vydělával rychleji, a hra by se s každým vzestupem dál zrychlovala.
         // Skutečná odměna za vzestup jde do samostatné měny (Hvězdný prach).
         let m = (this.isHardMode ? 2 : 1) + Math.floor(this.phase / 3);
-        if (this.inferno) m *= INFERNO.coinMult;
+        if (this.inferno) m *= this.hell.coinMult;
         m *= 1 + prestigeBonus('loot', 0.03);
         if (Achv.hasRelic('collector')) m *= 1.2;
         if (this.daily) m *= this.daily.coinMult;
@@ -3361,7 +3586,7 @@ class GameManager {
 
             // Šťastná hvězda ze stromu Vzestupu zvedá šanci na power-up, poměr heal/buff zůstává stejný
             if (!this.daily || this.daily.powerupsAllowed) {
-                const dropChance = (0.11 + prestigeBonus('luck', 0.01)) * (this.inferno ? INFERNO.powerupMult : 1);
+                const dropChance = (0.11 + prestigeBonus('luck', 0.01)) * (this.inferno ? this.hell.powerupMult : 1);
                 const roll = Math.random();
                 if (roll < dropChance) {
                     const types = roll < dropChance * 0.318 ? ['heal'] : ['triple', 'shield', 'rapid'];
@@ -3370,7 +3595,7 @@ class GameManager {
 
                 // Vzácný bonusový drop mincí - nezávislý na power-upech výš, aby zabíjení
                 // dávalo i hmatatelný pocit odměny mimo jen pomalu tikající HUD číslo.
-                if (e.type !== 'asteroid' && Math.random() < 0.035 * (this.inferno ? INFERNO.pickupMult : 1)) {
+                if (e.type !== 'asteroid' && Math.random() < 0.035 * (this.inferno ? this.hell.pickupMult : 1)) {
                     this.powerups.push(new Powerup(e.x, e.y, 'coin'));
                 }
             }
@@ -3457,7 +3682,7 @@ class GameManager {
     spawnBossInstance(level) {
         let hardMul = this.isHardMode ? 1.45 : 1;
         if (this.daily) hardMul *= this.daily.bossHpMult;
-        if (this.inferno) hardMul *= INFERNO.bossHpMult;
+        if (this.inferno) hardMul *= this.hell.bossHpMult;
 
         this.boss = new Boss(this, level, hardMul);
         this.bossActive = true;
@@ -3579,7 +3804,7 @@ class GameManager {
             this.eventDuration -= dt;
             if (this.eventDuration <= 0) {
                 this.currentEvent = null;
-                this.eventCooldown = this.inferno ? INFERNO.eventCooldown : 16000;
+                this.eventCooldown = this.inferno ? this.hell.eventCooldown : 16000;
             }
         }
 
@@ -3589,9 +3814,9 @@ class GameManager {
             this.currentEvent = 'rush';
             this.eventDuration = 10000;
             this.showEvent('NÁLET', '#ff0055');
-        } else if (canStart && this.score > (this.inferno ? INFERNO.asteroidScoreMin : 500) && Math.random() < (this.inferno ? INFERNO.asteroidChance : 0.0012)) {
+        } else if (canStart && this.score > (this.inferno ? this.hell.asteroidScoreMin : 500) && Math.random() < (this.inferno ? this.hell.asteroidChance : 0.0012)) {
             this.currentEvent = 'asteroids';
-            this.eventDuration = this.inferno ? INFERNO.asteroidDuration : 12000;
+            this.eventDuration = this.inferno ? this.hell.asteroidDuration : 12000;
             this.asteroidTimer = 0;
             this.showEvent('POLE ASTEROIDŮ', '#9aa1ad');
         }
@@ -3601,8 +3826,8 @@ class GameManager {
         if (this.currentEvent === 'asteroids') {
             this.asteroidTimer -= dt;
             if (this.asteroidTimer <= 0) {
-                this.asteroidTimer = U.rand(420, 780) * (this.inferno ? INFERNO.asteroidGapMult : 1);
-                const count = this.inferno ? INFERNO.asteroidBurst : 1;
+                this.asteroidTimer = U.rand(420, 780) * (this.inferno ? this.hell.asteroidGapMult : 1);
+                const count = this.inferno ? this.hell.asteroidBurst : 1;
                 for (let i = 0; i < count; i++) this.enemies.push(new Enemy(U.rand(30, this.width - 30), -50 - i * 40, 'asteroid', this.diffMult));
             }
         }
@@ -3616,7 +3841,7 @@ class GameManager {
             if (beam.firing && !this.tutActive) {
                 const reach = beam.w * 0.75 + this.player.hitR;
                 if (Math.abs(beam.x - this.player.x) < reach && this.player.y > (beam.boss ? beam.boss.y : 0)) {
-                    if (this.damagePlayer(14, 620)) return;
+                    if (this.damagePlayer(14, 620, false, true)) return;
                 }
             }
 
@@ -3639,7 +3864,7 @@ class GameManager {
                 const hi = Math.max(sw.prevR, sw.r) + pad;
                 if (d >= lo && d <= hi) {
                     sw.hit = true;
-                    if (this.damagePlayer(12, 500)) return;
+                    if (this.damagePlayer(12, 500, false, true)) return;
                 }
             }
 
@@ -3670,7 +3895,7 @@ class GameManager {
                     continue;
                 }
 
-                if (this.damagePlayer(b.dmg, 400)) return;
+                if (this.damagePlayer(b.dmg, 400, false, b.fromBoss)) return;
             }
         }
     }
@@ -3758,7 +3983,7 @@ class GameManager {
 
         // Boss má vlastní dotykový zásah, protože z obrazovky nemizí
         if (this.boss && U.hit(this.boss, this.player, this.boss.r * 0.8, this.player.r * 0.72) && !this.tutActive) {
-            if (this.damagePlayer(26, 900)) return;
+            if (this.damagePlayer(26, 900, false, true)) return;
         }
 
         // Seznam cílů sestavujeme až teď, aby v něm nebyli mrtví nepřátelé z kroku výše
@@ -4371,7 +4596,9 @@ const PRESTIGE_TREE = [
     { id: 'zenUnlocked', name: 'Režim Zen', desc: 'Odemkne klidný nekonečný režim bez umírání.', max: 1, unlock: true,
         cost: () => 150 },
     { id: 'dailyUnlocked', name: 'Denní výzva', desc: 'Odemkne denní výzvu s vlastním žebříčkem.', max: 1, unlock: true,
-        cost: () => 150 }
+        cost: () => 150 },
+    { id: 'insaneUnlocked', name: 'Insane Peklo', desc: 'Odemkne režim pro ty, co si mysleli, že Peklo je lehké.', max: 1, unlock: true,
+        cost: () => 1000 }
 ];
 
 function prestigeLevel(id) {
@@ -4483,7 +4710,7 @@ const UI = {
 
     refresh() {
         const coins = U.num(Storage.data.coins || 0);
-        const best = Math.max(Storage.data.best.normal || 0, Storage.data.best.hard || 0, Storage.data.best.inferno || 0);
+        const best = Math.max(Storage.data.best.normal || 0, Storage.data.best.hard || 0, Storage.data.best.inferno || 0, Storage.data.best.insane || 0);
 
         document.getElementById('menu-coins').innerText = coins + ' mincí';
         document.getElementById('pause-coins').innerText = coins + ' mincí';
@@ -4497,12 +4724,14 @@ const UI = {
         document.getElementById('rec-normal').innerText = 'Rekord ' + U.num(Storage.data.best.normal || 0);
         document.getElementById('rec-hard').innerText = 'Rekord ' + U.num(Storage.data.best.hard || 0);
         document.getElementById('rec-inferno').innerText = 'Rekord ' + U.num(Storage.data.best.inferno || 0);
+        document.getElementById('rec-insane').innerText = 'Rekord ' + U.num(Storage.data.best.insane || 0);
         document.getElementById('rec-blitz').innerText = 'Rekord ' + U.num(Storage.data.best.blitz || 0);
         document.getElementById('rec-rush').innerText = 'Série ' + U.num(Storage.data.best.rush || 0);
 
         // Zen a Denní výzva se v menu objeví, až je hráč odemkne za hvězdný prach
         document.getElementById('btn-start-zen').classList.toggle('hidden', !Storage.data.prestige.zenUnlocked);
         document.getElementById('btn-start-daily').classList.toggle('hidden', !Storage.data.prestige.dailyUnlocked);
+        document.getElementById('btn-start-insane').classList.toggle('hidden', !Storage.data.prestige.insaneUnlocked);
 
         if (Storage.data.prestige.dailyUnlocked) {
             const mod = dailyModifierForToday();
@@ -4736,6 +4965,7 @@ document.getElementById('btn-sound').innerText = Storage.data.muted ? '🔇' : '
 document.getElementById('btn-start-normal').onclick = () => Game.start('normal');
 document.getElementById('btn-start-hard').onclick = () => Game.start('hard');
 document.getElementById('btn-start-inferno').onclick = () => Game.start('inferno');
+document.getElementById('btn-start-insane').onclick = () => Game.start('insane');
 document.getElementById('btn-start-blitz').onclick = () => Game.start('blitz');
 document.getElementById('btn-start-rush').onclick = () => Game.start('rush');
 document.getElementById('btn-start-zen').onclick = () => Game.start('zen');
