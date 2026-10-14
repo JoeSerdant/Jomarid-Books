@@ -17,7 +17,6 @@
   function pad2(n) { return String(n).padStart(2, "0"); }
   function dateStr(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
   function todayStr() { return dateStr(new Date()); }
-  function yesterdayStr() { const d = new Date(); d.setDate(d.getDate() - 1); return dateStr(d); }
   function fmtClock(ms) {
     if (ms == null) return "";
     const total = Math.max(0, ms);
@@ -417,33 +416,6 @@
         button({ className: "icon-btn", onClick: () => onView(total), disabled: cur === total, "aria-label": "Na konec" }, "⏭")));
   }
 
-  // ---------- Karty ligy a výzev ----------
-  function LeagueCard({ xp, compact, onViewFull }) {
-    const info = League.getLeagueInfo(xp);
-    return div({ className: "panel-card league-card" },
-      div({ className: "rail-card-head" }, span({ className: "rail-card-title" }, "Tvoje liga"), compact && button({ className: "link-btn", onClick: onViewFull }, "ZOBRAZIT LIGU")),
-      div({ className: "league-tier-row" },
-        span({ className: "league-tier-icon" }, info.current.icon),
-        div(null, div({ className: "league-tier-name" }, info.current.name), div({ className: "league-tier-sub" }, info.next ? "Do " + info.next.name + " zbývá " + (info.next.min - xp) + " XP" : "Nejvyšší liga dosažena!"))),
-      div({ className: "progress-track" }, div({ className: "progress-fill", style: { width: info.progress * 100 + "%" } })),
-      !compact && div({ className: "tier-list" }, League.LEAGUE_TIERS.map((t, k) =>
-        div({ key: t.name, className: "tier-row" + (k <= info.idx ? " reached" : "") }, span(null, t.icon), span(null, t.name), span({ className: "tier-min" }, t.min, " XP")))));
-  }
-
-  function QuestsCard({ save, compact, onViewAll }) {
-    const quests = League.getDailyQuests(save, todayStr());
-    return div({ className: "panel-card quests-card" },
-      div({ className: "rail-card-head" }, span({ className: "rail-card-title" }, "Dnešní výzvy"), compact && button({ className: "link-btn", onClick: onViewAll }, "ZOBRAZIT VŠE")),
-      div({ className: "quest-list" }, quests.map((q) =>
-        div({ key: q.key, className: "quest-row" + (q.done ? " done" : "") },
-          span({ className: "quest-icon" }, q.done ? "✅" : q.icon),
-          div({ className: "quest-body" },
-            div({ className: "quest-label" }, q.label, q.special && span({ className: "quest-tag" }, "DNES NAVÍC")),
-            div({ className: "progress-track sm" }, div({ className: "progress-fill", style: { width: Math.min(100, (q.current / q.target) * 100) + "%" } }))),
-          span({ className: "quest-reward" }, "+", q.reward, " XP")))),
-      !compact && div({ className: "quest-note" }, "Za splněnou výzvu dostaneš XP automaticky po zápase, jednou za den. Výzvy se každý den obnoví."));
-  }
-
   function HistoryList({ recentGames, onOpen }) {
     if (!recentGames || recentGames.length === 0) return div({ className: "history-empty" }, "Zatím žádné zápasy — odehraj svou první hru a uvidíš ji tady.");
     return div({ className: "history-list" }, recentGames.map((g, k) => {
@@ -564,15 +536,6 @@
     }));
   }
 
-  function BadgesCard({ save }) {
-    const badges = League.getBadges(save);
-    const got = badges.filter((x) => x.earned).length;
-    return div(null,
-      div({ className: "section-head" }, "Odznaky", small(null, got, " / ", badges.length)),
-      div({ className: "badge-grid" }, badges.map((bd) => div({ key: bd.key, className: "badge-tile" + (bd.earned ? "" : " off"), title: bd.hint },
-        div({ className: "ic" }, bd.icon), div({ className: "nm" }, bd.name), !bd.earned && div({ className: "hn" }, bd.hint)))));
-  }
-
   function LadderCard({ save }) {
     const rows = BOTS.map((bt) => ({ bot: bt, rating: bt.rating })).concat([{ me: true, rating: save.rating }]).sort((a, c) => c.rating - a.rating);
     return div({ className: "ladder" }, rows.map((r) => {
@@ -589,7 +552,7 @@
     const [colorChoice, setColorChoice] = useState(save.playerColor === "b" ? "b" : "w");
     const [tc, setTc] = useState(save.tc || "none");
     const [menuTab, setMenuTab] = useState("play");
-    const navItems = [["play", "🏠", "Hrát"], ["league", "🛡️", "Liga"], ["quests", "🎯", "Výzvy"], ["settings", "⚙️", "Nastavení"]];
+    const navItems = [["play", "🏠", "Hrát"], ["rating", "📈", "Rating"], ["settings", "⚙️", "Nastavení"]];
     const start = (idx) => {
       const color = colorChoice === "r" ? (Math.random() < 0.5 ? "w" : "b") : colorChoice;
       onStart(idx, color, tc, colorChoice);
@@ -603,10 +566,10 @@
         navItems.map(([k, icon, label]) => button({ key: k, className: "nav-item" + (menuTab === k ? " active" : ""), onClick: () => setMenuTab(k) }, span({ className: "nav-icon" }, icon), span({ className: "nav-label" }, label)))),
       div({ className: "dash-shell" },
         div({ className: "dash-topbar" },
-          div({ className: "stat-row" }, span({ className: "stat-pill" }, "🔥 ", save.streak), span({ className: "stat-pill" }, "⭐ ", save.xp, " XP"), span({ className: "stat-pill" }, "📈 ", save.rating)),
+          div({ className: "stat-row" }, span({ className: "stat-pill" }, "📈 ", save.rating)),
           div({ style: { display: "flex", gap: 8 } }, button({ className: "icon-btn", onClick: () => onUpdate({ sound: !save.sound }), "aria-label": "Přepnout zvuk" }, save.sound ? "🔊" : "🔇"))),
 
-        menuTab === "play" && div({ className: "dash-body" },
+        menuTab === "play" && div({ className: "dash-body solo" },
           div({ className: "dash-main" },
             h(RatingHero, { save }),
             savedGame && div({ className: "resume-card" },
@@ -616,12 +579,9 @@
             h(SetupPicker, { save, colorChoice, setColorChoice, tc, setTc }),
             h(BotCards, { save, onStart: start }),
             div({ className: "section-head" }, "Historie zápasů", total > 0 && small(null, save.record.w, "–", save.record.d, "–", save.record.l)),
-            h(HistoryList, { recentGames: save.recentGames, onOpen: onOpenReview })),
-          div({ className: "dash-rail" },
-            h(LeagueCard, { xp: save.xp, compact: true, onViewFull: () => setMenuTab("league") }),
-            h(QuestsCard, { save, compact: true, onViewAll: () => setMenuTab("quests") }))),
+            h(HistoryList, { recentGames: save.recentGames, onOpen: onOpenReview }))),
 
-        menuTab === "league" && div({ className: "dash-body single" }, div({ className: "dash-main" },
+        menuTab === "rating" && div({ className: "dash-body single" }, div({ className: "dash-main" },
           div({ className: "section-head" }, "Tvůj rating"),
           div({ className: "panel-card" },
             div({ className: "rating-big" }, span({ className: "num" }, save.rating), span({ className: "ttl" }, League.ratingTitle(save.rating))),
@@ -632,13 +592,7 @@
               div({ className: "stat-cell" }, b(null, total ? Math.round(((save.record.w + save.record.d * 0.5) / total) * 100) + " %" : "–"), span(null, "Úspěšnost")),
               div({ className: "stat-cell" }, b(null, save.bestWinStreak), span(null, "Série výher")))),
           div({ className: "section-head" }, "Žebříček"),
-          h(LadderCard, { save }),
-          div({ className: "section-head" }, "Tvoje liga"),
-          h(LeagueCard, { xp: save.xp }),
-          h(BadgesCard, { save }))),
-
-        menuTab === "quests" && div({ className: "dash-body single" }, div({ className: "dash-main" },
-          div({ className: "section-head" }, "Dnešní výzvy"), h(QuestsCard, { save }))),
+          h(LadderCard, { save }))),
 
         menuTab === "settings" && div({ className: "dash-body single" }, div({ className: "dash-main" },
           div({ className: "section-head" }, "Nastavení"),
@@ -648,7 +602,7 @@
             div({ className: "settings-row" }, span(null, "Hlášky soupeřů", small(null, "Boti občas něco prohodí k průběhu partie.")), h(Toggle, { on: save.botChat, label: "Hlášky soupeřů", onChange: (v) => onUpdate({ botChat: v }) })),
             div({ className: "settings-row" }, span(null, "Automaticky povyšovat na dámu", small(null, "Bez ptaní, když pěšec dojde na konec desky.")), h(Toggle, { on: save.autoQueen, label: "Automaticky povyšovat na dámu", onChange: (v) => onUpdate({ autoQueen: v }) })),
             div({ className: "settings-row" }, span(null, "Motiv"), h(ThemeSeg, { value: theme, onChange: setTheme })),
-            div({ className: "settings-row" }, span(null, "Resetovat postup", small(null, "Smaže XP, rating, sérii, výhry i odemčené soupeře.")), button({ className: "btn btn-danger btn-sm", onClick: onResetProgress }, "Resetovat")))))));
+            div({ className: "settings-row" }, span(null, "Resetovat postup", small(null, "Smaže rating, rekordy, výhry i odemčené soupeře.")), button({ className: "btn btn-danger btn-sm", onClick: onResetProgress }, "Resetovat")))))));
   }
 
   // ---------- Hra ----------
@@ -880,7 +834,7 @@
               div({ className: "panel-title" }, "Zahájení"),
               opening ? div({ className: "opening-name" }, opening) : div({ className: "opening-empty" }, session.playerColor === "w" ? "Zatím se nehrálo — táhni jako první!" : "Zatím se nehrálo."),
               div({ className: "mode-pill " + (session.rated ? "rated" : "practice") }, session.rated ? "🏅 Hodnocená partie" : "🎓 Cvičná partie"),
-              div({ className: "mode-note" }, session.rated ? "Vrácení tahu a nápověda změní partii na cvičnou — rating se pak nezmění a nedostaneš Coiny." : "Pomoc byla použita: rating se nezmění, XP je poloviční a bez Coinů.")),
+              div({ className: "mode-note" }, session.rated ? "Vrácení tahu a nápověda změní partii na cvičnou — rating se pak nezmění a nedostaneš Coiny." : "Pomoc byla použita: rating se nezmění a nedostaneš Coiny.")),
             h(MoveListPanel, { moves: session.moves, viewIdx, onView: view_, showNav: true })))));
   }
 
@@ -919,13 +873,9 @@
             div({ className: "rc-note" }, "Před zápasem ", s.ratingBefore, " · očekávaná šance ", pct(s.expected), " · K ", s.k, s.provisional ? " · kalibrace " + Math.min(s.ratedGamesAfter, League.PROVISIONAL_GAMES) + "/" + League.PROVISIONAL_GAMES : ""),
             s.newPeak && div({ className: "badge-new" }, "🏆 Nový osobní rekord!"))
           : div({ className: "rc-note" }, "🎓 Cvičná partie (s vrácením tahu nebo nápovědou): rating zůstává ", s.ratingBefore, ".")),
-      div({ className: "xp-card" },
-        div({ className: "xp-row" }, span(null, "XP ze zápasu"), span({ className: "xp-total" }, "+", s.xpBase)),
-        s.questBonus.map((q) => div({ key: q.key, className: "xp-row" }, span(null, q.icon, " Výzva: ", q.label), span({ className: "xp-total" }, "+", q.reward))),
+      ((info.coinReward > 0 && embedded) || s.newlyUnlocked) && div({ className: "xp-card" },
         info.coinReward > 0 && embedded && div({ className: "xp-row" }, span(null, "🪙 Odměna za výhru (Jomarid Coins)"), span({ className: "xp-total" }, "až +", info.coinReward)),
-        div({ className: "xp-row" }, span(null, "Série"), span(null, "🔥 ", s.streak)),
-        s.newlyUnlocked && div({ className: "xp-row" }, span(null, "Nový soupeř"), span({ className: "xp-total" }, "Odemčen!")),
-        s.promoted && div({ className: "xp-row" }, span(null, "Postup do ligy"), span({ className: "xp-total" }, s.tierAfter.icon, " ", s.tierAfter.name))),
+        s.newlyUnlocked && div({ className: "xp-row" }, span(null, "Nový soupeř"), span({ className: "xp-total" }, "Odemčen!"))),
       info.moves.length >= 4 && div({ className: "xp-card" },
         div({ className: "xp-card-title" }, "Rozbor partie"),
         acc
@@ -1114,7 +1064,7 @@
       const saved = savedGame;
       League.persistGame(storage, null); setSavedGame(null);
       if (!saved) return;
-      const r = League.finishGame(saveRef.current, { botIdx: saved.botIdx, result: "loss", reason: "resign", color: saved.color, plies: saved.moves.length, tc: saved.tc, rated: !saved.assisted, moves: saved.moves }, BOT_LIST, todayStr(), yesterdayStr());
+      const r = League.finishGame(saveRef.current, { botIdx: saved.botIdx, result: "loss", reason: "resign", color: saved.color, plies: saved.moves.length, tc: saved.tc, rated: !saved.assisted, moves: saved.moves }, BOT_LIST, todayStr());
       setSaveFull(r.save);
     }
 
@@ -1125,13 +1075,13 @@
       processedRef.current = sess;
       const { result, reason } = sess.result;
       const botIdx = sess.botIdx, rated = sess.rated, coords = sess.coords();
-      const r = League.finishGame(saveRef.current, { botIdx, result, reason, color: sess.playerColor, plies: coords.length, tc: sess.tcKey, rated, moves: coords }, BOT_LIST, todayStr(), yesterdayStr());
+      const r = League.finishGame(saveRef.current, { botIdx, result, reason, color: sess.playerColor, plies: coords.length, tc: sess.tcKey, rated, moves: coords }, BOT_LIST, todayStr());
       setSaveFull(r.save);
       League.persistGame(storage, null); setSavedGame(null);
       // Odměna v Coinech jen za výhru v hodnocené partii; o skutečné částce rozhoduje server (denní strop).
       const coinReward = result === "win" && rated ? Bots.COIN_REWARDS[BOTS[botIdx].key] || 0 : 0;
       if (coinReward > 0 && typeof jomaridReward === "function") jomaridReward("chess_win_" + BOTS[botIdx].key, coinReward, true);
-      if (r.summary.promoted && r.save.sound) setTimeout(() => SoundFX.level(), 600);
+      if (r.summary.newlyUnlocked && r.save.sound) setTimeout(() => SoundFX.level(), 600);
       setEndInfo({ result, reason, summary: r.summary, coinReward, botIdx, color: sess.playerColor, moves: coords, tcKey: sess.tcKey });
       setView("end");
       runAnalysis(coords, sess.playerColor, true);
@@ -1204,7 +1154,7 @@
     return div({ className: "app-shell" },
       content,
       confirm && confirm.abandon && h(ConfirmModal, { title: "Vzdát rozehranou partii?", text: "Zápas se započítá jako prohra.", confirmLabel: "Vzdát", danger: true, onConfirm: () => { setConfirm(null); doAbandon(); }, onCancel: () => setConfirm(null) }),
-      confirm && confirm.reset && h(ConfirmModal, { title: "Resetovat veškerý postup?", text: "Smaže se XP, rating, série, výhry i odemčení soupeři. Tohle nejde vrátit.", confirmLabel: "Resetovat", danger: true, onConfirm: () => { setConfirm(null); doReset(); }, onCancel: () => setConfirm(null) }),
+      confirm && confirm.reset && h(ConfirmModal, { title: "Resetovat veškerý postup?", text: "Smaže se rating, rekordy, výhry i odemčení soupeři. Tohle nejde vrátit.", confirmLabel: "Resetovat", danger: true, onConfirm: () => { setConfirm(null); doReset(); }, onCancel: () => setConfirm(null) }),
       confirm && confirm.start && h(ConfirmModal, { title: "Máš rozehranou partii", text: "Když začneš novou, rozehraná partie se započítá jako prohra.", confirmLabel: "Začít novou", danger: true, onConfirm: () => { const c = confirm.start; setConfirm(null); doAbandon(); reallyStart(c.botIdx, c.color, c.tc, c.colorChoice); }, onCancel: () => setConfirm(null) }));
   }
 

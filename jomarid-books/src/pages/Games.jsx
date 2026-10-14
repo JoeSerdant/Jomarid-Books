@@ -38,7 +38,7 @@ const GAMES = [
   {
     id: 'chess',
     title: 'Chess League',
-    tagline: 'Šachy proti pěti botům s vlastní osobností - skutečný Elo rating, hodiny, nápověda, rozbor partie a ligový postup.',
+    tagline: 'Šachy proti pěti botům s vlastní osobností - skutečný Elo rating, hodiny, nápověda a rozbor partie.',
     icon: Crown,
     load: () => import('../gameContent/chess').then(m => m.CHESS_HTML),
   },
