@@ -26,7 +26,15 @@ save.set = Object.assign({ vib: true, lefty: false, ctl: 1, fx: 1 }, save.set ||
 save.st = Object.assign({ games: 0, kills: 0, deaths: 0, shapes: 0, bosses: 0, secs: 0, bestLevel: 1, wins: 0, perks: 0, crystals: 0, bossKinds: {}, mapsSeen: {}, modesPlayed: {}, bestWave: 0, survWins: 0, hillWins: 0, royaleWins: 0, rushWins: 0, rushBest: 0, bestGold: 0, goldWins: 0 }, save.st || {});
 save.st.bossKinds = save.st.bossKinds || {}; save.st.mapsSeen = save.st.mapsSeen || {}; save.st.modesPlayed = save.st.modesPlayed || {};
 save.codex = save.codex || {}; save.ach = save.ach || {};
-function persist() { try { localStorage.setItem(STORE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ } }
+function persist() { try { localStorage.setItem(STORE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ } reportRecords(); }
+// Rekordy se hlásí appce (jomaridRecord v mostu); posílá se jen zvýšení, takže volání při každém uložení nic nestojí.
+function reportRecords() {
+  if (typeof jomaridRecord !== 'function') return;
+  jomaridRecord('best_level', save.st.bestLevel);
+  jomaridRecord('bosses_defeated', save.st.bosses);
+  jomaridRecord('wins', save.st.wins);
+}
+reportRecords();
 
 /* ---------- theme (čte CSS tokeny) ---------- */
 const theme = { bg: '#08131a', arena: '#0e1f27', grid: '#16303a', ink: '#e7f2f3', barrel: '#8ea0aa', barrelStroke: '#4a5a63', accent: '#5fe0d4' };

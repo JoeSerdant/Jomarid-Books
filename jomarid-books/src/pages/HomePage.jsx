@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { BOOK_BADGES } from '../constants/badges';
 import { sumBadgeXp } from '../constants/badgeXp';
+import { loadGameProgress } from '../gameRecords/api';
 import { STREAK_FREEZE_PRICE, DEFAULT_BOOK_PRICE } from '../constants/economy';
 import { calculateLevelAndProgress, getLevelVisuals, computeTotalXp } from '../constants/leveling';
 import { plural } from '../lib/plural';
@@ -155,12 +156,13 @@ export const HomePage = () => {
     setPersonalLoading(true);
     (async () => {
       try {
-        const [profileRes, userBooksRes, activityRes, allBooksRes, streakRes] = await Promise.all([
+        const [profileRes, userBooksRes, activityRes, allBooksRes, streakRes, gameProgress] = await Promise.all([
           supabase.from('profiles').select('fake_xp, bonus_xp, unlocked_badges, coins, highest_goal_completed, featured_badge, current_streak').eq('id', user.id).maybeSingle(),
           supabase.from('user_books').select('book_id, is_read, status, scroll_position, updated_at').eq('user_id', user.id),
           supabase.from('user_daily_activity').select('activity_date').eq('user_id', user.id).order('activity_date', { ascending: false }),
           supabase.from('books').select('id, title, author, author_display, genres, description, price_coins, is_auto_assigned, avg_rating'),
           supabase.rpc('resolve_streak'),
+          loadGameProgress(supabase),
         ]);
         if (cancelled) return;
         if (profileRes.error) throw profileRes.error;
@@ -196,6 +198,7 @@ export const HomePage = () => {
           bonusXp: profile.bonus_xp,
           streak,
           badgeXp: sumBadgeXp(unlockedBadgeIds),
+          gameXp: gameProgress.xp,
         });
         const { level, xpInCurrentLevel, xpNeededForNext } = calculateLevelAndProgress(totalXp);
         const visuals = getLevelVisuals(level);

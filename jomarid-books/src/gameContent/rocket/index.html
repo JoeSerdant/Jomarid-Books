@@ -888,10 +888,33 @@ h2 {
     else if (!timer) { timer = setTimeout(flush, 1200); }
   };
 
-  window.addEventListener('pagehide', function () { if (timer) clearTimeout(timer); flush(); });
+  // Rekordy hry (nejlepší skóre, nejvyšší úroveň...): hra jen hlásí aktuální hodnotu, o zápisu a odznacích rozhoduje server.
+  // Hlásí se jen zvýšení oproti naposledy odeslanému (stejná nebo nižší hodnota se neposílá znovu) a víc hlášení v rychlém sledu se sloučí.
+  var recSent = {}, recPending = {}, recTimer = null;
+  function recFlush() {
+    recTimer = null;
+    var pend = recPending; recPending = {};
+    if (!inFrame) return;
+    for (var k in pend) {
+      if (pend[k] <= (recSent[k] || 0)) continue;
+      recSent[k] = pend[k];
+      try { window.parent.postMessage({ source: 'jomarid-game', type: 'record', game: GAME_ID, stat: k, value: pend[k] }, '*'); } catch (e) {}
+    }
+  }
+  window.jomaridRecord = function (stat, value, immediate) {
+    if (!inFrame || typeof stat !== 'string') return;
+    value = Math.floor(Number(value));
+    if (!isFinite(value) || value < 1) return;
+    if (value <= (recSent[stat] || 0) || value <= (recPending[stat] || 0)) return;
+    recPending[stat] = value;
+    if (immediate) { if (recTimer) clearTimeout(recTimer); recFlush(); }
+    else if (!recTimer) { recTimer = setTimeout(recFlush, 1500); }
+  };
+
+  window.addEventListener('pagehide', function () { if (timer) clearTimeout(timer); flush(); if (recTimer) clearTimeout(recTimer); recFlush(); });
   document.addEventListener('click', function (e) {
     var t = e.target && e.target.closest ? e.target.closest('#btn-back-to-jomarid') : null;
-    if (t) { if (timer) clearTimeout(timer); flush(); }
+    if (t) { if (timer) clearTimeout(timer); flush(); if (recTimer) clearTimeout(recTimer); recFlush(); }
   }, true);
 })();
 </script>
@@ -1110,7 +1133,7 @@ const Storage = {
         stats: {
             totalKills: 0, totalBossKills: 0, totalCoinsEarned: 0, totalPlaytime: 0,
             bestCombo: 0, runsPlayed: 0, bombsUsed: 0, noHitBosses: 0,
-            longestRun: 0, blitzClears: 0, bestRushStreak: 0
+            longestRun: 0, blitzClears: 0, bestRushStreak: 0, bestBossLevel: 0
         }
     },
 
@@ -1181,6 +1204,7 @@ const Storage = {
         try {
             localStorage.setItem(this.key, JSON.stringify(this.data));
         } catch (e) {}
+        reportRecords();
     },
 
     // Zápis do localStorage je drahý - během boje jen označíme změnu a uložíme dávkově
@@ -1204,7 +1228,23 @@ const Storage = {
     }
 };
 
+// Rekordy se hlásí appce (jomaridRecord v mostu na začátku dokumentu; mimo appku funkce není a nic se neděje).
+// Posílá se jen zvýšení, takže volání při každém uložení nic nestojí. Server si nejvyšší hodnotu pamatuje u účtu a odemyká herní odznaky.
+function reportRecords() {
+    if (typeof jomaridRecord !== 'function') return;
+    const d = Storage.data;
+    jomaridRecord('score_normal', d.best.normal);
+    jomaridRecord('score_hard', d.best.hard);
+    jomaridRecord('score_inferno', d.best.inferno);
+    jomaridRecord('score_insane', d.best.insane);
+    jomaridRecord('score_blitz', d.best.blitz);
+    jomaridRecord('rush_streak', d.best.rush);
+    jomaridRecord('boss_level', d.stats.bestBossLevel);
+    jomaridRecord('ascension', d.ascension);
+}
+
 Storage.load();
+reportRecords();
 window.addEventListener('pagehide', () => Storage.flush());
 
 //======================================================================
@@ -3612,6 +3652,7 @@ class GameManager {
             this.score += gained;
             this.kills++;
             this.trackStat('totalBossKills');
+            Storage.data.stats.bestBossLevel = Math.max(Storage.data.stats.bestBossLevel || 0, b.level);
             if (this.bossNoHit) this.trackStat('noHitBosses');
 
             this.texts.push(new FloatingText(b.x, b.y - 30, '+' + U.num(gained), b.color, 22));

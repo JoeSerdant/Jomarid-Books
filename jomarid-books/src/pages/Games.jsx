@@ -6,6 +6,8 @@ import { Coins, Loader2, Rocket, Swords, Building2, Target, Crown, Smile, Lock }
 import { GameBar } from '../components/GameBar';
 import { useReaderSnapshot } from '../gameBar/useReaderSnapshot';
 import { rewardLabel, REWARD_LIMIT_NOTE } from '../gameBar/rewardLabels';
+import { normalizeRecord } from '../gameRecords/catalog';
+import { reportGameRecord } from '../gameRecords/api';
 
 // Každá hra je velký kus textu (stovky kB, šachy i s Reactem). Stahuje se až při spuštění (dynamický import), ne spolu
 // se stránkou Her - jinak by si hráč už při otevření seznamu stáhl všechny hry najednou.
@@ -195,6 +197,9 @@ export const GameLauncher = ({ game }) => {
   // zprávu nemohlo spustit nic jiného, co náhodou pošle stejně tvarovanou
   // zprávu odjinud.
   //
+  // 'record' je HLÁŠENÍ rekordu (nejlepší skóre, nejvyšší úroveň...). Appka ho jen předá serveru (report_game_record), ten si nejvyšší
+  // hodnotu pamatuje u účtu a odemyká herní odznaky; nový odznak se potvrdí v liště nad hrou. Neznámá statistika a hodnota mimo meze se zahodí.
+  //
   // 'coin' je ŽÁDOST o odměnu za herní událost (zlaté kliknutí, sklad zásob,
   // krystal, výhra v šachách...) - hra sama Jomarid Coins NIKDY neuděluje,
   // jen POŽÁDÁ; o skutečné částce (a denním stropu) rozhoduje výhradně server
@@ -207,6 +212,12 @@ export const GameLauncher = ({ game }) => {
 
       if (event.data?.type === 'close') {
         handleCloseGame();
+      } else if (event.data?.type === 'record' && user) {
+        const rec = normalizeRecord(game.id, event.data.stat, event.data.value);
+        if (!rec) return;
+        reportGameRecord(supabase, rec.game, rec.stat, rec.value).then((res) => {
+          if (res?.unlocked?.length) showFlash({ text: `+${res.xp} XP`, label: `Odznak: ${res.unlocked.map((b) => b.title).join(', ')}` });
+        });
       } else if (event.data?.type === 'coin' && user) {
         const amount = Math.floor(Number(event.data.amount));
         if (!Number.isFinite(amount) || amount < 1) return;
@@ -327,7 +338,7 @@ export const GameLauncher = ({ game }) => {
 
         <div style={{ borderColor: 'var(--border-color)' }} className="w-full border-t pt-6 flex flex-col items-center gap-3">
           <p style={{ color: 'var(--text-muted)' }} className="text-xs max-w-sm mx-auto opacity-80">
-            Skóre a vylepšení ve hře jsou jen pro zábavu a zůstávají jen v tomhle prohlížeči. Za to, že si dnes zahraješ, ale dostaneš i pár skutečných Jomarid Coinů - jednou denně.
+            Vylepšení a postup ve hře zůstávají jen v tomhle prohlížeči, ale rekordy a herní odznaky se ukládají k tvému účtu (Statistiky, záložka Hry). Za to, že si dnes zahraješ, dostaneš i pár skutečných Jomarid Coinů - jednou denně.
           </p>
           <button
             onClick={handleClaimBonus}

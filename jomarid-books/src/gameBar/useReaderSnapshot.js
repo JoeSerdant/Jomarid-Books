@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { buildReaderSnapshot, todayUtcStr } from './readerSnapshot';
+import { loadGameProgress } from '../gameRecords/api';
 
 // Načte úroveň čtenáře pro lištu nad hrou. Když se něco nepovede, lišta úroveň prostě neukáže (hra jede dál).
 export function useReaderSnapshot(userId) {
@@ -12,11 +13,12 @@ export function useReaderSnapshot(userId) {
     (async () => {
       try {
         const today = todayUtcStr();
-        const [profileRes, readRes, activityRes, streakRes] = await Promise.all([
+        const [profileRes, readRes, activityRes, streakRes, gameProgress] = await Promise.all([
           supabase.from('profiles').select('fake_xp, bonus_xp, unlocked_badges, highest_goal_completed, current_streak, coins').eq('id', userId).maybeSingle(),
           supabase.from('user_books').select('book_id').eq('user_id', userId).eq('is_read', true),
           supabase.from('user_daily_activity').select('activity_date').eq('user_id', userId).eq('activity_date', today).limit(1),
           supabase.rpc('resolve_streak'),
+          loadGameProgress(supabase),
         ]);
         if (cancelled) return;
         if (profileRes.error || readRes.error) throw (profileRes.error || readRes.error);
@@ -25,6 +27,7 @@ export function useReaderSnapshot(userId) {
           totalRead: (readRes.data || []).length,
           todayActive: !activityRes.error && (activityRes.data || []).length > 0,
           resolvedStreak: streakRes?.data?.streak,
+          gameXp: gameProgress.xp,
         });
         setSnapshot(next);
       } catch (err) {

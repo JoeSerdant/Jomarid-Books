@@ -1,6 +1,6 @@
 # Databáze (Supabase)
 
-SQL soubory, které se spouštějí ručně v Supabase. Oba jdou spustit víckrát bez ztráty dat (funkce se jen nahrazují; `push-notifications.sql` navíc odstraní zařízení s nepovolenou adresou).
+SQL soubory, které se spouštějí ručně v Supabase. Všechny jdou spustit víckrát bez ztráty dat (funkce se jen nahrazují; `push-notifications.sql` navíc odstraní zařízení s nepovolenou adresou; `game-records.sql` jen srovná seznam statistik a odznaků).
 
 Jak soubor spustit: na GitHubu ho otevři → **Copy raw file** → v Supabase otevři **SQL Editor** → vlož → **Run**.
 
@@ -8,11 +8,13 @@ Jak soubor spustit: na GitHubu ho otevři → **Copy raw file** → v Supabase o
 | --- | --- |
 | `push-notifications.sql` | Oznámení do zařízení (push), motivační připomínky a plánovač. Postup celého nastavení (včetně Edge Function): [`push/README.md`](push/README.md). |
 | `email-change.sql` | Změna e-mailu přes správce: žádost čtenáře, zrušení, provedení a zamítnutí správcem. |
+| `game-records.sql` | Herní rekordy a odznaky: hry hlásí nejlepší výsledky, server je pamatuje u účtu, odemyká herní odznaky (jen XP) a dává data pro sekci Hry ve Statistikách a pro žebříčky. |
 
 ## Pořadí a předpoklady
 
 1. `push-notifications.sql` podle [`push/README.md`](push/README.md).
 2. `email-change.sql`. Potřebuje, aby v databázi už byly tabulky `profiles`, `admin_notifications`, `user_notifications`, `system_logs`, funkce `notif_require_admin()` a trigger `trg_sync_profile_email` na `auth.users` (seznam je i na začátku souboru). Na `push-notifications.sql` nezávisí, ale když je spuštěné, nová upozornění správci se posílají i jako oznámení do zařízení.
+3. `game-records.sql`. Potřebuje jen tabulku `profiles` (sloupce `id`, `username`, `show_in_leaderboard`), na ostatních souborech nezávisí. Po něm se v appce nic dalšího nenastavuje. Jde ho spustit před nasazením nové verze appky i po něm; dokud neběží, appka funguje jako dřív: hry rekordy hlásí, ale server je nezapíše, sekce Hry ve Statistikách je prázdná a úroveň vychází bez herního XP. Znovu ho spusť jen po změně souboru (seznam statistik a odznaků je i v `src/gameRecords/catalog.js`, test `npm run test:gamerecords` hlídá, že si odpovídají).
 
 Po `email-change.sql` se v appce nic dalšího nenastavuje. Znovu ho spusť jen po změně souboru. Jde ho spustit před nasazením nové verze appky i po něm; dokud neběží, Nastavení u změny e-mailu ukáže, že je dočasně nedostupná.
 

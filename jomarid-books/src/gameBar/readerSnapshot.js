@@ -10,7 +10,8 @@ export const todayUtcStr = (now = new Date()) => now.toISOString().slice(0, 10);
 //   totalRead: počet dočtených knih
 //   todayActive: četl dnes (v user_daily_activity je dnešní den)
 //   resolvedStreak: výsledek resolve_streak(); když chybí, použije se current_streak z profilu
-export function buildReaderSnapshot({ profile, totalRead = 0, todayActive = false, resolvedStreak } = {}) {
+//   gameXp: XP z herních odznaků (my_game_progress); bez něj se počítá nula
+export function buildReaderSnapshot({ profile, totalRead = 0, todayActive = false, resolvedStreak, gameXp = 0 } = {}) {
   const p = profile || {};
   const base = Number.isFinite(resolvedStreak) ? resolvedStreak : (parseInt(p.current_streak, 10) || 0);
   const streak = base + (todayActive ? 1 : 0);
@@ -21,6 +22,7 @@ export function buildReaderSnapshot({ profile, totalRead = 0, todayActive = fals
     bonusXp: p.bonus_xp,
     streak,
     badgeXp: sumBadgeXp(p.unlocked_badges || []),
+    gameXp,
   });
   const { level } = calculateLevelAndProgress(totalXp);
   const name = getLevelVisuals(level).name;
