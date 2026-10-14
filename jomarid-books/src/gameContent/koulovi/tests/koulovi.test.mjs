@@ -313,3 +313,14 @@ test('nový rekord (od 100 bodů, mimo Zen) dá žádost o 3 Jomarid Coins, jen 
   assert.equal(z.rewards.length, 0, 'Zen bez odměny');
 });
 
+test('rekord z přerušené hry (odchod do menu) o odměnu nepřijde: dostane se při odchodu, ne podruhé na konci', () => {
+  const e = makeEnv();
+  e.run("start('classic')"); e.run('g.score = 150; toMenu();');
+  assert.deepEqual(e.rewards, [['record', 3]]);
+  e.run("resume()");
+  e.run('finish(1);');
+  assert.equal(e.rewards.length, 1, 'stejný rekord podruhé');
+  e.run("start('classic')"); e.run('g.score = 200; finish(1);');
+  assert.equal(e.rewards.length, 2);
+});
+

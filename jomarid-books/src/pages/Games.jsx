@@ -198,7 +198,7 @@ export const GameLauncher = ({ game }) => {
         supabase.rpc('award_game_coins', { p_game_id: game.id, p_amount: amount, p_reason: String(event.data.reason || 'event').slice(0, 30) })
           .then(({ data, error }) => {
             if (error) { console.error('Chyba při udílení herní odměny:', error.message); return; }
-            if (data?.granted) setCoins(data.balance ?? 0);
+            if (data?.granted) { setCoins(data.balance ?? 0); setCoinsLoaded(true); } // zůstatek z odpovědi serveru platí i tehdy, když se úvodní načtení nepovedlo
             try {
               event.source?.postMessage({ source: 'jomarid-host', type: 'coin-result', granted: data?.granted || 0, capped: !!data?.capped }, '*');
             } catch { /* okno hry už zaniklo */ }
