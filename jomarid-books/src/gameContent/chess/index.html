@@ -24,18 +24,7 @@
   var GAME_ID = 'chess';
   var inFrame = false;
   try { inFrame = !!window.parent && window.parent !== window; } catch (e) { inFrame = false; }
-  var pending = 0, reasons = {}, timer = null, capNotified = false;
-
-  function toast(text, warn) {
-    try {
-      var el = document.createElement('div');
-      el.textContent = text;
-      el.setAttribute('style', 'position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-20px);z-index:2147483000;pointer-events:none;padding:9px 16px;border-radius:999px;font:800 13px system-ui,-apple-system,Segoe UI,sans-serif;letter-spacing:.3px;white-space:nowrap;opacity:0;transition:opacity .25s,transform .25s;box-shadow:0 6px 24px rgba(0,0,0,.35);color:' + (warn ? '#e5e7eb' : '#1a1200') + ';background:' + (warn ? 'rgba(55,65,81,.95)' : 'linear-gradient(135deg,#ffd76a,#f59e0b)') + ';');
-      document.documentElement.appendChild(el);
-      requestAnimationFrame(function () { el.style.opacity = '1'; el.style.transform = 'translateX(-50%) translateY(0)'; });
-      setTimeout(function () { el.style.opacity = '0'; setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 300); }, 2600);
-    } catch (e) {}
-  }
+  var pending = 0, reasons = {}, timer = null;
 
   function flush() {
     timer = null;
@@ -48,6 +37,7 @@
 
   // Hra jen POSILA ZADOST o odmenu - o tom, kolik Jomarid Coins se skutecne udeli,
   // rozhoduje server (denni stropy). Vice udalosti v rychlem sledu se sloucí do jedne zpravy.
+  // Potvrzení odměny (kolik se skutečně připsalo) ukazuje lišta appky nad hrou, hra samotná nic nezobrazuje.
   window.jomaridReward = function (reason, amount, immediate) {
     if (!inFrame) return;
     amount = Math.floor(Number(amount));
@@ -58,14 +48,6 @@
     if (immediate) { if (timer) clearTimeout(timer); flush(); }
     else if (!timer) { timer = setTimeout(flush, 1200); }
   };
-
-  window.addEventListener('message', function (ev) {
-    var d = ev.data;
-    if (!d || d.source !== 'jomarid-host' || d.type !== 'coin-result') return;
-    if (ev.source !== window.parent) return;
-    if (d.granted > 0) toast('\uD83D\uDD36 +' + d.granted + ' Jomarid Coins');
-    else if (d.capped && !capNotified) { capNotified = true; toast('\uD83D\uDD36 Denn\u00ED limit odm\u011Bn z t\u00E9to hry je vy\u010Derp\u00E1n', true); }
-  });
 
   window.addEventListener('pagehide', function () { if (timer) clearTimeout(timer); flush(); });
   document.addEventListener('click', function (e) {
