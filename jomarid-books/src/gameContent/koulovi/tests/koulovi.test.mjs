@@ -324,3 +324,89 @@ test('rekord z přerušené hry (odchod do menu) o odměnu nepřijde: dostane se
   assert.equal(e.rewards.length, 2);
 });
 
+
+/* ---------------------------------------------------------------- zlatá koule (vzácný bonus jako v ostatních hrách) */
+test('zlatá koule: šance 4 %, jen mimo Zen, nejvýš 3 za hru a vždy jen jedna naráz', () => {
+  const a = makeEnv();
+  a.run("start('classic')");
+  a.run('Math.random = () => 0.0399');
+  assert.equal(a.run('goldRoll()'), 1, 'těsně pod 4 % padne');
+  a.run('g.nG = 0; g.gn = 0; Math.random = () => 0.0401');
+  assert.equal(a.run('goldRoll()'), 0, 'těsně nad 4 % nepadne');
+  assert.equal(a.run('g.gn'), 0, 'nepadlo = nepočítá se');
+  // opakovaně házím, zlaté koule z misky mezitím mizí (spojí se) - víc než 3 za hru nepřijdou
+  const b = makeEnv();
+  b.run("start('classic')"); b.run('Math.random = () => 0');
+  let golden = 0; let together = 0;
+  for (let i = 0; i < 60; i += 1) {
+    b.run('g.cool = 0; g.left = 99; drop();');
+    together = Math.max(together, b.run('g.cG + g.nG + g.balls.filter(q => q.gold).length'));
+    golden += b.run('g.balls.filter(q => q.gold).length');
+    b.run('g.balls = g.balls.filter(q => !q.gold)');
+  }
+  assert.equal(b.run('g.gn'), 3, 'nejvýš tři za hru');
+  assert.equal(golden, 3);
+  assert.ok(together <= 1, 'jedna naráz: ' + together);
+  const z = makeEnv();
+  z.run("start('zen')"); z.run('Math.random = () => 0');
+  for (let i = 0; i < 40; i += 1) z.run('g.cool = 0; drop();');
+  assert.equal(z.run('g.gn'), 0, 'Zen zlatou kouli nemá');
+  assert.equal(z.run('g.balls.some(q => q.gold) || g.cG || g.nG'), 0);
+});
+
+test('zlatá koule: spojením dá žádost o 4 Jomarid Coins a 25 🪙, jen za zlatou, nejvýš 3krát za hru, mimo Zen', () => {
+  const { run, rewards } = makeEnv();
+  run("start('classic')"); run('S.disc = 11');
+  run('g.balls = [mk(270, 600, 2), mk(270, 600, 2)]; step();');
+  assert.equal(rewards.length, 0, 'běžné spojení bez odměny');
+  assert.equal(run('S.coins'), 0);
+  run('{ const a = mk(270, 600, 2), b = mk(270, 600, 2); a.gold = 1; g.balls = [a, b]; } step();');
+  assert.deepEqual(rewards, [['golden_ball', 4]]);
+  assert.equal(run('S.coins'), 25);
+  assert.equal(run('g.pp.some(p => p.s === "+4 🔶")'), true, 'hra ukáže +4 🔶');
+  assert.equal(run('g.balls.some(q => q.gold)'), false, 'spojením vznikne běžná koule');
+  for (let i = 0; i < 5; i += 1) run('{ const a = mk(270, 600, 2), b = mk(270, 600, 2); b.gold = 1; g.balls = [a, b]; } step();');
+  assert.equal(rewards.length, 3, 'nejvýš 3 odměny za hru (i při vracení tahů)');
+  const z = makeEnv();
+  z.run("start('zen')"); z.run('S.disc = 11');
+  z.run('{ const a = mk(270, 600, 2), b = mk(270, 600, 2); a.gold = 1; g.balls = [a, b]; } step();');
+  assert.equal(z.rewards.length, 0);
+  assert.equal(z.run('S.coins'), 0);
+  // nová hra počítá znovu
+  run("start('classic')");
+  run('{ const a = mk(270, 600, 2), b = mk(270, 600, 2); a.gold = 1; g.balls = [a, b]; } step();');
+  assert.equal(rewards.length, 4);
+});
+
+test('zlatá koule přežije uložení rozehrané hry i vrácení tahu', () => {
+  const { run } = makeEnv();
+  run("start('classic')"); run('g.cG = 1; g.nG = 0; g.gn = 1; g.gr = 1;');
+  run('g.cool = 0; drop();');
+  assert.equal(run('g.balls.length'), 1);
+  assert.equal(run('g.balls[0].gold'), 1, 'padlá koule je zlatá');
+  // vrácení tahu vrátí zlatou kouli do ruky
+  run('S.inv.undo = 1; ability("undo");');
+  assert.equal(run('g.cG'), 1);
+  assert.equal(run('g.balls.length'), 0);
+  run('g.cool = 0; drop();');
+  assert.equal(run('g.balls[0].gold'), 1);
+  run('saveRun();');
+  run("start('time'); resume();");
+  assert.equal(run('g.mode'), 'classic');
+  assert.equal(run('g.balls.filter(q => q.gold).length'), 1, 'po pokračování je pořád zlatá');
+  assert.equal(run('g.gn'), 1);
+  assert.equal(run('g.gr'), 1);
+  // starý uložený postup bez zlatých koulí se načte
+  run('S.run = { mode: "classic", score: 5, cur: 0, next: 1, merges: 0, f: 0, t: 5400, left: 30, balls: [{ t: 0, ph: 1, P: [[1,1,0,0],[1,1,0,0],[1,1,0,0],[1,1,0,0],[1,1,0,0],[1,1,0,0],[1,1,0,0],[1,1,0,0]] }] }; resume();');
+  assert.equal(run('g.cG + g.nG + g.gn + g.gr'), 0);
+  assert.equal(run('g.balls.length'), 1);
+});
+
+test('zlatá koule je vidět: zář kolem koule a 🔶 v ruce, v dalším poli i v misce, odměna jde přes most se jménem golden_ball', () => {
+  assert.match(game, /goldRoll\(\)\)\{g\.nG=1;/);
+  assert.match(game, /jomaridReward\('golden_ball',GOLD\.jc\)/);
+  assert.match(game, /ball\(60,204,Math\.min\(RAD\[g\.next\],26\),g\.next,0,1,undefined,1,g\.nG\)/);
+  assert.match(game, /ball\(hx,DROP_Y,hr,g\.cur,0,1,undefined,1,g\.cG\)/);
+  assert.match(game, /bl,b\.gold\)\}/);
+  assert.match(game, /if\(gd\)\{ctx\.font=/);
+});
