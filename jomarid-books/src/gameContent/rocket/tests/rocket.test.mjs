@@ -1,4 +1,4 @@
-// Testy Rocket Game: skládání dokumentu, napojení na appku, režim Peklo, tajný kód. Samotný chod hry se zkouší v prohlížeči (hra je plátno).
+// Testy Rocket Game: skládání dokumentu, napojení na appku, režimy Peklo a Insane Peklo, bossové, tajný kód. Samotný chod hry se zkouší v prohlížeči (hra je plátno).
 //   npm run test:rocket
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -37,8 +37,9 @@ test('Peklo je zapsané na všech místech: karta, start, uložený rekord, menu
   assert.match(html, /<button class="mode-card inferno" id="btn-start-inferno">/);
   assert.match(html, /id="rec-inferno"/);
   assert.match(html, /getElementById\('btn-start-inferno'\)\.onclick = \(\) => Game\.start\('inferno'\)/);
-  assert.match(html, /\['normal', 'hard', 'inferno', 'blitz', 'rush', 'zen', 'daily'\]\.includes\(mode\)/);
-  assert.match(html, /this\.isHardMode = \(this\.mode === 'hard' \|\| this\.mode === 'inferno'\)/);
+  assert.match(html, /\['normal', 'hard', 'inferno', 'insane', 'blitz', 'rush', 'zen', 'daily'\]\.includes\(mode\)/);
+  assert.match(html, /this\.isHardMode = \(this\.mode === 'hard' \|\| this\.inferno\)/);
+  assert.match(html, /get inferno\(\) \{\s*return this\.mode === 'inferno' \|\| this\.mode === 'insane';/);
   assert.match(html, /best: \{ normal: 0, hard: 0, inferno: 0,/);
   assert.match(html, /getElementById\('rec-inferno'\)\.innerText = /);
   assert.match(html, /inferno: 'Peklo'/);
@@ -58,7 +59,7 @@ test('Peklo: čísla odpovídají zadání (víc a odolnější nepřátelé, as
 test('štít vykryje jen 50 % poškození ve všech režimech, v Pekle ho asteroid probíjí celý', () => {
   assert.match(html, /const SHIELD_BLOCK = 0\.5;/);
   assert.match(html, /takeDamage\(amount, iframes, shieldBlock\)/);
-  assert.match(html, /const shieldBlock = \(this\.inferno && piercing\) \? 0 : SHIELD_BLOCK;/);
+  assert.match(html, /const shieldBlock = \(\(this\.inferno && piercing\) \|\| \(this\.insane && fromBoss\)\) \? 0 : SHIELD_BLOCK;/);
   assert.match(html, /this\.damagePlayer\(dmg, e\.indestructible \? 900 : 400, e\.type === 'asteroid'\)/);
   assert.doesNotMatch(html, /if \(this\.shieldTimer > 0 \|\| this\.invulnTimer > 0\) return false;/, 'starý štít, který pohltil všechno');
   assert.match(html, /štít ti na chvíli pohltí polovinu zásahů/);
@@ -98,3 +99,68 @@ test('strom Vzestupu: nové uzly za hvězdný prach mají cenu, strop, uložení
   assert.ok(byId.armor.max * 0.02 <= 0.2 && byId.discount.max * 0.03 <= 0.15);
 });
 
+
+test('Insane Peklo je zapsané na všech místech: odemčení za 1000 ✦, karta, start, rekord, konec hry', () => {
+  assert.match(html, /<button class="mode-card insane hidden" id="btn-start-insane">/);
+  assert.match(html, /Pro ty, co si mysleli, že Peklo je lehké/);
+  assert.match(html, /id="rec-insane"/);
+  assert.match(html, /getElementById\('btn-start-insane'\)\.onclick = \(\) => Game\.start\('insane'\)/);
+  assert.match(html, /getElementById\('btn-start-insane'\)\.classList\.toggle\('hidden', !Storage\.data\.prestige\.insaneUnlocked\)/);
+  assert.match(html, /insaneUnlocked: false/);
+  assert.match(html, /best: \{ normal: 0, hard: 0, inferno: 0, insane: 0,/);
+  assert.match(html, /insane: 'Insane Peklo'/);
+  const tree = vm.runInNewContext(html.match(/const PRESTIGE_TREE = (\[[\s\S]*?\n\]);/)[1]);
+  const node = tree.find((n) => n.id === 'insaneUnlocked');
+  assert.ok(node && node.unlock && node.max === 1 && node.cost(0) === 1000, 'odemykací uzel za 1000');
+});
+
+test('Insane Peklo: čísla odpovídají zadání (+75 % bossové, +70 % nepřátelé, vše tvrdší než Peklo)', () => {
+  const I = vm.runInNewContext('(' + html.match(/const INFERNO = (\{[\s\S]*?\n\});/)[1] + ')');
+  const N = vm.runInNewContext('(' + html.match(/const INSANE = (\{[\s\S]*?\n\});/)[1] + ')');
+  // stejný tvar jako INFERNO, aby šel brát místo něj (g.hell)
+  for (const k of Object.keys(I)) assert.ok(k in N, 'chybí ' + k);
+  assert.ok(Math.abs(N.bossHpMult / I.bossHpMult - 1.75) < 0.01, 'bossové o 75 % víc než v Pekle');
+  assert.ok(Math.abs(N.enemyHpMult / I.enemyHpMult - 1.7) < 0.01, 'nepřátelé o 70 % víc než v Pekle');
+  assert.ok(N.extraEnemies > I.extraEnemies && N.gapMult < I.gapMult && N.maxLeft > I.maxLeft, 'nepřátelé častěji');
+  assert.ok(N.asteroidChance > I.asteroidChance && N.asteroidGapMult < I.asteroidGapMult && N.asteroidBurst > I.asteroidBurst && N.eventCooldown < I.eventCooldown, 'asteroidy častěji a hustěji');
+  assert.ok(N.powerupMult < I.powerupMult && N.pickupMult < I.pickupMult, 'power-upy vzácnější');
+  assert.ok(N.bossRate > 1 && N.destroyerFireMult < 1 && N.destroyerShots > 1 && N.heavyWeight > 1 && N.tankUpgrade > 0, 'bossové rychleji, destroyer víc, těžší nepřátelé častěji');
+  assert.ok(N.powerupTimeMult < 1 && N.healMult < 1 && N.hpMult < 1 && N.dmgMult < 1 && N.fireRateMult > 1, 'slabší loď a power-upy');
+});
+
+test('Insane Peklo se projeví v kódu: bossové probíjejí štít, nepřátelé chodí i při bossovi, slabší loď, destroyer ve vějíři', () => {
+  assert.match(html, /get insane\(\) \{\s*return this\.mode === 'insane';/);
+  assert.match(html, /get hell\(\) \{\s*return this\.insane \? INSANE : INFERNO;/);
+  assert.doesNotMatch(html, /INFERNO\.\w+/, 'čísla Pekla se berou přes g.hell, ne napřímo');
+  assert.match(html, /\(g\.bossActive && !g\.insane\) \|\| g\.tutActive \|\| g\.mode === 'rush'/);
+  for (const call of ['damagePlayer(14, 620, false, true)', 'damagePlayer(12, 500, false, true)', 'damagePlayer(26, 900, false, true)', 'damagePlayer(b.dmg, 400, false, b.fromBoss)']) {
+    assert.ok(html.includes(call), call);
+  }
+  assert.equal((html.match(/b\.fromBoss = true;/g) || []).length, 2, 'střely bosse jsou označené (fire i fireRaw)');
+  assert.match(html, /if \(this\.insane\) \{\s*this\.maxHp = /);
+  assert.match(html, /this\.player\.hp = this\.player\.maxHp;\s*this\.lastPlayerHp = this\.player\.hp;/, 'poslední známý život se přepíše, jinak by hned naskočil NÁLET');
+  assert.match(html, /if \(ins\) this\.shootFan\(game, game\.player, 4\.6, 7, INSANE\.destroyerShots\)/);
+  assert.match(html, /heavy\(f\) \? INSANE\.heavyWeight : 1/);
+});
+
+test('bossové: pět nových za NEMESIS, na konci GLITCH, který se opakuje; všechny útoky mají obsluhu', () => {
+  const bosses = vm.runInNewContext(html.match(/const BOSS_TYPES = (\[[\s\S]*?\n\]);/)[1]);
+  const names = Array.from(bosses, (b) => b.name);
+  assert.deepEqual(names.slice(0, 8), ['STRÁŽCE', 'ÚLOVEC', 'TRHÁČ', 'VÍR', 'PRIZMA', 'ARCHONT', 'BAŠTA', 'NEMESIS']);
+  assert.equal(names.length, 14);
+  assert.equal(names[13], 'GLITCH');
+  assert.equal(new Set(names).size, names.length, 'jména jsou unikátní');
+  assert.equal(new Set(bosses.map((b) => b.color)).size, bosses.length, 'barvy jsou unikátní');
+  const glitch = bosses[13];
+  assert.ok(glitch.glitch && glitch.rate > 1 && glitch.recoverMul < 1 && glitch.moveMul < 1, 'GLITCH je rychlý a bez prodlev');
+  const used = new Set(bosses.flatMap((b) => [...b.attacks, b.rage]));
+  for (const a of used) assert.ok(html.includes(`case '${a}':`), `útok ${a} nemá obsluhu`);
+  // kombinace všech útoků: GLITCH umí všechno, co umí kdokoli jiný
+  for (const a of used) assert.ok(glitch.attacks.includes(a) || glitch.rage === a, `GLITCH neumí ${a}`);
+  // opakuje se poslední z řady
+  assert.match(html, /BOSS_TYPES\[Math\.min\(level - 1, BOSS_TYPES\.length - 1\)\]/);
+  // bossové se objevují po skóre, které roste: 13 pevných hranic, další po 3400
+  const thr = vm.runInNewContext(html.match(/const BOSS_THRESHOLDS = (\[[^\]]*\]);/)[1]);
+  assert.equal(thr.length, 13);
+  assert.ok(thr.every((v, i) => i === 0 || v > thr[i - 1]));
+});
