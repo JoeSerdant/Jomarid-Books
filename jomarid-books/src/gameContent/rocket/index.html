@@ -1114,7 +1114,7 @@ const Storage = {
         ascension: 0,
         stardust: 0,
         cycleCoins: 0,
-        prestige: { hull: 0, aura: 0, magnet: 0, luck: 0, capital: 0, bomb: 0, zenUnlocked: false, dailyUnlocked: false },
+        prestige: { hull: 0, aura: 0, magnet: 0, luck: 0, capital: 0, armor: 0, startShield: 0, heal: 0, loot: 0, discount: 0, combo: 0, bomb: 0, zenUnlocked: false, dailyUnlocked: false },
         achievements: {},
         stats: {
             totalKills: 0, totalBossKills: 0, totalCoinsEarned: 0, totalPlaytime: 0,
@@ -1714,7 +1714,7 @@ class Player {
         this.tripleTime = Math.round((7000 + ((u.tripleDuration || 1) - 1) * 550) * auraMul);
         this.shieldTime = Math.round((5000 + ((u.shieldDuration || 1) - 1) * 450) * auraMul);
         this.rapidTime = Math.round((6000 + ((u.rapidDuration || 1) - 1) * 500) * auraMul);
-        this.healAmount = 25 + (((u.healPower || 1) - 1) * 10);
+        this.healAmount = Math.round((25 + (((u.healPower || 1) - 1) * 10)) * (1 + prestigeBonus('heal', 0.1)));
         this.maxBombs = Math.min(7, 1 + Math.floor(((u.bombs || 1) - 1) / 3) + relicBombs + prestigeBombs);
     }
 
@@ -3027,6 +3027,7 @@ class GameManager {
         document.getElementById('tut-layer').classList.add('hidden');
         this.resetGameData();
         this.state = 'PLAY';
+        this.player.shieldTimer = prestigeLevel('startShield') * 1500;
 
         // Denní modifikátor upraví lodˇ až po jejím vytvoření - jednorázově, ne jako trvalá vylepšení
         if (this.daily) {
@@ -3203,6 +3204,10 @@ class GameManager {
         let realAmount = this.daily ? Math.round(amount * this.daily.dmgTakenMult) : amount;
         if (this.inferno) realAmount = Math.round(realAmount * INFERNO.dmgTakenMult);
 
+        // Pancíř ze stromu Vzestupu snižuje všechno přijaté poškození (nejvýš o 20 %), zásah ale zůstane zásahem
+        const armor = prestigeBonus('armor', 0.02);
+        if (armor) realAmount = Math.max(1, Math.round(realAmount * (1 - armor)));
+
         // Štít kryje jen část zásahu (SHIELD_BLOCK); v Pekle ho asteroidy probíjejí celé
         const shieldBlock = (this.inferno && piercing) ? 0 : SHIELD_BLOCK;
 
@@ -3246,7 +3251,7 @@ class GameManager {
     addCombo() {
         const before = this.comboMult;
         this.combo++;
-        this.comboTimer = 2400;
+        this.comboTimer = Math.round(2400 * (1 + prestigeBonus('combo', 0.1)));
 
         const now = this.comboMult;
         if (now > before) {
@@ -3272,6 +3277,7 @@ class GameManager {
         // Skutečná odměna za vzestup jde do samostatné měny (Hvězdný prach).
         let m = (this.isHardMode ? 2 : 1) + Math.floor(this.phase / 3);
         if (this.inferno) m *= INFERNO.coinMult;
+        m *= 1 + prestigeBonus('loot', 0.03);
         if (Achv.hasRelic('collector')) m *= 1.2;
         if (this.daily) m *= this.daily.coinMult;
         return m;
@@ -4216,7 +4222,8 @@ const UPGRADE_COST_MULT = 6;
 const UPGRADE_COST_GROWTH = 1.30;
 
 function upgradeCost(up, level) {
-    return Math.round(up.step * UPGRADE_COST_MULT * Math.pow(UPGRADE_COST_GROWTH, level - 1));
+    const base = up.step * UPGRADE_COST_MULT * Math.pow(UPGRADE_COST_GROWTH, level - 1);
+    return Math.max(1, Math.round(base * (1 - prestigeBonus('discount', 0.03))));
 }
 
 const UPGRADES = [
@@ -4347,6 +4354,18 @@ const PRESTIGE_TREE = [
         cost: lvl => 60 * (lvl + 1) },
     { id: 'capital', name: 'Startovní kapitál', desc: '+150 mincí na začátku každé hry za úroveň.', max: 5,
         cost: lvl => 30 * (lvl + 1) },
+    { id: 'armor', name: 'Pancíř', desc: '-2 % přijatého poškození za úroveň.', max: 10,
+        cost: lvl => 70 * (lvl + 1) },
+    { id: 'startShield', name: 'Startovní štít', desc: '+1,5 s štítu na začátku každé hry za úroveň.', max: 4,
+        cost: lvl => 80 * (lvl + 1) },
+    { id: 'heal', name: 'Léčivý prach', desc: '+10 % síly léčení za úroveň.', max: 5,
+        cost: lvl => 45 * (lvl + 1) },
+    { id: 'loot', name: 'Zlatá kořist', desc: '+3 % mincí za úroveň.', max: 5,
+        cost: lvl => 90 * (lvl + 1) },
+    { id: 'discount', name: 'Slevová karta', desc: '-3 % ceny vylepšení lodi za úroveň.', max: 5,
+        cost: lvl => 75 * (lvl + 1) },
+    { id: 'combo', name: 'Dlouhé kombo', desc: '+10 % času na navázání komba za úroveň.', max: 5,
+        cost: lvl => 55 * (lvl + 1) },
     { id: 'bomb', name: 'Rezervní bomba', desc: '+1 k maximálnímu počtu bomb.', max: 1,
         cost: () => 500 },
     { id: 'zenUnlocked', name: 'Režim Zen', desc: 'Odemkne klidný nekonečný režim bez umírání.', max: 1, unlock: true,
