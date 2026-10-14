@@ -272,3 +272,44 @@ test('zrušený dotyk koule neodhodí a táhnutí smí dokončit jen prst, kter�
   fire(env, 'pointerup', { clientX: 200, clientY: 400, pointerId: 1 });
   assert.equal(run('g.left'), left0 - 1);
 });
+
+/* ---------------------------------------------------------------- Jomarid Coins ve hře */
+test('appka posílá hře zůstatek (balance) a hra ho umí přijmout', () => {
+  assert.match(gamesPage, /type: 'balance', balance: coins/);
+  assert.match(gamesPage, /onLoad=\{sendBalance\}/);
+  assert.match(shell, /d\.type === 'balance'/);
+  assert.match(shell, /ev\.source !== window\.parent/);
+});
+
+test('zůstatek 🔶 se ukáže až po zprávě z appky a pak se mění', () => {
+  const { run, sandbox } = makeEnv();
+  assert.equal(run('hasJb()'), false);
+  sandbox.jomaridBalance = 420;
+  sandbox.onJomaridBalance();
+  assert.equal(sandbox.document.getElementById('jbn').textContent, 420);
+  assert.equal(sandbox.document.getElementById('jb').classList.contains('hide'), false);
+  assert.equal(run('hasJb()'), true);
+  sandbox.jomaridBalance = 427;
+  sandbox.onJomaridBalance();
+  assert.equal(sandbox.document.getElementById('jbn').textContent, 427);
+  // nečíselný zůstatek se nepovažuje za známý
+  sandbox.jomaridBalance = 'x';
+  assert.equal(run('hasJb()'), false);
+});
+
+test('nový rekord (od 100 bodů, mimo Zen) dá žádost o 3 Jomarid Coins, jen jednou za rekord', () => {
+  const a = makeEnv();
+  a.run("start('classic')"); a.run('g.score = 150; finish(1);');
+  assert.deepEqual(a.rewards, [['record', 3]]);
+  a.run("start('classic')"); a.run('g.score = 150; finish(1);');
+  assert.equal(a.rewards.length, 1, 'stejné skóre rekord není');
+  a.run("start('classic')"); a.run('g.score = 151; finish(1);');
+  assert.equal(a.rewards.length, 2);
+  const b = makeEnv();
+  b.run("start('classic')"); b.run('g.score = 99; finish(1);');
+  assert.equal(b.rewards.length, 0, 'pod 100 bodů bez odměny');
+  const z = makeEnv();
+  z.run("start('zen')"); z.run('g.score = 5000; finish(1);');
+  assert.equal(z.rewards.length, 0, 'Zen bez odměny');
+});
+

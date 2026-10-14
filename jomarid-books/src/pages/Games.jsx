@@ -72,6 +72,7 @@ function gameBonusSourceType(gameId) {
 export const GameLauncher = ({ game }) => {
   const { user } = useAuth();
   const [coins, setCoins] = useState(0);
+  const [coinsLoaded, setCoinsLoaded] = useState(false); // zůstatek z účtu už je načtený (do té doby ho hře neposíláme, ať neukáže nulu)
   const [claiming, setClaiming] = useState(false);
   const [claimedToday, setClaimedToday] = useState(false);
   const [claimedAmount, setClaimedAmount] = useState(null);
@@ -95,7 +96,7 @@ export const GameLauncher = ({ game }) => {
     supabase.from('profiles').select('coins').eq('id', user.id).maybeSingle()
       .then(({ data, error }) => {
         if (error) throw error;
-        if (data) setCoins(data.coins || 0);
+        if (data) { setCoins(data.coins || 0); setCoinsLoaded(true); }
       })
       .catch((err) => console.error('Nepodařilo se načíst zůstatek mincí:', err.message));
   }, [user]);
@@ -153,6 +154,15 @@ export const GameLauncher = ({ game }) => {
 
   // Při najetí myší nebo zaostření se hra stáhne dopředu, takže se po kliknutí obvykle otevře hned.
   const warmUp = useCallback(() => { game.load().catch(() => {}); }, [game]);
+
+  // Zůstatek Jomarid Coins se posílá do hry (po načtení hry a po každé změně), aby ho mohla ukázat. Hry, které ho nečekají, zprávu ignorují.
+  const sendBalance = useCallback(() => {
+    if (!coinsLoaded) return;
+    try {
+      iframeRef.current?.contentWindow?.postMessage({ source: 'jomarid-host', type: 'balance', balance: coins }, '*');
+    } catch { /* okno hry už zaniklo */ }
+  }, [coins, coinsLoaded]);
+  useEffect(() => { if (showGame) sendBalance(); }, [showGame, sendBalance]);
 
   const handleCloseGame = useCallback(() => {
     if (gameOpenedAtRef.current && Date.now() - gameOpenedAtRef.current >= MIN_PLAY_MS) {
@@ -254,6 +264,7 @@ export const GameLauncher = ({ game }) => {
           ref={iframeRef}
           title={game.title}
           srcDoc={html}
+          onLoad={sendBalance}
           allow="clipboard-write"
           style={{ border: 'none', display: 'block' }}
           className="flex-1 min-h-0 min-w-0 w-full"

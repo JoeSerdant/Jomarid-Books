@@ -52,8 +52,14 @@
 
   window.addEventListener('message', function (ev) {
     var d = ev.data;
-    if (!d || d.source !== 'jomarid-host' || d.type !== 'coin-result') return;
+    if (!d || d.source !== 'jomarid-host') return;
     if (ev.source !== window.parent) return;
+    // Zůstatek Jomarid Coins z účtu (appka ho posílá po načtení hry a po každé změně); hra ho jen zobrazuje.
+    if (d.type === 'balance') {
+      if (typeof d.balance === 'number' && isFinite(d.balance)) { window.jomaridBalance = d.balance; if (window.onJomaridBalance) window.onJomaridBalance(); }
+      return;
+    }
+    if (d.type !== 'coin-result') return;
     if (d.granted > 0) toast('\uD83D\uDD36 +' + d.granted + ' Jomarid Coins');
     else if (d.capped && !capNotified) { capNotified = true; toast('\uD83D\uDD36 Denn\u00ED limit odm\u011Bn z t\u00E9to hry je vy\u010Derp\u00E1n', true); }
   });
@@ -71,7 +77,7 @@
 <canvas id="c" width="540" height="960"></canvas>
 <div id="menu" class="ov">
  <h1>Kouloví<br>Kámoši</h1>
- <div class="mas" id="mas"></div><div style="font-size:1.8em">🪙 <b id="cn">0</b></div>
+ <div class="mas" id="mas"></div><div style="font-size:1.8em">🪙 <b id="cn">0</b></div><div id="jb" class="hide" style="font-size:1.3em;margin-top:-.5em" title="Jomarid Coins">🔶 <b id="jbn">0</b> <span style="font-size:.6em;opacity:.8">Jomarid Coins</span></div>
  <div class="stats"><h2>MOJE STATISTIKY</h2>
   <div class="row"><div><b id="sT">0</b><i>Dnes</i></div><div><b id="sW">0</b><i>Tento týden</i></div><div><b id="sA">0</b><i>Celkem</i></div></div>
   <div class="small">Her: <span id="sG">0</span> · Sloučení: <span id="sM">0</span></div></div>
