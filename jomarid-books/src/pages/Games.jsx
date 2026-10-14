@@ -2,7 +2,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Coins, Loader2, X, Rocket, Swords, Building2, Target, Crown, Smile, Lock } from 'lucide-react';
+import { Coins, Loader2, Rocket, Swords, Building2, Target, Crown, Smile, Lock } from 'lucide-react';
+import { GameBar } from '../components/GameBar';
+import { useReaderSnapshot } from '../gameBar/useReaderSnapshot';
+import { rewardLabel, REWARD_LIMIT_NOTE } from '../gameBar/rewardLabels';
 
 // Každá hra je velký kus textu (stovky kB, šachy i s Reactem). Stahuje se až při spuštění (dynamický import), ne spolu
 // se stránkou Her - jinak by si hráč už při otevření seznamu stáhl všechny hry najednou.
@@ -83,12 +86,24 @@ export const GameLauncher = ({ game }) => {
   const [loadingGame, setLoadingGame] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const gameOpenedAtRef = useRef(null);
+  const [flash, setFlash] = useState(null); // krátké potvrzení odměny v liště nad hrou
   const iframeRef = useRef(null);
   const mountedRef = useRef(true);
+  const flashTimerRef = useRef(null);
+  const limitShownRef = useRef(false);
+  const reader = useReaderSnapshot(user?.id);
 
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+    return () => { mountedRef.current = false; clearTimeout(flashTimerRef.current); };
+  }, []);
+
+  // Potvrzení odměny (nebo poznámka o limitu) se ukazuje jen v liště appky nad hrou, hry samy nic nezobrazují.
+  const showFlash = useCallback((next) => {
+    if (!mountedRef.current) return;
+    clearTimeout(flashTimerRef.current);
+    setFlash({ id: Date.now() + Math.random(), ...next });
+    flashTimerRef.current = setTimeout(() => { if (mountedRef.current) setFlash(null); }, 2800);
   }, []);
 
   useEffect(() => {
@@ -149,6 +164,7 @@ export const GameLauncher = ({ game }) => {
       setLoadingGame(false);
     }
     gameOpenedAtRef.current = Date.now();
+    limitShownRef.current = false;
     setShowGame(true);
   }, [game, html, loadingGame]);
 
@@ -182,9 +198,8 @@ export const GameLauncher = ({ game }) => {
   // 'coin' je ŽÁDOST o odměnu za herní událost (zlaté kliknutí, sklad zásob,
   // krystal, výhra v šachách...) - hra sama Jomarid Coins NIKDY neuděluje,
   // jen POŽÁDÁ; o skutečné částce (a denním stropu) rozhoduje výhradně server
-  // přes award_game_coins(). Výsledek se pošle zpátky do hry jako
-  // 'coin-result', aby mohla zobrazit skutečně připsanou částku (ne tu, o
-  // kterou jen požádala).
+  // přes award_game_coins(). Skutečně připsanou částku (ne tu, o kterou jen
+  // požádala) ukáže lišta nad hrou; hra samotná žádné potvrzení nezobrazuje.
   useEffect(() => {
     const handleMessage = (event) => {
       if (event.data?.source !== 'jomarid-game') return;
@@ -195,20 +210,20 @@ export const GameLauncher = ({ game }) => {
       } else if (event.data?.type === 'coin' && user) {
         const amount = Math.floor(Number(event.data.amount));
         if (!Number.isFinite(amount) || amount < 1) return;
-        supabase.rpc('award_game_coins', { p_game_id: game.id, p_amount: amount, p_reason: String(event.data.reason || 'event').slice(0, 30) })
+        const reason = String(event.data.reason || 'event').slice(0, 30);
+        supabase.rpc('award_game_coins', { p_game_id: game.id, p_amount: amount, p_reason: reason })
           .then(({ data, error }) => {
             if (error) { console.error('Chyba při udílení herní odměny:', error.message); return; }
             if (data?.granted) { setCoins(data.balance ?? 0); setCoinsLoaded(true); } // zůstatek z odpovědi serveru platí i tehdy, když se úvodní načtení nepovedlo
-            try {
-              event.source?.postMessage({ source: 'jomarid-host', type: 'coin-result', granted: data?.granted || 0, capped: !!data?.capped }, '*');
-            } catch { /* okno hry už zaniklo */ }
+            if (data?.granted > 0) showFlash({ text: `+${data.granted}`, label: rewardLabel(reason) });
+            else if (data?.capped && !limitShownRef.current) { limitShownRef.current = true; showFlash({ text: REWARD_LIMIT_NOTE, warn: true }); }
           })
           .catch((err) => console.error('Chyba při udílení herní odměny:', err.message));
       }
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [handleCloseGame, user, game.id]);
+  }, [handleCloseGame, user, game.id, showFlash]);
 
   const canClaim = hasPlayedEnough && !checkingStatus && !claimedToday;
 
@@ -244,22 +259,7 @@ export const GameLauncher = ({ game }) => {
     return (
       // Výřez displeje (--sat nahoře, --sar vpravo) se přičítá k velikosti pruhu, ne odebírá z místa pro tlačítko.
       <div style={{ position: 'fixed', inset: 0, zIndex: 999, backgroundColor: '#000', '--sat': 'env(safe-area-inset-top,0px)', '--sar': 'env(safe-area-inset-right,0px)' }} className="flex flex-col [@media(orientation:landscape)_and_(max-height:500px)]:flex-row-reverse">
-        <div
-          data-testid="game-bar"
-          style={{ backgroundColor: '#05050f', paddingTop: 'var(--sat)', paddingRight: 'var(--sar)', borderColor: 'rgba(255,255,255,0.12)' }}
-          className="shrink-0 flex items-center justify-between gap-2 px-3 h-[calc(2.75rem+var(--sat))] border-b [@media(orientation:landscape)_and_(max-height:500px)]:flex-col [@media(orientation:landscape)_and_(max-height:500px)]:justify-start [@media(orientation:landscape)_and_(max-height:500px)]:w-[calc(3rem+var(--sar))] [@media(orientation:landscape)_and_(max-height:500px)]:h-auto [@media(orientation:landscape)_and_(max-height:500px)]:px-1 [@media(orientation:landscape)_and_(max-height:500px)]:pt-2 [@media(orientation:landscape)_and_(max-height:500px)]:border-b-0 [@media(orientation:landscape)_and_(max-height:500px)]:border-l"
-        >
-          <span style={{ color: 'rgba(255,255,255,0.7)' }} className="text-[0.6875rem] font-black uppercase tracking-wider truncate [@media(orientation:landscape)_and_(max-height:500px)]:hidden">{game.title}</span>
-          <button
-            onClick={handleCloseGame}
-            title="Zavřít hru"
-            aria-label="Zavřít hru"
-            style={{ backgroundColor: 'rgba(255,255,255,0.1)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)' }}
-            className="w-9 h-9 shrink-0 rounded-xl cursor-pointer flex items-center justify-center"
-          >
-            <X size={18} />
-          </button>
-        </div>
+        <GameBar title={game.title} onClose={handleCloseGame} coins={coins} coinsLoaded={coinsLoaded} level={reader?.level} levelName={reader?.levelName} flash={flash} />
         <iframe
           ref={iframeRef}
           title={game.title}
