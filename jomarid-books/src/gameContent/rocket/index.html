@@ -1,0 +1,4731 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Vesmírný Ochránce v4.0</title>
+<style>
+:root {
+    --ui: #7c3aed;
+    --ui-dim: #5b3aa8;
+    --danger: #ff0055;
+    --gold: #ffc400;
+    --bg: #020617;
+    --panel: rgba(15, 23, 42, 0.94);
+    --line: rgba(124, 58, 237, 0.18);
+}
+
+* {
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-user-drag: none;
+    -webkit-tap-highlight-color: transparent;
+    margin: 0;
+    padding: 0;
+}
+
+body, html {
+    width: 100%;
+    height: 100%;
+    background: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    overflow: hidden;
+    touch-action: none;
+}
+
+#game-container {
+    position: relative;
+    width: 100vw;
+    height: 100%;
+    max-width: 620px;
+    background: var(--bg);
+    overflow: hidden;
+    box-shadow: 0 0 60px rgba(124, 58, 237, 0.12);
+}
+
+canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+#game-container.playing canvas { cursor: crosshair; }
+
+button { font-family: inherit; }
+
+button:focus-visible {
+    outline: 2px solid var(--ui);
+    outline-offset: 2px;
+}
+
+/*------ HUD ------*/
+.hud {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: calc(12px + env(safe-area-inset-top, 0px)) 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.hud-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.hud-group {
+    background: rgba(0, 0, 0, 0.6);
+    padding: 7px 13px;
+    border-radius: 11px;
+    border: 1px solid var(--line);
+    color: #fff;
+    font-weight: 700;
+    font-size: 14px;
+    display: flex;
+    gap: 14px;
+    align-items: baseline;
+    text-shadow: 0 0 6px #000;
+    transition: box-shadow 0.3s, border-color 0.3s;
+}
+
+#hud-score { font-variant-numeric: tabular-nums; }
+#hud-coins { color: var(--gold); font-variant-numeric: tabular-nums; }
+
+#hud-combo {
+    color: #fff;
+    background: var(--danger);
+    border-radius: 7px;
+    padding: 1px 7px;
+    font-size: 13px;
+    box-shadow: 0 0 12px rgba(255, 0, 85, 0.7);
+}
+
+.hud-buttons {
+    display: flex;
+    gap: 7px;
+    pointer-events: auto;
+}
+
+.icon-btn {
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid var(--ui-dim);
+    color: var(--ui);
+    border-radius: 9px;
+    width: 40px;
+    height: 36px;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+.icon-btn:active { transform: scale(0.92); }
+
+/* Pruh života: tvar nese informaci lépe než číslo v procentech */
+.hp-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    max-width: 260px;
+}
+
+.hp-track {
+    position: relative;
+    flex: 1;
+    height: 13px;
+    background: rgba(0, 0, 0, 0.62);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    overflow: hidden;
+}
+
+.hp-fill {
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(90deg, #00b34a, #4dff88);
+    transition: width 0.22s ease-out, background 0.3s;
+}
+
+.hp-fill.mid { background: linear-gradient(90deg, #b37700, #ffc400); }
+.hp-fill.low { background: linear-gradient(90deg, #99002f, #ff2a5f); }
+
+/* Dílky po 25 % dávají pruhu měřítko */
+.hp-ticks {
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(90deg, transparent calc(25% - 1px), rgba(0, 0, 0, 0.55) calc(25% - 1px), rgba(0, 0, 0, 0.55) 25%, transparent 25%);
+    background-size: 25% 100%;
+}
+
+.hp-num {
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    min-width: 46px;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 6px #000;
+}
+
+/*------ PRUH BOSSE ------*/
+.boss-bar {
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 7px 11px 9px;
+    animation: dropIn 0.35s ease-out;
+}
+
+@keyframes dropIn {
+    from { opacity: 0; transform: translateY(-14px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.boss-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 5px;
+}
+
+#boss-name {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 2px;
+}
+
+#boss-phase {
+    font-size: 11px;
+    color: #9aa1ad;
+}
+
+.boss-track {
+    height: 9px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.boss-fill {
+    height: 100%;
+    width: 100%;
+    transition: width 0.18s linear;
+}
+
+/*------ ODPOČTY POWER-UPŮ ------*/
+.powerup-timers {
+    display: flex;
+    gap: 10px;
+}
+
+.buff-badge {
+    position: relative;
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 50%;
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes popIn {
+    from { transform: scale(0); }
+    to { transform: scale(1); }
+}
+
+.buff-badge svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.buff-badge circle.bg {
+    stroke: rgba(255, 255, 255, 0.1);
+    stroke-width: 3;
+    fill: none;
+}
+
+.buff-badge circle.progress {
+    stroke-width: 3;
+    fill: none;
+    stroke-dasharray: 100;
+    stroke-dashoffset: 0;
+    stroke-linecap: round;
+}
+
+.buff-icon { font-size: 19px; z-index: 2; }
+
+/*------ BOMBA ------*/
+#btn-bomb {
+    position: absolute;
+    right: calc(16px + env(safe-area-inset-right, 0px));
+    bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+    width: 66px;
+    height: 66px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 34% 30%, rgba(255, 196, 0, 0.32), rgba(0, 0, 0, 0.72));
+    border: 2px solid var(--gold);
+    color: #fff;
+    font-size: 25px;
+    cursor: pointer;
+    z-index: 12;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 18px rgba(255, 196, 0, 0.3);
+    transition: transform 0.1s, opacity 0.2s;
+}
+
+#btn-bomb:active { transform: scale(0.9); }
+
+#btn-bomb.empty {
+    opacity: 0.3;
+    border-color: #555;
+    box-shadow: none;
+}
+
+#bomb-count {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    background: var(--gold);
+    color: #1a1200;
+    font-size: 13px;
+    font-weight: 900;
+    min-width: 22px;
+    height: 22px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/*------ HLÁŠENÍ UPROSTŘED ------*/
+#event-text {
+    position: absolute;
+    top: 27%;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    font-size: 27px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 15;
+    transition: opacity 0.25s, transform 0.25s;
+    transform: scale(0.82);
+    text-shadow: 0 0 18px currentColor;
+}
+
+#event-text.show { opacity: 1; transform: scale(1); }
+
+/*------ MENU & PŘEKRYVY ------*/
+.overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 5, 15, 0.9);
+    backdrop-filter: blur(8px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    overflow-y: auto;
+    padding: calc(20px + env(safe-area-inset-top, 0px)) 20px calc(20px + env(safe-area-inset-bottom, 0px));
+    text-align: center;
+    z-index: 20;
+    color: #fff;
+}
+
+.overlay > *:first-child { margin-top: auto; }
+.overlay > *:last-child { margin-bottom: auto; }
+
+.hidden { display: none !important; }
+
+h1 {
+    font-size: 34px;
+    letter-spacing: 6px;
+    color: var(--ui);
+    text-shadow: 0 0 22px rgba(124, 58, 237, 0.55);
+    margin-bottom: 4px;
+}
+
+h2 {
+    color: var(--danger);
+    font-size: 27px;
+    letter-spacing: 3px;
+    margin-bottom: 8px;
+}
+
+.tagline {
+    color: #7c8391;
+    font-size: 13px;
+    letter-spacing: 1px;
+    margin-bottom: 18px;
+}
+
+.btn {
+    background: linear-gradient(45deg, #6d28d9, #7c3aed);
+    border: none;
+    color: #fff;
+    padding: 14px 28px;
+    font-size: 16px;
+    font-weight: 700;
+    border-radius: 25px;
+    margin: 7px;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(124, 58, 237, 0.28);
+    transition: transform 0.1s;
+    width: 82%;
+    max-width: 310px;
+}
+
+.btn:active { transform: scale(0.96); }
+
+.btn-danger {
+    background: linear-gradient(45deg, #ff0055, #aa0000);
+    box-shadow: 0 4px 16px rgba(255, 0, 85, 0.28);
+}
+
+.btn-hard { background: linear-gradient(45deg, #ff8800, #ff0055); }
+
+.btn-small {
+    padding: 8px 16px;
+    font-size: 14px;
+    width: auto;
+    margin: 0;
+}
+
+.stats-bar {
+    width: 100%;
+    max-width: 350px;
+    background: var(--panel);
+    padding: 11px;
+    border-radius: 12px;
+    border: 1px solid var(--ui-dim);
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-around;
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.section-label {
+    width: 100%;
+    max-width: 350px;
+    text-align: left;
+    font-size: 12px;
+    color: #6c7280;
+    margin-bottom: 7px;
+    letter-spacing: 1px;
+}
+
+.upgrades-container {
+    width: 100%;
+    max-width: 350px;
+    margin-bottom: 14px;
+}
+
+.upgrade-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--panel);
+    padding: 10px 12px;
+    border-radius: 12px;
+    margin-bottom: 8px;
+    border: 1px solid var(--line);
+    gap: 10px;
+}
+
+.upgrade-item.maxed { border-color: var(--ui-dim); }
+
+.upgrade-info { text-align: left; }
+
+.upgrade-name {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.upgrade-lvl {
+    font-size: 11px;
+    color: #7c8391;
+    margin-top: 2px;
+}
+
+.upgrade-effect { color: var(--ui); }
+
+.btn-buy {
+    min-width: 76px;
+    transition: filter 0.2s, opacity 0.2s;
+}
+
+.btn-buy.locked {
+    filter: grayscale(0.85);
+    opacity: 0.45;
+}
+
+.btn-buy.maxed {
+    background: none;
+    border: 1px solid var(--ui-dim);
+    color: var(--ui);
+    box-shadow: none;
+    cursor: default;
+}
+
+@keyframes shakeX {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-6px); }
+    40% { transform: translateX(6px); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(4px); }
+}
+
+.shake { animation: shakeX 0.35s; }
+
+.record-badge {
+    background: linear-gradient(45deg, #ffaa00, #ffee00);
+    color: #201500;
+    font-weight: 900;
+    letter-spacing: 2px;
+    padding: 7px 20px;
+    border-radius: 20px;
+    margin-bottom: 14px;
+    animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.go-score {
+    font-size: 44px;
+    font-weight: 900;
+    color: var(--ui);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.go-sub {
+    font-size: 12px;
+    color: #7c8391;
+    margin-top: 6px;
+}
+
+.go-grid {
+    display: flex;
+    gap: 22px;
+    justify-content: center;
+    margin: 18px 0 4px;
+    font-size: 13px;
+    color: #cfd4dc;
+}
+
+.go-grid b {
+    display: block;
+    font-size: 17px;
+    color: #fff;
+    margin-bottom: 2px;
+}
+
+.hint {
+    font-size: 12px;
+    color: #656b78;
+    line-height: 1.7;
+    margin-top: 16px;
+}
+
+#secret-msg {
+    font-size: 12px;
+    min-height: 16px;
+    margin-top: 8px;
+}
+
+/*------ VÝCVIK ------*/
+.tut-box {
+    position: absolute;
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 400px;
+    background: var(--panel);
+    border: 2px solid var(--ui);
+    border-radius: 16px;
+    padding: 16px;
+    color: #fff;
+    font-size: 14px;
+    line-height: 1.5;
+    z-index: 30;
+    box-shadow: 0 0 28px rgba(124, 58, 237, 0.28);
+    text-align: center;
+}
+
+.tut-step {
+    font-size: 11px;
+    color: var(--ui-dim);
+    letter-spacing: 2px;
+    margin-bottom: 6px;
+}
+
+.tut-skip {
+    background: none;
+    border: none;
+    color: #6c7280;
+    font-size: 12px;
+    text-decoration: underline;
+    cursor: pointer;
+    margin-top: 12px;
+}
+
+.glow-highlight {
+    box-shadow: 0 0 20px 8px var(--ui) !important;
+    border-color: #fff !important;
+    z-index: 100;
+    animation: pulseGlow 1s infinite alternate;
+}
+
+@keyframes pulseGlow {
+    from { box-shadow: 0 0 14px 4px var(--ui); }
+    to { box-shadow: 0 0 26px 13px var(--ui); }
+}
+
+#tut-focus-circle {
+    position: absolute;
+    border: 3px solid var(--ui);
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0;
+    box-shadow: 0 0 20px var(--ui);
+    transition: opacity 0.3s;
+    z-index: 15;
+}
+
+#tut-focus-circle.show {
+    opacity: 1;
+    animation: pulseGlow 1s infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/*------ REŽIMY (v5) ------*/
+#hud-timer, #hud-streak { font-variant-numeric: tabular-nums; }
+#hud-timer.hidden, #hud-streak.hidden { display: none; }
+
+.btn-ghost {
+    background: none;
+    border: 1px solid var(--ui-dim);
+    color: var(--ui);
+    box-shadow: none;
+}
+
+.mode-grid {
+    width: 100%;
+    max-width: 350px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 9px;
+    margin: 4px 0 14px;
+}
+
+.mode-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 13px 10px;
+    color: #fff;
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    transition: transform 0.1s, border-color 0.2s;
+}
+
+.mode-card:active { transform: scale(0.96); }
+
+.mode-card .mode-icon { font-size: 19px; }
+.mode-card .mode-name { font-size: 14px; font-weight: 800; margin-top: 2px; }
+.mode-card .mode-desc { font-size: 11px; color: #8992a3; line-height: 1.35; min-height: 28px; }
+.mode-card .mode-rec { font-size: 11px; color: var(--ui); margin-top: 5px; font-variant-numeric: tabular-nums; }
+
+.mode-card.hard { border-color: rgba(255, 136, 0, 0.4); }
+.mode-card.hard .mode-rec { color: #ff9500; }
+.mode-card.blitz { border-color: rgba(255, 196, 0, 0.4); }
+.mode-card.blitz .mode-rec { color: var(--gold); }
+.mode-card.rush { border-color: rgba(255, 0, 204, 0.4); }
+.mode-card.rush .mode-rec { color: #ff5fe0; }
+.mode-card.zen { border-color: rgba(140, 200, 255, 0.4); }
+.mode-card.zen .mode-rec { color: #8cc8ff; }
+.mode-card.daily { border-color: rgba(140, 255, 180, 0.4); }
+.mode-card.daily .mode-rec { color: #8cffb4; }
+
+/*------ ÚSPĚCHY - TOASTY ------*/
+#achv-toast-layer {
+    position: absolute;
+    top: calc(96px + env(safe-area-inset-top, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+    pointer-events: none;
+}
+
+.achv-toast {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(10, 13, 26, 0.96);
+    border: 1px solid var(--gold);
+    border-radius: 12px;
+    padding: 9px 16px 9px 12px;
+    box-shadow: 0 0 22px rgba(255, 196, 0, 0.35);
+    opacity: 0;
+    transform: translateY(-10px) scale(0.94);
+    transition: opacity 0.25s, transform 0.25s;
+    white-space: nowrap;
+}
+
+.achv-toast.show { opacity: 1; transform: translateY(0) scale(1); }
+.achv-toast-icon { font-size: 20px; }
+.achv-toast-eyebrow { font-size: 10px; color: var(--gold); letter-spacing: 1px; }
+.achv-toast-name { font-size: 13px; font-weight: 700; color: #fff; }
+
+/*------ POSTUP A ÚSPĚCHY ------*/
+.stats-grid {
+    width: 100%;
+    max-width: 350px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 16px;
+    font-size: 11px;
+    color: #cfd4dc;
+    text-align: left;
+}
+
+.stats-grid > div {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 8px 9px;
+}
+
+.stats-grid b {
+    display: block;
+    font-size: 16px;
+    color: #fff;
+    margin-bottom: 1px;
+    font-variant-numeric: tabular-nums;
+}
+
+.ascend-box {
+    width: 100%;
+    max-width: 350px;
+    background: linear-gradient(160deg, rgba(255, 196, 0, 0.12), var(--panel));
+    border: 1px solid rgba(255, 196, 0, 0.4);
+    border-radius: 14px;
+    padding: 13px;
+    margin-bottom: 16px;
+    text-align: left;
+}
+
+.ascend-title {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--gold);
+    margin-bottom: 4px;
+}
+
+.ascend-desc {
+    font-size: 12px;
+    color: #b7bcc7;
+    line-height: 1.5;
+    margin-bottom: 10px;
+}
+
+#btn-ascend {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    background: linear-gradient(45deg, #ffaa00, #ffee00);
+    color: #201500;
+    box-shadow: 0 4px 16px rgba(255, 196, 0, 0.3);
+}
+
+#btn-ascend.locked {
+    background: none;
+    border: 1px solid var(--line);
+    color: #6c7280;
+    box-shadow: none;
+    cursor: default;
+}
+
+.relic-list, .achv-list {
+    width: 100%;
+    max-width: 350px;
+    margin-bottom: 16px;
+}
+
+.relic-item {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 9px 12px;
+    margin-bottom: 7px;
+    text-align: left;
+}
+
+.relic-item.unlocked { border-color: var(--ui-dim); }
+.relic-item.locked { opacity: 0.55; }
+.relic-name { font-size: 13px; font-weight: 700; }
+.relic-desc { font-size: 11px; color: #8992a3; margin-top: 2px; }
+
+.prestige-list {
+    width: 100%;
+    max-width: 350px;
+    margin-bottom: 16px;
+}
+
+.prestige-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    background: var(--panel);
+    border: 1px solid rgba(185, 139, 255, 0.3);
+    border-radius: 12px;
+    padding: 9px 12px;
+    margin-bottom: 7px;
+    text-align: left;
+}
+
+.prestige-item.maxed { border-color: #b98bff; }
+.prestige-name { font-size: 13px; font-weight: 700; }
+.prestige-desc { font-size: 11px; color: #8992a3; margin-top: 2px; }
+.prestige-lvl { font-size: 10px; color: #b98bff; margin-top: 2px; }
+
+.btn-prestige {
+    min-width: 68px;
+    background: linear-gradient(45deg, #7a3fd6, #b98bff);
+    box-shadow: 0 4px 12px rgba(185, 139, 255, 0.28);
+}
+
+.btn-prestige.locked { filter: grayscale(0.85); opacity: 0.45; }
+.btn-prestige.maxed { background: none; border: 1px solid #b98bff; color: #b98bff; box-shadow: none; cursor: default; }
+
+.achv-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 9px 12px;
+    margin-bottom: 7px;
+    text-align: left;
+}
+
+.achv-item.unlocked { border-color: rgba(255, 196, 0, 0.4); }
+.achv-item.locked { opacity: 0.55; }
+.achv-icon { font-size: 18px; flex-shrink: 0; }
+.achv-body { flex: 1; min-width: 0; }
+.achv-name { font-size: 13px; font-weight: 700; }
+.achv-desc { font-size: 11px; color: #8992a3; margin-top: 2px; line-height: 1.4; }
+.achv-progress { font-size: 10px; color: var(--ui); margin-top: 3px; font-variant-numeric: tabular-nums; }
+.achv-reward { font-size: 12px; color: var(--gold); font-weight: 700; flex-shrink: 0; }
+</style>
+<script>/* JOMARID-BRIDGE */
+(function () {
+  var GAME_ID = 'rocket';
+  var inFrame = false;
+  try { inFrame = !!window.parent && window.parent !== window; } catch (e) { inFrame = false; }
+  var pending = 0, reasons = {}, timer = null, capNotified = false;
+
+  function toast(text, warn) {
+    try {
+      var el = document.createElement('div');
+      el.textContent = text;
+      el.setAttribute('style', 'position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-20px);z-index:2147483000;pointer-events:none;padding:9px 16px;border-radius:999px;font:800 13px system-ui,-apple-system,Segoe UI,sans-serif;letter-spacing:.3px;white-space:nowrap;opacity:0;transition:opacity .25s,transform .25s;box-shadow:0 6px 24px rgba(0,0,0,.35);color:' + (warn ? '#e5e7eb' : '#1a1200') + ';background:' + (warn ? 'rgba(55,65,81,.95)' : 'linear-gradient(135deg,#ffd76a,#f59e0b)') + ';');
+      document.documentElement.appendChild(el);
+      requestAnimationFrame(function () { el.style.opacity = '1'; el.style.transform = 'translateX(-50%) translateY(0)'; });
+      setTimeout(function () { el.style.opacity = '0'; setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 300); }, 2600);
+    } catch (e) {}
+  }
+
+  function flush() {
+    timer = null;
+    if (!pending || !inFrame) { pending = 0; reasons = {}; return; }
+    var top = 'event', topAmt = 0;
+    for (var k in reasons) { if (reasons[k] > topAmt) { top = k; topAmt = reasons[k]; } }
+    var amount = pending; pending = 0; reasons = {};
+    try { window.parent.postMessage({ source: 'jomarid-game', type: 'coin', game: GAME_ID, amount: amount, reason: top }, '*'); } catch (e) {}
+  }
+
+  // Hra jen POSILA ZADOST o odmenu - o tom, kolik Jomarid Coins se skutecne udeli,
+  // rozhoduje server (denni stropy). Vice udalosti v rychlem sledu se sloucí do jedne zpravy.
+  window.jomaridReward = function (reason, amount, immediate) {
+    if (!inFrame) return;
+    amount = Math.floor(Number(amount));
+    if (!isFinite(amount) || amount < 1) return;
+    var r = reason || 'event';
+    pending += amount;
+    reasons[r] = (reasons[r] || 0) + amount;
+    if (immediate) { if (timer) clearTimeout(timer); flush(); }
+    else if (!timer) { timer = setTimeout(flush, 1200); }
+  };
+
+  window.addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (!d || d.source !== 'jomarid-host' || d.type !== 'coin-result') return;
+    if (ev.source !== window.parent) return;
+    if (d.granted > 0) toast('\uD83D\uDD36 +' + d.granted + ' Jomarid Coins');
+    else if (d.capped && !capNotified) { capNotified = true; toast('\uD83D\uDD36 Denn\u00ED limit odm\u011Bn z t\u00E9to hry je vy\u010Derp\u00E1n', true); }
+  });
+
+  window.addEventListener('pagehide', function () { if (timer) clearTimeout(timer); flush(); });
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target.closest('#btn-back-to-jomarid') : null;
+    if (t) { if (timer) clearTimeout(timer); flush(); }
+  }, true);
+})();
+</script>
+
+</head>
+<body>
+
+<div id="game-container">
+    <a href="/app" id="btn-back-to-jomarid" onclick="if (typeof Storage !== 'undefined' && Storage.flush) Storage.flush(); if (window.parent !== window) { window.parent.postMessage({ source: 'jomarid-game', type: 'close' }, '*'); return false; }" style="position:absolute; top:calc(10px + env(safe-area-inset-top,0px)); left:10px; z-index:200; color:var(--ui-dim); font-size:11px; letter-spacing:0.5px; text-decoration:none; background:rgba(5,5,15,0.65); padding:6px 10px; border-radius:8px; border:1px solid var(--line); backdrop-filter: blur(4px);">← Jomarid Books</a>
+    <canvas id="gameCanvas"></canvas>
+    <div id="tut-focus-circle"></div>
+    <div id="event-text"></div>
+    <div id="achv-toast-layer"></div>
+
+    <div class="hud hidden" id="hud">
+        <div class="hud-top">
+            <div class="hud-group" id="hud-stats-group">
+                <span id="hud-score">0</span>
+                <span id="hud-coins">0</span>
+                <span id="hud-combo" class="hidden">×2</span>
+                <span id="hud-timer" class="hidden">3:00</span>
+                <span id="hud-streak" class="hidden">Série 0</span>
+            </div>
+            <div class="hud-buttons">
+                <button class="icon-btn" id="btn-sound" title="Zvuk (M)">🔊</button>
+                <button class="icon-btn" id="btn-pause" title="Pauza (Esc)">II</button>
+            </div>
+        </div>
+
+        <div class="hp-row">
+            <div class="hp-track">
+                <div class="hp-fill" id="hp-fill"></div>
+                <div class="hp-ticks"></div>
+            </div>
+            <span class="hp-num" id="hp-num">100/100</span>
+        </div>
+
+        <div class="boss-bar hidden" id="boss-bar">
+            <div class="boss-head">
+                <span id="boss-name">STRÁŽCE</span>
+                <span id="boss-phase">fáze 1/3</span>
+            </div>
+            <div class="boss-track"><div class="boss-fill" id="boss-fill"></div></div>
+        </div>
+
+        <div class="powerup-timers" id="powerup-timers"></div>
+    </div>
+
+    <button id="btn-bomb" class="hidden" title="Bomba (B)">💣<span id="bomb-count">0</span></button>
+
+    <div id="tut-layer" class="hidden">
+        <div class="tut-box" id="tut-box">
+            <div class="tut-step" id="tut-step">VÝCVIK</div>
+            <div id="tut-text"></div>
+            <div style="margin-top: 14px; display: flex; justify-content: center; gap: 10px;" id="tut-buttons"></div>
+            <button class="tut-skip" id="btn-tut-skip">Přeskočit výcvik</button>
+        </div>
+    </div>
+
+    <div id="menu-overlay" class="overlay">
+        <h1>OCHRÁNCE</h1>
+        <p class="tagline">Vesmírná arkádová střílečka</p>
+
+        <div class="stats-bar">
+            <span id="menu-coins" style="color: var(--gold);">0 mincí</span>
+            <span id="menu-best" style="color: var(--ui);">Rekord 0</span>
+            <span id="menu-ascend" class="hidden" style="color: var(--gold);">Vzestup 0</span>
+        </div>
+
+        <div class="mode-grid">
+            <button class="mode-card" id="btn-start-normal">
+                <span class="mode-icon">🚀</span>
+                <span class="mode-name">Normální</span>
+                <span class="mode-desc">Nekonečné přežití vlastním tempem</span>
+                <span class="mode-rec" id="rec-normal">Rekord 0</span>
+            </button>
+            <button class="mode-card hard" id="btn-start-hard">
+                <span class="mode-icon">🔥</span>
+                <span class="mode-name">Těžká</span>
+                <span class="mode-desc">Rychlejší nepřátelé, víc bolesti</span>
+                <span class="mode-rec" id="rec-hard">Rekord 0</span>
+            </button>
+            <button class="mode-card blitz" id="btn-start-blitz">
+                <span class="mode-icon">⚡</span>
+                <span class="mode-name">Blesková vlna</span>
+                <span class="mode-desc">3 minuty na maximální skóre</span>
+                <span class="mode-rec" id="rec-blitz">Rekord 0</span>
+            </button>
+            <button class="mode-card rush" id="btn-start-rush">
+                <span class="mode-icon">👹</span>
+                <span class="mode-name">Boss Rush</span>
+                <span class="mode-desc">Bossové jeden za druhým, bez oddechu</span>
+                <span class="mode-rec" id="rec-rush">Série 0</span>
+            </button>
+            <button class="mode-card zen hidden" id="btn-start-zen">
+                <span class="mode-icon">🌙</span>
+                <span class="mode-name">Zen</span>
+                <span class="mode-desc">Klidná nekonečná hra, umřít nejde</span>
+                <span class="mode-rec" id="rec-zen">Bez tlaku</span>
+            </button>
+            <button class="mode-card daily hidden" id="btn-start-daily">
+                <span class="mode-icon">📅</span>
+                <span class="mode-name">Denní výzva</span>
+                <span class="mode-desc" id="daily-desc">Dnešní modifikátor</span>
+                <span class="mode-rec" id="rec-daily">Rekord 0</span>
+            </button>
+        </div>
+
+        <button class="btn btn-ghost btn-small" id="btn-open-stats" style="margin-bottom: 14px;">Postup a úspěchy</button>
+
+        <div class="section-label">Trvalá vylepšení lodi</div>
+        <div class="upgrades-container" id="menu-shop"></div>
+
+        <button class="btn btn-danger" id="btn-reset" style="opacity: 0.6; font-size: 12px; padding: 8px; width: auto;">Smazat postup</button>
+
+        <div style="margin-top: 14px; display: flex; gap: 6px; justify-content: center; align-items: center;">
+            <input type="text" id="secret-input" placeholder="Tajný kód" autocomplete="off" style="padding: 8px 12px; border-radius: 15px; border: 1px solid var(--ui-dim); background: rgba(0,0,0,0.6); color: #fff; width: 130px; text-align: center; font-size: 13px; outline: none;">
+            <button class="btn btn-small" id="btn-secret" style="margin: 0; padding: 8px 14px;">Aktivovat</button>
+        </div>
+        <div id="secret-msg"></div>
+
+        <div class="hint">
+            Počítač: šipky, WASD nebo myš. Esc pauza, B bomba, M zvuk.<br>
+            Mobil: táhni prstem, bomba tlačítkem vpravo dole.
+        </div>
+    </div>
+
+    <div id="stats-overlay" class="overlay hidden">
+        <h1 style="font-size: 26px;">POSTUP</h1>
+        <p class="tagline">Vše, co jsi za dobu hraní dokázal</p>
+
+        <div class="stats-grid" id="lifetime-stats"></div>
+
+        <div class="ascend-box" id="ascend-box">
+            <div class="ascend-title">Vzestup <span id="ascend-level">0</span> · <span id="stardust-count" style="color: #b98bff;">0 ✦ prachu</span></div>
+            <div class="ascend-desc" id="ascend-desc">Vylepši všech osm kategorií na maximum, abys mohl vzestoupit.</div>
+            <button class="btn btn-small" id="btn-ascend" disabled>Vzestoupit</button>
+        </div>
+
+        <div class="section-label">Strom Vzestupu (za ✦ hvězdný prach)</div>
+        <div class="prestige-list" id="prestige-list"></div>
+
+        <div class="section-label">Relikvie</div>
+        <div class="relic-list" id="relic-list"></div>
+
+        <div class="section-label">Úspěchy</div>
+        <div class="achv-list" id="achv-list"></div>
+
+        <button class="btn" id="btn-close-stats">Zpět do menu</button>
+    </div>
+
+    <div id="pause-overlay" class="overlay hidden">
+        <h1>PAUZA</h1>
+
+        <div class="stats-bar">
+            <span id="pause-coins" style="color: var(--gold);">0 mincí</span>
+            <span id="pause-score" style="color: var(--ui);">Skóre 0</span>
+        </div>
+
+        <button class="btn" id="btn-resume">Pokračovat</button>
+
+        <div class="section-label">Vylepšení se projeví okamžitě</div>
+        <div class="upgrades-container" id="pause-shop"></div>
+
+        <button class="btn btn-danger" id="btn-quit-pause">Opustit hru</button>
+    </div>
+
+    <div id="gameover-overlay" class="overlay hidden">
+        <h2 id="go-heading">LOĎ ZNIČENA</h2>
+        <div id="go-record" class="record-badge hidden">Nový rekord</div>
+        <div class="section-label" id="go-metric-label" style="text-align: center; max-width: none;">SKÓRE</div>
+        <div class="go-score" id="go-score">0</div>
+        <div class="go-sub" id="go-sub">Rekord 0</div>
+        <div class="go-grid" id="go-grid"></div>
+        <button class="btn" id="btn-restart">Hrát znovu</button>
+        <button class="btn btn-danger" id="btn-quit-go">Hlavní menu</button>
+    </div>
+</div>
+
+<script>
+//======================================================================
+//  ULOŽENÁ DATA
+//======================================================================
+
+const MAX_LVL = 20;
+
+const Storage = {
+    key: 'space_shooter_v2_9',
+
+    defaults: {
+        coins: 0,
+        upgrades: {
+            fireRate: 1, hp: 1, damage: 1, bombs: 1,
+            tripleDuration: 1, shieldDuration: 1, rapidDuration: 1, healPower: 1
+        },
+        best: { normal: 0, hard: 0, blitz: 0, rush: 0, zen: 0 },
+        daily: { date: '', score: 0 },
+        muted: false,
+        tutorialDone: false,
+        ascension: 0,
+        stardust: 0,
+        cycleCoins: 0,
+        prestige: { hull: 0, aura: 0, magnet: 0, luck: 0, capital: 0, bomb: 0, zenUnlocked: false, dailyUnlocked: false },
+        achievements: {},
+        stats: {
+            totalKills: 0, totalBossKills: 0, totalCoinsEarned: 0, totalPlaytime: 0,
+            bestCombo: 0, runsPlayed: 0, bombsUsed: 0, noHitBosses: 0,
+            longestRun: 0, blitzClears: 0, bestRushStreak: 0
+        }
+    },
+
+    data: null,
+    dirty: false,
+    timer: null,
+
+    load() {
+        this.data = JSON.parse(JSON.stringify(this.defaults));
+
+        try {
+            const raw = localStorage.getItem(this.key);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                this.data = { ...this.data, ...parsed };
+                this.data.upgrades = { ...this.defaults.upgrades, ...(parsed.upgrades || {}) };
+                this.data.best = { ...this.defaults.best, ...(parsed.best || {}) };
+                this.data.stats = { ...this.defaults.stats, ...(parsed.stats || {}) };
+                this.data.prestige = { ...this.defaults.prestige, ...(parsed.prestige || {}) };
+                this.data.daily = (parsed.daily && typeof parsed.daily === 'object')
+                    ? { date: String(parsed.daily.date || ''), score: parsed.daily.score }
+                    : { ...this.defaults.daily };
+                // Neznámé klíče v achievementech neškodí - nikdy se pod cizím id nečtou
+                this.data.achievements = (parsed.achievements && typeof parsed.achievements === 'object') ? { ...parsed.achievements } : {};
+            }
+        } catch (e) {
+            // Poškozená data nebo zakázaný localStorage - hrajeme na výchozích hodnotách
+        }
+
+        if (!Number.isFinite(this.data.coins)) this.data.coins = 0;
+
+        if (!Number.isFinite(this.data.ascension) || this.data.ascension < 0) this.data.ascension = 0;
+        this.data.ascension = Math.floor(this.data.ascension);
+
+        if (!Number.isFinite(this.data.stardust) || this.data.stardust < 0) this.data.stardust = 0;
+        this.data.stardust = Math.floor(this.data.stardust);
+
+        if (!Number.isFinite(this.data.cycleCoins) || this.data.cycleCoins < 0) this.data.cycleCoins = 0;
+
+        for (const k in this.defaults.upgrades) {
+            const v = Math.floor(Number(this.data.upgrades[k]));
+            this.data.upgrades[k] = Number.isFinite(v) ? Math.min(MAX_LVL, Math.max(1, v)) : 1;
+        }
+
+        for (const k in this.defaults.best) {
+            if (!Number.isFinite(this.data.best[k])) this.data.best[k] = 0;
+        }
+
+        for (const k in this.defaults.stats) {
+            if (!Number.isFinite(this.data.stats[k]) || this.data.stats[k] < 0) this.data.stats[k] = 0;
+        }
+
+        for (const k in this.defaults.prestige) {
+            if (typeof this.defaults.prestige[k] === 'boolean') {
+                this.data.prestige[k] = !!this.data.prestige[k];
+            } else if (!Number.isFinite(this.data.prestige[k]) || this.data.prestige[k] < 0) {
+                this.data.prestige[k] = 0;
+            } else {
+                this.data.prestige[k] = Math.floor(this.data.prestige[k]);
+            }
+        }
+
+        if (!Number.isFinite(this.data.daily.score) || this.data.daily.score < 0) this.data.daily.score = 0;
+    },
+
+    save() {
+        this.dirty = false;
+        try {
+            localStorage.setItem(this.key, JSON.stringify(this.data));
+        } catch (e) {}
+    },
+
+    // Zápis do localStorage je drahý - během boje jen označíme změnu a uložíme dávkově
+    queueSave() {
+        this.dirty = true;
+        if (this.timer) return;
+
+        this.timer = setTimeout(() => {
+            this.timer = null;
+            if (this.dirty) this.save();
+        }, 1500);
+    },
+
+    flush() {
+        if (this.dirty) this.save();
+    },
+
+    wipe() {
+        this.data = JSON.parse(JSON.stringify(this.defaults));
+        this.save();
+    }
+};
+
+Storage.load();
+window.addEventListener('pagehide', () => Storage.flush());
+
+//======================================================================
+//  ZVUK
+//======================================================================
+
+class SoundSystem {
+    constructor() {
+        this.ctx = null;
+        this.muted = false;
+        this.activeUntil = []; // časová razítka konce každého znějícího zvuku
+    }
+
+    init() {
+        try {
+            if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            if (this.ctx.state === 'suspended') this.ctx.resume();
+        } catch (e) {}
+    }
+
+    setMuted(m) { this.muted = !!m; }
+
+    ready() {
+        if (!this.ctx || this.muted) return false;
+
+        // Počet aktivních hlasů počítáme z časových razítek, ne z setTimeout dekrementů -
+        // ty se na zabackgroundované kartě zpožďují a hra by tak mohla zůstat trvale němá
+        const now = Date.now();
+        if (this.activeUntil.length) {
+            this.activeUntil = this.activeUntil.filter(t => t > now);
+        }
+
+        // Strop hlasů brání praskání, když vybuchne půlka obrazovky naráz
+        return this.activeUntil.length < 14;
+    }
+
+    track(duration) {
+        this.activeUntil.push(Date.now() + duration * 1000 + 60);
+    }
+
+    tone(freq, type, duration, vol, endFreq) {
+        if (!this.ready()) return;
+
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, t);
+        osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFreq === undefined ? freq / 2 : endFreq), t + duration);
+
+        gain.gain.setValueAtTime(vol, t);
+        gain.gain.exponentialRampToValueAtTime(0.008, t + duration);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + duration);
+
+        this.track(duration);
+    }
+
+    // Šum dá výbuchům tělo, které samotný oscilátor nedá
+    noise(duration, vol, cutoff) {
+        if (!this.ready()) return;
+
+        const ctx = this.ctx;
+        const t = ctx.currentTime;
+        const len = Math.max(1, Math.floor(ctx.sampleRate * duration));
+        const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+        const data = buf.getChannelData(0);
+
+        for (let i = 0; i < len; i++) {
+            data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+        }
+
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(cutoff, t);
+        filter.frequency.exponentialRampToValueAtTime(Math.max(120, cutoff * 0.25), t + duration);
+
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(vol, t);
+        gain.gain.exponentialRampToValueAtTime(0.008, t + duration);
+
+        src.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+        src.start(t);
+
+        this.track(duration);
+    }
+
+    shoot() { this.tone(680, 'square', 0.06, 0.045, 420); }
+    enemyShoot() { this.tone(240, 'square', 0.09, 0.05, 150); }
+    hit() { this.tone(180, 'sawtooth', 0.1, 0.18, 70); }
+    heal() { this.tone(520, 'sine', 0.26, 0.18, 880); }
+    powerup() { this.tone(460, 'sine', 0.28, 0.2, 920); }
+    explosion() { this.noise(0.34, 0.26, 1400); this.tone(90, 'square', 0.22, 0.14, 40); }
+    bigExplosion() { this.noise(0.75, 0.38, 2200); this.tone(58, 'sawtooth', 0.6, 0.26, 26); }
+    bossSpawn() { this.tone(46, 'sawtooth', 1.1, 0.32, 120); }
+    telegraph() { this.tone(300, 'triangle', 0.2, 0.1, 620); }
+    beam() { this.noise(0.5, 0.2, 3600); this.tone(160, 'sawtooth', 0.5, 0.14, 420); }
+    bomb() { this.noise(1.0, 0.42, 3000); this.tone(70, 'sine', 0.8, 0.3, 30); }
+    combo(n) { this.tone(480 + n * 70, 'triangle', 0.1, 0.1, 760 + n * 70); }
+    buy() { this.tone(900, 'triangle', 0.15, 0.13, 1300); }
+    denied() { this.tone(150, 'square', 0.16, 0.1, 90); }
+    phase() { this.tone(120, 'sawtooth', 0.7, 0.24, 500); }
+}
+
+const Sounds = new SoundSystem();
+Sounds.setMuted(Storage.data.muted);
+
+// AudioContext smí vzniknout až po první interakci - jinak by desktop zůstal němý
+['pointerdown', 'keydown', 'click'].forEach(ev => {
+    window.addEventListener(ev, () => Sounds.init(), { passive: true });
+});
+
+//======================================================================
+//  POMOCNÉ FUNKCE
+//======================================================================
+
+const U = {
+    rand: (min, max) => Math.random() * (max - min) + min,
+    pick: arr => arr[Math.floor(Math.random() * arr.length)],
+    clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)),
+    dist: (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1),
+    lerp: (a, b, t) => a + (b - a) * t,
+
+    // Kolize dvou kruhů; r2 dovolí použít menší zásahový poloměr, než jaký je vidět
+    hit: (a, b, ar, br) => {
+        const ra = ar === undefined ? a.r : ar;
+        const rb = br === undefined ? b.r : br;
+        return U.dist(a.x, a.y, b.x, b.y) < ra + rb;
+    },
+
+    // Mezera po tisících je čitelnější než šňůra číslic
+    num: n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u202f')
+};
+
+//======================================================================
+//  ČÁSTICE A TEXTY
+//======================================================================
+
+class Particle {
+    constructor(x, y, color, speed, size, decay, angle) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+
+        const a = angle === undefined ? U.rand(0, Math.PI * 2) : angle;
+        this.vx = Math.cos(a) * speed;
+        this.vy = Math.sin(a) * speed;
+
+        this.size = size;
+        this.life = 1.0;
+        this.decay = decay;
+    }
+
+    update(dt) {
+        const f = dt / 16;
+        this.x += this.vx * f;
+        this.y += this.vy * f;
+        this.vx *= 0.97;
+        this.vy *= 0.97;
+        this.life -= this.decay * f;
+    }
+
+    draw(ctx) {
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size * Math.max(0.2, this.life), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+}
+
+class FloatingText {
+    constructor(x, y, text, color, size) {
+        this.x = x;
+        this.y = y;
+        this.text = text;
+        this.color = color;
+        this.size = size || 14;
+        this.life = 1.0;
+        this.decay = 0.022;
+    }
+
+    update(dt) {
+        const f = dt / 16;
+        this.y -= 0.7 * f;
+        this.life -= this.decay * f;
+    }
+
+    draw(ctx) {
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.fillStyle = this.color;
+        ctx.font = `900 ${this.size}px 'Segoe UI', sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.text, this.x, this.y);
+        ctx.globalAlpha = 1;
+    }
+}
+
+//======================================================================
+//  STŘELY
+//======================================================================
+
+class Bullet {
+    constructor(x, y, vx, vy, dmg, color, isEnemy, r) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.dmg = dmg;
+        this.color = color;
+        this.isEnemy = !!isEnemy;
+        this.r = r || (isEnemy ? 6 : 4);
+        this.life = 6000;
+    }
+
+    update(dt) {
+        const f = dt / 16;
+        this.x += this.vx * f;
+        this.y += this.vy * f;
+        this.life -= dt;
+    }
+
+    draw(ctx) {
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 10;
+
+        if (this.isEnemy) {
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Světlé jádro odliší střelu od pozadí i přes výbuchy
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = 'rgba(255,255,255,0.85)';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.r * 0.42, 0, Math.PI * 2);
+            ctx.fill();
+        } else {
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.ellipse(this.x, this.y, this.r, this.r * 2.1, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.shadowBlur = 0;
+    }
+}
+
+// Paprsek bosse: nejdřív varovná linka, teprve potom škodí
+class Beam {
+    constructor(boss, width, warnTime, fireTime, sweep) {
+        this.boss = boss;
+        this.x = boss.x;
+        this.w = width;
+        this.warn = warnTime;
+        this.fire = fireTime;
+        this.sweep = sweep || 0;
+        this.t = 0;
+        this.dead = false;
+    }
+
+    get firing() { return this.t >= this.warn && this.t < this.warn + this.fire; }
+
+    update(dt, game) {
+        this.t += dt;
+
+        if (this.t < this.warn) {
+            this.x = this.boss && !this.boss.dead ? this.boss.x : this.x;
+        } else {
+            this.x += this.sweep * (dt / 16);
+            this.x = U.clamp(this.x, 20, game.width - 20);
+        }
+
+        if (this.t >= this.warn + this.fire) this.dead = true;
+    }
+
+    draw(ctx, game) {
+        const top = this.boss ? this.boss.y : 0;
+
+        if (this.t < this.warn) {
+            const blink = 0.25 + Math.abs(Math.sin(this.t * 0.02)) * 0.5;
+            ctx.globalAlpha = blink;
+            ctx.strokeStyle = '#ff3366';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([9, 7]);
+            ctx.beginPath();
+            ctx.moveTo(this.x, top);
+            ctx.lineTo(this.x, game.height);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.globalAlpha = 1;
+            return;
+        }
+
+        const fade = U.clamp((this.warn + this.fire - this.t) / 180, 0, 1);
+        const w = this.w * fade;
+        const grad = ctx.createLinearGradient(this.x - w, 0, this.x + w, 0);
+
+        grad.addColorStop(0, 'rgba(255,0,90,0)');
+        grad.addColorStop(0.5, 'rgba(255,90,140,0.85)');
+        grad.addColorStop(1, 'rgba(255,0,90,0)');
+
+        ctx.fillStyle = grad;
+        ctx.fillRect(this.x - w, top, w * 2, game.height - top);
+
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.fillRect(this.x - w * 0.22, top, w * 0.44, game.height - top);
+    }
+}
+
+// Rozpínající se tlaková vlna - dá se obejít vzdáleností, ne jen úhybem do strany
+class Shockwave {
+    constructor(x, y, color, delay) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.r = 0;
+        this.prevR = 0;
+        this.speed = 4.2;
+        this.band = 26;
+        this.delay = delay || 0;
+        this.t = 0;
+        this.hit = false;
+        this.dead = false;
+        this.maxR = 900;
+    }
+
+    get active() { return this.t >= this.delay; }
+
+    update(dt) {
+        this.t += dt;
+        if (!this.active) return;
+
+        this.prevR = this.r;
+        this.r += this.speed * (dt / 16);
+        if (this.r > this.maxR) this.dead = true;
+    }
+
+    draw(ctx) {
+        if (!this.active) return;
+
+        const alpha = U.clamp(1 - this.r / this.maxR, 0, 1) * 0.8;
+        if (alpha <= 0) return;
+
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = this.band;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, Math.max(0, this.r), 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.globalAlpha = alpha * 0.6;
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+}
+
+//======================================================================
+//  POWER-UPY
+//======================================================================
+
+const POWERUP_STYLE = {
+    triple: { color: '#ffcc00', icon: '⚡' },
+    shield: { color: '#00aaff', icon: '🛡️' },
+    heal:   { color: '#00ff66', icon: '❤️' },
+    rapid:  { color: '#ff4400', icon: '🔥' },
+    coin:   { color: '#ffd700', icon: '🪙' }
+};
+
+class Powerup {
+    constructor(x, y, type) {
+        this.x = x;
+        this.y = y;
+        this.r = 14;
+        this.vy = 2.2;
+        this.vx = 0;
+        this.t = 0;
+        this.type = type;
+
+        const s = POWERUP_STYLE[type] || POWERUP_STYLE.triple;
+        this.color = s.color;
+        this.icon = s.icon;
+    }
+
+    update(dt, game) {
+        const f = dt / 16;
+        this.t += dt;
+
+        // Krátký dolet k lodi, aby se odměna neztrácela těsně vedle - Magnetické
+        // jádro ze stromu Vzestupu tento dosah trvale rozšiřuje
+        const p = game.player;
+        const d = U.dist(this.x, this.y, p.x, p.y);
+        const range = 130 * (p.magnetMul || 1);
+
+        if (d < range) {
+            const pull = (1 - d / range) * 2.6;
+            this.x += ((p.x - this.x) / d) * pull * f;
+            this.y += ((p.y - this.y) / d) * pull * f;
+        }
+
+        this.y += this.vy * f;
+    }
+
+    draw(ctx) {
+        const pulse = 1 + Math.sin(this.t * 0.007) * 0.09;
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.scale(pulse, pulse);
+
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 14;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        ctx.fillStyle = '#000';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.icon, 0, 0);
+
+        ctx.restore();
+    }
+}
+
+//======================================================================
+//  HRÁČ
+//======================================================================
+
+class Player {
+    constructor(gw, gh) {
+        this.gw = gw;
+        this.gh = gh;
+
+        this.r = 17;
+        this.hitR = 7;          // Zásahová zóna je menší než loď - klasika žánru, jinak je hra nefér
+        this.x = gw / 2;
+        this.y = gh - 90;
+        this.prevX = this.x;
+        this.tilt = 0;
+
+        this.applyStats();
+        this.hp = this.maxHp;
+        this.bombs = this.maxBombs;
+
+        this.fireTimer = 0;
+        this.tripleShotTimer = 0;
+        this.shieldTimer = 0;
+        this.rapidTimer = 0;
+        this.invulnTimer = 0;
+        this.trailTimer = 0;
+
+        this.speed = 5.8;
+    }
+
+    applyStats() {
+        const u = Storage.data.upgrades;
+
+        // Vzestup násobí základ natrvalo, relikvie se odemykají hraním, ne penězi
+        const asc = Storage.data.ascension || 0;
+        // Bonus silně slábne po 15. vzestupu - hodně vzestoupený hráč nemá být rychlejší,
+        // jen odolnější. Skutečná odměna za další vzestupy jde do Hvězdného prachu.
+        const ascMul = 1 + Math.min(asc, 15) * 0.025 + Math.max(0, asc - 15) * 0.006;
+        const relicDmg = Achv.hasRelic('barrel') ? 1.2 : 1;
+        const relicHp = Achv.hasRelic('plating') ? 1.15 : 1;
+        const relicFire = Achv.hasRelic('quickhand') ? 0.85 : 1;
+        const relicBombs = Achv.hasRelic('bombs') ? 1 : 0;
+
+        // Strom Vzestupu: ploché/stropované bonusy, nic co by hru zrychlovalo s dalšími vzestupy
+        const hullMul = 1 + prestigeBonus('hull', 0.02);
+        const auraMul = 1 + prestigeBonus('aura', 0.04);
+        this.magnetMul = 1 + prestigeBonus('magnet', 0.1);
+        const prestigeBombs = prestigeLevel('bomb');
+
+        this.maxHp = Math.round((80 + (u.hp || 1) * 20) * ascMul * relicHp * hullMul);
+        this.dmg = Math.round(((u.damage || 1) + 1) * ascMul * relicDmg);
+        // Mírnější křivka: dřív se palba vysytila kolem 9. úrovně a dál už nic nedělala
+        this.baseFireRate = Math.max(90, Math.round(Math.max(120, 430 - (u.fireRate || 1) * 16) * relicFire));
+
+        // Štít je plná nezranitelnost, proto roste nejpomaleji ze všech tří
+        this.tripleTime = Math.round((7000 + ((u.tripleDuration || 1) - 1) * 550) * auraMul);
+        this.shieldTime = Math.round((5000 + ((u.shieldDuration || 1) - 1) * 450) * auraMul);
+        this.rapidTime = Math.round((6000 + ((u.rapidDuration || 1) - 1) * 500) * auraMul);
+        this.healAmount = 25 + (((u.healPower || 1) - 1) * 10);
+        this.maxBombs = Math.min(7, 1 + Math.floor(((u.bombs || 1) - 1) / 3) + relicBombs + prestigeBombs);
+    }
+
+    update(dt, input, game) {
+        const f = dt / 16;
+        this.prevX = this.x;
+
+        let vx = 0, vy = 0;
+        if (input.keys['ArrowLeft'] || input.keys['KeyA']) vx = -this.speed;
+        if (input.keys['ArrowRight'] || input.keys['KeyD']) vx = this.speed;
+        if (input.keys['ArrowUp'] || input.keys['KeyW']) vy = -this.speed;
+        if (input.keys['ArrowDown'] || input.keys['KeyS']) vy = this.speed;
+
+        // Řídí ten ovladač, který hráč použil naposledy
+        if (input.mode === 'pointer' && input.pointerActive) {
+            this.x = U.lerp(this.x, input.pointerTarget.x, Math.min(1, 0.55 * f));
+            this.y = U.lerp(this.y, input.pointerTarget.y, Math.min(1, 0.55 * f));
+        } else {
+            this.x += vx * f;
+            this.y += vy * f;
+        }
+
+        this.x = U.clamp(this.x, this.r, this.gw - this.r);
+        this.y = U.clamp(this.y, this.r, this.gh - this.r);
+
+        // Náklon podle skutečného pohybu funguje pro prst i klávesnici stejně
+        this.tilt = U.lerp(this.tilt, U.clamp((this.x - this.prevX) * 0.05, -0.42, 0.42), 0.2);
+
+        if (this.tripleShotTimer > 0) this.tripleShotTimer -= dt;
+        if (this.shieldTimer > 0) this.shieldTimer -= dt;
+        if (this.rapidTimer > 0) this.rapidTimer -= dt;
+        if (this.invulnTimer > 0) this.invulnTimer -= dt;
+
+        this.trailTimer -= dt;
+        if (this.trailTimer <= 0) {
+            this.trailTimer = 45;
+            game.particles.push(new Particle(
+                this.x + U.rand(-3, 3), this.y + 16,
+                this.rapidTimer > 0 ? '#ff6622' : '#00a8ff',
+                U.rand(0.3, 0.9), U.rand(1.5, 3), 0.07, Math.PI / 2
+            ));
+        }
+
+        const rate = this.rapidTimer > 0 ? Math.max(60, this.baseFireRate * 0.36) : this.baseFireRate;
+        this.fireTimer += dt;
+
+        if (this.fireTimer >= rate && !game.holdFire) {
+            this.fireTimer = 0;
+            this.shoot(game);
+        }
+    }
+
+    shoot(game) {
+        Sounds.shoot();
+
+        const y = this.y - 18;
+        const v = -14.5;
+
+        if (this.tripleShotTimer > 0) {
+            game.bullets.push(new Bullet(this.x, y, 0, v, this.dmg, '#00f0ff'));
+            game.bullets.push(new Bullet(this.x - 11, y + 6, -2.6, v * 0.92, this.dmg, '#00f0ff'));
+            game.bullets.push(new Bullet(this.x + 11, y + 6, 2.6, v * 0.92, this.dmg, '#00f0ff'));
+        } else {
+            game.bullets.push(new Bullet(this.x - 6, y, 0, v, this.dmg, '#00f0ff'));
+            game.bullets.push(new Bullet(this.x + 6, y, 0, v, this.dmg, '#00f0ff'));
+        }
+
+        game.particles.push(new Particle(this.x, y, '#bff8ff', 0.6, 2.2, 0.16));
+    }
+
+    takeDamage(amount, iframes) {
+        if (this.shieldTimer > 0 || this.invulnTimer > 0) return false;
+
+        this.hp -= amount;
+        this.invulnTimer = iframes === undefined ? 400 : iframes;
+        Sounds.hit();
+
+        return this.hp <= 0;
+    }
+
+    heal(amount) {
+        this.hp = Math.min(this.maxHp, this.hp + amount);
+        Sounds.heal();
+    }
+
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.tilt);
+
+        if (this.invulnTimer > 0 && this.shieldTimer <= 0) {
+            ctx.globalAlpha = (Math.floor(Date.now() / 70) % 2) ? 0.3 : 1;
+        }
+
+        if (this.shieldTimer > 0) {
+            const pulse = 0.28 + Math.sin(Date.now() / 110) * 0.09;
+            ctx.beginPath();
+            ctx.arc(0, 0, this.r + 11, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(0, 170, 255, ${pulse})`;
+            ctx.fill();
+            ctx.strokeStyle = '#00aaff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Poslední vteřina štítu bliká, ať konec nepřekvapí
+            if (this.shieldTimer < 1200 && Math.floor(this.shieldTimer / 120) % 2) {
+                ctx.strokeStyle = '#fff';
+                ctx.stroke();
+            }
+        }
+
+        ctx.fillStyle = this.rapidTimer > 0 ? '#ff3300' : (Math.random() > 0.5 ? '#ff8800' : '#ffcc00');
+        ctx.beginPath();
+        ctx.moveTo(-5, 11);
+        ctx.lineTo(5, 11);
+        ctx.lineTo(0, 20 + Math.random() * 9);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#00f0ff';
+        ctx.shadowColor = '#00f0ff';
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.moveTo(0, -this.r);
+        ctx.lineTo(-this.r, this.r - 5);
+        ctx.lineTo(0, this.r - 10);
+        ctx.lineTo(this.r, this.r - 5);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#d8fbff';
+        ctx.beginPath();
+        ctx.arc(0, -2, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+}
+
+//======================================================================
+//  BĚŽNÍ NEPŘÁTELÉ
+//======================================================================
+
+const ENEMY_TYPES = {
+    basic:     { r: 17, hp: 2,  speed: 2.4, color: '#ff0055', score: 3,  coins: 6 },
+    fast:      { r: 12, hp: 1,  speed: 4.4, color: '#ff00ff', score: 5,  coins: 6 },
+    tank:      { r: 25, hp: 7,  speed: 1.15, color: '#ff8800', score: 10, coins: 18 },
+    destroyer: { r: 30, hp: 22, speed: 0.72, color: '#aa0000', score: 24, coins: 48 },
+    asteroid:  { r: 30, hp: Infinity, speed: 4, color: '#6b6b74', score: 0, coins: 0 }
+};
+
+class Enemy {
+    constructor(x, y, type, diffMult) {
+        const s = ENEMY_TYPES[type] || ENEMY_TYPES.basic;
+
+        this.x = x;
+        this.y = y;
+        this.type = type;
+        this.r = type === 'asteroid' ? U.rand(20, 38) : s.r;
+        this.maxHp = s.hp === Infinity ? Infinity : Math.max(1, Math.round(s.hp * diffMult));
+        this.hp = this.maxHp;
+        this.speed = type === 'asteroid' ? U.rand(3, 5.5) : s.speed;
+        this.color = s.color;
+        this.scoreVal = s.score;
+        this.coinAmt = s.coins;
+
+        this.vx = 0;
+        this.t = U.rand(0, 3000);
+        this.hitFlash = 0;
+        this.angle = 0;
+        this.rotSpeed = U.rand(-0.05, 0.05);
+        this.fireTimer = U.rand(900, 2200);
+        this.dead = false;
+    }
+
+    get indestructible() { return this.type === 'asteroid'; }
+
+    update(dt, game) {
+        const f = dt / 16;
+        this.t += dt;
+        if (this.hitFlash > 0) this.hitFlash -= dt;
+
+        switch (this.type) {
+            case 'asteroid':
+                this.y += this.speed * f;
+                this.angle += this.rotSpeed * f;
+                break;
+
+            case 'fast':
+                // Rychlíci letí po nastavené dráze, takže mají spád i do stran
+                this.y += this.speed * f;
+                this.x += this.vx * f;
+                break;
+
+            case 'destroyer': {
+                this.y += this.speed * f;
+                this.fireTimer -= dt;
+
+                if (this.fireTimer <= 0 && this.y > 40 && this.y < game.height * 0.62) {
+                    this.fireTimer = U.rand(1500, 2400);
+                    this.shootAt(game, game.player, 4.6, 8);
+                }
+                break;
+            }
+
+            case 'tank':
+                this.y += this.speed * f;
+                this.x += Math.sin(this.t * 0.0016) * 0.5 * f;
+                break;
+
+            default:
+                this.y += this.speed * f;
+                this.x += Math.sin(this.t * 0.0026) * 0.9 * f;
+        }
+
+        this.x = U.clamp(this.x, -60, game.width + 60);
+    }
+
+    shootAt(game, target, speed, dmg) {
+        const a = Math.atan2(target.y - this.y, target.x - this.x);
+        game.bullets.push(new Bullet(this.x, this.y + 10, Math.cos(a) * speed, Math.sin(a) * speed, dmg, '#ff6600', true, 6));
+        game.particles.push(new Particle(this.x, this.y + 12, '#ffaa44', 1.2, 2.5, 0.12));
+        Sounds.enemyShoot();
+    }
+
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        const fill = this.hitFlash > 0 ? '#ffffff' : this.color;
+
+        if (this.type === 'asteroid') {
+            ctx.rotate(this.angle);
+            ctx.fillStyle = fill;
+            ctx.beginPath();
+            ctx.moveTo(-this.r * 0.8, -this.r * 0.5);
+            ctx.lineTo(0, -this.r);
+            ctx.lineTo(this.r * 0.9, -this.r * 0.4);
+            ctx.lineTo(this.r, this.r * 0.6);
+            ctx.lineTo(this.r * 0.2, this.r);
+            ctx.lineTo(-this.r * 0.7, this.r * 0.8);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath();
+            ctx.arc(-this.r * 0.2, -this.r * 0.1, this.r * 0.26, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+            return;
+        }
+
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 11;
+        ctx.fillStyle = fill;
+
+        if (this.type === 'destroyer') {
+            ctx.beginPath();
+            ctx.moveTo(-this.r, -this.r * 0.45);
+            ctx.lineTo(this.r, -this.r * 0.45);
+            ctx.lineTo(this.r * 0.6, this.r * 0.6);
+            ctx.lineTo(-this.r * 0.6, this.r * 0.6);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#ffcc66';
+            ctx.fillRect(-4, this.r * 0.4, 8, 7);
+        } else if (this.type === 'tank') {
+            ctx.beginPath();
+            ctx.moveTo(0, this.r);
+            ctx.lineTo(-this.r, 0);
+            ctx.lineTo(0, -this.r);
+            ctx.lineTo(this.r, 0);
+            ctx.closePath();
+            ctx.fill();
+        } else if (this.type === 'fast') {
+            ctx.beginPath();
+            ctx.moveTo(0, this.r);
+            ctx.lineTo(-this.r * 0.75, -this.r);
+            ctx.lineTo(this.r * 0.75, -this.r);
+            ctx.closePath();
+            ctx.fill();
+        } else {
+            ctx.beginPath();
+            ctx.arc(0, 0, this.r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.shadowBlur = 0;
+
+        // Odolní nepřátelé ukážou zbývající život, jakmile schytají první ránu
+        if (this.hp < this.maxHp && (this.type === 'tank' || this.type === 'destroyer')) {
+            const w = this.r * 1.7;
+            ctx.fillStyle = 'rgba(0,0,0,0.55)';
+            ctx.fillRect(-w / 2, -this.r - 9, w, 4);
+            ctx.fillStyle = '#ffdd33';
+            ctx.fillRect(-w / 2, -this.r - 9, w * Math.max(0, this.hp / this.maxHp), 4);
+        }
+
+        ctx.restore();
+    }
+}
+//======================================================================
+//  BOSSOVÉ
+//======================================================================
+//  Každý boss je stavový automat: přesun -> nádech -> útok -> oddech.
+//  Nádech je vždy vidět dopředu, takže zásah je chyba hráče, ne náhoda.
+//  Fáze se mění podle zbývajícího života a mění tempo i skladbu útoků.
+
+const BOSS_TYPES = [
+    {
+        name: 'STRÁŽCE',
+        color: '#ff3355',
+        attacks: ['burst', 'fan'],
+        rage: 'radial',
+        hpMul: 1.0,
+        desc: 'Drží linii a střílí mířené salvy.'
+    },
+    {
+        name: 'ÚLOVEC',
+        color: '#ff9500',
+        attacks: ['minions', 'fan', 'burst'],
+        rage: 'rain',
+        hpMul: 1.05,
+        desc: 'Posílá do boje rychlíky.'
+    },
+    {
+        name: 'TRHÁČ',
+        color: '#ff0055',
+        attacks: ['charge', 'burst', 'fan'],
+        rage: 'charge',
+        hpMul: 1.05,
+        desc: 'Nalétává přímo na loď.'
+    },
+    {
+        name: 'VÍR',
+        color: '#aa55ff',
+        attacks: ['spiral', 'radial', 'burst'],
+        rage: 'spiral',
+        hpMul: 1.1,
+        desc: 'Rozsévá střely do spirály.'
+    },
+    {
+        name: 'PRIZMA',
+        color: '#00ddff',
+        attacks: ['beam', 'fan', 'burst'],
+        rage: 'beam',
+        hpMul: 1.1,
+        desc: 'Vypaluje sloup energie.'
+    },
+    {
+        name: 'ARCHONT',
+        color: '#ff00cc',
+        attacks: ['radial', 'charge', 'beam', 'spiral', 'minions'],
+        rage: 'radial',
+        hpMul: 1.15,
+        desc: 'Umí všechno a nic neodpouští.'
+    },
+    {
+        name: 'BAŠTA',
+        color: '#ffaa00',
+        attacks: ['radial', 'pulse', 'burst'],
+        rage: 'pulse',
+        hpMul: 1.2,
+        desc: 'Bytelná pevnost, co vysílá tlakové vlny.'
+    },
+    {
+        name: 'NEMESIS',
+        color: '#ff003c',
+        attacks: ['burst', 'fan', 'radial', 'spiral', 'charge', 'beam', 'minions', 'pulse'],
+        rage: 'pulse',
+        hpMul: 1.35,
+        desc: 'Poslední zkouška - zvládá vše.'
+    }
+];
+
+class Boss {
+    constructor(game, level, hardMul) {
+        const def = BOSS_TYPES[Math.min(level - 1, BOSS_TYPES.length - 1)];
+
+        this.game = game;
+        this.type = 'boss';
+        this.level = level;
+        this.def = def;
+        this.name = def.name;
+        this.color = def.color;
+
+        this.r = 44;
+        this.maxHp = Math.round((35 + level * 58 + level * level * 9) * def.hpMul * hardMul);
+        this.hp = this.maxHp;
+
+        this.x = game.width / 2;
+        this.y = -90;
+        this.tx = this.x;
+        this.ty = 132;
+
+        this.scoreVal = 120 * level;
+        this.coinAmt = 240 + level * 120;
+
+        this.hitFlash = 0;
+        this.phase = 1;
+        this.t = 0;
+        this.spin = 0;
+        this.dead = false;
+
+        this.state = 'ENTRY';
+        this.stateT = 0;
+        this.attack = null;
+        this.attackT = 0;
+        this.attackStep = 0;
+        this.shotTimer = 0;
+        this.lastAttack = null;
+        this.aim = { x: 0, y: 0 };
+
+        Sounds.bossSpawn();
+    }
+
+    get hpPct() { return U.clamp(this.hp / this.maxHp, 0, 1); }
+    get indestructible() { return false; }
+
+    // Vyšší fáze a vyšší level zrychlují celý cyklus
+    get tempo() { return 1 / (1 + (this.phase - 1) * 0.22 + Math.min(this.level, 10) * 0.035); }
+
+    setState(s, time) {
+        this.state = s;
+        this.stateT = time || 0;
+    }
+
+    //---------------------------------------------------------------- fáze
+
+    checkPhase(game) {
+        const want = this.hpPct <= 0.33 ? 3 : (this.hpPct <= 0.66 ? 2 : 1);
+        if (want <= this.phase) return;
+
+        this.phase = want;
+
+        game.shake = Math.max(game.shake, 16);
+        game.showEvent(this.phase === 3 ? 'ZUŘIVOST' : 'FÁZE ' + this.phase, this.color);
+        game.texts.push(new FloatingText(this.x, this.y - 60, 'FÁZE ' + this.phase, this.color, 18));
+        Sounds.phase();
+
+        for (let i = 0; i < 26; i++) {
+            game.particles.push(new Particle(this.x, this.y, this.color, U.rand(3, 8), U.rand(2, 5), 0.03));
+        }
+
+        // Vstup do fáze vždy vykryje kruhová salva, aby změna byla cítit
+        this.startAttack('radial');
+    }
+
+    //---------------------------------------------------------------- pohyb
+
+    pickPosition(game) {
+        const p = game.player;
+        const margin = this.r + 24;
+
+        // Cíl se posouvá k hráči, ale nikdy přesně na něj - hráč má vždy únikovou stranu
+        const wanted = U.lerp(this.x, p.x, 0.45) + U.rand(-90, 90);
+
+        this.tx = U.clamp(wanted, margin, game.width - margin);
+        this.ty = U.rand(100, 100 + 50 + this.phase * 22);
+    }
+
+    moveToTarget(dt, game, rate) {
+        const f = dt / 16;
+        const k = Math.min(1, (rate || 0.055) * f);
+
+        this.x = U.lerp(this.x, this.tx, k);
+        this.y = U.lerp(this.y, this.ty, k);
+        this.x = U.clamp(this.x, this.r, game.width - this.r);
+    }
+
+    update(dt, game) {
+        this.t += dt;
+        if (this.hitFlash > 0) this.hitFlash -= dt;
+
+        this.checkPhase(game);
+        this.stateT -= dt;
+
+        switch (this.state) {
+            case 'ENTRY':
+                this.y += 3.2 * (dt / 16);
+                this.x = U.lerp(this.x, game.width / 2, 0.06);
+                if (this.y >= 132) {
+                    this.y = 132;
+                    this.pickPosition(game);
+                    this.setState('MOVE', 900 * this.tempo);
+                }
+                break;
+
+            case 'MOVE':
+                this.moveToTarget(dt, game, 0.05 + this.phase * 0.012);
+                this.y += Math.sin(this.t * 0.003) * 0.4 * (dt / 16);
+
+                if (this.stateT <= 0) {
+                    this.chooseAttack(game);
+                }
+                break;
+
+            case 'TELEGRAPH':
+                // Nádech: boss couvne a rozsvítí se, hráč má čas se přesunout
+                this.y = U.lerp(this.y, this.ty - 14, 0.08 * (dt / 16));
+                if (this.stateT <= 0) this.beginAttack(game);
+                break;
+
+            case 'ATTACK':
+                this.runAttack(dt, game);
+                break;
+
+            case 'RECOVER':
+                this.moveToTarget(dt, game, 0.03);
+                if (this.stateT <= 0) {
+                    this.pickPosition(game);
+                    this.setState('MOVE', U.rand(650, 1000) * this.tempo);
+                }
+                break;
+        }
+    }
+
+    //---------------------------------------------------------------- volba útoku
+
+    chooseAttack(game) {
+        let pool = this.def.attacks.slice();
+
+        if (this.phase >= 3 && this.def.rage) pool.push(this.def.rage, this.def.rage);
+        if (pool.length > 1 && this.lastAttack) {
+            const filtered = pool.filter(a => a !== this.lastAttack);
+            if (filtered.length) pool = filtered;
+        }
+
+        this.startAttack(U.pick(pool));
+    }
+
+    startAttack(name) {
+        this.attack = name;
+        this.lastAttack = name;
+        this.attackT = 0;
+        this.attackStep = 0;
+        this.shotTimer = 0;
+
+        const telegraph = Math.max(220, (name === 'charge' || name === 'beam' || name === 'pulse' ? 600 : 440) * this.tempo);
+        this.setState('TELEGRAPH', telegraph);
+        Sounds.telegraph();
+    }
+
+    beginAttack(game) {
+        this.aim = { x: game.player.x, y: game.player.y };
+        this.setState('ATTACK', 0);
+        this.attackT = 0;
+
+        if (this.attack === 'beam') {
+            const sweep = this.phase >= 2 ? U.rand(-1.5, 1.5) * this.phase : 0;
+            game.beams.push(new Beam(this, 22 + this.phase * 5, 620, 700 + this.phase * 120, sweep));
+            Sounds.beam();
+        }
+
+        if (this.attack === 'minions') {
+            const n = 2 + this.phase;
+            for (let i = 0; i < n; i++) {
+                const e = new Enemy(this.x + U.rand(-60, 60), this.y + 20, 'fast', game.diffMult);
+                e.vx = U.rand(-1.4, 1.4);
+                game.enemies.push(e);
+                game.particles.push(new Particle(e.x, e.y, this.color, 3, 3, 0.05));
+            }
+        }
+
+        if (this.attack === 'pulse') {
+            const rings = this.phase >= 3 ? 3 : (this.phase === 2 ? 2 : 1);
+            for (let i = 0; i < rings; i++) {
+                game.shockwaves.push(new Shockwave(this.x, this.y, this.color, i * 260));
+            }
+            Sounds.beam();
+        }
+    }
+
+    endAttack() {
+        this.attack = null;
+        this.setState('RECOVER', U.rand(420, 760) * this.tempo);
+    }
+
+    //---------------------------------------------------------------- útoky
+
+    fire(game, angle, speed, dmg, r) {
+        game.bullets.push(new Bullet(
+            this.x + Math.cos(angle) * (this.r * 0.6),
+            this.y + Math.sin(angle) * (this.r * 0.6),
+            Math.cos(angle) * speed,
+            Math.sin(angle) * speed,
+            dmg === undefined ? 9 : dmg,
+            this.color,
+            true,
+            r || 6
+        ));
+    }
+
+    angleToPlayer(game) {
+        return Math.atan2(game.player.y - this.y, game.player.x - this.x);
+    }
+
+    runAttack(dt, game) {
+        this.attackT += dt;
+        this.shotTimer -= dt;
+
+        switch (this.attack) {
+
+            // Mířené salvy: nejjednodušší útok, učí hráče uhýbat do strany
+            case 'burst': {
+                const shots = 2 + this.phase;
+                if (this.shotTimer <= 0) {
+                    this.shotTimer = 200 * this.tempo;
+                    const a = this.angleToPlayer(game);
+                    this.fire(game, a, 6.2, 9);
+                    Sounds.enemyShoot();
+                    this.attackStep++;
+                }
+                if (this.attackStep >= shots) this.endAttack();
+                break;
+            }
+
+            // Vějíř: nutí hráče vybrat si mezeru dřív, než doletí
+            case 'fan': {
+                if (this.attackStep === 0) {
+                    const n = 4 + this.phase * 2;
+                    const base = this.angleToPlayer(game);
+                    const spread = 0.62 + this.phase * 0.12;
+
+                    for (let i = 0; i < n; i++) {
+                        const a = base - spread / 2 + (spread / (n - 1)) * i;
+                        this.fire(game, a, 5.4, 9);
+                    }
+
+                    Sounds.enemyShoot();
+                    this.attackStep = 1;
+                }
+                if (this.attackT > 420) this.endAttack();
+                break;
+            }
+
+            // Kruh: prostor se uzavírá ze všech stran, řeší se pozicí předem
+            case 'radial': {
+                const waves = Math.min(3, this.phase);
+                if (this.shotTimer <= 0) {
+                    this.shotTimer = 360 * this.tempo;
+                    const n = 9 + this.phase * 3;
+                    const off = this.attackStep * (Math.PI / n);
+
+                    for (let i = 0; i < n; i++) {
+                        this.fire(game, off + (Math.PI * 2 / n) * i, 4.4, 9);
+                    }
+
+                    Sounds.enemyShoot();
+                    this.attackStep++;
+                }
+                if (this.attackStep >= waves) this.endAttack();
+                break;
+            }
+
+            // Spirála: souvislý proud, hráč musí kroužit
+            case 'spiral': {
+                if (this.shotTimer <= 0) {
+                    this.shotTimer = 86;
+                    this.spin += 0.38;
+                    const arms = this.phase >= 3 ? 3 : 2;
+
+                    for (let i = 0; i < arms; i++) {
+                        this.fire(game, this.spin + (Math.PI * 2 / arms) * i, 4.3, 8, 5);
+                    }
+
+                    this.attackStep++;
+                    if (this.attackStep % 6 === 0) Sounds.enemyShoot();
+                }
+                if (this.attackT > 1200 + this.phase * 250) this.endAttack();
+                break;
+            }
+
+            // Déšť: pokrývá celou šířku, bezpečno je jen v pohybu
+            case 'rain': {
+                if (this.shotTimer <= 0) {
+                    this.shotTimer = 135;
+                    game.bullets.push(new Bullet(U.rand(15, game.width - 15), -10, 0, 4.4 + this.phase * 0.4, 8, this.color, true, 6));
+                    this.attackStep++;
+                }
+                if (this.attackT > 1600) this.endAttack();
+                break;
+            }
+
+            // Nálet: fyzický útok, trestá stání na místě
+            case 'charge': {
+                const f = dt / 16;
+
+                if (this.attackStep === 0) {
+                    this.y = U.lerp(this.y, 90, 0.1 * f);
+                    if (this.attackT > 320) {
+                        this.aim = { x: game.player.x, y: game.player.y };
+                        this.attackStep = 1;
+                        this.attackT = 0;
+                    }
+                } else if (this.attackStep === 1) {
+                    const a = Math.atan2(this.aim.y - this.y, this.aim.x - this.x);
+                    const sp = 11 + this.phase * 1.6;
+
+                    this.x += Math.cos(a) * sp * f;
+                    this.y += Math.sin(a) * sp * f;
+
+                    game.particles.push(new Particle(this.x, this.y, this.color, U.rand(1, 3), U.rand(2, 4), 0.05));
+
+                    if (U.dist(this.x, this.y, this.aim.x, this.aim.y) < 30 || this.attackT > 900 || this.y > game.height - 60) {
+                        this.attackStep = 2;
+                        this.attackT = 0;
+                        this.pickPosition(game);
+                        this.ty = U.rand(100, 150);
+                        game.shake = Math.max(game.shake, 8);
+                    }
+                } else {
+                    this.moveToTarget(dt, game, 0.05);
+                    if (this.attackT > 620) this.endAttack();
+                }
+
+                this.x = U.clamp(this.x, this.r, game.width - this.r);
+                this.y = U.clamp(this.y, this.r, game.height - this.r);
+                break;
+            }
+
+            case 'minions':
+                if (this.attackT > 600) this.endAttack();
+                break;
+
+            case 'beam': {
+                this.x = U.lerp(this.x, this.tx, 0.02 * (dt / 16));
+                if (this.attackT > 1500 + this.phase * 120) this.endAttack();
+                break;
+            }
+
+            // Tlaková vlna: nádech pošle rozpínající se kruhy, boss mezitím jen čeká
+            case 'pulse': {
+                const rings = this.phase >= 3 ? 3 : (this.phase === 2 ? 2 : 1);
+                if (this.attackT > 500 + rings * 300) this.endAttack();
+                break;
+            }
+
+            default:
+                this.endAttack();
+        }
+    }
+
+    //---------------------------------------------------------------- kresba
+
+    draw(ctx) {
+        const telegraphing = this.state === 'TELEGRAPH';
+        const charging = this.attack === 'charge' && this.attackStep === 1;
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // Aura sílí s fází, takže je stav bosse čitelný i periferně
+        const auraR = this.r + 16 + Math.sin(this.t * 0.004) * 4;
+        const aura = ctx.createRadialGradient(0, 0, this.r * 0.5, 0, 0, auraR);
+        aura.addColorStop(0, 'rgba(0,0,0,0)');
+        aura.addColorStop(1, this.phase >= 3 ? 'rgba(255,40,40,0.28)' : 'rgba(255,255,255,0.09)');
+        ctx.fillStyle = aura;
+        ctx.beginPath();
+        ctx.arc(0, 0, auraR, 0, Math.PI * 2);
+        ctx.fill();
+
+        let body = this.color;
+        if (this.hitFlash > 0) body = '#ffffff';
+        else if (telegraphing && Math.floor(this.t / 90) % 2) body = '#ffffff';
+        else if (charging) body = '#ffdddd';
+
+        ctx.fillStyle = body;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = telegraphing ? 30 : 16;
+
+        // Trup
+        ctx.beginPath();
+        ctx.moveTo(0, this.r);
+        ctx.lineTo(-this.r * 0.55, this.r * 0.4);
+        ctx.lineTo(-this.r, -this.r * 0.45);
+        ctx.lineTo(-this.r * 0.4, -this.r);
+        ctx.lineTo(this.r * 0.4, -this.r);
+        ctx.lineTo(this.r, -this.r * 0.45);
+        ctx.lineTo(this.r * 0.55, this.r * 0.4);
+        ctx.closePath();
+        ctx.fill();
+
+        // Křídla
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.beginPath();
+        ctx.moveTo(-this.r, -this.r * 0.45);
+        ctx.lineTo(-this.r * 1.5, this.r * 0.15);
+        ctx.lineTo(-this.r * 0.6, this.r * 0.25);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(this.r, -this.r * 0.45);
+        ctx.lineTo(this.r * 1.5, this.r * 0.15);
+        ctx.lineTo(this.r * 0.6, this.r * 0.25);
+        ctx.closePath();
+        ctx.fill();
+
+        // Jádro
+        const core = telegraphing ? 1 : 0.55 + Math.sin(this.t * 0.006) * 0.2;
+        ctx.globalAlpha = core;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(0, -this.r * 0.15, this.r * 0.28, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Oči podle fáze
+        ctx.fillStyle = this.phase >= 3 ? '#ff2200' : '#ffffff';
+        for (let i = 0; i < this.phase; i++) {
+            ctx.fillRect(-10 + i * 10 - (this.phase - 1) * 5 + 5 - 5, -this.r * 0.55, 4, 4);
+        }
+
+        ctx.restore();
+    }
+}
+
+//======================================================================
+//  REŽISÉR VLN
+//======================================================================
+//  Místo náhodného kapání posílá hra čitelné útvary s pauzami mezi nimi.
+//  Pauza je prostor na sebrání power-upu a nádech - bez ní je hra jen šum.
+
+const FORMATIONS = [
+    {
+        name: 'proud',
+        minPhase: 1,
+        build(g, phase) {
+            const x = U.rand(50, g.width - 50);
+            const n = 4 + Math.min(3, phase);
+            const out = [];
+            for (let i = 0; i < n; i++) out.push({ delay: i * 250, x, y: -30, type: 'basic' });
+            return out;
+        }
+    },
+    {
+        name: 'klín',
+        minPhase: 1,
+        build(g) {
+            const cx = U.rand(g.width * 0.32, g.width * 0.68);
+            const out = [{ delay: 0, x: cx, y: -30, type: 'basic' }];
+            for (let i = 1; i <= 2; i++) {
+                out.push({ delay: i * 70, x: cx - i * 44, y: -30 - i * 26, type: 'basic' });
+                out.push({ delay: i * 70, x: cx + i * 44, y: -30 - i * 26, type: 'basic' });
+            }
+            return out;
+        }
+    },
+    {
+        name: 'křídla',
+        minPhase: 2,
+        build(g) {
+            const out = [];
+            for (let i = 0; i < 3; i++) {
+                out.push({ delay: i * 180, x: -20, y: 40 + i * 30, type: 'fast', vx: 2.4 });
+                out.push({ delay: i * 180 + 90, x: g.width + 20, y: 40 + i * 30, type: 'fast', vx: -2.4 });
+            }
+            return out;
+        }
+    },
+    {
+        name: 'stěna',
+        minPhase: 2,
+        build(g, phase) {
+            const n = 4 + Math.min(2, phase - 1);
+            const out = [];
+            for (let i = 0; i < n; i++) {
+                out.push({ delay: i * 60, x: (g.width / (n + 1)) * (i + 1), y: -30, type: i % 2 ? 'basic' : 'fast' });
+            }
+            return out;
+        }
+    },
+    {
+        name: 'těžká',
+        minPhase: 3,
+        build(g) {
+            return [
+                { delay: 0, x: U.rand(70, g.width - 70), y: -40, type: 'destroyer' },
+                { delay: 500, x: U.rand(40, g.width - 40), y: -30, type: 'basic' },
+                { delay: 900, x: U.rand(40, g.width - 40), y: -30, type: 'basic' }
+            ];
+        }
+    },
+    {
+        name: 'obrněnci',
+        minPhase: 3,
+        build(g) {
+            return [
+                { delay: 0, x: g.width * 0.3, y: -40, type: 'tank' },
+                { delay: 350, x: g.width * 0.7, y: -40, type: 'tank' },
+                { delay: 800, x: g.width * 0.5, y: -30, type: 'fast' }
+            ];
+        }
+    },
+    {
+        name: 'roj',
+        minPhase: 4,
+        build(g) {
+            const out = [];
+            for (let i = 0; i < 7; i++) {
+                out.push({ delay: i * 130, x: U.rand(40, g.width - 40), y: -30, type: 'fast', vx: U.rand(-1.2, 1.2) });
+            }
+            return out;
+        }
+    },
+    {
+        name: 'nával',
+        minPhase: 6,
+        build(g) {
+            const out = [];
+            for (let i = 0; i < 5; i++) {
+                const t = i % 3 === 0 ? 'tank' : (i % 3 === 1 ? 'fast' : 'basic');
+                out.push({ delay: i * 90, x: U.rand(30, g.width - 30), y: -30, type: t });
+            }
+            return out;
+        }
+    }
+];
+
+class Director {
+    constructor(game) {
+        this.game = game;
+        this.reset();
+    }
+
+    reset() {
+        this.wave = 0;
+        this.queue = [];
+        this.gap = 900;
+        this.lastName = '';
+    }
+
+    update(dt) {
+        const g = this.game;
+        // Boss Rush je čistě souboj s bossy - běžné vlny sem nepatří
+        if (g.bossActive || g.tutActive || g.mode === 'rush') return;
+
+        for (let i = this.queue.length - 1; i >= 0; i--) {
+            const s = this.queue[i];
+            s.delay -= dt;
+            if (s.delay <= 0) {
+                this.spawn(s);
+                this.queue.splice(i, 1);
+            }
+        }
+
+        this.gap -= dt;
+
+        // Další vlna přijde až se uvolní místo - obrazovka se nezanese
+        if (this.gap <= 0 && this.queue.length === 0 && g.enemies.length <= 2) {
+            this.nextWave();
+        }
+    }
+
+    nextWave() {
+        const g = this.game;
+        const phase = g.phase;
+
+        let pool = FORMATIONS.filter(f => f.minPhase <= phase);
+        if (pool.length > 1 && this.lastName) {
+            const filtered = pool.filter(f => f.name !== this.lastName);
+            if (filtered.length) pool = filtered;
+        }
+
+        const form = U.pick(pool);
+        this.lastName = form.name;
+        this.wave++;
+
+        this.queue = form.build(g, phase);
+
+        const rush = g.currentEvent === 'rush';
+        let gap = Math.max(450, 1700 - phase * 95) * (rush ? 0.42 : 1);
+        if (g.mode === 'blitz') gap *= 0.7;
+        if (g.daily) gap /= g.daily.spawnMult;
+        this.gap = gap;
+    }
+
+    spawn(s) {
+        const g = this.game;
+        const e = new Enemy(s.x, s.y, s.type, g.diffMult);
+        if (s.vx) e.vx = s.vx;
+        g.enemies.push(e);
+    }
+}
+//======================================================================
+//  HERNÍ MANAŽER
+//======================================================================
+
+const BOSS_THRESHOLDS = [150, 650, 1400, 2400, 3600, 5000, 6600, 8400, 10400, 12600];
+
+//======================================================================
+//  DENNÍ VÝZVA
+//======================================================================
+//  Žádný server, žádné pravé sdílené semínko - místo toho si každý den
+//  podle data deterministicky vybere jeden z několika pevných modifikátorů.
+//  Stejný den = stejná výzva pro každého, zítra jiná.
+
+const DAILY_MODIFIERS = [
+    { name: 'Zlatá horečka', desc: 'Dvojnásobné mince, jinak normální hra.',
+        coinMult: 2, enemyHpMult: 1, dmgTakenMult: 1, fireRateMult: 1, spawnMult: 1, hpMult: 1, bossHpMult: 1, bossRewardMult: 1, bombsAllowed: true, powerupsAllowed: true },
+    { name: 'Křehcí nepřátelé', desc: 'Nepřátelé mají poloviční život i poloviční odměnu.',
+        coinMult: 0.5, enemyHpMult: 0.5, dmgTakenMult: 1, fireRateMult: 1, spawnMult: 1, hpMult: 1, bossHpMult: 1, bossRewardMult: 1, bombsAllowed: true, powerupsAllowed: true },
+    { name: 'Železná vůle', desc: '+50 % život, ale nepřátelé dávají o polovinu víc poškození.',
+        coinMult: 1, enemyHpMult: 1, dmgTakenMult: 1.5, fireRateMult: 1, spawnMult: 1, hpMult: 1.5, bossHpMult: 1, bossRewardMult: 1, bombsAllowed: true, powerupsAllowed: true },
+    { name: 'Rychlý zásah', desc: 'Poloviční prodleva mezi výstřely, ale bez bomb.',
+        coinMult: 1, enemyHpMult: 1, dmgTakenMult: 1, fireRateMult: 0.5, spawnMult: 1, hpMult: 1, bossHpMult: 1, bossRewardMult: 1, bombsAllowed: false, powerupsAllowed: true },
+    { name: 'Bouře', desc: 'Dvojnásobné tempo vln, ale bez power-upů.',
+        coinMult: 1, enemyHpMult: 1, dmgTakenMult: 1, fireRateMult: 1, spawnMult: 2, hpMult: 1, bossHpMult: 1, bossRewardMult: 1, bombsAllowed: true, powerupsAllowed: false },
+    { name: 'Vytrvalost', desc: 'Bossové mají dvojnásobný život, ale trojnásobnou odměnu.',
+        coinMult: 1, enemyHpMult: 1, dmgTakenMult: 1, fireRateMult: 1, spawnMult: 1, hpMult: 1, bossHpMult: 2, bossRewardMult: 3, bombsAllowed: true, powerupsAllowed: true }
+];
+
+function todayKey() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function dailyModifierForToday() {
+    const key = todayKey();
+    let h = 0;
+    for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+    return DAILY_MODIFIERS[h % DAILY_MODIFIERS.length];
+}
+
+class GameManager {
+    constructor() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d', { alpha: false });
+
+        this.width = 0;
+        this.height = 0;
+        this.state = 'MENU';
+        this.isHardMode = false;
+        this.mode = 'normal';
+        this.daily = null;
+        this.lastTime = 0;
+        this.hudCache = {};
+
+        this.tutStep = 0;
+        this.tutActive = false;
+        this.holdFire = false;
+
+        this.director = new Director(this);
+        this.resetGameData();
+        this.initInput();
+        this.resize();
+
+        window.addEventListener('resize', () => this.resize());
+        window.addEventListener('orientationchange', () => setTimeout(() => this.resize(), 250));
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && this.state === 'PLAY' && !this.tutActive) this.pause();
+        });
+
+        requestAnimationFrame(t => this.loop(t));
+    }
+
+    //---------------------------------------------------------------- stav
+
+    get phase() {
+        if (this.mode === 'blitz') {
+            // Blesková vlna měří tempo časem do konce, ne skóre - ať je tlak cítit od začátku
+            return U.clamp(1 + Math.floor((180000 - this.modeTimeLeft) / 18000), 1, 10);
+        }
+        const byScore = 1 + Math.floor(this.score / 280);
+        const byTime = 1 + Math.floor(this.runTime / 65000);
+        return U.clamp(Math.max(byScore, Math.min(byTime, 6)), 1, 12);
+    }
+
+    get diffMult() {
+        let m = (this.isHardMode ? 1.5 : 1) * (1 + this.phase * 0.09);
+        if (this.daily) m *= this.daily.enemyHpMult;
+        return m;
+    }
+
+    get comboMult() {
+        return Math.min(8, 1 + Math.floor(this.combo / 4));
+    }
+
+    resetGameData() {
+        this.player = new Player(this.width || 400, this.height || 700);
+
+        this.bullets = [];
+        this.enemies = [];
+        this.particles = [];
+        this.powerups = [];
+        this.texts = [];
+        this.beams = [];
+        this.booms = [];
+
+        this.boss = null;
+        this.bossActive = false;
+        this.bossCount = 0;
+        this.bossNoHit = true;
+        this.shockwaves = [];
+
+        this.score = 0;
+        this.kills = 0;
+        this.coinsEarned = 0;
+        this.runTime = 0;
+
+        this.combo = 0;
+        this.comboTimer = 0;
+        this.bestCombo = 1;
+
+        this.shake = 0;
+        this.flash = 0;
+        this.whiteFlash = 0;
+
+        this.currentEvent = null;
+        this.eventDuration = 0;
+        this.eventCooldown = 12000;
+        this.asteroidTimer = 0;
+        this.lastPlayerHp = this.player.maxHp;
+
+        // Stav specifický pro herní režimy - mimo svůj režim jednoduše nečinný
+        this.modeTimeLeft = 180000;
+        this.rushStreak = 0;
+        this.rushBreak = 0;
+        this.phoenixUsed = false;
+        this._lastStatSec = 0;
+
+        this.director.reset();
+        this.hudCache = {};
+    }
+
+    resize() {
+        const container = document.getElementById('game-container');
+        this.width = container.clientWidth;
+        this.height = container.clientHeight;
+
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        this.canvas.width = Math.round(this.width * dpr);
+        this.canvas.height = Math.round(this.height * dpr);
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        this.stars = Array.from({ length: 95 }, () => {
+            const layer = Math.floor(Math.random() * 3);
+            return {
+                x: Math.random() * this.width,
+                y: Math.random() * this.height,
+                s: 1 + layer * 0.8,
+                v: 0.35 + layer * 0.9,
+                a: 0.2 + layer * 0.3
+            };
+        });
+
+        if (this.player) {
+            this.player.gw = this.width;
+            this.player.gh = this.height;
+            this.player.x = Math.min(this.player.x, this.width - this.player.r);
+            this.player.y = Math.min(this.player.y, this.height - this.player.r);
+        }
+    }
+
+    //---------------------------------------------------------------- ovládání
+
+    initInput() {
+        this.input = { keys: {}, mode: 'keys', pointerActive: false, pointerTarget: { x: 0, y: 0 } };
+
+        const moveCodes = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'KeyA', 'KeyD', 'KeyW', 'KeyS'];
+
+        window.addEventListener('keydown', e => {
+            const focusTag = document.activeElement && document.activeElement.tagName;
+            if (focusTag === 'INPUT') return;
+
+            this.input.keys[e.code] = true;
+
+            if (moveCodes.includes(e.code)) {
+                e.preventDefault();
+                this.input.mode = 'keys';
+                if (this.tutStep === 3) this.advanceTutorialStep();
+            }
+
+            if (e.code === 'Escape' || e.code === 'KeyP') {
+                if (this.state === 'PLAY') this.pause();
+                else if (this.state === 'PAUSE') this.resume();
+            }
+
+            if (e.code === 'KeyM') UI.toggleSound();
+            if (e.code === 'KeyB') this.useBomb();
+
+            if (e.code === 'Enter' || e.code === 'Space') {
+                if (focusTag === 'BUTTON') return;
+                e.preventDefault();
+                if (this.state === 'MENU') this.start('normal');
+                else if (this.state === 'GAMEOVER') this.start(this.mode);
+                else if (this.state === 'PAUSE') this.resume();
+            }
+        });
+
+        window.addEventListener('keyup', e => { this.input.keys[e.code] = false; });
+
+        const setTarget = e => {
+            const rect = this.canvas.getBoundingClientRect();
+            const fingerOffset = e.pointerType === 'touch' ? 38 : 0;
+            this.input.pointerTarget = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top - fingerOffset
+            };
+        };
+
+        this.canvas.addEventListener('pointerdown', e => {
+            Sounds.init();
+            if (this.state !== 'PLAY') return;
+
+            if (this.canvas.setPointerCapture) {
+                try { this.canvas.setPointerCapture(e.pointerId); } catch (err) {}
+            }
+
+            this.input.mode = 'pointer';
+            this.input.pointerActive = true;
+            setTarget(e);
+            if (this.tutStep === 3) this.advanceTutorialStep();
+        });
+
+        this.canvas.addEventListener('pointermove', e => {
+            if (this.state !== 'PLAY') return;
+            if (e.pointerType === 'touch' && !this.input.pointerActive) return;
+
+            this.input.mode = 'pointer';
+            this.input.pointerActive = true;
+            setTarget(e);
+            if (this.tutStep === 3) this.advanceTutorialStep();
+        });
+
+        const endPointer = e => { if (e.pointerType === 'touch') this.input.pointerActive = false; };
+
+        this.canvas.addEventListener('pointerup', endPointer);
+        this.canvas.addEventListener('pointercancel', endPointer);
+        this.canvas.addEventListener('contextmenu', e => e.preventDefault());
+    }
+
+    //---------------------------------------------------------------- běh hry
+
+    start(mode) {
+        Storage.flush();
+        Sounds.init();
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+
+        this.mode = ['normal', 'hard', 'blitz', 'rush', 'zen', 'daily'].includes(mode) ? mode : 'normal';
+        this.isHardMode = (this.mode === 'hard');
+        this.daily = (this.mode === 'daily') ? dailyModifierForToday() : null;
+        this.tutActive = false;
+        this.holdFire = false;
+        this.tutStep = 0;
+        this.clearTutorialGlows();
+
+        document.getElementById('tut-layer').classList.add('hidden');
+        this.resetGameData();
+        this.state = 'PLAY';
+
+        // Denní modifikátor upraví lodˇ až po jejím vytvoření - jednorázově, ne jako trvalá vylepšení
+        if (this.daily) {
+            this.player.maxHp = Math.round(this.player.maxHp * this.daily.hpMult);
+            this.player.hp = this.player.maxHp;
+            this.player.baseFireRate = Math.max(40, Math.round(this.player.baseFireRate * this.daily.fireRateMult));
+            if (!this.daily.bombsAllowed) {
+                this.player.maxBombs = 0;
+                this.player.bombs = 0;
+            }
+        }
+
+        document.getElementById('menu-overlay').classList.add('hidden');
+        document.getElementById('gameover-overlay').classList.add('hidden');
+        document.getElementById('pause-overlay').classList.add('hidden');
+        document.getElementById('hud').classList.remove('hidden');
+        document.getElementById('btn-bomb').classList.toggle('hidden', !!this.daily && !this.daily.bombsAllowed);
+        document.getElementById('boss-bar').classList.add('hidden');
+        document.getElementById('game-container').classList.add('playing');
+
+        document.getElementById('hud-timer').classList.toggle('hidden', this.mode !== 'blitz');
+        document.getElementById('hud-streak').classList.toggle('hidden', this.mode !== 'rush');
+
+        this.lastTime = performance.now();
+
+        if (!Storage.data.tutorialDone) {
+            this.startTutorialDialog();
+        } else if (this.mode === 'rush') {
+            this.spawnRushBoss();
+        }
+    }
+
+    pause() {
+        if (this.state !== 'PLAY') return;
+        if (this.tutActive && this.tutStep !== 11) return;
+
+        this.state = 'PAUSE';
+        Storage.flush();
+        UI.refresh();
+        document.getElementById('pause-score').innerText = 'Skóre ' + U.num(this.score);
+        document.getElementById('pause-overlay').classList.remove('hidden');
+    }
+
+    resume() {
+        if (this.state !== 'PAUSE') return;
+
+        this.state = 'PLAY';
+        this.player.applyStats();
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        document.getElementById('pause-overlay').classList.add('hidden');
+        this.lastTime = performance.now();
+    }
+
+    quitToMenu() {
+        this.state = 'MENU';
+        Storage.flush();
+
+        this.tutActive = false;
+        this.holdFire = false;
+        this.clearTutorialGlows();
+
+        ['pause-overlay', 'gameover-overlay', 'hud', 'tut-layer', 'btn-bomb'].forEach(id => {
+            document.getElementById(id).classList.add('hidden');
+        });
+        document.getElementById('game-container').classList.remove('playing');
+
+        UI.refresh();
+        document.getElementById('menu-overlay').classList.remove('hidden');
+    }
+
+    gameOver(reason) {
+        this.state = 'GAMEOVER';
+
+        // Boss Rush má vlastní jméno pro smrt, i když mechanicky jde o stejnou událost
+        const effectiveReason = (reason === 'death' && this.mode === 'rush') ? 'rush_death' : (reason || 'death');
+        if (effectiveReason !== 'timeup') Sounds.bigExplosion();
+
+        Storage.data.stats.runsPlayed = (Storage.data.stats.runsPlayed || 0) + 1;
+        Storage.data.stats.totalPlaytime = (Storage.data.stats.totalPlaytime || 0) + this.runTime;
+        Storage.data.stats.bestCombo = Math.max(Storage.data.stats.bestCombo || 0, this.bestCombo);
+        Storage.data.stats.longestRun = Math.max(Storage.data.stats.longestRun || 0, this.runTime);
+
+        if (this.mode === 'blitz' && effectiveReason === 'timeup') {
+            Storage.data.stats.blitzClears = (Storage.data.stats.blitzClears || 0) + 1;
+        }
+
+        const isRush = this.mode === 'rush';
+        const isDaily = this.mode === 'daily';
+        const primary = isRush ? this.rushStreak : this.score;
+
+        let prevBest, isRecord;
+        if (isDaily) {
+            // Denní rekord platí jen pro dnešek - jiný den, jiná výzva, jiná nula
+            const today = todayKey();
+            prevBest = (Storage.data.daily.date === today) ? (Storage.data.daily.score || 0) : 0;
+            isRecord = primary > prevBest;
+            if (isRecord) Storage.data.daily = { date: today, score: primary };
+        } else {
+            prevBest = Storage.data.best[this.mode] || 0;
+            isRecord = primary > prevBest;
+            if (isRecord) Storage.data.best[this.mode] = primary;
+        }
+
+        Achv.check();
+        Storage.save();
+
+        const secs = Math.floor(this.runTime / 1000);
+        const time = Math.floor(secs / 60) + ':' + String(secs % 60).padStart(2, '0');
+
+        document.getElementById('hud').classList.add('hidden');
+        document.getElementById('btn-bomb').classList.add('hidden');
+        document.getElementById('game-container').classList.remove('playing');
+        document.getElementById('go-record').classList.toggle('hidden', !isRecord);
+
+        const headings = { death: 'LOĎ ZNIČENA', timeup: 'ČAS VYPRŠEL', rush_death: 'SÉRIE PŘERUŠENA' };
+        document.getElementById('go-heading').innerText = headings[effectiveReason] || headings.death;
+
+        document.getElementById('go-metric-label').innerText = isRush ? 'PORAŽENÍ BOSSOVÉ V ŘADĚ' : 'SKÓRE';
+        document.getElementById('go-score').innerText = U.num(primary);
+
+        const modeNames = { normal: 'Normální obtížnost', hard: 'Těžká obtížnost', blitz: 'Blesková vlna', rush: 'Boss Rush', daily: 'Denní výzva' + (this.daily ? ' · ' + this.daily.name : ''), zen: 'Zen' };
+        document.getElementById('go-sub').innerText =
+            (modeNames[this.mode] || modeNames.normal) + ' · rekord ' + U.num(Math.max(prevBest, primary));
+
+        let gridHtml;
+        if (isRush) {
+            gridHtml = `
+                <div><b>${U.num(this.coinsEarned)}</b>mincí</div>
+                <div><b>${this.kills}</b>zničeno</div>
+                <div><b>${U.num(this.score)}</b>skóre</div>
+                <div><b>${time}</b>čas</div>`;
+        } else if (this.mode === 'blitz') {
+            gridHtml = `
+                <div><b>${U.num(this.coinsEarned)}</b>mincí</div>
+                <div><b>${this.kills}</b>zničeno</div>
+                <div><b>×${this.bestCombo}</b>nejlepší kombo</div>
+                <div><b>${this.phase}</b>dosažená fáze</div>`;
+        } else {
+            gridHtml = `
+                <div><b>${U.num(this.coinsEarned)}</b>mincí</div>
+                <div><b>${this.kills}</b>zničeno</div>
+                <div><b>×${this.bestCombo}</b>nejlepší kombo</div>
+                <div><b>${time}</b>čas</div>`;
+        }
+        document.getElementById('go-grid').innerHTML = gridHtml;
+
+        document.getElementById('gameover-overlay').classList.remove('hidden');
+    }
+
+    //---------------------------------------------------------------- efekty
+
+    showEvent(msg, color) {
+        const el = document.getElementById('event-text');
+        el.innerText = msg;
+        el.style.color = color || '#ff8800';
+        el.classList.add('show');
+
+        clearTimeout(this.eventTimer);
+        this.eventTimer = setTimeout(() => el.classList.remove('show'), 2200);
+    }
+
+    boom(x, y, color, amount, speed) {
+        for (let i = 0; i < amount; i++) {
+            this.particles.push(new Particle(x, y, color, U.rand(1.5, speed || 6), U.rand(2, 5), U.rand(0.02, 0.05)));
+        }
+    }
+
+    damagePlayer(amount, iframes) {
+        // Zásah vykrytý štítem se stále počítá jako zásah - achievement "Bez škrábnutí"
+        // má znamenat skutečné uhýbání, ne tankování za štítem
+        if (this.boss) this.bossNoHit = false;
+
+        const realAmount = this.daily ? Math.round(amount * this.daily.dmgTakenMult) : amount;
+
+        const before = this.player.hp;
+        const wouldDie = this.player.takeDamage(realAmount, iframes);
+
+        if (this.player.hp < before) {
+            this.shake = Math.max(this.shake, 9);
+            this.flash = 400;
+            this.combo = 0;
+            this.comboTimer = 0;
+        }
+
+        if (!wouldDie) return false;
+
+        // Zen je klidný nekonečný režim - smrt tu prostě neexistuje
+        if (this.mode === 'zen') {
+            this.player.hp = 1;
+            this.player.invulnTimer = Math.max(this.player.invulnTimer, 900);
+            return false;
+        }
+
+        // Fénixovo jádro: jednou za běh přežiješ smrtící zásah s 1 HP
+        if (!this.tutActive && Achv.hasRelic('phoenix') && !this.phoenixUsed) {
+            this.phoenixUsed = true;
+            this.player.hp = 1;
+            this.player.invulnTimer = Math.max(this.player.invulnTimer, 2200);
+            this.shake = Math.max(this.shake, 20);
+            this.whiteFlash = 320;
+            Sounds.heal();
+            this.texts.push(new FloatingText(this.player.x, this.player.y - 30, 'FÉNIX', '#ff8800', 20));
+            return false;
+        }
+
+        this.boom(this.player.x, this.player.y, '#00f0ff', 45, 9);
+        this.shake = 28;
+        this.gameOver('death');
+        return true;
+    }
+
+    addCombo() {
+        const before = this.comboMult;
+        this.combo++;
+        this.comboTimer = 2400;
+
+        const now = this.comboMult;
+        if (now > before) {
+            Sounds.combo(now);
+            this.bestCombo = Math.max(this.bestCombo, now);
+
+            if (now > (Storage.data.stats.bestCombo || 0)) {
+                Storage.data.stats.bestCombo = now;
+                Achv.check();
+            }
+        }
+    }
+
+    // Statistiky se během výcviku vůbec nezapisují, ať cvičné souboje nic neodemykají
+    trackStat(key, amount) {
+        if (this.tutActive) return;
+        Storage.data.stats[key] = (Storage.data.stats[key] || 0) + (amount === undefined ? 1 : amount);
+    }
+
+    coinMultiplier() {
+        // Vzestup už sem záměrně nevstupuje - jinak by hodně vzestoupený hráč
+        // vydělával rychleji, a hra by se s každým vzestupem dál zrychlovala.
+        // Skutečná odměna za vzestup jde do samostatné měny (Hvězdný prach).
+        let m = (this.isHardMode ? 2 : 1) + Math.floor(this.phase / 3);
+        if (Achv.hasRelic('collector')) m *= 1.2;
+        if (this.daily) m *= this.daily.coinMult;
+        return m;
+    }
+
+    useBomb() {
+        if (this.state !== 'PLAY' || this.player.bombs <= 0) return;
+
+        this.player.bombs--;
+        this.player.invulnTimer = Math.max(this.player.invulnTimer, 1400);
+
+        this.whiteFlash = 420;
+        this.shake = 24;
+        Sounds.bomb();
+
+        // Nepřátelské střely se rozpadnou na jiskry, ať je úleva vidět
+        for (const b of this.bullets) {
+            if (b.isEnemy) this.particles.push(new Particle(b.x, b.y, b.color, U.rand(1, 3), 3, 0.05));
+        }
+        this.bullets = this.bullets.filter(b => !b.isEnemy);
+        this.beams.length = 0;
+        this.shockwaves.length = 0;
+
+        for (let i = this.enemies.length - 1; i >= 0; i--) {
+            const e = this.enemies[i];
+            if (e.indestructible) {
+                this.boom(e.x, e.y, '#888', 10);
+                this.enemies.splice(i, 1);
+                continue;
+            }
+            e.hitFlash = 120;
+            e.hp -= 50;
+            if (e.hp <= 0) this.killEnemy(i, true);
+        }
+
+        if (this.boss) {
+            this.boss.hitFlash = 140;
+            this.boss.hp -= 80;
+            this.boom(this.boss.x, this.boss.y, '#fff', 20);
+            if (this.boss.hp <= 0) this.killBoss();
+        }
+
+        this.trackStat('bombsUsed');
+        if (!this.tutActive) Achv.check();
+
+        this.updateHUD(true);
+    }
+
+    //---------------------------------------------------------------- smrt nepřátel
+
+    killEnemy(index, silent) {
+        const e = this.enemies[index];
+        if (!e) return;
+
+        if (!silent) Sounds.explosion();
+        this.boom(e.x, e.y, e.color, 16);
+
+        if (!this.tutActive) {
+            this.addCombo();
+
+            const gained = Math.round(e.scoreVal * this.comboMult);
+            this.score += gained;
+            this.kills++;
+            this.trackStat('totalKills');
+
+            if (this.comboMult > 1 && e.scoreVal > 0) {
+                this.texts.push(new FloatingText(e.x, e.y, '+' + gained, '#ffffff', 13));
+            }
+
+            const gain = Math.round((e.coinAmt || 0) * this.coinMultiplier());
+
+            if (gain) {
+                Storage.data.coins += gain;
+                Storage.data.cycleCoins = (Storage.data.cycleCoins || 0) + gain;
+                this.coinsEarned += gain;
+                this.trackStat('totalCoinsEarned', gain);
+                Storage.queueSave();
+            }
+
+            Achv.check();
+
+            // Šťastná hvězda ze stromu Vzestupu zvedá šanci na power-up, poměr heal/buff zůstává stejný
+            if (!this.daily || this.daily.powerupsAllowed) {
+                const dropChance = 0.11 + prestigeBonus('luck', 0.01);
+                const roll = Math.random();
+                if (roll < dropChance) {
+                    const types = roll < dropChance * 0.318 ? ['heal'] : ['triple', 'shield', 'rapid'];
+                    this.powerups.push(new Powerup(e.x, e.y, U.pick(types)));
+                }
+
+                // Vzácný bonusový drop mincí - nezávislý na power-upech výš, aby zabíjení
+                // dávalo i hmatatelný pocit odměny mimo jen pomalu tikající HUD číslo.
+                if (e.type !== 'asteroid' && Math.random() < 0.035) {
+                    this.powerups.push(new Powerup(e.x, e.y, 'coin'));
+                }
+            }
+        }
+
+        this.enemies.splice(index, 1);
+        this.checkTutorialClear();
+    }
+
+    killBoss() {
+        const b = this.boss;
+        if (!b) return;
+
+        Sounds.bigExplosion();
+        this.shake = 34;
+        this.whiteFlash = 200;
+        this.boom(b.x, b.y, b.color, 60, 10);
+        this.boom(b.x, b.y, '#ffffff', 25, 5);
+
+        // Řetěz výbuchů dá porážce váhu, kterou jeden záblesk nemá
+        for (let i = 0; i < 7; i++) {
+            this.booms.push({
+                t: 90 + i * 110,
+                x: b.x + U.rand(-b.r, b.r),
+                y: b.y + U.rand(-b.r, b.r),
+                color: i % 2 ? '#ffffff' : b.color
+            });
+        }
+
+        if (!this.tutActive) {
+            const gained = b.scoreVal;
+            this.score += gained;
+            this.kills++;
+            this.trackStat('totalBossKills');
+            if (this.bossNoHit) this.trackStat('noHitBosses');
+
+            this.texts.push(new FloatingText(b.x, b.y - 30, '+' + U.num(gained), b.color, 22));
+
+            const gain = Math.round(b.coinAmt * this.coinMultiplier() * (this.daily ? this.daily.bossRewardMult : 1));
+
+            Storage.data.coins += gain;
+            Storage.data.cycleCoins = (Storage.data.cycleCoins || 0) + gain;
+            this.coinsEarned += gain;
+            this.trackStat('totalCoinsEarned', gain);
+            Storage.save();
+
+            this.powerups.push(new Powerup(b.x - 26, b.y, 'heal'));
+            this.powerups.push(new Powerup(b.x + 26, b.y, 'triple'));
+            this.powerups.push(new Powerup(b.x, b.y + 26, 'shield'));
+
+            // Bomba za bosse je odměna, která se hodí právě do další vlny
+            if (this.player.bombs < this.player.maxBombs) this.player.bombs++;
+            this.showEvent('BOSS ZNIČEN', b.color);
+
+            Achv.check();
+        }
+
+        this.boss = null;
+        this.bossActive = false;
+        this.beams.length = 0;
+        this.shockwaves.length = 0;
+        document.getElementById('boss-bar').classList.add('hidden');
+
+        this.checkTutorialClear();
+
+        if (!this.tutActive && this.mode === 'rush') {
+            this.rushStreak++;
+            Storage.data.stats.bestRushStreak = Math.max(Storage.data.stats.bestRushStreak || 0, this.rushStreak);
+            Achv.check();
+
+            // Malé doplnění sil mezi souboji, ať má série šanci pokračovat
+            this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * 0.12);
+            if (this.player.bombs < this.player.maxBombs) this.player.bombs++;
+
+            this.rushBreak = 2200;
+        }
+    }
+
+    nextBossScore() {
+        if (this.bossCount < BOSS_THRESHOLDS.length) return BOSS_THRESHOLDS[this.bossCount];
+        return BOSS_THRESHOLDS[BOSS_THRESHOLDS.length - 1] + (this.bossCount - BOSS_THRESHOLDS.length + 1) * 3400;
+    }
+
+    spawnBossInstance(level) {
+        let hardMul = this.isHardMode ? 1.45 : 1;
+        if (this.daily) hardMul *= this.daily.bossHpMult;
+
+        this.boss = new Boss(this, level, hardMul);
+        this.bossActive = true;
+        this.bossNoHit = true;
+
+        this.enemies.length = 0;
+        this.showEvent(this.boss.name, this.boss.color);
+
+        const bar = document.getElementById('boss-bar');
+        bar.classList.remove('hidden');
+        document.getElementById('boss-name').innerText = this.boss.name;
+        document.getElementById('boss-name').style.color = this.boss.color;
+        document.getElementById('boss-fill').style.background = this.boss.color;
+    }
+
+    spawnBoss() {
+        this.bossCount++;
+        this.spawnBossInstance(this.bossCount);
+    }
+
+    spawnRushBoss() {
+        this.spawnBossInstance(this.rushStreak + 1);
+    }
+
+    //---------------------------------------------------------------- hlavní logika
+
+    updateLogic(dt) {
+        const f = dt / 16;
+        this.runTime += dt;
+
+        if (this.mode === 'blitz' && !this.tutActive) {
+            this.modeTimeLeft -= dt;
+            if (this.modeTimeLeft <= 0) {
+                this.modeTimeLeft = 0;
+                this.updateHUD(true);
+                this.gameOver('timeup');
+                return;
+            }
+        }
+
+        if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 0.05);
+        if (this.flash > 0) this.flash -= dt;
+        if (this.whiteFlash > 0) this.whiteFlash -= dt;
+
+        if (this.comboTimer > 0) {
+            this.comboTimer -= dt;
+            if (this.comboTimer <= 0) this.combo = 0;
+        }
+
+        // Dlouhé přežití se počítá i za běhu, ne jen na konci, ať úspěch naskočí hned
+        if (!this.tutActive) {
+            const sec = Math.floor(this.runTime / 1000);
+            if (sec !== this._lastStatSec) {
+                this._lastStatSec = sec;
+                if (sec > 0 && sec % 30 === 0) {
+                    Storage.data.stats.longestRun = Math.max(Storage.data.stats.longestRun || 0, this.runTime);
+                    Achv.check();
+                }
+            }
+        }
+
+        this.player.update(dt, this.input, this);
+
+        this.updateEvents(dt);
+        this.director.update(dt);
+
+        if (this.mode === 'rush' && !this.tutActive) {
+            if (!this.boss && !this.bossActive && this.rushBreak > 0) {
+                this.rushBreak -= dt;
+                if (this.rushBreak <= 0) {
+                    this.rushBreak = 0;
+                    this.spawnRushBoss();
+                }
+            }
+        } else if (!this.bossActive && !this.tutActive && this.score >= this.nextBossScore()) {
+            this.spawnBoss();
+        }
+
+        if (this.boss) {
+            this.boss.update(dt, this);
+            if (this.boss.hp <= 0) this.killBoss();
+        }
+
+        this.updateBeams(dt);
+        this.updateShockwaves(dt);
+        this.updateBullets(dt);
+        this.updatePowerups(dt);
+        this.updateEnemies(dt);
+
+        for (let i = this.booms.length - 1; i >= 0; i--) {
+            const b = this.booms[i];
+            b.t -= dt;
+            if (b.t <= 0) {
+                this.boom(b.x, b.y, b.color, 14, 7);
+                Sounds.explosion();
+                this.booms.splice(i, 1);
+            }
+        }
+
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            this.particles[i].update(dt);
+            if (this.particles[i].life <= 0) this.particles.splice(i, 1);
+        }
+
+        for (let i = this.texts.length - 1; i >= 0; i--) {
+            this.texts[i].update(dt);
+            if (this.texts[i].life <= 0) this.texts.splice(i, 1);
+        }
+
+        this.updateHUD();
+    }
+
+    updateEvents(dt) {
+        if (this.tutActive || this.mode === 'rush') return;
+
+        if (this.eventCooldown > 0) this.eventCooldown -= dt;
+
+        if (this.currentEvent) {
+            this.eventDuration -= dt;
+            if (this.eventDuration <= 0) {
+                this.currentEvent = null;
+                this.eventCooldown = 16000;
+            }
+        }
+
+        const canStart = !this.bossActive && !this.currentEvent && this.eventCooldown <= 0;
+
+        if (canStart && this.player.hp < this.lastPlayerHp && this.score > 350 && Math.random() < 0.4) {
+            this.currentEvent = 'rush';
+            this.eventDuration = 10000;
+            this.showEvent('NÁLET', '#ff0055');
+        } else if (canStart && this.score > 500 && Math.random() < 0.0012) {
+            this.currentEvent = 'asteroids';
+            this.eventDuration = 12000;
+            this.asteroidTimer = 0;
+            this.showEvent('POLE ASTEROIDŮ', '#9aa1ad');
+        }
+
+        this.lastPlayerHp = this.player.hp;
+
+        if (this.currentEvent === 'asteroids') {
+            this.asteroidTimer -= dt;
+            if (this.asteroidTimer <= 0) {
+                this.asteroidTimer = U.rand(420, 780);
+                this.enemies.push(new Enemy(U.rand(30, this.width - 30), -50, 'asteroid', this.diffMult));
+            }
+        }
+    }
+
+    updateBeams(dt) {
+        for (let i = this.beams.length - 1; i >= 0; i--) {
+            const beam = this.beams[i];
+            beam.update(dt, this);
+
+            if (beam.firing && !this.tutActive) {
+                const reach = beam.w * 0.75 + this.player.hitR;
+                if (Math.abs(beam.x - this.player.x) < reach && this.player.y > (beam.boss ? beam.boss.y : 0)) {
+                    if (this.damagePlayer(14, 620)) return;
+                }
+            }
+
+            if (beam.dead) this.beams.splice(i, 1);
+        }
+    }
+
+    updateShockwaves(dt) {
+        for (let i = this.shockwaves.length - 1; i >= 0; i--) {
+            const sw = this.shockwaves[i];
+            if (!sw) break;
+            sw.update(dt);
+
+            if (sw.active && !sw.hit && !this.tutActive) {
+                const d = U.dist(sw.x, sw.y, this.player.x, this.player.y);
+                const pad = sw.band / 2 + this.player.hitR;
+                // Kontrolujeme prostor, který prstenec za tento snímek skutečně zametl,
+                // ne jen jeho okamžitý poloměr - jinak by ho výjimečně dlouhý snímek mohl přeskočit
+                const lo = Math.min(sw.prevR, sw.r) - pad;
+                const hi = Math.max(sw.prevR, sw.r) + pad;
+                if (d >= lo && d <= hi) {
+                    sw.hit = true;
+                    if (this.damagePlayer(12, 500)) return;
+                }
+            }
+
+            if (sw.dead) this.shockwaves.splice(i, 1);
+        }
+    }
+
+    updateBullets(dt) {
+        for (let i = this.bullets.length - 1; i >= 0; i--) {
+            const b = this.bullets[i];
+            if (!b) break;
+            b.update(dt);
+
+            if (b.life <= 0 || b.y < -40 || b.y > this.height + 40 || b.x < -40 || b.x > this.width + 40) {
+                this.bullets.splice(i, 1);
+                continue;
+            }
+
+            if (!b.isEnemy) continue;
+
+            if (U.hit(b, this.player, b.r, this.player.hitR)) {
+                this.boom(b.x, b.y, b.color, 5, 3);
+                this.bullets.splice(i, 1);
+
+                // Ve výcviku se neumírá, jen se učí uhýbat
+                if (this.tutActive) {
+                    Sounds.hit();
+                    continue;
+                }
+
+                if (this.damagePlayer(b.dmg, 400)) return;
+            }
+        }
+    }
+
+    updatePowerups(dt) {
+        for (let i = this.powerups.length - 1; i >= 0; i--) {
+            const p = this.powerups[i];
+            if (!p) break;
+            p.update(dt, this);
+
+            if (U.hit(p, this.player)) {
+                const pl = this.player;
+
+                if (p.type === 'triple') pl.tripleShotTimer = pl.tripleTime;
+                if (p.type === 'shield') pl.shieldTimer = pl.shieldTime;
+                if (p.type === 'rapid') pl.rapidTimer = pl.rapidTime;
+                if (p.type === 'heal') pl.heal(pl.healAmount);
+
+                if (p.type === 'coin') {
+                    // Vzácný bonusový drop - výrazně víc než obyčejný zabitý nepřítel,
+                    // ať to má hráč proč chytat a hra nepůsobí bezcenně.
+                    const bonus = Math.round((60 + Math.random() * 90) * this.coinMultiplier());
+                    Storage.data.coins += bonus;
+                    Storage.data.cycleCoins = (Storage.data.cycleCoins || 0) + bonus;
+                    this.coinsEarned += bonus;
+                    this.trackStat('totalCoinsEarned', bonus);
+                    Storage.queueSave();
+                    this.texts.push(new FloatingText(p.x, p.y - 12, '+' + bonus + ' 🪙', '#ffd700', 20));
+                    if (typeof jomaridReward === 'function') jomaridReward('coin_pickup', 4);
+                } else {
+                    this.texts.push(new FloatingText(p.x, p.y - 12, POWERUP_STYLE[p.type].icon, p.color, 18));
+                }
+
+                if (p.type !== 'heal') Sounds.powerup();
+
+                this.powerups.splice(i, 1);
+
+                if (this.tutActive && (this.tutStep === 7 || this.tutStep === 8) && this.powerups.length === 0) {
+                    this.advanceTutorialStep();
+                }
+            } else if (p.y > this.height + 25) {
+                const missed = p.type;
+                this.powerups.splice(i, 1);
+
+                // Propadlý power-up by výcvik nastálo zasekl
+                if (this.tutActive && (this.tutStep === 7 || this.tutStep === 8)) {
+                    this.powerups.push(new Powerup(U.rand(this.width * 0.25, this.width * 0.75), -20, missed));
+                }
+            }
+        }
+    }
+
+    updateEnemies(dt) {
+        for (let i = this.enemies.length - 1; i >= 0; i--) {
+            const e = this.enemies[i];
+            if (!e) break;
+            e.update(dt, this);
+
+            if (e.y > this.height + e.r + 20) {
+                this.enemies.splice(i, 1);
+                this.checkTutorialClear();
+                continue;
+            }
+
+            if (U.hit(e, this.player, e.r * 0.82, this.player.r * 0.72)) {
+                const removable = !e.indestructible;
+
+                if (removable) {
+                    this.boom(e.x, e.y, e.color, 16);
+                    this.enemies.splice(i, 1);
+                }
+
+                const dmg = e.type === 'asteroid' ? 34 : (e.type === 'destroyer' ? 30 : Math.round(e.r * 0.9));
+
+                if (!this.tutActive) {
+                    if (this.damagePlayer(dmg, e.indestructible ? 900 : 400)) return;
+                } else {
+                    Sounds.hit();
+                }
+
+                this.checkTutorialClear();
+                if (removable) continue;
+            }
+        }
+
+        // Boss má vlastní dotykový zásah, protože z obrazovky nemizí
+        if (this.boss && U.hit(this.boss, this.player, this.boss.r * 0.8, this.player.r * 0.72) && !this.tutActive) {
+            if (this.damagePlayer(26, 900)) return;
+        }
+
+        // Seznam cílů sestavujeme až teď, aby v něm nebyli mrtví nepřátelé z kroku výše
+        const targets = this.boss ? this.enemies.concat([this.boss]) : this.enemies;
+
+        // Pole cílů je momentka - pokud jedna střela zabije nepřítele, další střela
+        // ve stejném snímku by na jeho staré souřadnice mohla mířit naprázdno
+        const goneThisFrame = new Set();
+
+        for (let j = this.bullets.length - 1; j >= 0; j--) {
+            const b = this.bullets[j];
+            // Postup výcviku vyprázdní pole uprostřed iterace, proto pojistka
+            if (!b) break;
+            if (b.isEnemy) continue;
+
+            for (let k = 0; k < targets.length; k++) {
+                const e = targets[k];
+                if (goneThisFrame.has(e)) continue;
+                if (!U.hit(b, e)) continue;
+
+                this.boom(b.x, b.y, '#ffffff', 3, 2.5);
+                this.bullets.splice(j, 1);
+
+                if (e.indestructible) break;
+
+                e.hp -= b.dmg;
+                e.hitFlash = 70;
+
+                if (e.hp <= 0) {
+                    goneThisFrame.add(e);
+                    if (e === this.boss) this.killBoss();
+                    else this.killEnemy(this.enemies.indexOf(e));
+                }
+                break;
+            }
+        }
+    }
+
+    //---------------------------------------------------------------- HUD
+
+    updateHUD(force) {
+        const c = this.hudCache;
+
+        if (force || c.score !== this.score) {
+            c.score = this.score;
+            document.getElementById('hud-score').innerText = U.num(this.score);
+        }
+
+        if (force || c.coins !== Storage.data.coins) {
+            c.coins = Storage.data.coins;
+            document.getElementById('hud-coins').innerText = U.num(Storage.data.coins);
+        }
+
+        const mult = this.comboMult;
+        if (force || c.mult !== mult) {
+            c.mult = mult;
+            const tag = document.getElementById('hud-combo');
+            tag.classList.toggle('hidden', mult < 2);
+            tag.innerText = '×' + mult;
+        }
+
+        if (this.mode === 'blitz') {
+            const secs = Math.max(0, Math.ceil(this.modeTimeLeft / 1000));
+            const label = Math.floor(secs / 60) + ':' + String(secs % 60).padStart(2, '0');
+            if (force || c.timer !== label) {
+                c.timer = label;
+                document.getElementById('hud-timer').innerText = label;
+            }
+        }
+
+        if (this.mode === 'rush') {
+            if (force || c.streak !== this.rushStreak) {
+                c.streak = this.rushStreak;
+                document.getElementById('hud-streak').innerText = 'Série ' + this.rushStreak;
+            }
+        }
+
+        const hp = Math.max(0, Math.ceil(this.player.hp));
+        if (force || c.hp !== hp || c.maxHp !== this.player.maxHp) {
+            c.hp = hp;
+            c.maxHp = this.player.maxHp;
+
+            const pct = U.clamp(hp / this.player.maxHp, 0, 1);
+            const fill = document.getElementById('hp-fill');
+
+            fill.style.width = (pct * 100) + '%';
+            fill.classList.toggle('mid', pct <= 0.55 && pct > 0.25);
+            fill.classList.toggle('low', pct <= 0.25);
+            document.getElementById('hp-num').innerText = hp + '/' + this.player.maxHp;
+        }
+
+        const bombs = this.player.bombs;
+        if (force || c.bombs !== bombs) {
+            c.bombs = bombs;
+            document.getElementById('bomb-count').innerText = bombs;
+            document.getElementById('btn-bomb').classList.toggle('empty', bombs <= 0);
+        }
+
+        if (this.boss) {
+            const pct = this.boss.hpPct;
+            if (force || c.bossHp !== pct) {
+                c.bossHp = pct;
+                document.getElementById('boss-fill').style.width = (pct * 100) + '%';
+            }
+            if (force || c.bossPhase !== this.boss.phase) {
+                c.bossPhase = this.boss.phase;
+                document.getElementById('boss-phase').innerText = 'fáze ' + this.boss.phase + '/3';
+            }
+        }
+
+        const p = this.player;
+        const buffs = [
+            { id: 'shield', t: p.shieldTimer, max: p.shieldTime, color: '#00aaff', icon: '🛡️' },
+            { id: 'triple', t: p.tripleShotTimer, max: p.tripleTime, color: '#ffcc00', icon: '⚡' },
+            { id: 'rapid', t: p.rapidTimer, max: p.rapidTime, color: '#ff4400', icon: '🔥' }
+        ].filter(b => b.t > 0);
+
+        const container = document.getElementById('powerup-timers');
+        const key = buffs.map(b => b.id).join(',');
+
+        // DOM se staví jen při změně sady, jinak by se pop-in animace restartovala každý snímek
+        if (key !== c.buffKey) {
+            c.buffKey = key;
+            container.innerHTML = buffs.map(b => `
+                <div class="buff-badge" data-buff="${b.id}">
+                    <svg viewBox="0 0 36 36">
+                        <circle class="bg" cx="18" cy="18" r="15.9155" />
+                        <circle class="progress" cx="18" cy="18" r="15.9155" stroke="${b.color}" />
+                    </svg>
+                    <span class="buff-icon">${b.icon}</span>
+                </div>`).join('');
+        }
+
+        for (const b of buffs) {
+            const ring = container.querySelector(`[data-buff="${b.id}"] .progress`);
+            if (ring) ring.style.strokeDashoffset = 100 - (b.t / b.max) * 100;
+        }
+    }
+
+    //---------------------------------------------------------------- kresba
+
+    draw() {
+        const ctx = this.ctx;
+
+        ctx.fillStyle = '#020617';
+        ctx.fillRect(0, 0, this.width, this.height);
+
+        ctx.save();
+        if (this.shake > 0) {
+            ctx.translate(U.rand(-this.shake, this.shake), U.rand(-this.shake, this.shake));
+        }
+
+        ctx.fillStyle = '#fff';
+        for (const s of this.stars) {
+            ctx.globalAlpha = s.a;
+            ctx.fillRect(s.x, s.y, s.s, s.s);
+        }
+        ctx.globalAlpha = 1;
+
+        if (this.state === 'PLAY' || this.state === 'PAUSE') {
+            for (const b of this.beams) b.draw(ctx, this);
+            for (const sw of this.shockwaves) sw.draw(ctx);
+            for (const p of this.powerups) p.draw(ctx);
+            for (const e of this.enemies) e.draw(ctx);
+            if (this.boss) this.boss.draw(ctx);
+            for (const b of this.bullets) b.draw(ctx);
+
+            this.player.draw(ctx);
+
+            for (const p of this.particles) p.draw(ctx);
+            for (const t of this.texts) t.draw(ctx);
+        }
+
+        ctx.restore();
+
+        this.drawOverlays(ctx);
+    }
+
+    drawOverlays(ctx) {
+        if (this.flash > 0) {
+            this.vignette(ctx, '255, 0, 60', Math.min(0.5, this.flash / 800));
+        }
+
+        // Trvalé varování při kritickém životě
+        if (this.state === 'PLAY' && this.player.hp / this.player.maxHp < 0.25) {
+            const pulse = 0.14 + Math.abs(Math.sin(Date.now() / 340)) * 0.16;
+            this.vignette(ctx, '255, 0, 40', pulse);
+        }
+
+        if (this.whiteFlash > 0) {
+            ctx.fillStyle = `rgba(255,255,255,${Math.min(0.75, this.whiteFlash / 560)})`;
+            ctx.fillRect(0, 0, this.width, this.height);
+        }
+    }
+
+    vignette(ctx, rgb, alpha) {
+        const g = ctx.createRadialGradient(
+            this.width / 2, this.height / 2, Math.min(this.width, this.height) * 0.18,
+            this.width / 2, this.height / 2, Math.max(this.width, this.height) * 0.72
+        );
+
+        g.addColorStop(0, `rgba(${rgb}, 0)`);
+        g.addColorStop(1, `rgba(${rgb}, ${alpha})`);
+
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, this.width, this.height);
+    }
+
+    updateStars(dt) {
+        const boost = this.state === 'PLAY' ? 1 + this.phase * 0.04 : 1;
+
+        for (const s of this.stars) {
+            s.y += s.v * boost * (dt / 16);
+            if (s.y > this.height) {
+                s.y = -2;
+                s.x = Math.random() * this.width;
+            }
+        }
+    }
+
+    loop(timestamp) {
+        let dt = timestamp - this.lastTime;
+        if (!Number.isFinite(dt) || dt < 0) dt = 16;
+        if (dt > 100) dt = 100;
+        this.lastTime = timestamp;
+
+        if (this.state === 'PLAY') this.updateLogic(dt);
+        if (this.state !== 'PAUSE') this.updateStars(dt);
+
+        this.draw();
+        requestAnimationFrame(t => this.loop(t));
+    }
+}
+//======================================================================
+//  VÝCVIK
+//======================================================================
+//  Oddělený od herní smyčky, aby se logika hry nemíchala s výukou.
+
+const TUT_LAST = 11;
+const TUT_COMBAT_STEPS = [4, 5, 6, 9, 10];
+
+Object.assign(GameManager.prototype, {
+
+    startTutorialDialog() {
+        this.tutActive = true;
+        this.holdFire = true;
+        this.tutStep = 1;
+
+        document.getElementById('tut-layer').classList.remove('hidden');
+        this.setTutText('Než vyrazíš, můžeme si projít výcvik. Trvá asi minutu a naučí tě všechno potřebné.');
+        this.setTutStepLabel();
+
+        document.getElementById('tut-buttons').innerHTML = `
+            <button class="btn btn-small" id="btn-tut-yes">Spustit výcvik</button>
+            <button class="btn btn-small btn-danger" id="btn-tut-no">Rovnou hrát</button>`;
+
+        document.getElementById('btn-tut-yes').onclick = () => this.advanceTutorialStep();
+        document.getElementById('btn-tut-no').onclick = () => this.endTutorial();
+        document.getElementById('btn-tut-skip').onclick = () => this.endTutorial();
+    },
+
+    setTutText(html) {
+        document.getElementById('tut-text').innerHTML = html;
+    },
+
+    setTutStepLabel() {
+        const el = document.getElementById('tut-step');
+        el.innerText = this.tutStep <= 1 ? 'VÝCVIK' : 'KROK ' + (this.tutStep - 1) + ' Z ' + (TUT_LAST - 1);
+    },
+
+    clearTutorialGlows() {
+        ['hud-stats-group', 'btn-pause', 'btn-bomb'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove('glow-highlight');
+        });
+
+        const circle = document.getElementById('tut-focus-circle');
+        if (circle) circle.classList.remove('show');
+    },
+
+    // Volá se po každém úbytku nepřátel; bez toho výcvik uvázne
+    checkTutorialClear() {
+        if (!this.tutActive) return;
+        if (!TUT_COMBAT_STEPS.includes(this.tutStep)) return;
+        if (this.enemies.length > 0 || this.boss) return;
+
+        this.advanceTutorialStep();
+    },
+
+    advanceTutorialStep() {
+        this.clearTutorialGlows();
+
+        this.enemies.length = 0;
+        this.bullets.length = 0;
+        this.powerups.length = 0;
+        this.beams.length = 0;
+        this.shockwaves.length = 0;
+
+        this.tutStep++;
+        this.setTutStepLabel();
+
+        const btns = document.getElementById('tut-buttons');
+        btns.innerHTML = '';
+        this.holdFire = true;
+
+        const next = label => {
+            btns.innerHTML = `<button class="btn btn-small" id="btn-tut-next">${label || 'Další'}</button>`;
+            document.getElementById('btn-tut-next').onclick = () => this.advanceTutorialStep();
+        };
+
+        switch (this.tutStep) {
+
+            case 2:
+                document.getElementById('hud-stats-group').classList.add('glow-highlight');
+                this.setTutText('Nahoře máš skóre, mince a pruh života. Rychle po sobě zničení nepřátelé zvednou násobič skóre, který uvidíš hned vedle mincí.');
+                next();
+                break;
+
+            case 3: {
+                const circle = document.getElementById('tut-focus-circle');
+                circle.style.left = (this.player.x - 32) + 'px';
+                circle.style.top = (this.player.y - 32) + 'px';
+                circle.style.width = '64px';
+                circle.style.height = '64px';
+                circle.classList.add('show');
+                this.setTutText('Tohle je tvoje loď. Zkus s ní pohnout - táhni prstem, nebo použij šipky, WASD či myš.');
+                break;
+            }
+
+            case 4: {
+                this.holdFire = false;
+                const e = new Enemy(this.width / 2, 70, 'basic', 1);
+                e.speed = 0.45;
+                this.enemies.push(e);
+                this.setTutText('Střílíš automaticky, stačí mířit tělem lodi. Znič tohoto nepřítele.');
+                break;
+            }
+
+            case 5: {
+                this.holdFire = false;
+                const fast = new Enemy(this.width * 0.3, 60, 'fast', 1);
+                const tank = new Enemy(this.width * 0.7, 60, 'tank', 1);
+                fast.speed = 0.8;
+                tank.speed = 0.35;
+                this.enemies.push(fast, tank);
+                this.setTutText('Fialový rychlík se řítí dolů, ale stačí mu jediná rána. Oranžový obrněnec je pomalý a vydrží několik zásahů.');
+                break;
+            }
+
+            case 6: {
+                this.holdFire = false;
+                const dest = new Enemy(this.width * 0.32, 60, 'destroyer', 1);
+                const ast = new Enemy(this.width * 0.72, 40, 'asteroid', 1);
+                dest.speed = 0.3;
+                dest.fireTimer = 900;
+                ast.speed = 0.6;
+                this.enemies.push(dest, ast);
+                this.setTutText('Rudý ničitel po tobě střílí a má hodně života - uhýbej do strany. Šedý asteroid zničit nejde, ten se dá jen obejít.');
+                break;
+            }
+
+            case 7:
+                this.powerups.push(new Powerup(this.width * 0.35, 120, 'triple'));
+                this.powerups.push(new Powerup(this.width * 0.65, 120, 'rapid'));
+                this.setTutText('Útočné power-upy: ⚡ trojitá střelba a 🔥 rychlopalba. Seber oba.');
+                break;
+
+            case 8:
+                this.powerups.push(new Powerup(this.width * 0.35, 120, 'shield'));
+                this.powerups.push(new Powerup(this.width * 0.65, 120, 'heal'));
+                this.setTutText('Obranné power-upy: 🛡️ štít ti na chvíli zajistí nezranitelnost, ❤️ doplní život. Poslední vteřina štítu bliká.');
+                break;
+
+            case 9: {
+                this.holdFire = false;
+
+                const boss = new Boss(this, 1, 1);
+                boss.maxHp = 45;
+                boss.hp = 45;
+                this.boss = boss;
+                this.bossActive = true;
+
+                const bar = document.getElementById('boss-bar');
+                bar.classList.remove('hidden');
+                document.getElementById('boss-name').innerText = boss.name;
+                document.getElementById('boss-name').style.color = boss.color;
+                document.getElementById('boss-fill').style.background = boss.color;
+
+                this.setTutText('Boss před každým útokem zbělá a nadechne se - to je tvoje chvíle na úhyb. Jak mu ubývá život, přepíná do vyšších fází a přitvrzuje.');
+                break;
+            }
+
+            case 10: {
+                this.player.bombs = 1;
+                document.getElementById('btn-bomb').classList.add('glow-highlight');
+
+                for (let i = 0; i < 5; i++) {
+                    const e = new Enemy((this.width / 6) * (i + 1), 90 + (i % 2) * 40, 'basic', 1);
+                    e.speed = 0;
+                    this.enemies.push(e);
+                }
+
+                this.setTutText('Bomba vyčistí obrazovku od nepřátel i střel a na chvíli tě ochrání. Máš jednu - použij ji tlačítkem vpravo dole (nebo klávesou B).');
+                break;
+            }
+
+            case 11:
+                document.getElementById('btn-pause').classList.add('glow-highlight');
+                this.setTutText('Tlačítkem pauzy hru kdykoliv zastavíš a za mince nakoupíš trvalá vylepšení lodi. Platí i do dalších her. V menu najdeš i další herní režimy, úspěchy a vzestup pro pokročilé.');
+                btns.innerHTML = `<button class="btn btn-small" id="btn-tut-finish">Dokončit výcvik</button>`;
+                document.getElementById('btn-tut-finish').onclick = () => this.endTutorial();
+                break;
+
+            default:
+                this.endTutorial();
+        }
+    },
+
+    endTutorial() {
+        this.clearTutorialGlows();
+
+        Storage.data.tutorialDone = true;
+        Storage.save();
+
+        this.tutActive = false;
+        this.holdFire = false;
+        this.tutStep = 0;
+
+        this.enemies.length = 0;
+        this.bullets.length = 0;
+        this.powerups.length = 0;
+        this.beams.length = 0;
+        this.shockwaves.length = 0;
+        this.boss = null;
+        this.bossActive = false;
+
+        this.player.hp = this.player.maxHp;
+        this.player.bombs = this.player.maxBombs;
+        // Cvičný štít, trojstřel nebo rychlopalba nesmí přežít do ostré hry
+        this.player.tripleShotTimer = 0;
+        this.player.shieldTimer = 0;
+        this.player.rapidTimer = 0;
+        this.player.invulnTimer = 0;
+
+        document.getElementById('boss-bar').classList.add('hidden');
+        document.getElementById('tut-layer').classList.add('hidden');
+
+        // Kdo si vybral Boss Rush ještě před prvním výcvikem, dostane svého prvního bosse až teď
+        if (this.mode === 'rush') this.spawnRushBoss();
+    }
+});
+
+//======================================================================
+//  OBCHOD A ROZHRANÍ
+//======================================================================
+
+// Cena roste exponenciálně, ne lineárně - časná vylepšení jsou levná pro rychlý
+// pocit pokroku, pozdní jsou výrazně dražší, aby vymaxování celé lodi bylo
+// otázkou desítek minut hraní, ne pár kol. Kalibrováno simulací skutečné hry.
+const UPGRADE_COST_MULT = 6;
+const UPGRADE_COST_GROWTH = 1.30;
+
+function upgradeCost(up, level) {
+    return Math.round(up.step * UPGRADE_COST_MULT * Math.pow(UPGRADE_COST_GROWTH, level - 1));
+}
+
+const UPGRADES = [
+    { key: 'fireRate', name: 'Rychlost palby', step: 10, effect: l => {
+        const relicFire = Achv.hasRelic('quickhand') ? 0.85 : 1;
+        const rate = Math.max(90, Math.round(Math.max(120, 430 - l * 16) * relicFire));
+        return `${(1000 / rate).toFixed(1)} salv za sekundu`;
+    } },
+    { key: 'damage', name: 'Síla poškození', step: 15, effect: l => {
+        const asc = Storage.data.ascension || 0;
+        // Bonus silně slábne po 15. vzestupu - hodně vzestoupený hráč nemá být rychlejší,
+        // jen odolnější. Skutečná odměna za další vzestupy jde do Hvězdného prachu.
+        const ascMul = 1 + Math.min(asc, 15) * 0.025 + Math.max(0, asc - 15) * 0.006;
+        const relicDmg = Achv.hasRelic('barrel') ? 1.2 : 1;
+        return `${Math.round((l + 1) * ascMul * relicDmg)} poškození za střelu`;
+    } },
+    { key: 'hp', name: 'Maximální život', step: 10, effect: l => {
+        const asc = Storage.data.ascension || 0;
+        // Bonus silně slábne po 15. vzestupu - hodně vzestoupený hráč nemá být rychlejší,
+        // jen odolnější. Skutečná odměna za další vzestupy jde do Hvězdného prachu.
+        const ascMul = 1 + Math.min(asc, 15) * 0.025 + Math.max(0, asc - 15) * 0.006;
+        const relicHp = Achv.hasRelic('plating') ? 1.15 : 1;
+        const hullMul = 1 + prestigeBonus('hull', 0.02);
+        return `${Math.round((80 + l * 20) * ascMul * relicHp * hullMul)} bodů života`;
+    } },
+    { key: 'bombs', name: 'Zásoba bomb 💣', step: 25, effect: l => {
+        const relicBombs = Achv.hasRelic('bombs') ? 1 : 0;
+        const prestigeBombs = prestigeLevel('bomb');
+        return `${Math.min(7, 1 + Math.floor((l - 1) / 3) + relicBombs + prestigeBombs)} na začátku hry`;
+    } },
+    { key: 'shieldDuration', name: 'Trvání štítu 🛡️', step: 12, effect: l => {
+        const auraMul = 1 + prestigeBonus('aura', 0.04);
+        return `${((5000 + (l - 1) * 450) * auraMul / 1000).toFixed(1)} sekundy`;
+    } },
+    { key: 'tripleDuration', name: 'Trvání trojstřelu ⚡', step: 12, effect: l => {
+        const auraMul = 1 + prestigeBonus('aura', 0.04);
+        return `${((7000 + (l - 1) * 550) * auraMul / 1000).toFixed(1)} sekundy`;
+    } },
+    { key: 'rapidDuration', name: 'Trvání rychlopalby 🔥', step: 12, effect: l => {
+        const auraMul = 1 + prestigeBonus('aura', 0.04);
+        return `${((6000 + (l - 1) * 500) * auraMul / 1000).toFixed(1)} sekundy`;
+    } },
+    { key: 'healPower', name: 'Účinek lékárničky ❤️', step: 15, effect: l => `+${25 + (l - 1) * 10} života` }
+];
+
+//======================================================================
+//  ÚSPĚCHY A RELIKVIE
+//======================================================================
+//  Relikvie se neodemykají za mince, ale hraním - jsou to trvalé stopy
+//  po tom, co hráč ve hře dokázal. Každá relikvie visí na jednom úspěchu.
+
+const ACHIEVEMENTS = [
+    { id: 'first_blood', name: 'První krev', desc: 'Znič svého prvního nepřítele.', reward: 20,
+        check: s => s.totalKills >= 1 },
+    { id: 'hunter_100', name: 'Lovec', desc: 'Znič 100 nepřátel.', reward: 50,
+        check: s => s.totalKills >= 100, progress: s => [s.totalKills, 100] },
+    { id: 'hunter_300', name: 'Vyhlazovač', desc: 'Znič 300 nepřátel. Odemyká relikvii Posílená hlaveň.', reward: 150, relic: 'barrel',
+        check: s => s.totalKills >= 300, progress: s => [s.totalKills, 300] },
+    { id: 'hunter_1500', name: 'Zkáza hvězd', desc: 'Znič 1500 nepřátel.', reward: 400,
+        check: s => s.totalKills >= 1500, progress: s => [s.totalKills, 1500] },
+
+    { id: 'boss_first', name: 'První pád', desc: 'Poraz svého prvního bosse.', reward: 40,
+        check: s => s.totalBossKills >= 1 },
+    { id: 'boss_10', name: 'Postrach bossů', desc: 'Poraz 10 bossů. Odemyká relikvii Silné pláty.', reward: 200, relic: 'plating',
+        check: s => s.totalBossKills >= 10, progress: s => [s.totalBossKills, 10] },
+    { id: 'boss_30', name: 'Exterminátor', desc: 'Poraz 30 bossů.', reward: 500,
+        check: s => s.totalBossKills >= 30, progress: s => [s.totalBossKills, 30] },
+    { id: 'no_hit_boss', name: 'Bez škrábnutí', desc: 'Poraz bosse, aniž bys v souboji dostal zásah.', reward: 150,
+        check: s => s.noHitBosses >= 1 },
+
+    { id: 'combo_4', name: 'Řetězová reakce', desc: 'Dosáhni násobiče kombo ×4.', reward: 30,
+        check: s => (s.bestCombo || 0) >= 4 },
+    { id: 'combo_8', name: 'Nezastavitelný', desc: 'Dosáhni násobiče kombo ×8. Odemyká relikvii Rychlá ruka.', reward: 100, relic: 'quickhand',
+        check: s => (s.bestCombo || 0) >= 8 },
+
+    { id: 'bomb_20', name: 'Demolice', desc: 'Použij bomby 20×. Odemyká relikvii Nouzové bomby.', reward: 80, relic: 'bombs',
+        check: s => s.bombsUsed >= 20, progress: s => [s.bombsUsed, 20] },
+
+    { id: 'coins_5000', name: 'Boháč', desc: 'Vydělej za život 5 000 mincí. Odemyká relikvii Sběrač.', reward: 100, relic: 'collector',
+        check: s => s.totalCoinsEarned >= 5000, progress: s => [Math.min(s.totalCoinsEarned, 5000), 5000] },
+    { id: 'coins_50000', name: 'Magnát', desc: 'Vydělej za život 50 000 mincí.', reward: 300,
+        check: s => s.totalCoinsEarned >= 50000, progress: s => [Math.min(s.totalCoinsEarned, 50000), 50000] },
+
+    { id: 'survivor_10', name: 'Vytrvalec', desc: 'Přežij 10 minut v jednom běhu.', reward: 100,
+        check: s => (s.longestRun || 0) >= 600000 },
+    { id: 'survivor_20', name: 'Železné plíce', desc: 'Přežij 20 minut v jednom běhu.', reward: 250,
+        check: s => (s.longestRun || 0) >= 1200000 },
+
+    { id: 'blitz_clear', name: 'Bleskový útok', desc: 'Dokonči celé kolo Blesková vlna.', reward: 60,
+        check: s => (s.blitzClears || 0) >= 1 },
+    { id: 'rush_5', name: 'Nájezdník', desc: 'V Boss Rush poraz 5 bossů v jedné sérii.', reward: 150,
+        check: s => (s.bestRushStreak || 0) >= 5 },
+    { id: 'rush_10', name: 'Legenda nájezdů', desc: 'V Boss Rush poraz 10 bossů v jedné sérii.', reward: 400,
+        check: s => (s.bestRushStreak || 0) >= 10 },
+
+    { id: 'ascend_1', name: 'Vzestup', desc: 'Poprvé vzestup. Odemyká relikvii Fénixovo jádro.', reward: 0, relic: 'phoenix',
+        check: (s, d) => (d.ascension || 0) >= 1 },
+    { id: 'maxed_all', name: 'Dokonalá loď', desc: 'Vylepši všech osm kategorií na maximum.', reward: 300,
+        check: (s, d) => UPGRADES.every(u => (d.upgrades[u.key] || 1) >= MAX_LVL) }
+];
+
+const RELICS = [
+    { id: 'barrel', name: 'Posílená hlaveň', desc: '+20 % poškození.', requires: 'hunter_300' },
+    { id: 'plating', name: 'Silné pláty', desc: '+15 % maximálního života.', requires: 'boss_10' },
+    { id: 'quickhand', name: 'Rychlá ruka', desc: '-15 % prodleva mezi výstřely.', requires: 'combo_8' },
+    { id: 'bombs', name: 'Nouzové bomby', desc: '+1 k maximálnímu počtu bomb.', requires: 'bomb_20' },
+    { id: 'collector', name: 'Sběrač', desc: '+20 % vydělaných mincí.', requires: 'coins_5000' },
+    { id: 'phoenix', name: 'Fénixovo jádro', desc: 'Jednou za běh přežiješ smrtící zásah s 1 HP.', requires: 'ascend_1' }
+];
+
+//======================================================================
+//  HVĚZDNÝ PRACH - STROM VZESTUPU
+//======================================================================
+//  Vzestup dává samostatnou měnu (hvězdný prach), ne přímo herní zrychlení.
+//  Uzly stromu jsou schválně stropované nebo ploché, ne procentuální bez
+//  limitu - hodně vzestoupený hráč má být odolnější a pohodlnější na hraní,
+//  ne rychlejší. Jediné dva "silné" uzly jsou jednorázové odemčení nových
+//  režimů, ne trvalý násobič.
+
+const PRESTIGE_TREE = [
+    { id: 'hull', name: 'Pevnější trup', desc: '+2 % max. života za úroveň.', max: 10,
+        cost: lvl => 40 * (lvl + 1) },
+    { id: 'aura', name: 'Ochranná aura', desc: '+4 % trvání štítu, trojstřelu a rychlopalby za úroveň.', max: 8,
+        cost: lvl => 50 * (lvl + 1) },
+    { id: 'magnet', name: 'Magnetické jádro', desc: '+10 % dosahu přitažení power-upů za úroveň.', max: 6,
+        cost: lvl => 35 * (lvl + 1) },
+    { id: 'luck', name: 'Šťastná hvězda', desc: '+1 % šance na power-up z nepřítele za úroveň.', max: 5,
+        cost: lvl => 60 * (lvl + 1) },
+    { id: 'capital', name: 'Startovní kapitál', desc: '+150 mincí na začátku každé hry za úroveň.', max: 5,
+        cost: lvl => 30 * (lvl + 1) },
+    { id: 'bomb', name: 'Rezervní bomba', desc: '+1 k maximálnímu počtu bomb.', max: 1,
+        cost: () => 500 },
+    { id: 'zenUnlocked', name: 'Režim Zen', desc: 'Odemkne klidný nekonečný režim bez umírání.', max: 1, unlock: true,
+        cost: () => 150 },
+    { id: 'dailyUnlocked', name: 'Denní výzva', desc: 'Odemkne denní výzvu s vlastním žebříčkem.', max: 1, unlock: true,
+        cost: () => 150 }
+];
+
+function prestigeLevel(id) {
+    const v = Storage.data.prestige[id];
+    return typeof v === 'boolean' ? (v ? 1 : 0) : (v || 0);
+}
+
+function prestigeBonus(id, perLevel) {
+    return prestigeLevel(id) * perLevel;
+}
+
+const Toast = {
+    queue: [],
+    showing: false,
+
+    push(a) {
+        this.queue.push(a);
+        this.pump();
+    },
+
+    pump() {
+        if (this.showing || !this.queue.length) return;
+        this.showing = true;
+
+        const a = this.queue.shift();
+        const layer = document.getElementById('achv-toast-layer');
+        if (!layer) { this.showing = false; return; }
+
+        const el = document.createElement('div');
+        el.className = 'achv-toast';
+        el.innerHTML = `<span class="achv-toast-icon">🏆</span><div><div class="achv-toast-eyebrow">Úspěch odemčen</div><div class="achv-toast-name">${a.name}</div></div>`;
+        layer.appendChild(el);
+
+        requestAnimationFrame(() => el.classList.add('show'));
+
+        setTimeout(() => {
+            el.classList.remove('show');
+            setTimeout(() => {
+                layer.removeChild(el);
+                this.showing = false;
+                this.pump();
+            }, 320);
+        }, 2600);
+    }
+};
+
+const Achv = {
+    hasRelic(id) {
+        const r = RELICS.find(x => x.id === id);
+        return !!(r && Storage.data.achievements[r.requires]);
+    },
+
+    check() {
+        const s = Storage.data.stats;
+        const d = Storage.data;
+        let changed = false;
+
+        for (const a of ACHIEVEMENTS) {
+            if (Storage.data.achievements[a.id]) continue;
+
+            if (a.check(s, d)) {
+                Storage.data.achievements[a.id] = true;
+                Storage.data.coins += a.reward;
+                Storage.data.cycleCoins = (Storage.data.cycleCoins || 0) + a.reward;
+                changed = true;
+                Toast.push(a);
+
+                // Nová relikvie se musí projevit okamžitě, ne až v dalším běhu
+                if (Game && Game.player) Game.player.applyStats();
+            }
+        }
+
+        if (changed) Storage.queueSave();
+    }
+};
+
+//======================================================================
+//  OBCHOD A ROZHRANÍ
+//======================================================================
+
+const UI = {
+    renderShop(containerId) {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+
+        const u = Storage.data.upgrades;
+        const coins = Storage.data.coins || 0;
+
+        el.innerHTML = UPGRADES.map(up => {
+            const lvl = u[up.key] || 1;
+            const maxed = lvl >= MAX_LVL;
+            const cost = upgradeCost(up, lvl);
+            const afford = coins >= cost;
+
+            const btn = maxed
+                ? `<button class="btn btn-small btn-buy maxed" disabled>Maximum</button>`
+                : `<button class="btn btn-small btn-buy ${afford ? '' : 'locked'}" data-upgrade="${up.key}">${U.num(cost)} m</button>`;
+
+            return `
+            <div class="upgrade-item ${maxed ? 'maxed' : ''}">
+                <div class="upgrade-info">
+                    <div class="upgrade-name">${up.name}</div>
+                    <div class="upgrade-lvl">Úroveň ${lvl} z ${MAX_LVL} — <span class="upgrade-effect">${up.effect(lvl)}</span></div>
+                </div>
+                ${btn}
+            </div>`;
+        }).join('');
+    },
+
+    refresh() {
+        const coins = U.num(Storage.data.coins || 0);
+        const best = Math.max(Storage.data.best.normal || 0, Storage.data.best.hard || 0);
+
+        document.getElementById('menu-coins').innerText = coins + ' mincí';
+        document.getElementById('pause-coins').innerText = coins + ' mincí';
+        document.getElementById('menu-best').innerText = 'Rekord ' + U.num(best);
+
+        const asc = Storage.data.ascension || 0;
+        const ascBadge = document.getElementById('menu-ascend');
+        ascBadge.classList.toggle('hidden', asc <= 0);
+        ascBadge.innerText = 'Vzestup ' + asc;
+
+        document.getElementById('rec-normal').innerText = 'Rekord ' + U.num(Storage.data.best.normal || 0);
+        document.getElementById('rec-hard').innerText = 'Rekord ' + U.num(Storage.data.best.hard || 0);
+        document.getElementById('rec-blitz').innerText = 'Rekord ' + U.num(Storage.data.best.blitz || 0);
+        document.getElementById('rec-rush').innerText = 'Série ' + U.num(Storage.data.best.rush || 0);
+
+        // Zen a Denní výzva se v menu objeví, až je hráč odemkne za hvězdný prach
+        document.getElementById('btn-start-zen').classList.toggle('hidden', !Storage.data.prestige.zenUnlocked);
+        document.getElementById('btn-start-daily').classList.toggle('hidden', !Storage.data.prestige.dailyUnlocked);
+
+        if (Storage.data.prestige.dailyUnlocked) {
+            const mod = dailyModifierForToday();
+            document.getElementById('daily-desc').innerText = mod.name;
+            const today = todayKey();
+            const dailyScore = (Storage.data.daily.date === today) ? (Storage.data.daily.score || 0) : 0;
+            document.getElementById('rec-daily').innerText = 'Rekord ' + U.num(dailyScore);
+        }
+
+        this.renderShop('menu-shop');
+        this.renderShop('pause-shop');
+    },
+
+    buyUpgrade(key) {
+        const up = UPGRADES.find(x => x.key === key);
+        if (!up) return;
+
+        const lvl = Storage.data.upgrades[key] || 1;
+        if (lvl >= MAX_LVL) return;
+
+        const cost = upgradeCost(up, lvl);
+
+        // Bez odezvy vypadá nedostatek mincí jako rozbité tlačítko
+        if ((Storage.data.coins || 0) < cost) {
+            Sounds.denied();
+            document.querySelectorAll(`[data-upgrade="${key}"]`).forEach(btn => {
+                btn.classList.remove('shake');
+                void btn.offsetWidth;
+                btn.classList.add('shake');
+            });
+            return;
+        }
+
+        Storage.data.coins -= cost;
+        Storage.data.upgrades[key] = lvl + 1;
+        Storage.save();
+        Sounds.buy();
+
+        if (Game.player) {
+            const before = Game.player.maxHp;
+            Game.player.applyStats();
+
+            // Vylepšení koupené během hry se musí projevit hned, ne až příští kolo
+            if (key === 'hp') Game.player.hp = Math.min(Game.player.maxHp, Game.player.hp + (Game.player.maxHp - before));
+            if (key === 'bombs') Game.player.bombs = Math.min(Game.player.maxBombs, Game.player.bombs + 1);
+
+            Game.updateHUD(true);
+        }
+
+        Achv.check();
+        this.refresh();
+    },
+
+    toggleSound() {
+        Storage.data.muted = !Storage.data.muted;
+        Sounds.setMuted(Storage.data.muted);
+        Storage.save();
+        document.getElementById('btn-sound').innerText = Storage.data.muted ? '🔇' : '🔊';
+    },
+
+    renderLifetimeStats(containerId) {
+        const s = Storage.data.stats;
+        const totalMin = Math.floor((s.totalPlaytime || 0) / 60000);
+
+        document.getElementById(containerId).innerHTML = `
+            <div><b>${U.num(s.totalKills || 0)}</b>nepřátel zničeno</div>
+            <div><b>${U.num(s.totalBossKills || 0)}</b>bossů poraženo</div>
+            <div><b>${U.num(s.totalCoinsEarned || 0)}</b>mincí vyděláno</div>
+            <div><b>${U.num(totalMin)}</b>minut hraní</div>
+            <div><b>×${s.bestCombo || 1}</b>nejlepší kombo</div>
+            <div><b>${U.num(s.runsPlayed || 0)}</b>odehraných her</div>`;
+    },
+
+    renderRelics(containerId) {
+        document.getElementById(containerId).innerHTML = RELICS.map(r => {
+            const unlocked = Achv.hasRelic(r.id);
+            return `<div class="relic-item ${unlocked ? 'unlocked' : 'locked'}">
+                <div class="relic-name">${unlocked ? '' : '🔒 '}${r.name}</div>
+                <div class="relic-desc">${r.desc}</div>
+            </div>`;
+        }).join('');
+    },
+
+    renderAchievements(containerId) {
+        document.getElementById(containerId).innerHTML = ACHIEVEMENTS.map(a => {
+            const unlocked = !!Storage.data.achievements[a.id];
+            let progressHtml = '';
+
+            if (!unlocked && a.progress) {
+                const [cur, max] = a.progress(Storage.data.stats);
+                progressHtml = `<div class="achv-progress">${U.num(Math.min(cur, max))} / ${U.num(max)}</div>`;
+            }
+
+            return `<div class="achv-item ${unlocked ? 'unlocked' : 'locked'}">
+                <div class="achv-icon">${unlocked ? '🏆' : '🔒'}</div>
+                <div class="achv-body">
+                    <div class="achv-name">${a.name}</div>
+                    <div class="achv-desc">${a.desc}</div>
+                    ${progressHtml}
+                </div>
+                <div class="achv-reward">${a.reward > 0 ? '+' + a.reward : ''}</div>
+            </div>`;
+        }).join('');
+    },
+
+    renderPrestige(containerId) {
+        document.getElementById(containerId).innerHTML = PRESTIGE_TREE.map(node => {
+            const lvl = prestigeLevel(node.id);
+            const maxed = lvl >= node.max;
+            const cost = maxed ? 0 : node.cost(lvl);
+            const afford = (Storage.data.stardust || 0) >= cost;
+            const lvlLabel = node.unlock ? (maxed ? 'Odemčeno' : 'Zamčeno') : `Úroveň ${lvl} z ${node.max}`;
+
+            const btn = maxed
+                ? `<button class="btn btn-small btn-prestige maxed" disabled>${node.unlock ? 'Hotovo' : 'Max'}</button>`
+                : `<button class="btn btn-small btn-prestige ${afford ? '' : 'locked'}" data-prestige="${node.id}">${U.num(cost)} ✦</button>`;
+
+            return `
+            <div class="prestige-item ${maxed ? 'maxed' : ''}">
+                <div class="prestige-info">
+                    <div class="prestige-name">${node.name}</div>
+                    <div class="prestige-desc">${node.desc}</div>
+                    <div class="prestige-lvl">${lvlLabel}</div>
+                </div>
+                ${btn}
+            </div>`;
+        }).join('');
+    },
+
+    renderStats() {
+        this.renderLifetimeStats('lifetime-stats');
+        this.renderPrestige('prestige-list');
+        this.renderRelics('relic-list');
+        this.renderAchievements('achv-list');
+
+        document.getElementById('stardust-count').innerText = U.num(Storage.data.stardust || 0) + ' ✦ prachu';
+
+        const allMaxed = UPGRADES.every(u => (Storage.data.upgrades[u.key] || 1) >= MAX_LVL);
+
+        document.getElementById('ascend-level').innerText = Storage.data.ascension || 0;
+        document.getElementById('ascend-desc').innerText = allMaxed
+            ? 'Vše je na maximu. Vzestup vrátí vylepšení na začátek výměnou za trvalý bonus a hvězdný prach.'
+            : 'Vylepši všech osm kategorií na maximum, abys mohl vzestoupit.';
+
+        const btn = document.getElementById('btn-ascend');
+        btn.disabled = !allMaxed;
+        btn.classList.toggle('locked', !allMaxed);
+    }
+};
+
+function buyPrestigeNode(id) {
+    const node = PRESTIGE_TREE.find(n => n.id === id);
+    if (!node) return;
+
+    const lvl = prestigeLevel(id);
+    if (lvl >= node.max) return;
+
+    const cost = node.cost(lvl);
+
+    if ((Storage.data.stardust || 0) < cost) {
+        Sounds.denied();
+        document.querySelectorAll(`[data-prestige="${id}"]`).forEach(btn => {
+            btn.classList.remove('shake');
+            void btn.offsetWidth;
+            btn.classList.add('shake');
+        });
+        return;
+    }
+
+    Storage.data.stardust -= cost;
+    Storage.data.prestige[id] = node.unlock ? true : lvl + 1;
+    Storage.save();
+    Sounds.buy();
+
+    if (Game.player) {
+        Game.player.applyStats();
+        Game.updateHUD(true);
+    }
+
+    UI.refresh();
+    UI.renderStats();
+}
+
+function performAscend() {
+    const allMaxed = UPGRADES.every(u => (Storage.data.upgrades[u.key] || 1) >= MAX_LVL);
+    if (!allMaxed) return;
+
+    // Hvězdný prach je odměna za to, kolik hráč tento cyklus skutečně vydělal -
+    // čím dál se dostal, tím větší odměna, ale je to jiná měna než mince,
+    // takže se s dalšími vzestupy nezrychluje samotná hra.
+    const earned = Math.max(5, Math.floor((Storage.data.cycleCoins || 0) / 800));
+
+    if (!confirm(`Vzestoupit? Vylepšení lodi se vrátí na začátek výměnou za trvalý bonus a ${earned} hvězdného prachu.`)) return;
+
+    for (const k in Storage.data.upgrades) Storage.data.upgrades[k] = 1;
+    Storage.data.ascension = (Storage.data.ascension || 0) + 1;
+    Storage.data.stardust = (Storage.data.stardust || 0) + earned;
+    Storage.data.cycleCoins = 0;
+    // Startovní kapitál ze stromu Vzestupu dá malou vzpruhu místo tvrdé nuly
+    Storage.data.coins = prestigeLevel('capital') * 150;
+    Storage.save();
+
+    Achv.check();
+
+    if (Game.player) {
+        Game.player.applyStats();
+        Game.player.hp = Game.player.maxHp;
+        Game.player.bombs = Game.player.maxBombs;
+    }
+
+    UI.refresh();
+    UI.renderStats();
+}
+
+//======================================================================
+//  START
+//======================================================================
+
+const Game = new GameManager();
+
+UI.refresh();
+document.getElementById('btn-sound').innerText = Storage.data.muted ? '🔇' : '🔊';
+
+['menu-shop', 'pause-shop'].forEach(id => {
+    document.getElementById(id).addEventListener('click', e => {
+        const btn = e.target.closest('[data-upgrade]');
+        if (btn) UI.buyUpgrade(btn.dataset.upgrade);
+    });
+});
+
+document.getElementById('btn-start-normal').onclick = () => Game.start('normal');
+document.getElementById('btn-start-hard').onclick = () => Game.start('hard');
+document.getElementById('btn-start-blitz').onclick = () => Game.start('blitz');
+document.getElementById('btn-start-rush').onclick = () => Game.start('rush');
+document.getElementById('btn-start-zen').onclick = () => Game.start('zen');
+document.getElementById('btn-start-daily').onclick = () => Game.start('daily');
+document.getElementById('btn-pause').onclick = () => Game.pause();
+document.getElementById('btn-resume').onclick = () => Game.resume();
+document.getElementById('btn-quit-pause').onclick = () => Game.quitToMenu();
+document.getElementById('btn-restart').onclick = () => Game.start(Game.mode);
+document.getElementById('btn-quit-go').onclick = () => Game.quitToMenu();
+document.getElementById('btn-sound').onclick = () => UI.toggleSound();
+
+document.getElementById('prestige-list').addEventListener('click', e => {
+    const btn = e.target.closest('[data-prestige]');
+    if (btn) buyPrestigeNode(btn.dataset.prestige);
+});
+
+document.getElementById('btn-open-stats').onclick = () => {
+    document.getElementById('menu-overlay').classList.add('hidden');
+    document.getElementById('stats-overlay').classList.remove('hidden');
+    UI.renderStats();
+};
+
+document.getElementById('btn-close-stats').onclick = () => {
+    document.getElementById('stats-overlay').classList.add('hidden');
+    document.getElementById('menu-overlay').classList.remove('hidden');
+};
+
+document.getElementById('btn-ascend').onclick = () => performAscend();
+
+document.getElementById('btn-bomb').addEventListener('pointerdown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    Game.useBomb();
+});
+
+document.getElementById('btn-reset').onclick = () => {
+    if (confirm('Opravdu smazat postup? Přijdeš o mince, vylepšení, rekordy, úspěchy, vzestup i hvězdný prach.')) {
+        Storage.wipe();
+        Sounds.setMuted(false);
+        document.getElementById('btn-sound').innerText = '🔊';
+        UI.refresh();
+        // Obrazovka Postupu sem dnes vést nemůže (btn-reset žije jen v menu-overlay),
+        // ale kdyby se to v budoucnu změnilo, ať nezůstanou zobrazená smazaná data
+        if (!document.getElementById('stats-overlay').classList.contains('hidden')) UI.renderStats();
+    }
+};
+
+const secretBtn = document.getElementById('btn-secret');
+const secretInput = document.getElementById('secret-input');
+const secretMsg = document.getElementById('secret-msg');
+let secretTimer = null;
+
+const showSecretMsg = (text, color) => {
+    secretMsg.style.color = color;
+    secretMsg.innerText = text;
+
+    clearTimeout(secretTimer);
+    secretTimer = setTimeout(() => { secretMsg.innerText = ''; }, 2500);
+};
+
+const applySecret = () => {
+    const code = secretInput.value.trim().toUpperCase();
+    if (!code) return;
+
+    if (code === '67MILUJU') {
+        Storage.data.coins = 999999999;
+        Storage.save();
+        UI.refresh();
+        secretInput.value = '';
+        showSecretMsg('Kód přijat, mince doplněny.', '#00ff88');
+    } else {
+        showSecretMsg('Tenhle kód neznám.', 'var(--danger)');
+    }
+};
+
+if (secretBtn && secretInput) {
+    secretBtn.onclick = applySecret;
+    secretInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') applySecret();
+    });
+}
+</script>
+</body>
+</html>
