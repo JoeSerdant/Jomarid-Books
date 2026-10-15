@@ -565,6 +565,7 @@ button.history-row:hover { background: var(--bg-soft); }
 .mode-pill.rated { background: var(--green-soft); color: var(--green-dark); }
 :root:not([data-theme="light"]) .mode-pill.rated { color: var(--purple); }
 .mode-pill.practice { background: var(--gold-soft); color: var(--gold-dark); }
+.mode-pill.cheat { background: var(--purple-soft, rgba(168,85,247,.16)); color: var(--purple, #a855f7); }
 .mode-note { font-size: 12px; font-weight: 600; color: var(--ink-soft); margin: 6px 0 0; line-height: 1.4; }
 
 .move-list { max-height: 210px; overflow-y: auto; font-size: 14px; }
@@ -685,3 +686,31 @@ button.history-row:hover { background: var(--bg-soft); }
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
 }
+
+/* ---------- Cheat menu (kód 67MILUJU) ---------- */
+.cheat-card { max-width: 420px; text-align: left; max-height: calc(100vh - 40px); overflow-y: auto; }
+.cheat-card .modal-title, .cheat-card .modal-text { text-align: center; }
+.cheat-list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.cheat-item {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer;
+  background: var(--bg-soft); color: var(--ink); border: 2px solid var(--border); border-radius: 16px; padding: 10px 12px; font: inherit;
+}
+.cheat-item:hover:not(:disabled) { border-color: var(--blue); }
+.cheat-item:disabled { opacity: .45; cursor: not-allowed; }
+.cheat-item.on { border-color: var(--green); background: var(--green-soft); }
+.cheat-icon { font-size: 24px; flex: 0 0 auto; width: 32px; text-align: center; }
+.cheat-text { flex: 1 1 auto; min-width: 0; }
+.cheat-text b { display: block; font-family: var(--font-display); font-weight: 800; font-size: 14px; }
+.cheat-text small { display: block; font-weight: 600; font-size: 12px; color: var(--ink-soft); margin-top: 1px; line-height: 1.3; }
+.cheat-state { flex: 0 0 auto; font-family: var(--font-display); font-weight: 800; font-size: 11px; color: var(--ink-soft); }
+.cheat-item.on .cheat-state { color: var(--green-dark); }
+.secret-code { display: flex; gap: 8px; align-items: center; }
+.secret-input {
+  width: 130px; background: var(--bg-soft); color: var(--ink); border: 2px solid var(--border); border-radius: 12px;
+  padding: 7px 10px; font: inherit; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+}
+.secret-input:focus-visible { outline: 3px solid var(--blue); outline-offset: 1px; }
+@keyframes disco-hue { from { filter: hue-rotate(0deg) saturate(1.6); } to { filter: hue-rotate(360deg) saturate(1.6); } }
+body.disco .board { animation: disco-hue 2.4s linear infinite; }
+@media (prefers-reduced-motion: reduce) { body.disco .board { animation: none; filter: hue-rotate(120deg) saturate(1.6); } }
+.cheat-card:focus { outline: none; }

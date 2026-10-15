@@ -166,18 +166,20 @@ const League = (function () {
   }
 
   // ---------- Dokončení partie ----------
-  // g: { botIdx, botKey, result: win|loss|draw, reason, color, plies, tc, rated, moves, accuracy? }
+  // g: { botIdx, botKey, result: win|loss|draw, reason, color, plies, tc, rated, moves, accuracy?, cheated? }
+  // Partie s cheat kódem (cheated) je nehodnocená a navíc se nepočítá do výher ani do odemykání dalšího soupeře.
   // bots: [{ key, rating }]. Vrací nový postup a souhrn pro obrazovku po zápase.
   function finishGame(save, g, bots, today) {
     const s = JSON.parse(JSON.stringify(save));
     const bot = bots[g.botIdx];
     const score = g.result === "win" ? 1 : g.result === "draw" ? 0.5 : 0;
-    const summary = { rated: !!g.rated, result: g.result };
+    const rated = !!g.rated && !g.cheated; // cheat partie nikdy není hodnocená
+    const summary = { rated, result: g.result, cheated: !!g.cheated };
 
     // hodnocení
     summary.ratingBefore = s.rating;
     summary.provisional = s.ratedGames < PROVISIONAL_GAMES;
-    if (g.rated) {
+    if (rated) {
       const ch = ratingChange(s.rating, bot.rating, score, s.ratedGames);
       summary.expected = ch.expected; summary.k = ch.k; summary.delta = ch.delta;
       s.rating += ch.delta;
@@ -199,7 +201,7 @@ const League = (function () {
 
     // odemykání dalšího soupeře a výhry
     summary.newlyUnlocked = false;
-    if (g.result === "win") {
+    if (g.result === "win" && !g.cheated) {
       s.wins[bot.key] = (s.wins[bot.key] || 0) + 1;
       if (g.botIdx === s.unlockedIndex && g.botIdx < bots.length - 1) { s.unlockedIndex = g.botIdx + 1; summary.newlyUnlocked = true; }
     }
@@ -207,7 +209,7 @@ const League = (function () {
     // historie zápasů
     s.recentGames.unshift({
       botKey: bot.key, result: g.result, reason: g.reason || null, date: today,
-      delta: summary.delta, rated: !!g.rated, color: g.color, plies: g.plies, tc: g.tc || "none",
+      delta: summary.delta, rated, color: g.color, plies: g.plies, tc: g.tc || "none", ...(g.cheated ? { cheat: true } : {}),
       ratingBefore: summary.ratingBefore, oppRating: bot.rating, moves: (g.moves || []).join(" "),
       acc: g.accuracy == null ? null : Math.round(g.accuracy)
     });

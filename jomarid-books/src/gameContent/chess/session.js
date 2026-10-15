@@ -34,6 +34,10 @@ class GameSession {
     this.assisted = false;
     this.hintsUsed = 0;
     this.undosUsed = 0;
+    this.cheated = false; // použil se cheat kód (menu 67MILUJU): partie je nehodnocená a nepočítá se do výher, odemykání ani rekordů
+    this.cheatBlind = false; // cheat: soupeř hraje náhodné tahy
+    this.cheatAuto = false; // cheat: autopilot hraje tahy za hráče
+    this._autoTimer = null;
     this.drawBlockedUntil = 0;
     this.botScores = [];
     this.lastBotEval = null;
@@ -119,6 +123,7 @@ class GameSession {
       if (after.turn === this.botColor) this._botTurn();
     }
     this._changed();
+    if (byBot) this._autopilotSoon();
   }
 
   _countPosition(state) {
@@ -228,8 +233,15 @@ class GameSession {
     let move = null;
     const info = { book: false, forced: false, legal: 0, recapture: false, inCheck: ChessEngine.isInCheck(state, state.turn), ply: this.moves.length };
 
+    // cheat "naslepo": náhodný legální tah, bez knihy i hledání
+    if (this.cheatBlind) {
+      const legal = ChessEngine.generateAllLegalMoves(state, state.turn);
+      move = legal[Math.floor(this.rng() * legal.length)];
+      info.legal = legal.length;
+    }
+
     // 1) kniha zahájení
-    if (bot.book) {
+    if (bot.book && !move) {
       let san = null;
       if (played.length === 0 && bot.book.odd && this.rng() < bot.book.odd.chance) {
         san = bot.book.odd.moves[Math.floor(this.rng() * bot.book.odd.moves.length)];
@@ -285,7 +297,8 @@ class GameSession {
 
     // 4) lidské tempo
     const t = this.liveTimes();
-    const delay = Bots.thinkDelay(bot, info, this.rng, t ? t[this.botColor] : null) * this.delayScale;
+    let delay = Bots.thinkDelay(bot, info, this.rng, t ? t[this.botColor] : null) * this.delayScale;
+    if (this.cheatBlind) delay = Math.min(delay, 600 * this.delayScale);
     const wait = Math.max(0, delay - (this.now() - t0));
     this._timer = this.timers.setTimeout(() => {
       this._timer = null;
@@ -351,6 +364,64 @@ class GameSession {
     return { verdict };
   }
 
+  // ---------- Cheat kód (menu 67MILUJU) ----------
+  // Zásah do partie ji označí jako cheat: je nehodnocená (rating se nezmění, žádné Coiny) a navíc se nepočítá do výher, odemykání soupeřů
+  // ani rekordů (League.finishGame s cheated). Čistě vizuální věci (konfety, disco) do partie nezasahují a nic neoznačují.
+  _markCheated() { this.cheated = true; this.assisted = true; }
+
+  // Vyhraje partii hned: soupeř se vzdá.
+  cheatWin() {
+    if (this.over) return false;
+    this._markCheated();
+    this._finish("win", "cheat");
+    return true;
+  }
+
+  cheatDraw() {
+    if (this.over) return false;
+    this._markCheated();
+    this._finish("draw", "cheat");
+    return true;
+  }
+
+  // Soupeř hraje náhodné legální tahy (rychle, bez přemýšlení).
+  setBlindBot(on) {
+    if (this.over) return false;
+    if (on) this._markCheated();
+    this.cheatBlind = !!on;
+    this._changed();
+    return true;
+  }
+
+  // Autopilot: engine hraje za hráče (nejlepší tah z nápovědy) a čeká na tah soupeře.
+  setAutopilot(on) {
+    if (this.over) return false;
+    if (on) this._markCheated();
+    this.cheatAuto = !!on;
+    if (!on && this._autoTimer) { this.timers.clearTimeout(this._autoTimer); this._autoTimer = null; }
+    this._changed();
+    this._autopilotSoon();
+    return true;
+  }
+
+  // Soupeř řekne hlášku, jako když prohrává (jen když jsou hlášky zapnuté).
+  cheatScare() { this._say("losing", 1, true); }
+
+  _autopilotSoon() {
+    if (!this.cheatAuto || this._autoTimer || this.over) return;
+    this._autoTimer = this.timers.setTimeout(() => { this._autoTimer = null; this._autopilotStep(); }, 700 * this.delayScale);
+  }
+  async _autopilotStep() {
+    if (!this.cheatAuto || this.over) return;
+    if (!this.isPlayerTurn || this.thinking) { this._autopilotSoon(); return; } // čeká se na soupeře
+    const hint = await this.requestHint();
+    if (this.cheatAuto && hint && this.isPlayerTurn && !this.over) {
+      const m = findMoveByCoord(this.state, hint.coord);
+      if (m) { this.playerMove(m); return; } // po tahu soupeře se autopilot znovu naplánuje v _apply
+    }
+    this._autopilotSoon();
+  }
+
   // ---------- Hlášky bota ----------
   _say(kind, prob, force) {
     if (!this.chat) return;
@@ -369,7 +440,7 @@ class GameSession {
     return {
       v: 1, botIdx: this.botIdx, botKey: this.bot.key, color: this.playerColor, tc: this.tcKey,
       moves: this.coords(), times: t ? { w: Math.round(t.w), b: Math.round(t.b) } : null,
-      assisted: this.assisted, hints: this.hintsUsed, undos: this.undosUsed, startedAt: this.startedAt
+      assisted: this.assisted, cheated: this.cheated, hints: this.hintsUsed, undos: this.undosUsed, startedAt: this.startedAt
     };
   }
 
@@ -387,6 +458,7 @@ class GameSession {
       this._countPosition(after);
     }
     this.assisted = !!saved.assisted;
+    this.cheated = !!saved.cheated;
     this.hintsUsed = saved.hints || 0;
     this.undosUsed = saved.undos || 0;
     this.startedAt = saved.startedAt || this.startedAt;
@@ -404,6 +476,8 @@ class GameSession {
   destroy() {
     this._token++;
     this.thinking = false;
+    this.cheatAuto = false;
+    if (this._autoTimer) { this.timers.clearTimeout(this._autoTimer); this._autoTimer = null; }
     if (this._timer) { this.timers.clearTimeout(this._timer); this._timer = null; }
     this.ai.cancel && this.ai.cancel();
   }
