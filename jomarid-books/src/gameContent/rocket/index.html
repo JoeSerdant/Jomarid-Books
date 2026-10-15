@@ -999,7 +999,7 @@ h2 {
             <button class="mode-card inferno" id="btn-start-inferno">
                 <span class="mode-icon">😈</span>
                 <span class="mode-name">Peklo</span>
-                <span class="mode-desc">Hordy odolnějších nepřátel, málo power-upů, asteroidy probíjejí štít</span>
+                <span class="mode-desc">Hordy odolnějších nepřátel, řidší bossové, málo power-upů, asteroidy probíjejí štít</span>
                 <span class="mode-rec" id="rec-inferno">Rekord 0</span>
             </button>
             <button class="mode-card insane hidden" id="btn-start-insane">
@@ -2743,6 +2743,7 @@ const INFERNO = {
     dmgTakenMult: 1.6,       // loď dostává víc poškození
     enemyHpMult: 1.5,        // nepřátelé mají víc života (navíc k bonusu Těžké)
     bossHpMult: 1.25,        // bossové taky, jen mírněji (už v Těžké mají o 45 % víc)
+    bossScoreMult: 1.5,      // bossové chodí řidčeji: každý až po tolikanásobku skóre (první na 225 místo 150); nepřátel je i tak dost
     powerupMult: 0.35,       // šance na power-up ze zničeného nepřítele
     pickupMult: 0.5,         // šance na bonusovou minci
     asteroidChance: 0.0035,  // pole asteroidů začíná častěji (jinak 0,0012 na snímek)
@@ -2767,6 +2768,7 @@ const INSANE = {
     dmgTakenMult: 1.6,
     enemyHpMult: 2.55,       // 1,5 z Pekla × 1,7 (o 70 % víc než v Pekle)
     bossHpMult: 2.19,        // 1,25 z Pekla × 1,75 (o 75 % víc než v Pekle)
+    bossScoreMult: 2,        // bossové chodí ještě řidčeji než v Pekle: každý až po dvojnásobku skóre (první na 300)
     powerupMult: 0.12,       // power-upy jsou vyloženě vzácné
     pickupMult: 0.3,
     asteroidChance: 0.006,
@@ -3697,9 +3699,12 @@ class GameManager {
         }
     }
 
+    // Skóre, od kterého přijde další boss. V Pekle a Insane Pekle je to násobek (hell.bossScoreMult): nepřátel je tam tolik, že jim stačí řidší bossové.
     nextBossScore() {
-        if (this.bossCount < BOSS_THRESHOLDS.length) return BOSS_THRESHOLDS[this.bossCount];
-        return BOSS_THRESHOLDS[BOSS_THRESHOLDS.length - 1] + (this.bossCount - BOSS_THRESHOLDS.length + 1) * 3400;
+        const base = this.bossCount < BOSS_THRESHOLDS.length
+            ? BOSS_THRESHOLDS[this.bossCount]
+            : BOSS_THRESHOLDS[BOSS_THRESHOLDS.length - 1] + (this.bossCount - BOSS_THRESHOLDS.length + 1) * 3400;
+        return Math.round(base * (this.inferno ? this.hell.bossScoreMult || 1 : 1));
     }
 
     spawnBossInstance(level) {

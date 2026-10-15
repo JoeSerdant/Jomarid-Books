@@ -429,7 +429,7 @@
     return div({ className: "history-list" }, recentGames.map((g, k) => {
       const bot = botByKey(g.botKey);
       const tcName = (League.TIME_CONTROLS.find((t) => t.key === g.tc) || {}).short;
-      const meta = [g.color === "b" ? "černými" : "bílými", g.plies ? Math.ceil(g.plies / 2) + " tahů" : null, tcName && g.tc !== "none" ? tcName : null, g.acc != null ? "přesnost " + g.acc + " %" : null, g.rated === false ? "cvičná" : null].filter(Boolean).join(" · ");
+      const meta = [g.color === "b" ? "černými" : "bílými", g.plies ? Math.ceil(g.plies / 2) + " tahů" : null, tcName && g.tc !== "none" ? tcName : null, g.acc != null ? "přesnost " + g.acc + " %" : null, g.cheat ? "cheat" : g.rated === false ? "cvičná" : null].filter(Boolean).join(" · ");
       const row = [
         h(BotAvatar, { key: "a", bot, small: true }),
         div({ key: "i", className: "history-info" }, div({ className: "history-name" }, bot.name), div({ className: "history-meta" }, meta)),
@@ -470,6 +470,85 @@
   }
   function Toggle({ on, onChange, label }) {
     return button({ className: "toggle" + (on ? " on" : ""), role: "switch", "aria-checked": on, "aria-label": label, onClick: () => onChange(!on) });
+  }
+
+  // ---------- Cheat menu ----------
+  // Otevře se zadáním kódu na klávesnici kdekoli ve hře, nebo v Nastavení do pole "Tajný kód" (kvůli telefonům bez klávesnice).
+  // Zásahy do partie ji označí jako cheat (GameSession.cheated): rating se nezmění, žádné Coiny a nezapočítá se do výher ani rekordů.
+  const CHEAT_CODE = "67MILUJU";
+  // Znak z klávesy nezávisle na rozložení: číslice podle event.code (na české klávesnici dává řada čísel bez Shiftu písmena s háčky),
+  // písmena podle event.key.
+  function cheatChar(e) {
+    const m = /^(?:Digit|Numpad)(\d)$/.exec(e.code || "");
+    if (m) return m[1];
+    return typeof e.key === "string" && /^[a-z]$/i.test(e.key) ? e.key.toUpperCase() : null;
+  }
+  function useCheatCode(onOpen) {
+    useEffect(() => {
+      let buf = "";
+      function onKey(e) {
+        if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+        const ch = cheatChar(e);
+        if (!ch) return;
+        buf = (buf + ch).slice(-CHEAT_CODE.length);
+        if (buf === CHEAT_CODE) { buf = ""; onOpen(); }
+      }
+      window.addEventListener("keydown", onKey);
+      return () => window.removeEventListener("keydown", onKey);
+    }, []);
+  }
+
+  function CheatMenu({ session, disco, onDisco, onConfetti, onClose, soundOn }) {
+    const [, bump] = useReducer((x) => x + 1, 0);
+    useEffect(() => {
+      const onKey = (e) => { if (e.key === "Escape") onClose(); };
+      window.addEventListener("keydown", onKey);
+      return () => window.removeEventListener("keydown", onKey);
+    }, []);
+    const live = !!session && !session.over;
+    const items = [
+      { id: "win", icon: "🏆", label: "Vyhrát partii", note: "Soupeř se okamžitě vzdá.", game: true, run: () => { session.cheatWin(); onClose(); } },
+      { id: "draw", icon: "🤝", label: "Vynutit remízu", note: "Dohoda, o které soupeř nerozhoduje.", game: true, run: () => { session.cheatDraw(); onClose(); } },
+      { id: "blind", icon: "🙈", label: "Soupeř hraje naslepo", note: "Táhne náhodně a rychle.", game: true, on: live && session.cheatBlind, run: () => { session.setBlindBot(!session.cheatBlind); bump(); } },
+      { id: "auto", icon: "🤖", label: "Autopilot", note: "Engine hraje tvoje tahy za tebe.", game: true, on: live && session.cheatAuto, run: () => { session.setAutopilot(!session.cheatAuto); bump(); } },
+      { id: "scare", icon: "😱", label: "Vyděsit soupeře", note: "Soupeř zpanikaří (když má zapnuté hlášky).", game: true, run: () => { session.cheatScare(); onClose(); } },
+      { id: "confetti", icon: "🎉", label: "Konfety", note: "Jen tak, bez vlivu na partii.", run: () => { onConfetti(); } },
+      { id: "disco", icon: "🪩", label: "Disco šachovnice", note: "Duhová šachovnice, zapnout i vypnout.", on: disco, run: () => { onDisco(); } },
+      { id: "fanfare", icon: "🎺", label: "Fanfára", note: "Zahraje fanfáru.", run: () => { SoundFX.win(); } }
+    ];
+    return div({ className: "overlay", onClick: onClose, role: "dialog", "aria-modal": "true", "aria-label": "Cheat menu" },
+      // Fokus jde na kartu, ne na tlačítko: menu se otevírá klávesou Enter (pole Tajný kód), která by jinak hned potvrdila "Zavřít".
+      div({ className: "modal-card cheat-card", tabIndex: -1, autoFocus: true, onClick: (e) => e.stopPropagation() },
+        div({ className: "modal-title" }, "🎭 Cheat menu"),
+        div({ className: "modal-text" }, live
+          ? "Zásah do partie ji označí jako cheat: rating se nezmění, nedostaneš Coiny a nezapočítá se do výher, odemykání soupeřů ani rekordů."
+          : "Cheaty do partie fungují jen během rozehrané partie. Spusť ji a zadej kód znovu; zábavné věci (konfety, disco, fanfára) jdou kdykoli."),
+        div({ className: "cheat-list" }, items.map((it) => {
+          const off = it.game && !live;
+          const isToggle = it.on !== undefined;
+          return button({ key: it.id, className: "cheat-item" + (it.on ? " on" : ""), "data-cheat": it.id, disabled: off, role: isToggle ? "switch" : undefined, "aria-checked": isToggle ? !!it.on : undefined, onClick: it.run },
+            span({ className: "cheat-icon", "aria-hidden": "true" }, it.icon),
+            span({ className: "cheat-text" }, b(null, it.label), small(null, it.note)),
+            isToggle && span({ className: "cheat-state" }, it.on ? "ZAP" : "VYP"));
+        })),
+        div({ className: "modal-actions" }, button({ className: "btn btn-primary btn-sm", onClick: onClose }, "Zavřít"))));
+  }
+
+  // Pole v Nastavení: kód se píše do něj (telefon bez klávesnice nemá kam "psát po hře").
+  function SecretCodeRow({ onSubmit }) {
+    const [val, setVal] = useState("");
+    const [bad, setBad] = useState(false);
+    function submit() {
+      if (!val.trim()) return;
+      const ok = onSubmit(val);
+      setBad(!ok);
+      if (ok) setVal("");
+    }
+    return div({ className: "settings-row" },
+      span(null, "Tajný kód", small(null, bad ? "Tenhle kód neznám." : "Znáš-li ho.")),
+      div({ className: "secret-code" },
+        h("input", { className: "secret-input", type: "text", value: val, maxLength: 24, autoComplete: "off", autoCapitalize: "characters", spellCheck: false, "aria-label": "Tajný kód", onChange: (e) => { setVal(e.target.value); setBad(false); }, onKeyDown: (e) => { if (e.key === "Enter") submit(); } }),
+        button({ className: "btn btn-ghost btn-sm", onClick: submit }, "OK")));
   }
 
   function RatingHero({ save }) {
@@ -556,7 +635,7 @@
     }));
   }
 
-  function MenuScreen({ save, savedGame, onStart, onResume, onAbandon, onUpdate, onOpenReview, onResetProgress, theme, setTheme }) {
+  function MenuScreen({ save, savedGame, onStart, onResume, onAbandon, onUpdate, onOpenReview, onResetProgress, onCheatCode, theme, setTheme }) {
     const [colorChoice, setColorChoice] = useState(save.playerColor === "b" ? "b" : "w");
     const [tc, setTc] = useState(save.tc || "none");
     const [menuTab, setMenuTab] = useState("play");
@@ -610,6 +689,7 @@
             div({ className: "settings-row" }, span(null, "Hlášky soupeřů", small(null, "Boti občas něco prohodí k průběhu partie.")), h(Toggle, { on: save.botChat, label: "Hlášky soupeřů", onChange: (v) => onUpdate({ botChat: v }) })),
             div({ className: "settings-row" }, span(null, "Automaticky povyšovat na dámu", small(null, "Bez ptaní, když pěšec dojde na konec desky.")), h(Toggle, { on: save.autoQueen, label: "Automaticky povyšovat na dámu", onChange: (v) => onUpdate({ autoQueen: v }) })),
             div({ className: "settings-row" }, span(null, "Motiv"), h(ThemeSeg, { value: theme, onChange: setTheme })),
+            h(SecretCodeRow, { onSubmit: onCheatCode }),
             div({ className: "settings-row" }, span(null, "Resetovat postup", small(null, "Smaže rating, rekordy, výhry i odemčené soupeře.")), button({ className: "btn btn-danger btn-sm", onClick: onResetProgress }, "Resetovat")))))));
   }
 
@@ -841,15 +921,15 @@
             div({ className: "panel-card" },
               div({ className: "panel-title" }, "Zahájení"),
               opening ? div({ className: "opening-name" }, opening) : div({ className: "opening-empty" }, session.playerColor === "w" ? "Zatím se nehrálo — táhni jako první!" : "Zatím se nehrálo."),
-              div({ className: "mode-pill " + (session.rated ? "rated" : "practice") }, session.rated ? "🏅 Hodnocená partie" : "🎓 Cvičná partie"),
-              div({ className: "mode-note" }, session.rated ? "Vrácení tahu a nápověda změní partii na cvičnou — rating se pak nezmění a nedostaneš Coiny." : "Pomoc byla použita: rating se nezmění a nedostaneš Coiny.")),
+              div({ className: "mode-pill " + (session.cheated ? "cheat" : session.rated ? "rated" : "practice") }, session.cheated ? "🎭 Cheat partie" : session.rated ? "🏅 Hodnocená partie" : "🎓 Cvičná partie"),
+              div({ className: "mode-note" }, session.cheated ? "Použil jsi cheat kód: rating se nezmění, nedostaneš Coiny a partie se nezapočítá do výher ani rekordů." : session.rated ? "Vrácení tahu a nápověda změní partii na cvičnou — rating se pak nezmění a nedostaneš Coiny." : "Pomoc byla použita: rating se nezmění a nedostaneš Coiny.")),
             h(MoveListPanel, { moves: session.moves, viewIdx, onView: view_, showNav: true })))));
   }
 
   // ---------- Konec zápasu ----------
   const REASON_LABELS = {
     checkmate: "matem", resign: "vzdáním", stalemate: "patem", insufficient: "nedostatkem materiálu", fiftymove: "pravidlem 50 tahů",
-    repetition: "trojím opakováním pozice", timeout: "časem", "timeout-material": "časem (soupeř nemá dost materiálu na mat)", agreement: "dohodou", botresign: "vzdáním soupeře"
+    repetition: "trojím opakováním pozice", timeout: "časem", "timeout-material": "časem (soupeř nemá dost materiálu na mat)", agreement: "dohodou", botresign: "vzdáním soupeře", cheat: "cheat kódem"
   };
 
   function EndScreen({ info, bot, analysis, onContinue, onRematch, onReview }) {
@@ -880,7 +960,7 @@
             div({ className: "rating-change" }, span({ className: "rc-num" }, shown), span({ className: "rc-delta " + deltaCls }, s.delta > 0 ? "▲ +" + s.delta : s.delta < 0 ? "▼ −" + Math.abs(s.delta) : "• ±0")),
             div({ className: "rc-note" }, "Před zápasem ", s.ratingBefore, " · očekávaná šance ", pct(s.expected), " · K ", s.k, s.provisional ? " · kalibrace " + Math.min(s.ratedGamesAfter, League.PROVISIONAL_GAMES) + "/" + League.PROVISIONAL_GAMES : ""),
             s.newPeak && div({ className: "badge-new" }, "🏆 Nový osobní rekord!"))
-          : div({ className: "rc-note" }, "🎓 Cvičná partie (s vrácením tahu nebo nápovědou): rating zůstává ", s.ratingBefore, ".")),
+          : div({ className: "rc-note" }, s.cheated ? "🎭 Cheat partie: rating, výhry ani odemykání soupeřů se nezměnily (rating zůstává " + s.ratingBefore + ")." : "🎓 Cvičná partie (s vrácením tahu nebo nápovědou): rating zůstává " + s.ratingBefore + ".")),
       ((info.coinReward > 0 && embedded) || s.newlyUnlocked) && div({ className: "xp-card" },
         info.coinReward > 0 && embedded && div({ className: "xp-row" }, span(null, "🪙 Odměna za výhru (Jomarid Coins)"), span({ className: "xp-total" }, "až +", info.coinReward)),
         s.newlyUnlocked && div({ className: "xp-row" }, span(null, "Nový soupeř"), span({ className: "xp-total" }, "Odemčen!"))),
@@ -1007,6 +1087,10 @@
     const [analysis, setAnalysis] = useState(null);
     const [reviewData, setReviewData] = useState(null);
     const [confirm, setConfirm] = useState(null);
+    const [cheatOpen, setCheatOpen] = useState(false);
+    const [disco, setDisco] = useState(false);
+    const [confettiKey, setConfettiKey] = useState(0);
+    const confettiRef = useRef(null);
     const saveRef = useRef(save);
     saveRef.current = save;
     const aiRef = useRef(null);
@@ -1014,6 +1098,19 @@
     const analysisToken = useRef(0);
     const processedRef = useRef(null);
     if (!aiRef.current) aiRef.current = createAIClient();
+
+    // Cheat kód 67MILUJU (kdekoli na klávesnici nebo v Nastavení) otevře cheat menu.
+    useCheatCode(() => { setCheatOpen(true); });
+    function tryCheatCode(text) {
+      if (String(text).trim().toUpperCase() !== CHEAT_CODE) return false;
+      setCheatOpen(true);
+      return true;
+    }
+    useEffect(() => { document.body.classList.toggle("disco", disco); return () => document.body.classList.remove("disco"); }, [disco]);
+    useEffect(() => {
+      if (!confettiKey || !confettiRef.current) return;
+      return Confetti.burst(confettiRef.current, 3200);
+    }, [confettiKey]);
 
     const theme = save.theme || "dark";
     useEffect(() => {
@@ -1075,7 +1172,7 @@
       const saved = savedGame;
       League.persistGame(storage, null); setSavedGame(null);
       if (!saved) return;
-      const r = League.finishGame(saveRef.current, { botIdx: saved.botIdx, result: "loss", reason: "resign", color: saved.color, plies: saved.moves.length, tc: saved.tc, rated: !saved.assisted, moves: saved.moves }, BOT_LIST, todayStr());
+      const r = League.finishGame(saveRef.current, { botIdx: saved.botIdx, result: "loss", reason: "resign", color: saved.color, plies: saved.moves.length, tc: saved.tc, rated: !saved.assisted, cheated: !!saved.cheated, moves: saved.moves }, BOT_LIST, todayStr());
       setSaveFull(r.save);
     }
 
@@ -1086,7 +1183,7 @@
       processedRef.current = sess;
       const { result, reason } = sess.result;
       const botIdx = sess.botIdx, rated = sess.rated, coords = sess.coords();
-      const r = League.finishGame(saveRef.current, { botIdx, result, reason, color: sess.playerColor, plies: coords.length, tc: sess.tcKey, rated, moves: coords }, BOT_LIST, todayStr());
+      const r = League.finishGame(saveRef.current, { botIdx, result, reason, color: sess.playerColor, plies: coords.length, tc: sess.tcKey, rated, cheated: sess.cheated, moves: coords }, BOT_LIST, todayStr());
       setSaveFull(r.save);
       League.persistGame(storage, null); setSavedGame(null);
       // Odměna v Coinech jen za výhru v hodnocené partii; o skutečné částce rozhoduje server (denní strop).
@@ -1154,7 +1251,7 @@
     const settings = { sound: save.sound, highlights: save.highlights, chat: save.botChat !== false, autoQueen: !!save.autoQueen };
     let content;
     if (view === "menu") {
-      content = h(MenuScreen, { save, savedGame, onStart: startGame, onResume: resumeGame, onAbandon: () => setConfirm({ abandon: true }), onUpdate: updateSave, onOpenReview: (g) => openReview(g, "menu"), onResetProgress: () => setConfirm({ reset: true }), theme, setTheme: (t) => updateSave({ theme: t }) });
+      content = h(MenuScreen, { save, savedGame, onStart: startGame, onResume: resumeGame, onAbandon: () => setConfirm({ abandon: true }), onUpdate: updateSave, onOpenReview: (g) => openReview(g, "menu"), onResetProgress: () => setConfirm({ reset: true }), onCheatCode: tryCheatCode, theme, setTheme: (t) => updateSave({ theme: t }) });
     } else if (view === "game" && session) {
       content = h(GameScreen, { key: session.startedAt + "-" + session.botIdx, session, save, soundOn: save.sound, onToggleSound: () => updateSave({ sound: !save.sound }), onExit: leaveGame, onFinished, settings });
     } else if (view === "end" && endInfo) {
@@ -1164,6 +1261,8 @@
     }
     return div({ className: "app-shell" },
       content,
+      confettiKey > 0 && h("canvas", { key: confettiKey, ref: confettiRef, className: "confetti-canvas", "aria-hidden": "true" }),
+      cheatOpen && h(CheatMenu, { session: view === "game" ? session : null, disco, soundOn: save.sound, onDisco: () => setDisco((d) => !d), onConfetti: () => { setConfettiKey((k) => k + 1); }, onClose: () => setCheatOpen(false) }),
       confirm && confirm.abandon && h(ConfirmModal, { title: "Vzdát rozehranou partii?", text: "Zápas se započítá jako prohra.", confirmLabel: "Vzdát", danger: true, onConfirm: () => { setConfirm(null); doAbandon(); }, onCancel: () => setConfirm(null) }),
       confirm && confirm.reset && h(ConfirmModal, { title: "Resetovat veškerý postup?", text: "Smaže se rating, rekordy, výhry i odemčení soupeři. Tohle nejde vrátit.", confirmLabel: "Resetovat", danger: true, onConfirm: () => { setConfirm(null); doReset(); }, onCancel: () => setConfirm(null) }),
       confirm && confirm.start && h(ConfirmModal, { title: "Máš rozehranou partii", text: "Když začneš novou, rozehraná partie se započítá jako prohra.", confirmLabel: "Začít novou", danger: true, onConfirm: () => { const c = confirm.start; setConfirm(null); doAbandon(); reallyStart(c.botIdx, c.color, c.tc, c.colorChoice); }, onCancel: () => setConfirm(null) }));

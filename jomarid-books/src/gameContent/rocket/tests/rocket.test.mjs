@@ -128,6 +128,26 @@ test('Insane Peklo: čísla odpovídají zadání (+75 % bossové, +70 % nepřá
   assert.ok(N.powerupTimeMult < 1 && N.healMult < 1 && N.hpMult < 1 && N.dmgMult < 1 && N.fireRateMult > 1, 'slabší loď a power-upy');
 });
 
+test('bossové chodí v Pekle řidčeji a v Insane Pekle ještě řidčeji (násobek skóre), jinde beze změny', () => {
+  const I = vm.runInNewContext('(' + html.match(/const INFERNO = (\{[\s\S]*?\n\});/)[1] + ')');
+  const N = vm.runInNewContext('(' + html.match(/const INSANE = (\{[\s\S]*?\n\});/)[1] + ')');
+  assert.ok(I.bossScoreMult > 1 && N.bossScoreMult > I.bossScoreMult, 'Peklo řidší než ostatní režimy, Insane Peklo řidší než Peklo');
+  assert.equal(I.bossScoreMult, 1.5);
+  assert.equal(N.bossScoreMult, 2);
+  // nextBossScore se spustí tak, jak je ve hře napsané (bez zbytku třídy)
+  const thr = vm.runInNewContext(html.match(/const BOSS_THRESHOLDS = (\[[^\]]*\]);/)[1]);
+  const src = html.match(/nextBossScore\(\) \{([\s\S]*?)\n    \}\n/)[1];
+  const next = new Function('BOSS_THRESHOLDS', 'game', `return (function () {${src}}).call(game)`);
+  const at = (count, extra) => next(thr, { bossCount: count, inferno: false, ...extra });
+  assert.deepEqual([0, 1, 12].map((c) => at(c)), [150, 650, 20400], 'normální režimy: stejné prahy jako dřív');
+  assert.equal(at(13), 20400 + 3400, 'za poslední pevnou hranicí dál po 3400');
+  assert.deepEqual([0, 1, 12].map((c) => at(c, { inferno: true, hell: I })), [225, 975, 30600], 'Peklo: o polovinu později');
+  assert.deepEqual([0, 1, 12].map((c) => at(c, { inferno: true, hell: N })), [300, 1300, 40800], 'Insane Peklo: dvakrát později');
+  assert.equal(at(14, { inferno: true, hell: N }), (20400 + 2 * 3400) * 2, 'násobek platí i za pevnými hranicemi');
+  assert.equal(at(0, { inferno: true, hell: {} }), 150, 'režim bez násobku se chová jako normální (žádné NaN)');
+  assert.ok(html.includes('řidší bossové'), 'karta Pekla to říká');
+});
+
 test('Insane Peklo se projeví v kódu: bossové probíjejí štít, nepřátelé chodí i při bossovi, slabší loď, destroyer ve vějíři', () => {
   assert.match(html, /get insane\(\) \{\s*return this\.mode === 'insane';/);
   assert.match(html, /get hell\(\) \{\s*return this\.insane \? INSANE : INFERNO;/);
