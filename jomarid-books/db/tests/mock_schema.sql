@@ -1,4 +1,4 @@
--- Zjednodušené schéma Supabase pro SQL testy (db/tests/run.sh): jen tabulky a funkce, na které se db/push-notifications.sql a db/email-change.sql odkazují.
+-- Zjednodušené schéma Supabase pro SQL testy (db/tests/run.sh): jen tabulky a funkce, na které se db/push-notifications.sql, db/email-change.sql a db/game-records.sql odkazují.
 -- Slouží výhradně testům na dočasném lokálním PostgreSQL; do Supabase se nikdy nespouští (maže schéma public!).
 drop schema if exists public cascade; create schema public;
 drop schema if exists auth cascade; drop schema if exists net cascade; drop schema if exists extensions cascade;
@@ -21,7 +21,7 @@ create schema net;
 create table net.calls (id serial primary key, url text, headers jsonb, body jsonb);
 create function net.http_post(url text, body jsonb default '{}', params jsonb default '{}', headers jsonb default '{}', timeout_milliseconds int default 5000)
 returns bigint language plpgsql as $$ begin insert into net.calls (url, headers, body) values (url, headers, body); return 1; end $$;
-create table public.profiles (id uuid primary key references auth.users (id), role text, email text, username text, coins bigint default 0, monthly_goal int, frozen_dates date[] default '{}', current_streak int default 0);
+create table public.profiles (id uuid primary key references auth.users (id), role text, email text, username text, coins bigint default 0, monthly_goal int, frozen_dates date[] default '{}', current_streak int default 0, show_in_leaderboard boolean default true);
 create table public.books (id uuid primary key default gen_random_uuid(), title text, author text, author_display text, author_id uuid, price_coins int not null default 0, is_hidden boolean not null default false, is_auto_assigned boolean default false);
 create table public.user_books (id uuid primary key default gen_random_uuid(), user_id uuid not null, book_id uuid not null, status text, is_read boolean default false, scroll_position numeric(5,2), updated_at timestamptz default now(), first_completed_at timestamptz);
 create table public.user_daily_activity (id bigint generated always as identity primary key, user_id uuid, activity_date date, unique (user_id, activity_date));

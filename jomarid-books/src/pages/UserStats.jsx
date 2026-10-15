@@ -3,11 +3,13 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { BOOK_BADGES } from '../constants/badges';
+import { EMPTY_PROGRESS, loadGameProgress, loadGameXpTotals } from '../gameRecords/api';
 import { calculateLevelAndProgress, getLevelVisuals, calculateGoalMultiplier, computeTotalXp, DEFAULT_MONTHLY_GOAL } from '../constants/leveling';
 import { sumBadgeXp } from '../constants/badgeXp';
 import { STREAK_FREEZE_PRICE } from '../constants/economy';
 import { plural } from '../lib/plural';
 import { BadgesSection } from '../components/BadgesSection';
+import { GamesProgress } from '../components/GamesProgress';
 import { Calendar, CheckCircle, ChevronRight, Coins, Flame, Loader2, Lock, Shield, ShieldCheck, ShieldOff, Sparkles, TrendingUp, Trophy, Users } from 'lucide-react';
 
 export const UserStats = () => {
@@ -73,11 +75,12 @@ export const UserStats = () => {
       // Paralelní stažení profilu, knih, denní aktivity a vyřešení streaku
       // (resolve_streak() sám dožene libovolné množství uplynulých dní od
       // posledního vyřešení - klient historii sám neprochází).
-      const [profileRes, booksRes, activityRes, streakRes] = await Promise.all([
+      const [profileRes, booksRes, activityRes, streakRes, gameProgress] = await Promise.all([
         supabase.from('profiles').select('fake_xp, bonus_xp, show_in_leaderboard, unlocked_badges, monthly_goal, last_goal_change_date, coins, lifetime_coins_earned, streak_freezes, frozen_dates, current_streak, highest_goal_completed, featured_badge').eq('id', user.id).maybeSingle(),
         supabase.from('user_books').select('updated_at, first_completed_at, is_read').eq('user_id', user.id).eq('is_read', true),
         supabase.from('user_daily_activity').select('activity_date').eq('user_id', user.id).order('activity_date', { ascending: false }),
-        supabase.rpc('resolve_streak')
+        supabase.rpc('resolve_streak'),
+        loadGameProgress(supabase),
       ]);
 
       const profileData = profileRes.data || {};
@@ -211,7 +214,9 @@ export const UserStats = () => {
       });
 
       // 5. FINÁLNÍ HERNÍ MATEMATIKA (XP)
-      const totalXp = xpBeforeBadges + badgeBonusXp;
+      // XP z herních odznaků (server, db/game-records.sql) se přičítá až sem: do vyhodnocení odznaků z úrovně (výš) nevstupuje,
+      // aby hry neodemykaly odznaky za úroveň a s nimi mince.
+      const totalXp = xpBeforeBadges + badgeBonusXp + gameProgress.xp;
       const { level, xpInCurrentLevel, xpNeededForNext } = calculateLevelAndProgress(totalXp);
       const visuals = getLevelVisuals(level);
 
@@ -245,6 +250,7 @@ export const UserStats = () => {
         streak, monthlyRead, monthlyGoal: currentGoal, totalRead, weeklyActivity: weeklyActivityGenerated, readingTrend,
         xp: xpInCurrentLevel, level, levelName: visuals.name, levelBadgeClass: visuals.badge, levelBoxClass: visuals.box,
         xpNeededForNext, daysRemainingInMonth, currentMonthName, showInLeaderboard: profileData.show_in_leaderboard ?? true,
+        gameProgress,
         unlockedBadges: savedUnlockedBadges, jomaridCoins: calculatedCoins, goalLocked: isGoalLocked, goalLockedCompletely: isLockedByProgress, goalProgress: monthlyRead,
         streakFreezes: displayStreakFreezes, frozenDates: displayFrozenDates, highestGoalCompleted, featuredBadge: profileData.featured_badge || null
       });
@@ -252,7 +258,7 @@ export const UserStats = () => {
       // 6. LEADERBOARDS
       // Žebříček bere server (leaderboard_profiles): jen uživatelské jméno a statistiky, žádné e-maily ostatních.
       let allProfiles = null;
-      const lbRes = await supabase.rpc('leaderboard_profiles');
+      const [lbRes, gameXpTotals] = await Promise.all([supabase.rpc('leaderboard_profiles'), loadGameXpTotals(supabase)]);
       if (lbRes.error) console.error('Nepodařilo se načíst žebříček:', lbRes.error);
       else if (Array.isArray(lbRes.data)) allProfiles = lbRes.data;
       if (allProfiles && allProfiles.length > 0) {
@@ -298,7 +304,8 @@ export const UserStats = () => {
             fakeXp: p.fake_xp,
             bonusXp: p.bonus_xp,
             streak: uStreak,
-            badgeXp: sumBadgeXp(p.unlocked_badges)
+            badgeXp: sumBadgeXp(p.unlocked_badges),
+            gameXp: gameXpTotals.get(p.id) || 0
           });
           const { level: uLvl } = calculateLevelAndProgress(uXpTotal);
 
@@ -690,6 +697,7 @@ export const UserStats = () => {
 
       {/* ODZNÁČKY */}
       <BadgesSection stats={stats} />
+      <GamesProgress progress={stats.gameProgress || EMPTY_PROGRESS} userId={user?.id} />
 
       {/* TLAČÍTKO ZPĚT */}
       <div className="flex justify-end">

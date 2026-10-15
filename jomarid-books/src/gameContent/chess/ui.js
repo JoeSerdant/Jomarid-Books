@@ -17,6 +17,14 @@
   function pad2(n) { return String(n).padStart(2, "0"); }
   function dateStr(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
   function todayStr() { return dateStr(new Date()); }
+  // Rekordy se hlásí appce (jomaridRecord v mostu v index.html; mimo appku funkce není a nic se neděje).
+  function reportRecords(s) {
+    if (typeof jomaridRecord !== "function" || !s) return;
+    jomaridRecord("rating_peak", s.peak);
+    jomaridRecord("wins_total", s.record && s.record.w);
+    jomaridRecord("expert_wins", s.botStats && s.botStats.expert && s.botStats.expert.w);
+    jomaridRecord("bots_unlocked", (s.unlockedIndex || 0) + 1);
+  }
   function fmtClock(ms) {
     if (ms == null) return "";
     const total = Math.max(0, ms);
@@ -1017,10 +1025,13 @@
       return () => { if (mq.removeEventListener) mq.removeEventListener("change", fn); };
     }, [theme]);
 
+    // Uložený postup se zapisuje vždy spolu s hlášením rekordů appce (jen zvýšení se posílá dál, takže to nic nestojí).
+    function persistSave(next) { League.persistSave(storage, next); reportRecords(next); }
+    useEffect(() => { reportRecords(save); }, []);
     function updateSave(patch) {
-      setSave((prev) => { const next = Object.assign({}, prev, patch); League.persistSave(storage, next); return next; });
+      setSave((prev) => { const next = Object.assign({}, prev, patch); persistSave(next); return next; });
     }
-    function setSaveFull(next) { League.persistSave(storage, next); setSave(next); }
+    function setSaveFull(next) { persistSave(next); setSave(next); }
     function stopAnalysis() {
       analysisToken.current++;
       if (analysisAiRef.current) { analysisAiRef.current.destroy(); analysisAiRef.current = null; }

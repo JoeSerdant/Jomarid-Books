@@ -12,7 +12,9 @@ if(hasJb())window.onJomaridBalance();
 // Zapíše nový nejlepší výsledek režimu a při rekordu (od 100 bodů, mimo Zen) požádá o odměnu; stejně se volá při odchodu do menu i na konci hry,
 // takže rekord z přerušené hry o odměnu nepřijde.
 const bump=(m,sc)=>{if(sc<=(S.bm[m]||0))return 0;S.bm[m]=sc;if(m!=='zen'&&sc>=100&&typeof jomaridReward==='function')jomaridReward('record',3);return 1};
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+// Rekordy se hlásí appce (jomaridRecord v mostu); posílá se jen zvýšení, takže volání při každém uložení nic nestojí.
+const rec=()=>{if(typeof jomaridRecord!=='function')return;for(const m of['classic','time','drops','chaos'])jomaridRecord('score_'+m,S.bm[m]);jomaridRecord('balls_discovered',S.disc+1)};
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}rec()};
 function stats(){const d=new Date();d.setHours(0,0,0,0);const mx=t=>S.log.reduce((m,[ts,sc])=>ts>=t?Math.max(m,sc):m,0);
  $('sT').textContent=mx(d.getTime());$('sW').textContent=mx(Date.now()-6048e5);$('sA').textContent=S.best;$('sG').textContent=S.games;$('sM').textContent=S.merges;$('cn').textContent=S.coins;$('snd').textContent=S.mute?'🔇':'🔊';$('cont').classList.toggle('hide',!S.run);if(S.run)$('cont').textContent='Pokračovat · '+MODES.find(m=>m[0]===S.run.mode)[1]+' · '+S.run.score}
 $('mas').innerHTML=[3,4,5,6,2].map(t=>{const s=[50,60,70,80,55][t%5];return `<div class="b" style="width:${s/16}em;height:${s/16}em;background:${COL[t]};animation-delay:${t*.2}s"><span style="left:14%"></span><span style="right:14%"></span></div>`}).join('');
@@ -130,4 +132,4 @@ function draw(){
  for(const p of g.pt){ctx.fillStyle=p.c;ctx.globalAlpha=p.l/30;ctx.beginPath();ctx.arc(p.x,p.y,4,0,7);ctx.fill()}ctx.globalAlpha=1;for(const p of g.pp)txt(p.s||'+'+p.v,p.x,p.y,p.s?30:34,'center',p.c);if(g.tgt)txt('Klepni na kouli',W/2,300,32,'center','#ffd92e');if(g.disc){ctx.fillStyle='rgba(0,0,0,.65)';ctx.fillRect(0,0,W,H);txt('Nová koule objevena!',W/2,280,44,'center');ball(W/2,500,110,g.disc.t);txt('Klepni pro pokračování',W/2,700,26,'center')}}
 function loop(t){requestAnimationFrame(loop);const dt=Math.min(.05,(t-last)/1000||0);last=t;if(st==='menu')return;
  if(st==='play'){acc+=dt;while(acc>=1/60){if(g.disc){g.disc.l--;if(g.disc.l<1)g.disc=null}else step();acc-=1/60;if(st!=='play')break}}draw()}
-g={balls:[],score:0,cur:0,next:0,aimX:W/2,cool:0,overT:0,ab:{}};stats();requestAnimationFrame(loop);
+g={balls:[],score:0,cur:0,next:0,aimX:W/2,cool:0,overT:0,ab:{}};stats();rec();requestAnimationFrame(loop);

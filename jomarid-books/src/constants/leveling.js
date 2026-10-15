@@ -65,11 +65,12 @@ export const calculateGoalMultiplier = (highestGoalCompleted) => {
   return g > DEFAULT_MONTHLY_GOAL ? 1 + (g - DEFAULT_MONTHLY_GOAL) * 0.02 : 1;
 };
 
-// Celkové XP: dočtené knihy (s násobkem za splněný cíl) + XP za sérii + bonusy z profilu + XP z odznaků.
-// badgeXp spočítej přes sumBadgeXp() (constants/badgeXp.js).
-export const computeTotalXp = ({ totalRead = 0, highestGoalCompleted, fakeXp, bonusXp, streak = 0, badgeXp = 0 }) =>
+// Celkové XP: dočtené knihy (s násobkem za splněný cíl) + XP za sérii + bonusy z profilu + XP z odznaků + XP z herních odznaků.
+// badgeXp spočítej přes sumBadgeXp() (constants/badgeXp.js), gameXp dává server (my_game_progress, game_xp_totals; viz src/gameRecords).
+export const computeTotalXp = ({ totalRead = 0, highestGoalCompleted, fakeXp, bonusXp, streak = 0, badgeXp = 0, gameXp = 0 }) =>
   Math.round((totalRead * 100) * calculateGoalMultiplier(highestGoalCompleted))
   + (parseInt(fakeXp, 10) || 0)
   + (parseInt(bonusXp, 10) || 0)
   + calculateXpMultiplier(streak)
-  + badgeXp;
+  + badgeXp
+  + (Number.isFinite(gameXp) && gameXp > 0 ? Math.floor(gameXp) : 0);

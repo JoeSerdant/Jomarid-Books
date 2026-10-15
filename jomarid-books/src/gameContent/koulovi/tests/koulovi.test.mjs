@@ -56,6 +56,7 @@ test('hra nenačítá cizí skripty (jen písmo) a ukládá pod vlastním klíč
 function makeEnv() {
   const store = {};
   const rewards = [];
+  const records = [];
   const els = new Map();
   const rafs = [];
   const ctx2d = () => {
@@ -88,6 +89,7 @@ function makeEnv() {
     navigator: { vibrate() {} },
     localStorage: { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } },
     jomaridReward: (reason, amount) => { rewards.push([reason, amount]); },
+    jomaridRecord: (stat, value) => { records.push([stat, value]); },
   };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
@@ -95,7 +97,7 @@ function makeEnv() {
   vm.runInContext('(function () { var s = 12345; Math.random = function () { s = (s * 1664525 + 1013904223) % 4294967296; return s / 4294967296; }; })()', sandbox);
   new vm.Script(game, { filename: 'game.js' }).runInContext(sandbox);
   const run = (code) => vm.runInContext(code, sandbox);
-  return { sandbox, run, store, rewards };
+  return { sandbox, run, store, rewards, records };
 }
 
 test('hra se spustí a ukáže menu bez chyby', () => {
@@ -409,4 +411,18 @@ test('zlatá koule je vidět: zář kolem koule a 🔶 v ruce, v dalším poli i
   assert.match(game, /ball\(hx,DROP_Y,hr,g\.cur,0,1,undefined,1,g\.cG\)/);
   assert.match(game, /bl,b\.gold\)\}/);
   assert.match(game, /if\(gd\)\{ctx\.font=/);
+});
+
+test('rekordy se hlásí appce: skóre režimů a objevené koule při startu i při uložení, režimy bez skóre se neposílají', () => {
+  const a = makeEnv();
+  assert.deepEqual(a.records.filter(([k]) => k !== 'balls_discovered'), [['score_classic', undefined], ['score_time', undefined], ['score_drops', undefined], ['score_chaos', undefined]], 'bez rekordů se posílá jen undefined, které most zahodí');
+  assert.deepEqual(a.records.find(([k]) => k === 'balls_discovered'), ['balls_discovered', 1], 'jedna koule je odemčená vždy');
+  const b = makeEnv();
+  b.records.length = 0;
+  b.run("start('classic')"); b.run('g.score = 150; finish(1);');
+  assert.ok(b.records.some(([k, v]) => k === 'score_classic' && v === 150), 'konec hry nahlásí skóre Klasiky');
+  assert.ok(!b.records.some(([k]) => k === 'score_zen'), 'Zen se nehlásí');
+  b.records.length = 0;
+  b.run('g.balls = [mk(270, 600, 4), mk(270, 600, 4)]; S.disc = 3; step();');
+  assert.ok(b.records.some(([k, v]) => k === 'balls_discovered' && v === 6), 'objevení nové koule (typ 5) nahlásí 6 objevených');
 });
