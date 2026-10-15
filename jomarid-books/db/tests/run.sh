@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# SQL testy na skutečném PostgreSQL: db/push-notifications.sql (oznámení), db/email-change.sql (změna e-mailu přes správce) a db/game-records.sql (herní rekordy a odznaky)
+# SQL testy na skutečném PostgreSQL: db/push-notifications.sql (oznámení), db/email-change.sql (změna e-mailu přes správce), db/game-records.sql (herní rekordy a odznaky)
+# a db/shop.sql (obchůdek)
 # proti zjednodušenému schématu Supabase (mock_schema.sql).
 #   bash db/tests/run.sh        (nebo: npm run test:sql)
 # Potřebuje PostgreSQL 14+ (initdb, pg_ctl, psql v PATH nebo v /usr/lib/postgresql/*/bin). Vytvoří dočasný cluster mimo síť (jen unix socket),
@@ -9,6 +10,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 SQL="$HERE/../push-notifications.sql"
 EMAIL_SQL="$HERE/../email-change.sql"
 GAME_SQL="$HERE/../game-records.sql"
+SHOP_SQL="$HERE/../shop.sql"
 
 BIN=""
 for d in $(command -v initdb >/dev/null 2>&1 && dirname "$(command -v initdb)") /usr/lib/postgresql/*/bin; do
@@ -20,7 +22,7 @@ TMP="$(mktemp -d)"
 RUNAS=""
 if [ "$(id -u)" = "0" ]; then
   id postgres >/dev/null 2>&1 || { echo "Jako root je potřeba uživatel postgres." >&2; rm -rf "$TMP"; exit 77; }
-  chown postgres "$TMP"; chmod 755 "$HERE" "$HERE"/*.sql "$SQL" "$EMAIL_SQL" "$GAME_SQL" 2>/dev/null || true
+  chown postgres "$TMP"; chmod 755 "$HERE" "$HERE"/*.sql "$SQL" "$EMAIL_SQL" "$GAME_SQL" "$SHOP_SQL" 2>/dev/null || true
   RUNAS="runuser -u postgres --"
 fi
 run() { $RUNAS "$@"; }
@@ -44,10 +46,13 @@ OUT="$TMP/out.txt"
   PSQLQ -f "$EMAIL_SQL" &&      # i tenhle soubor
   PSQLQ -f "$GAME_SQL" &&
   PSQLQ -f "$GAME_SQL" &&       # i herní rekordy
+  PSQLQ -f "$SHOP_SQL" &&
+  PSQLQ -f "$SHOP_SQL" &&       # i obchůdek
   PSQLQ -f "$HERE/push_logic.test.sql" &&
   PSQLQ -f "$HERE/push_rpc.test.sql" &&
   PSQLQ -f "$HERE/email_change.test.sql" &&
-  PSQLQ -f "$HERE/game_records.test.sql"
+  PSQLQ -f "$HERE/game_records.test.sql" &&
+  PSQLQ -f "$HERE/shop.test.sql"
 } >"$OUT" 2>&1
 STATUS=$?
 
@@ -82,6 +87,38 @@ HOLD
       echo "SELÁHALO: souběh plánovače (zamčený průchod vrátil '$BLOCKED', v deníku $LOGGED_WHILE_LOCKED, po uvolnění '$FREE')" >>"$OUT"; STATUS=1
     fi
   fi
+fi
+
+# Kontrola předpokladů v db/shop.sql: nesedí-li tabulka mincí (nebo chybí herní odznaky), soubor se musí zastavit hned při spuštění,
+# dřív než cokoli změní, ne až při prvním nákupu. Každý případ se zkouší na rozbité kopii a zase vrací zpět.
+if [ $STATUS -eq 0 ]; then
+  pf() {  # pf <popis> <text hlášky> <příprava> <úklid>
+    PSQLQ -c "update public.shop_items set price = 1 where item_id = 'gamefx_noir'" || STATUS=1
+    PSQLQ -c "$3" || STATUS=1
+    local out; out=$(PSQL -At -f "$SHOP_SQL" 2>&1); local rc=$?
+    PSQLQ -c "$4" || STATUS=1
+    local price; price=$(PSQL -At -c "select price from public.shop_items where item_id = 'gamefx_noir'" 2>&1)
+    if [ $rc -ne 0 ] && echo "$out" | grep -q "$2" && [ "$price" = "1" ]; then
+      echo "NOTICE:  OK   db/shop.sql se zastaví a nic nezmění, když $1" >>"$OUT"
+    else
+      echo "SELÁHALO: db/shop.sql při '$1' (kód $rc, cena po pokusu '$price'): $out" >>"$OUT"; STATUS=1
+    fi
+    PSQLQ -f "$SHOP_SQL" 2>/dev/null || STATUS=1   # zpátky do pořádku (cena se srovná)
+  }
+  pf "zápis do coin_transactions zůstatek vůbec nemění (chybí spoušť)" "zapsanou částku" \
+     "alter table public.coin_transactions disable trigger trg_update_coins;" \
+     "alter table public.coin_transactions enable trigger trg_update_coins;"
+  pf "zápis do coin_transactions změní zůstatek o jinou částku, než se zapsala" "zapsanou částku" \
+     "create or replace function public.update_user_coins_balance() returns trigger language plpgsql as \$f\$ begin update public.profiles set coins = coins + 2 * new.amount where id = new.user_id; return new; end \$f\$;" \
+     "create or replace function public.update_user_coins_balance() returns trigger language plpgsql as \$f\$ begin update public.profiles set coins = coins + new.amount where id = new.user_id; return new; end \$f\$;"
+  pf "tabulka coin_transactions zkušební zápis odmítne" "Zkušební zápis do coin_transactions selhal" \
+     "alter table public.coin_transactions add constraint tt_no_cosmetic check (source_type not like 'cosmetic_purchase:%') not valid;" \
+     "alter table public.coin_transactions drop constraint tt_no_cosmetic;"
+  pf "chybí herní odznaky (game-records.sql)" "Nejdřív spusť db/game-records.sql" \
+     "alter table public.game_badge_unlocks rename to tt_unlocks_away;" \
+     "alter table public.tt_unlocks_away rename to game_badge_unlocks;"
+  PRICE_BACK=$(PSQL -At -c "select price from public.shop_items where item_id = 'gamefx_noir'" 2>&1)
+  [ "$PRICE_BACK" = "250" ] || { echo "SELÁHALO: po úklidu zkoušek kontroly předpokladů se cena nesrovnala ($PRICE_BACK)" >>"$OUT"; STATUS=1; }
 fi
 
 OK=$(grep -c "OK   " "$OUT")

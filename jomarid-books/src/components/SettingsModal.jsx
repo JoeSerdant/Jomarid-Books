@@ -957,6 +957,9 @@ const EXPORT_SOURCES = [
   { key: 'coin_transactions', table: 'coin_transactions', column: 'user_id' },
   { key: 'daily_activity', table: 'user_daily_activity', column: 'user_id' },
   { key: 'settings', table: SETTINGS_TABLE, column: 'user_id', optional: true }, // tabulka nemusí existovat
+  // Herní rekordy a odznaky (db/game-records.sql) a obchůdek (db/shop.sql) čtou jen funkce, do tabulek klient nesmí; funkce nemusí existovat.
+  { key: 'game_progress', rpc: 'my_game_progress', optional: true },
+  { key: 'cosmetics', rpc: 'my_cosmetics', optional: true },
 ];
 
 // Supabase vrací nanejvýš 1000 řádků na dotaz - proto se čte po stránkách.
@@ -971,6 +974,14 @@ async function fetchAll(table, column, value) {
   }
   return rows;
 }
+
+async function fetchRpc(name) {
+  const { data, error } = await supabase.rpc(name);
+  if (error) throw error;
+  return data;
+}
+
+const isMissingFunction = (error) => ['PGRST202', '42883'].includes(String(error?.code || '')) || /could not find the function|function .* does not exist/i.test(String(error?.message || ''));
 
 const DELETE_ERRORS = {
   admin_cannot_self_delete: 'Účet správce si sám smazat nejde - napřed předej správu jinému správci.',
@@ -990,14 +1001,14 @@ const DataTab = ({ user, role }) => {
     setExportMsg(null);
     setExportBusy(true);
     try {
-      const results = await Promise.allSettled(EXPORT_SOURCES.map(s => fetchAll(s.table, s.column, user.id)));
+      const results = await Promise.allSettled(EXPORT_SOURCES.map(s => (s.rpc ? fetchRpc(s.rpc) : fetchAll(s.table, s.column, user.id))));
       const data = {};
       const errors = [];
       results.forEach((r, i) => {
-        const { key, table, optional } = EXPORT_SOURCES[i];
+        const { key, table, rpc, optional } = EXPORT_SOURCES[i];
         if (r.status === 'fulfilled') data[key] = key === 'profile' ? (r.value[0] || null) : r.value;
-        else if (optional && isMissingTable(r.reason)) return; // chybějící volitelná tabulka není chyba exportu
-        else errors.push(`${table}: ${r.reason?.message || 'chyba čtení'}`);
+        else if (optional && (isMissingTable(r.reason) || isMissingFunction(r.reason))) return; // chybějící volitelná tabulka nebo funkce není chyba exportu
+        else errors.push(`${table || rpc}: ${r.reason?.message || 'chyba čtení'}`);
       });
       const payload = {
         exportedAt: new Date().toISOString(),

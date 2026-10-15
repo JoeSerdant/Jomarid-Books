@@ -10,6 +10,9 @@ import { STREAK_FREEZE_PRICE } from '../constants/economy';
 import { plural } from '../lib/plural';
 import { BadgesSection } from '../components/BadgesSection';
 import { GamesProgress } from '../components/GamesProgress';
+import { Shop } from '../components/Shop';
+import { loadEquippedTitles, loadMyCosmetics } from '../shop/api';
+import { titleLabel } from '../shop/catalog';
 import { Calendar, CheckCircle, ChevronRight, Coins, Flame, Loader2, Lock, Shield, ShieldCheck, ShieldOff, Sparkles, TrendingUp, Trophy, Users } from 'lucide-react';
 
 export const UserStats = () => {
@@ -17,6 +20,8 @@ export const UserStats = () => {
   const [loading, setLoading] = useState(true);
   const [isUpdatingPrivacy, setIsUpdatingPrivacy] = useState(false);
   const [buyingFreeze, setBuyingFreeze] = useState(false);
+  // Koupené a nasazené zboží z obchůdku; null, dokud se nenačte nebo když v databázi obchůdek ještě není (pak se vůbec neukáže).
+  const [cosmetics, setCosmetics] = useState(null);
   
   const [isEditingGoal, setIsEditingGoal] = useState(false);
   const [newGoalInput, setNewGoalInput] = useState(String(DEFAULT_MONTHLY_GOAL));
@@ -75,13 +80,15 @@ export const UserStats = () => {
       // Paralelní stažení profilu, knih, denní aktivity a vyřešení streaku
       // (resolve_streak() sám dožene libovolné množství uplynulých dní od
       // posledního vyřešení - klient historii sám neprochází).
-      const [profileRes, booksRes, activityRes, streakRes, gameProgress] = await Promise.all([
+      const [profileRes, booksRes, activityRes, streakRes, gameProgress, myCosmetics] = await Promise.all([
         supabase.from('profiles').select('fake_xp, bonus_xp, show_in_leaderboard, unlocked_badges, monthly_goal, last_goal_change_date, coins, lifetime_coins_earned, streak_freezes, frozen_dates, current_streak, highest_goal_completed, featured_badge').eq('id', user.id).maybeSingle(),
         supabase.from('user_books').select('updated_at, first_completed_at, is_read').eq('user_id', user.id).eq('is_read', true),
         supabase.from('user_daily_activity').select('activity_date').eq('user_id', user.id).order('activity_date', { ascending: false }),
         supabase.rpc('resolve_streak'),
         loadGameProgress(supabase),
+        loadMyCosmetics(supabase),
       ]);
+      setCosmetics(myCosmetics);
 
       const profileData = profileRes.data || {};
       const userBooks = booksRes.data || [];
@@ -262,9 +269,10 @@ export const UserStats = () => {
       if (lbRes.error) console.error('Nepodařilo se načíst žebříček:', lbRes.error);
       else if (Array.isArray(lbRes.data)) allProfiles = lbRes.data;
       if (allProfiles && allProfiles.length > 0) {
-        const [allBooksRes, allActsRes] = await Promise.all([
+        const [allBooksRes, allActsRes, boardTitles] = await Promise.all([
           supabase.from('user_books').select('user_id, updated_at, first_completed_at').eq('is_read', true),
-          supabase.from('user_daily_activity').select('user_id, activity_date')
+          supabase.from('user_daily_activity').select('user_id, activity_date'),
+          loadEquippedTitles(supabase, allProfiles.map(p => p.id))
         ]);
         
         const allBooks = allBooksRes.data || [];
@@ -317,6 +325,7 @@ export const UserStats = () => {
             monthlyRead: uMRead,
             xp: uXpTotal,
             featuredBadge: p.featured_badge || null,
+            title: boardTitles.get(p.id) || null,
             isMe: p.id === user.id
           };
         });
@@ -434,6 +443,7 @@ export const UserStats = () => {
 
   const progressPercent = Math.min(100, Math.round((stats.monthlyRead / stats.monthlyGoal) * 100));
   const xpPercent = Math.min(100, Math.round((stats.xp / stats.xpNeededForNext) * 100));
+  const myTitle = titleLabel(cosmetics?.equipped?.title);
   const categories = [
     { id: 'streak', label: 'Plamínky 🔥', icon: Flame, suffix: n => plural(n, 'den', 'dny', 'dní') },
     { id: 'level', label: 'Úroveň 🏆', icon: Trophy, suffix: 'lvl' },
@@ -472,6 +482,11 @@ export const UserStats = () => {
         <span className="text-xs px-3 py-1 rounded-full font-black uppercase tracking-wider bg-amber-500/20 text-amber-400 flex items-center gap-1">
           <Coins size={12} /> {stats.jomaridCoins} Coins
         </span>
+        {myTitle && (
+          <span data-testid="own-title" style={{ borderColor: 'var(--bg-primary)', color: 'var(--text-body)' }} className="text-xs px-3 py-1 rounded-full font-black uppercase tracking-wider border">
+            {myTitle}
+          </span>
+        )}
       </div>
       <h1 className="text-3xl font-black tracking-tight mb-1" style={{ color: 'var(--text-body)' }}>Moje Statistiky</h1>
       <p style={{ color: 'var(--text-muted)' }} className="text-sm font-medium opacity-80">XP dostáváš za dočtené knihy (víc při splněných vyšších cílech), za denní sérii a za odznaky. Odznaky se vyhodnotí, když otevřeš tuhle stránku.</p>
@@ -651,6 +666,17 @@ export const UserStats = () => {
         </button>
       </div>
 
+      {/* OBCHŮDEK */}
+      {cosmetics && (
+        <Shop
+          cosmetics={cosmetics}
+          coins={stats.jomaridCoins}
+          unlocked={stats.gameProgress?.unlocked || []}
+          onCosmetics={setCosmetics}
+          onBalance={(balance) => setStats(prev => ({ ...prev, jomaridCoins: balance }))}
+        />
+      )}
+
       {/* SÍŇ SLÁVY */}
       <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 shadow-sm mb-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
@@ -673,6 +699,7 @@ export const UserStats = () => {
               let medalStyle = index === 0 ? "text-xl w-6 text-center animate-bounce" : index === 1 ? "text-lg w-6 text-center" : index === 2 ? "text-md w-6 text-center" : "text-xs font-black opacity-40 w-6 text-center";
               const featuredBadgeDef = row.featuredBadge ? BOOK_BADGES.find(b => b.id === row.featuredBadge) : null;
               const FeaturedIcon = featuredBadgeDef?.icon;
+              const rowTitle = row.isMe ? myTitle : row.title;
               return (
                 <div key={index} style={{ backgroundColor: row.isMe ? 'var(--bg-badge)' : 'rgba(0,0,0,0.02)', borderColor: row.isMe ? 'var(--bg-primary)' : 'transparent' }} className={`flex items-center justify-between p-3 rounded-xl border transition-all ${row.isMe && 'font-bold shadow-sm'}`}>
                   <div className="flex items-center gap-4 text-left">
@@ -683,6 +710,7 @@ export const UserStats = () => {
                       </span>
                     )}
                     <span className="text-sm tracking-wide truncate max-w-[200px] sm:max-w-[350px]">{row.email} {row.isMe && <span className="text-[0.625rem] bg-[var(--bg-primary)] text-[var(--text-primary)] px-1.5 py-0.5 rounded ml-1 uppercase font-black">Ty</span>}</span>
+                    {rowTitle && <span data-testid="lb-title" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }} className="text-[0.625rem] font-black uppercase tracking-wide border rounded px-1.5 py-0.5 shrink-0">{rowTitle}</span>}
                   </div>
                   <div className="text-right font-black text-sm flex items-center gap-1">
                     <span>{row[activeTab].toLocaleString()}</span>

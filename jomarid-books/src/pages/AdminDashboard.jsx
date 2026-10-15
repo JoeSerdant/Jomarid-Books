@@ -57,6 +57,7 @@ const SOURCE_LABELS = {
   book_purchase: 'Nákupy knih',
   book_sale: 'Prodeje knih (autorům)',
   streak_freeze_purchase: 'Streak Freeze',
+  cosmetic_purchase: 'Tituly a vzhledy her',
 };
 const sourceLabel = (sourceType) => {
   const key = String(sourceType || '').split(':')[0];
