@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseUrl, supabaseKey } from '../lib/supabase';
 import { Coins, Loader2, Rocket, Swords, Building2, Target, Crown, Smile, Lock } from 'lucide-react';
 import { GameBar } from '../components/GameBar';
 import { useReaderSnapshot } from '../gameBar/useReaderSnapshot';
@@ -9,6 +9,11 @@ import { rewardLabel, REWARD_LIMIT_NOTE } from '../gameBar/rewardLabels';
 import { normalizeRecord } from '../gameRecords/catalog';
 import { reportGameRecord } from '../gameRecords/api';
 import { useGameFilter } from '../shop/useGameFilter';
+import { createGameSync } from '../gameSave/sync';
+import { withStorageShim } from '../gameSave/shim';
+import { saveGameStateKeepalive } from '../gameSave/api';
+import { readLegacyStorage, clearLegacyStorage } from '../gameSave/legacy';
+import { SAVE_MESSAGES, SAVE_LOAD_ERROR } from '../gameSave/messages';
 
 // Každá hra je velký kus textu (stovky kB, šachy i s Reactem). Stahuje se až při spuštění (dynamický import), ne spolu
 // se stránkou Her - jinak by si hráč už při otevření seznamu stáhl všechny hry najednou.
@@ -86,6 +91,9 @@ export const GameLauncher = ({ game }) => {
   const [showGame, setShowGame] = useState(false);
   const [hasPlayedEnough, setHasPlayedEnough] = useState(false);
   const [html, setHtml] = useState(null); // text hry; do stažení je null
+  const [gameDoc, setGameDoc] = useState(null); // text hry s vloženým úložištěm a uloženým postupem; to, co běží v iframu
+  const [saveLoadError, setSaveLoadError] = useState(false); // uložený postup se nepodařilo načíst, hra se nespustila
+  const [saveStatus, setSaveStatus] = useState(null); // 'failing' | 'conflict' | 'rejected': postup se právě neukládá
   const [loadingGame, setLoadingGame] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const gameOpenedAtRef = useRef(null);
@@ -93,6 +101,8 @@ export const GameLauncher = ({ game }) => {
   const iframeRef = useRef(null);
   const mountedRef = useRef(true);
   const flashTimerRef = useRef(null);
+  const syncRef = useRef(null); // synchronizace postupu této hry se serverem
+  const tokenRef = useRef(null); // přihlašovací token pro uložení při zavírání stránky (tam se na nové načtení čekat nedá)
   const limitShownRef = useRef(false);
   const reader = useReaderSnapshot(user?.id);
   const gameFx = useGameFilter(user?.id); // vzhled her z obchůdku
@@ -103,11 +113,65 @@ export const GameLauncher = ({ game }) => {
   }, []);
 
   // Potvrzení odměny (nebo poznámka o limitu) se ukazuje jen v liště appky nad hrou, hry samy nic nezobrazují.
-  const showFlash = useCallback((next) => {
+  const showFlash = useCallback((next, ms = 2800) => {
     if (!mountedRef.current) return;
     clearTimeout(flashTimerRef.current);
     setFlash({ id: Date.now() + Math.random(), ...next });
-    flashTimerRef.current = setTimeout(() => { if (mountedRef.current) setFlash(null); }, 2800);
+    flashTimerRef.current = setTimeout(() => { if (mountedRef.current) setFlash(null); }, ms);
+  }, []);
+
+  // Postup hry žije na serveru (db/game-saves.sql). Hra si pořád "ukládá do localStorage", ale ten jí appka nahradí pamětí (gameSave/shim.js)
+  // a změny posílá sem; o chybách ukládání se hráč dozví v liště nad hrou.
+  const handleSaveStatus = useCallback(({ state, recovered }) => {
+    if (state === 'failing') { setSaveStatus('failing'); showFlash({ text: SAVE_MESSAGES.failing, warn: true }, 4000); }
+    else if (state === 'ok' && recovered) { setSaveStatus(null); showFlash({ text: SAVE_MESSAGES.recovered, warn: true }); }
+    else if (state === 'conflict') { setSaveStatus('conflict'); showFlash({ text: SAVE_MESSAGES.conflict, warn: true }, 9000); }
+    else if (state === 'rejected') { setSaveStatus('rejected'); showFlash({ text: SAVE_MESSAGES.rejected, warn: true }, 6000); }
+  }, [showFlash]);
+
+  const getSync = useCallback(() => {
+    if (!syncRef.current) {
+      syncRef.current = createGameSync({
+        client: supabase,
+        gameId: game.id,
+        readLegacy: readLegacyStorage,
+        clearLegacy: clearLegacyStorage,
+        keepalive: (args) => saveGameStateKeepalive({ url: supabaseUrl, apiKey: supabaseKey, token: tokenRef.current, ...args }),
+        onStatus: handleSaveStatus,
+      });
+    }
+    return syncRef.current;
+  }, [game.id, handleSaveStatus]);
+
+  // Token pro uložení při zavírání stránky: obyčejné načtení tokenu je asynchronní, tam už by se nestihlo.
+  useEffect(() => {
+    let cancelled = false;
+    supabase.auth.getSession().then(({ data }) => { if (!cancelled) tokenRef.current = data?.session?.access_token || null; });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => { tokenRef.current = session?.access_token || null; });
+    return () => { cancelled = true; sub?.subscription?.unsubscribe(); };
+  }, []);
+
+  // Hra, která se v iframu sama znovu načte (třeba restart ve Warroomu), si aktuální postup bere přímo odsud (gameSave/shim.js), ne z kopie
+  // vložené při otevření: ta by byla zastaralá a hra by se vrátila o krok zpět.
+  useEffect(() => {
+    const store = { read: (gameId) => (gameId === game.id && syncRef.current ? syncRef.current.snapshot().map : null) };
+    window.__jomaridGameSave = store;
+    return () => { if (window.__jomaridGameSave === store) delete window.__jomaridGameSave; };
+  }, [game.id]);
+
+  // Dohnat neuložené změny při skrytí stránky (přepnutí karty nebo aplikace), při odchodu ze stránky a při opuštění hry v appce.
+  useEffect(() => {
+    const onHide = () => syncRef.current?.flushOnHide();
+    const onVisibility = () => { if (document.visibilityState === 'hidden') syncRef.current?.flush(); };
+    window.addEventListener('pagehide', onHide);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', onHide);
+      document.removeEventListener('visibilitychange', onVisibility);
+      const sync = syncRef.current;
+      syncRef.current = null;
+      if (sync) sync.flush().finally(() => sync.dispose());
+    };
   }, []);
 
   useEffect(() => {
@@ -152,10 +216,11 @@ export const GameLauncher = ({ game }) => {
   // Hra se stáhne až teď (poprvé), další otevření je okamžité. Čas hraní se počítá až od chvíle, kdy se hra zobrazí.
   const handleOpenGame = useCallback(async () => {
     if (loadingGame) return;
+    setLoadError(false);
+    setSaveLoadError(false);
+    setLoadingGame(true);
     let src = html;
     if (!src) {
-      setLoadError(false);
-      setLoadingGame(true);
       try {
         src = await game.load();
       } catch (err) {
@@ -165,12 +230,27 @@ export const GameLauncher = ({ game }) => {
       }
       if (!mountedRef.current) return;
       setHtml(src);
-      setLoadingGame(false);
     }
+    // Uložený postup ze serveru (a při prvním spuštění po přesunu jednorázový přenos starého z prohlížeče). Když se nenačte, hra se
+    // nespustí: kdyby běžela naprázdno, mohla by uložený postup přepsat. Už načtený postup se znovu nenačítá (v paměti jsou i změny,
+    // které se ještě neodeslaly); jen po konfliktu (hrálo se jinde) se načte znovu.
+    const sync = getSync();
+    try {
+      if (!sync.isLoaded() || sync.state().stopped) await sync.load();
+    } catch (err) {
+      console.error('Nepodařilo se načíst uložený postup hry:', err?.message || err);
+      if (mountedRef.current) { setSaveLoadError(true); setLoadingGame(false); }
+      return;
+    }
+    if (!mountedRef.current) return;
+    const { status } = sync.state(); // znovu otevřená hra ukáže štítek i tehdy, když se postup pořád neukládá
+    setSaveStatus(status === 'ok' ? null : status);
+    setGameDoc(withStorageShim(src, game.id, sync.snapshot().map));
+    setLoadingGame(false);
     gameOpenedAtRef.current = Date.now();
     limitShownRef.current = false;
     setShowGame(true);
-  }, [game, html, loadingGame]);
+  }, [game, html, loadingGame, getSync]);
 
   // Při najetí myší nebo zaostření se hra stáhne dopředu, takže se po kliknutí obvykle otevře hned.
   const warmUp = useCallback(() => { game.load().catch(() => {}); }, [game]);
@@ -190,6 +270,7 @@ export const GameLauncher = ({ game }) => {
     }
     gameOpenedAtRef.current = null;
     setShowGame(false);
+    syncRef.current?.flush(); // postup se uloží hned, ne až po odkladu
   }, []);
 
   // Hry uvnitř iframu posílají postMessage místo skutečné navigace na "/app" -
@@ -214,6 +295,9 @@ export const GameLauncher = ({ game }) => {
 
       if (event.data?.type === 'close') {
         handleCloseGame();
+      } else if (event.data?.type === 'storage') {
+        // Změna "localStorage" ve hře (viz gameSave/shim.js): drží se v paměti a posílá se na server s odkladem.
+        syncRef.current?.apply(event.data);
       } else if (event.data?.type === 'record' && user) {
         const rec = normalizeRecord(game.id, event.data.stat, event.data.value);
         if (!rec) return;
@@ -272,11 +356,11 @@ export const GameLauncher = ({ game }) => {
     return (
       // Výřez displeje (--sat nahoře, --sar vpravo) se přičítá k velikosti pruhu, ne odebírá z místa pro tlačítko.
       <div style={{ position: 'fixed', inset: 0, zIndex: 999, backgroundColor: '#000', '--sat': 'env(safe-area-inset-top,0px)', '--sar': 'env(safe-area-inset-right,0px)' }} className="flex flex-col [@media(orientation:landscape)_and_(max-height:500px)]:flex-row-reverse">
-        <GameBar title={game.title} onClose={handleCloseGame} coins={coins} coinsLoaded={coinsLoaded} level={reader?.level} levelName={reader?.levelName} flash={flash} />
+        <GameBar title={game.title} onClose={handleCloseGame} coins={coins} coinsLoaded={coinsLoaded} level={reader?.level} levelName={reader?.levelName} flash={flash} saveStatus={saveStatus} />
         <iframe
           ref={iframeRef}
           title={game.title}
-          srcDoc={html}
+          srcDoc={gameDoc}
           onLoad={sendBalance}
           allow="clipboard-write"
           style={{ border: 'none', display: 'block', ...(gameFx ? { filter: gameFx } : {}) }}
@@ -321,6 +405,20 @@ export const GameLauncher = ({ game }) => {
         >
           {loadingGame ? <><Loader2 size={16} className="animate-spin" /> Načítám hru...</> : <><GameIcon size={16} /> Spustit hru</>}
         </button>
+        {saveLoadError && (
+          <div role="alert" data-testid="save-load-error" className="-mt-3 flex flex-col items-center gap-2">
+            <p style={{ color: 'var(--text-body)', borderColor: '#ef4444' }} className="text-xs m-0 border-l-2 pl-2 text-left max-w-sm">
+              {SAVE_LOAD_ERROR}
+            </p>
+            <button
+              onClick={handleOpenGame}
+              style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
+              className="px-4 py-2 rounded-lg text-[0.6875rem] font-black uppercase tracking-wider cursor-pointer border"
+            >
+              Zkusit znovu
+            </button>
+          </div>
+        )}
         {loadError && (
           // Prohlížeč si neúspěšné načtení souboru pamatuje, takže opakované kliknutí často nepomůže (stejně jako po vydání nové
           // verze aplikace, kdy staré soubory už neexistují). Spolehlivě pomůže až obnovení stránky.
@@ -340,7 +438,7 @@ export const GameLauncher = ({ game }) => {
 
         <div style={{ borderColor: 'var(--border-color)' }} className="w-full border-t pt-6 flex flex-col items-center gap-3">
           <p style={{ color: 'var(--text-muted)' }} className="text-xs max-w-sm mx-auto opacity-80">
-            Vylepšení a postup ve hře zůstávají jen v tomhle prohlížeči, ale rekordy a herní odznaky se ukládají k tvému účtu (Statistiky, záložka Hry). Za to, že si dnes zahraješ, dostaneš i pár skutečných Jomarid Coinů - jednou denně.
+            Postup ve hře (vylepšení, nastavení, rozehraná partie), rekordy i herní odznaky se ukládají k tvému účtu, takže je máš na všech zařízeních stejné (rekordy a odznaky najdeš ve Statistikách, záložka Hry). Za to, že si dnes zahraješ, dostaneš i pár skutečných Jomarid Coinů - jednou denně.
           </p>
           <button
             onClick={handleClaimBonus}

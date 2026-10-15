@@ -1,11 +1,13 @@
-import { X, Coins, BookOpen } from 'lucide-react';
+import { X, Coins, BookOpen, CloudOff } from 'lucide-react';
+import { SAVE_CHIPS } from '../gameSave/messages';
 
 // Lišta nad hrou: hra běží přes celou obrazovku, takže tohle je jediné, co z appky zůstane vidět. Drží se motivu appky
 // (barvy z proměnných), ukazuje, kdo hraje (úroveň) a živý zůstatek Jomarid Coins, a je to jediné místo, kde se potvrzují
 // odměny (hry samy nic nezobrazují). Na nízké obrazovce na šířku (telefon) je lišta svislá vpravo.
 // Třídy jsou napsané celé (ne skládané): Tailwind je při sestavení hledá v textu a sestavené by nepoznal.
 //   flash: { id, text, label, warn } - krátké potvrzení (odměna nebo poznámka o limitu), nebo null
-export const GameBar = ({ title, onClose, coins, coinsLoaded, level, levelName, flash }) => (
+//   saveStatus: 'failing' | 'conflict' | 'rejected' - postup se právě neukládá (štítek v liště, dokud to trvá), jinak null
+export const GameBar = ({ title, onClose, coins, coinsLoaded, level, levelName, flash, saveStatus }) => (
   <div
     data-testid="game-bar"
     style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-body)', paddingTop: 'var(--sat)', paddingRight: 'var(--sar)', borderColor: 'var(--border-color)' }}
@@ -17,6 +19,18 @@ export const GameBar = ({ title, onClose, coins, coinsLoaded, level, levelName, 
     </span>
 
     <div className="shrink-0 flex items-center gap-1.5 [@media(orientation:landscape)_and_(max-height:500px)]:flex-col [@media(orientation:landscape)_and_(max-height:500px)]:gap-2 [@media(orientation:landscape)_and_(max-height:500px)]:w-full">
+      {saveStatus && SAVE_CHIPS[saveStatus] && (
+        <span
+          data-testid="game-bar-save"
+          role="status"
+          title={SAVE_CHIPS[saveStatus]}
+          style={{ backgroundColor: '#fee2e2', borderColor: '#ef4444', color: '#991b1b' }}
+          className="flex items-center gap-1 px-2 py-1.5 rounded-xl border text-xs font-black leading-none whitespace-nowrap [@media(orientation:landscape)_and_(max-height:500px)]:order-4 [@media(orientation:landscape)_and_(max-height:500px)]:flex-col [@media(orientation:landscape)_and_(max-height:500px)]:text-[0.625rem] [@media(orientation:landscape)_and_(max-height:500px)]:px-1 [@media(orientation:landscape)_and_(max-height:500px)]:gap-0.5"
+        >
+          <CloudOff size={13} aria-hidden="true" />
+          <span className="[@media(orientation:landscape)_and_(max-height:500px)]:sr-only">{SAVE_CHIPS[saveStatus]}</span>
+        </span>
+      )}
       {level != null && (
         <span
           data-testid="game-bar-level"
