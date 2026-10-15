@@ -105,9 +105,12 @@ if [ $STATUS -eq 0 ]; then
     fi
     PSQLQ -f "$SHOP_SQL" 2>/dev/null || STATUS=1   # zpátky do pořádku (cena se srovná)
   }
-  pf "zápis do coin_transactions sám mění zůstatek" "spoušť" \
-     "create function public.tt_bump() returns trigger language plpgsql as \$f\$ begin update public.profiles set coins = coins + new.amount where id = new.user_id; return new; end \$f\$; create trigger tt_bump_trg after insert on public.coin_transactions for each row execute function public.tt_bump();" \
-     "drop trigger tt_bump_trg on public.coin_transactions; drop function public.tt_bump();"
+  pf "zápis do coin_transactions zůstatek vůbec nemění (chybí spoušť)" "zapsanou částku" \
+     "alter table public.coin_transactions disable trigger trg_update_coins;" \
+     "alter table public.coin_transactions enable trigger trg_update_coins;"
+  pf "zápis do coin_transactions změní zůstatek o jinou částku, než se zapsala" "zapsanou částku" \
+     "create or replace function public.update_user_coins_balance() returns trigger language plpgsql as \$f\$ begin update public.profiles set coins = coins + 2 * new.amount where id = new.user_id; return new; end \$f\$;" \
+     "create or replace function public.update_user_coins_balance() returns trigger language plpgsql as \$f\$ begin update public.profiles set coins = coins + new.amount where id = new.user_id; return new; end \$f\$;"
   pf "tabulka coin_transactions zkušební zápis odmítne" "Zkušební zápis do coin_transactions selhal" \
      "alter table public.coin_transactions add constraint tt_no_cosmetic check (source_type not like 'cosmetic_purchase:%') not valid;" \
      "alter table public.coin_transactions drop constraint tt_no_cosmetic;"

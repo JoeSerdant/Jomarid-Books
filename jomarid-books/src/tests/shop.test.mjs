@@ -119,6 +119,10 @@ test('SQL: funkce jsou jen pro přihlášené, tabulky mají RLS a nikdo k nim n
   assert.equal((sql.match(/security definer set search_path to 'public'/g) || []).length, 4);
   assert.match(sql, /select coins into v_coins from public\.profiles where id = v_uid for update;/, 'zámek řádku: dva nákupy naráz se nepředběhnou');
   assert.match(sql, /'cosmetic_purchase:' \|\| v_item\.item_id/, 'označení v deníku mincí');
+  // Mince strhává spoušť trg_update_coins při zápisu do coin_transactions (zjištěno z databáze); přímý update profilu by je strhl dvakrát.
+  assert.ok(!/update\s+public\.profiles\s+set\s+coins/i.test(sql), 'zůstatek se v profilu přímo neupravuje');
+  assert.match(sql, /perform set_config\('app\.bypass_profile_column_guard', 'true', true\);\n\s+insert into public\.coin_transactions/, 'nákup si před zápisem do deníku nastaví bypass ochrany sloupců profilu');
+  assert.match(sql, /v_after is distinct from v_before - 1/, 'kontrola předpokladů vyžaduje, aby zápis do deníku snížil zůstatek o zapsanou částku');
   assert.match(read('pages', 'AdminDashboard.jsx'), /cosmetic_purchase: '[^']+'/, 'správce vidí nákupy z obchůdku pod čitelným názvem');
 });
 

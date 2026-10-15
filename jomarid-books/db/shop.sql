@@ -2,15 +2,18 @@
 -- kterým appka přebarví hru, když ji spustíš). Nic z toho nedává výhodu ve hrách ani při čtení, je to jen vzhled.
 -- Spusť celý soubor v Supabase SQL Editoru. Jde spustit víckrát: tabulky se nemažou, seznam zboží níže se jen srovná
 -- (zboží, které ze seznamu zmizí, se přestane prodávat, ale kdo ho koupil, ho dál má) a funkce se nahrazují.
--- Předpoklady, které v databázi už jsou: tabulky profiles (id, coins, username, show_in_leaderboard) a coin_transactions (user_id, amount, source_type)
--- a hotový db/game-records.sql (některé tituly se odemykají herními odznaky).
+-- Předpoklady, které v databázi už jsou: tabulky profiles (id, coins, username, show_in_leaderboard) a coin_transactions (user_id, amount, source_type),
+-- spoušť trg_update_coins, která při zápisu do coin_transactions sama upraví profiles.coins, a hotový db/game-records.sql (některé tituly se
+-- odemykají herními odznaky).
 --
--- Nákup je jedna transakce: zamkne řádek profilu (dva nákupy naráz se nepředběhnou), zkontroluje cenu, zůstatek a odznak, strhne mince,
--- zapíše je do coin_transactions (source_type 'cosmetic_purchase:<zboží>') a koupené zboží rovnou nasadí. Cenu a požadovaný odznak rozhoduje
--- server; seznam zboží je i v appce (src/shop/catalog.js) a test src/tests/shop.test.mjs hlídá, že si odpovídají.
+-- Nákup je jedna transakce: zamkne řádek profilu (dva nákupy naráz se nepředběhnou), zkontroluje cenu, zůstatek a odznak, zapíše mince do
+-- coin_transactions (source_type 'cosmetic_purchase:<zboží>', záporná částka; zůstatek v profilu pak sníží spoušť, proto se v profilu přímo
+-- neupravuje, strhl by se dvakrát) a koupené zboží rovnou nasadí. Cenu a požadovaný odznak rozhoduje server; seznam zboží je i v appce
+-- (src/shop/catalog.js) a test src/tests/shop.test.mjs hlídá, že si odpovídají.
 
 -- Kontrola předpokladů dřív, než se cokoli vytvoří: ať případný nesoulad s tabulkou mincí vyjde najevo hned při spuštění,
--- ne až když si někdo něco koupí. Zkušební zápis se vrací zpět, nic po něm nezůstane.
+-- ne až když si někdo něco koupí. Zkušební zápis se vrací zpět, nic po něm nezůstane. Ověřuje, že zápis do coin_transactions sníží
+-- zůstatek přesně o zapsanou částku (to dělá spoušť trg_update_coins); kdyby ho neměnil, nebo měnil jinak, nákup by mince nestrhl správně.
 do $$
 declare
   v_uid uuid;
@@ -23,13 +26,14 @@ begin
   if to_regclass('public.coin_transactions') is null then
     raise exception 'V databázi chybí tabulka coin_transactions.';
   end if;
-  select id, coins into v_uid, v_before from public.profiles order by id limit 1;
+  select id, coalesce(coins, 0) into v_uid, v_before from public.profiles order by id limit 1;
   if v_uid is not null then
     begin
+      perform set_config('app.bypass_profile_column_guard', 'true', true);
       insert into public.coin_transactions (user_id, amount, source_type) values (v_uid, -1, 'cosmetic_purchase:preflight');
-      select coins into v_after from public.profiles where id = v_uid;
-      if v_after is distinct from v_before then
-        raise exception 'zápis do coin_transactions sám mění zůstatek v profiles (spoušť), nákup by strhl mince dvakrát';
+      select coalesce(coins, 0) into v_after from public.profiles where id = v_uid;
+      if v_after is distinct from v_before - 1 then
+        raise exception 'zápis do coin_transactions musí sám (spouští) upravit zůstatek v profiles o zapsanou částku; zůstatek byl % a po zápisu -1 je %', v_before, v_after;
       end if;
       raise exception using errcode = 'P0001', message = 'preflight_ok';
     exception when others then
@@ -129,8 +133,11 @@ begin
   end if;
   if coalesce(v_coins, 0) < v_item.price then raise exception 'insufficient_coins'; end if;
 
-  update public.profiles set coins = coins - v_item.price where id = v_uid returning coins into v_new;
+  -- Mince strhne spoušť trg_update_coins při zápisu do deníku. Ochrana sloupců profilu smí zůstatek změnit jen s tímhle nastavením
+  -- (stejně jako to dělá buy_streak_freeze); platí jen do konce transakce.
+  perform set_config('app.bypass_profile_column_guard', 'true', true);
   insert into public.coin_transactions (user_id, amount, source_type) values (v_uid, -v_item.price, 'cosmetic_purchase:' || v_item.item_id);
+  select coins into v_new from public.profiles where id = v_uid;
   insert into public.user_cosmetics (user_id, item_id, price_paid) values (v_uid, v_item.item_id, v_item.price);
   insert into public.user_equipped (user_id, kind, item_id) values (v_uid, v_item.kind, v_item.item_id)
   on conflict (user_id, kind) do update set item_id = excluded.item_id;

@@ -83,6 +83,8 @@ select tt.ok(tt.buy(1, 'gamefx_noir')->>'new_balance' = '150', 'vzhled her za 25
 select tt.ok(tt.mine(1) = '{"owned": ["title_bookworm", "gamefx_noir"], "equipped": {"title": "title_bookworm", "gamefx": "gamefx_noir"}}'::jsonb, 'titul a vzhled her jsou nasazené zároveň');
 select tt.ok(tt.ledger(1) = '[["cosmetic_purchase:title_bookworm", -100], ["cosmetic_purchase:gamefx_noir", -250]]'::jsonb, 'deník mincí má oba nákupy ve správném pořadí');
 select tt.ok((select 500 + coalesce(sum(amount), 0) from public.coin_transactions where user_id = tt.su(1)) = tt.coins(1), 'počáteční zůstatek plus deník mincí dává aktuální zůstatek');
+select tt.ok((select count(*) from public.coin_transactions where user_id = tt.su(1)) = 2, 'každý nákup zapsal do deníku jen jednou (mince strhla spoušť, ne funkce podruhé)');
+select tt.ok((select count(*) from pg_trigger where tgrelid = 'public.coin_transactions'::regclass and tgname = 'trg_update_coins' and not tgisinternal) = 1, 'test běží se spouští trg_update_coins jako ve skutečné databázi');
 
 -- málo mincí
 select tt.sfails($$select tt.buy(2, 'title_bookworm')$$, 'insufficient_coins', 'o minci míň, než zboží stojí: nákup se odmítne');

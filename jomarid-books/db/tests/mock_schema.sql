@@ -26,6 +26,19 @@ create table public.books (id uuid primary key default gen_random_uuid(), title 
 create table public.user_books (id uuid primary key default gen_random_uuid(), user_id uuid not null, book_id uuid not null, status text, is_read boolean default false, scroll_position numeric(5,2), updated_at timestamptz default now(), first_completed_at timestamptz);
 -- Deník mincí: jen sloupce, které appka čte (user_id, amount, source_type, created_at); skutečná tabulka může mít další, db/shop.sql to při spuštění ověří zkušebním zápisem.
 create table public.coin_transactions (id uuid primary key default gen_random_uuid(), user_id uuid not null references public.profiles (id) on delete cascade, amount int not null, source_type text not null, created_at timestamptz not null default now());
+-- Jako ve skutečné databázi: zápis do deníku mincí sám upraví zůstatek v profilu (spoušť trg_update_coins).
+create function public.update_user_coins_balance() returns trigger language plpgsql as $$ begin update public.profiles set coins = coins + new.amount where id = new.user_id; return new; end $$;
+create trigger trg_update_coins after insert on public.coin_transactions for each row execute function public.update_user_coins_balance();
+-- Zjednodušená ochrana sloupců profilu: přihlášený uživatel smí změnit zůstatek jen tehdy, když si funkce nastavila app.bypass_profile_column_guard
+-- (volání bez přihlášení, třeba ze SQL editoru, projde). Skutečná ochrana je složitější; tady slouží k ověření, že nákup si bypass nastavuje.
+create function public.profile_column_guard() returns trigger language plpgsql as $$
+begin
+  if new.coins is distinct from old.coins and auth.uid() is not null and coalesce(current_setting('app.bypass_profile_column_guard', true), '') <> 'true' then
+    raise exception 'profile_column_guard: zůstatek smí měnit jen funkce s bypassem';
+  end if;
+  return new;
+end $$;
+create trigger trg_profile_column_guard before update on public.profiles for each row execute function public.profile_column_guard();
 create table public.user_daily_activity (id bigint generated always as identity primary key, user_id uuid, activity_date date, unique (user_id, activity_date));
 create table public.user_notifications (id uuid primary key default gen_random_uuid(), user_id uuid not null, kind text not null, title text not null, body text, payload jsonb not null default '{}', created_at timestamptz not null default now(), read_at timestamptz);
 create table public.admin_notifications (id uuid primary key default gen_random_uuid(), kind text not null, status text not null default 'open', user_id uuid, title text not null, body text, payload jsonb not null default '{}', created_at timestamptz not null default now(), handled_at timestamptz, handled_by uuid,
