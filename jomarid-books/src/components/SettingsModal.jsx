@@ -960,6 +960,7 @@ const EXPORT_SOURCES = [
   // Herní rekordy a odznaky (db/game-records.sql) a obchůdek (db/shop.sql) čtou jen funkce, do tabulek klient nesmí; funkce nemusí existovat.
   { key: 'game_progress', rpc: 'my_game_progress', optional: true },
   { key: 'cosmetics', rpc: 'my_cosmetics', optional: true },
+  { key: 'game_saves', rpc: 'my_game_saves', optional: true }, // postup her (db/game-saves.sql)
 ];
 
 // Supabase vrací nanejvýš 1000 řádků na dotaz - proto se čte po stránkách.

@@ -1,4 +1,4 @@
--- Zjednodušené schéma Supabase pro SQL testy (db/tests/run.sh): jen tabulky a funkce, na které se db/push-notifications.sql, db/email-change.sql, db/game-records.sql a db/shop.sql odkazují.
+-- Zjednodušené schéma Supabase pro SQL testy (db/tests/run.sh): jen tabulky a funkce, na které se db/push-notifications.sql, db/email-change.sql, db/game-records.sql, db/shop.sql a db/game-saves.sql odkazují.
 -- Slouží výhradně testům na dočasném lokálním PostgreSQL; do Supabase se nikdy nespouští (maže schéma public!).
 drop schema if exists public cascade; create schema public;
 drop schema if exists auth cascade; drop schema if exists net cascade; drop schema if exists extensions cascade;
