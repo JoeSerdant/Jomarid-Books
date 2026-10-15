@@ -8,6 +8,7 @@ import { useReaderSnapshot } from '../gameBar/useReaderSnapshot';
 import { rewardLabel, REWARD_LIMIT_NOTE } from '../gameBar/rewardLabels';
 import { normalizeRecord } from '../gameRecords/catalog';
 import { reportGameRecord } from '../gameRecords/api';
+import { useGameFilter } from '../shop/useGameFilter';
 
 // Každá hra je velký kus textu (stovky kB, šachy i s Reactem). Stahuje se až při spuštění (dynamický import), ne spolu
 // se stránkou Her - jinak by si hráč už při otevření seznamu stáhl všechny hry najednou.
@@ -94,6 +95,7 @@ export const GameLauncher = ({ game }) => {
   const flashTimerRef = useRef(null);
   const limitShownRef = useRef(false);
   const reader = useReaderSnapshot(user?.id);
+  const gameFx = useGameFilter(user?.id); // vzhled her z obchůdku
 
   useEffect(() => {
     mountedRef.current = true;
@@ -277,7 +279,7 @@ export const GameLauncher = ({ game }) => {
           srcDoc={html}
           onLoad={sendBalance}
           allow="clipboard-write"
-          style={{ border: 'none', display: 'block' }}
+          style={{ border: 'none', display: 'block', ...(gameFx ? { filter: gameFx } : {}) }}
           className="flex-1 min-h-0 min-w-0 w-full"
         />
       </div>

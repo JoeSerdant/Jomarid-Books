@@ -1,4 +1,4 @@
--- Zjednodušené schéma Supabase pro SQL testy (db/tests/run.sh): jen tabulky a funkce, na které se db/push-notifications.sql, db/email-change.sql a db/game-records.sql odkazují.
+-- Zjednodušené schéma Supabase pro SQL testy (db/tests/run.sh): jen tabulky a funkce, na které se db/push-notifications.sql, db/email-change.sql, db/game-records.sql a db/shop.sql odkazují.
 -- Slouží výhradně testům na dočasném lokálním PostgreSQL; do Supabase se nikdy nespouští (maže schéma public!).
 drop schema if exists public cascade; create schema public;
 drop schema if exists auth cascade; drop schema if exists net cascade; drop schema if exists extensions cascade;
@@ -24,6 +24,8 @@ returns bigint language plpgsql as $$ begin insert into net.calls (url, headers,
 create table public.profiles (id uuid primary key references auth.users (id), role text, email text, username text, coins bigint default 0, monthly_goal int, frozen_dates date[] default '{}', current_streak int default 0, show_in_leaderboard boolean default true);
 create table public.books (id uuid primary key default gen_random_uuid(), title text, author text, author_display text, author_id uuid, price_coins int not null default 0, is_hidden boolean not null default false, is_auto_assigned boolean default false);
 create table public.user_books (id uuid primary key default gen_random_uuid(), user_id uuid not null, book_id uuid not null, status text, is_read boolean default false, scroll_position numeric(5,2), updated_at timestamptz default now(), first_completed_at timestamptz);
+-- Deník mincí: jen sloupce, které appka čte (user_id, amount, source_type, created_at); skutečná tabulka může mít další, db/shop.sql to při spuštění ověří zkušebním zápisem.
+create table public.coin_transactions (id uuid primary key default gen_random_uuid(), user_id uuid not null references public.profiles (id) on delete cascade, amount int not null, source_type text not null, created_at timestamptz not null default now());
 create table public.user_daily_activity (id bigint generated always as identity primary key, user_id uuid, activity_date date, unique (user_id, activity_date));
 create table public.user_notifications (id uuid primary key default gen_random_uuid(), user_id uuid not null, kind text not null, title text not null, body text, payload jsonb not null default '{}', created_at timestamptz not null default now(), read_at timestamptz);
 create table public.admin_notifications (id uuid primary key default gen_random_uuid(), kind text not null, status text not null default 'open', user_id uuid, title text not null, body text, payload jsonb not null default '{}', created_at timestamptz not null default now(), handled_at timestamptz, handled_by uuid,
