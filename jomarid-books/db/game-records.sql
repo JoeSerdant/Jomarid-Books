@@ -6,7 +6,7 @@
 --
 -- Důvěra: hry běží v prohlížeči, takže hlášená hodnota jde podvrhnout (stejně jako uložený postup ve hře). Server proto přijme jen
 -- známé statistiky, celá nezáporná čísla do věrohodné meze a nikdy hodnotu nesníží. Odznaky za hry dávají jen XP (ne mince), dohromady
--- 10470 XP: čím těžší odznak ve stejné statistice, tím víc XP. XP se přičítá k úrovni čtenáře, ale odznaky za úroveň (a s nimi mince)
+-- 12080 XP: čím těžší odznak ve stejné statistice, tím víc XP. XP se přičítá k úrovni čtenáře, ale odznaky za úroveň (a s nimi mince)
 -- se z něj nevyhodnocují. Seznam statistik a odznaků je i v appce (src/gameRecords/catalog.js);
 -- test src/tests/gameRecords.test.mjs hlídá, že si odpovídají.
 
@@ -66,6 +66,15 @@ insert into public.game_stat_limits (game_id, stat_key, max_value) values
   ('rocket', 'rush_streak', 10000),
   ('rocket', 'boss_level', 1000),
   ('rocket', 'ascension', 10000),
+  ('rocket', 'total_kills', 2000000000),
+  ('rocket', 'total_boss_kills', 100000000),
+  ('rocket', 'no_hit_bosses', 100000000),
+  ('rocket', 'best_combo', 1000),
+  ('rocket', 'bombs_used', 1000000000),
+  ('rocket', 'total_coins_earned', 1000000000000),
+  ('rocket', 'longest_run', 100000),
+  ('rocket', 'blitz_clears', 100000000),
+  ('rocket', 'maxed_upgrades', 8),
   ('warroom', 'best_sector', 10000),
   ('warroom', 'scenarios_unlocked', 100),
   ('cityclicker', 'prestige_count', 100000),
@@ -104,6 +113,19 @@ with seed (badge_id, game_id, stat_key, threshold, xp) as (values
   ('rocket_blitz', 'rocket', 'score_blitz', 1500, 100),
   ('rocket_rush5', 'rocket', 'rush_streak', 5, 150),
   ('rocket_rush10', 'rocket', 'rush_streak', 10, 300),
+  ('rocket_hunter300', 'rocket', 'total_kills', 300, 50),
+  ('rocket_hunter1500', 'rocket', 'total_kills', 1500, 120),
+  ('rocket_boss10', 'rocket', 'total_boss_kills', 10, 80),
+  ('rocket_boss30', 'rocket', 'total_boss_kills', 30, 200),
+  ('rocket_nohit', 'rocket', 'no_hit_bosses', 1, 150),
+  ('rocket_combo8', 'rocket', 'best_combo', 8, 80),
+  ('rocket_bombs20', 'rocket', 'bombs_used', 20, 40),
+  ('rocket_coins5k', 'rocket', 'total_coins_earned', 5000, 40),
+  ('rocket_coins50k', 'rocket', 'total_coins_earned', 50000, 120),
+  ('rocket_run10', 'rocket', 'longest_run', 10, 100),
+  ('rocket_run20', 'rocket', 'longest_run', 20, 250),
+  ('rocket_blitzclear', 'rocket', 'blitz_clears', 1, 80),
+  ('rocket_maxship', 'rocket', 'maxed_upgrades', 8, 300),
   ('chess_first', 'chess', 'wins_total', 1, 50),
   ('chess_25', 'chess', 'wins_total', 25, 120),
   ('chess_dragon', 'chess', 'expert_wins', 1, 250),

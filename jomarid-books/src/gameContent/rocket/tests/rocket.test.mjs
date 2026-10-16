@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
+import { GAME_BADGES, GAME_CATALOG } from '../../../gameRecords/catalog.js';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(DIR, '..', '..');
@@ -89,13 +90,13 @@ test('tajné kódy: pole vypadá jako číslo verze úplně dole v menu, 67MILUJ
 
 test('cheat menu v Rocketu: mince, prach, loď na maximum, boss 14 a rekordy skóre ve všech režimech se zapíšou do skutečného postupu a nahlásí appce', () => {
   const overlay = html.slice(html.indexOf('<div id="cheat-overlay"'), html.indexOf('<div id="pause-overlay"'));
-  for (const id of ['coins', 'stardust', 'maxship', 'boss', 'score-normal', 'score-hard', 'score-inferno', 'score-insane', 'score-blitz']) assert.ok(overlay.includes(`data-cheat="${id}"`), id);
+  for (const id of ['coins', 'stardust', 'maxship', 'boss', 'score-normal', 'score-hard', 'score-inferno', 'score-insane', 'score-blitz', 'rush', 'lifetime']) assert.ok(overlay.includes(`data-cheat="${id}"`), id);
   assert.match(html, /boss: \(\) => \{ Storage\.data\.stats\.bestBossLevel = Math\.max\(Storage\.data\.stats\.bestBossLevel \|\| 0, 14\);/, 'boss 14 odemkne NEMESIS i GLITCH');
   assert.match(html, /Storage\.data\.best\[mode\] = Math\.max\(Storage\.data\.best\[mode\] \|\| 0, CHEAT_SCORE\);/, 'rekord se jen zvyšuje');
   assert.match(html, /const CHEAT_SCORE = 3000;/);
   assert.match(html, /maxship: \(\) => \{ for \(const u of UPGRADES\) Storage\.data\.upgrades\[u\.key\] = MAX_LVL;/);
-  // po každém cheatu se postup uloží (to ho nahlásí appce přes reportRecords), obnoví se menu a vyhodnotí úspěchy
-  assert.match(html, /const text = CHEATS\[btn\.dataset\.cheat\]\(\);\s*Storage\.save\(\);\s*UI\.refresh\(\);\s*UI\.renderStats\(\);\s*Achv\.check\(\);/);
+  // po každém cheatu se postup uloží (to ho nahlásí appce přes reportRecords), obnoví se menu a vyhodnotí relikvie
+  assert.match(html, /const text = CHEATS\[btn\.dataset\.cheat\]\(\);\s*Storage\.save\(\);\s*UI\.refresh\(\);\s*UI\.renderStats\(\);\s*Relics\.check\(\);/);
 });
 
 test('strom Vzestupu: nové uzly za hvězdný prach mají cenu, strop, uložení a napojení do hry', () => {
@@ -205,4 +206,70 @@ test('bossové: pět nových za NEMESIS, na konci GLITCH, který se opakuje; vš
   const thr = vm.runInNewContext(html.match(/const BOSS_THRESHOLDS = (\[[^\]]*\]);/)[1]);
   assert.equal(thr.length, 13);
   assert.ok(thr.every((v, i) => i === 0 || v > thr[i - 1]));
+});
+
+/* ---------------------------------------------------------------- úspěchy jsou odznaky v appce */
+const rocketBadges = GAME_BADGES.filter((b) => b.game === 'rocket');
+const rocketStats = GAME_CATALOG.find((g) => g.id === 'rocket').stats;
+// statistika v appce -> klíč ve hře (a jednotka: nejdelší běh se hlásí v minutách)
+const STAT_SOURCE = {
+  total_kills: ['stats', 'totalKills', 1], total_boss_kills: ['stats', 'totalBossKills', 1], no_hit_bosses: ['stats', 'noHitBosses', 1], best_combo: ['stats', 'bestCombo', 1],
+  bombs_used: ['stats', 'bombsUsed', 1], total_coins_earned: ['stats', 'totalCoinsEarned', 1], longest_run: ['stats', 'longestRun', 60000], blitz_clears: ['stats', 'blitzClears', 1],
+};
+
+test('úspěchy ve hře jsou odznaky v appce: ve hře není seznam úspěchů ani odměny za ně, zůstaly jen relikvie', () => {
+  assert.doesNotMatch(html, /ACHIEVEMENTS|renderAchievements|achv-|\bAchv\b/);
+  assert.ok(html.includes('id="stats-overlay"') && html.includes('class="stats-note"'), 'poznámka, kde úspěchy najít');
+  assert.match(html, /Úspěchy za hraní jsou odznaky v appce: stránka Odznaky, záložka Odznaky her\./);
+  assert.ok(html.includes('>Postup a relikvie</button>'));
+  assert.match(html, /const Relics = \{[\s\S]*?\n\};/);
+  const relics = html.match(/const Relics = \{[\s\S]*?\n\};/)[0];
+  assert.doesNotMatch(relics, /coins|reward/i, 'relikvie nedávají mince');
+  assert.match(relics, /d\.achievements\[r\.requires\] = true;/, 'odemčení se zapisuje pod stejným klíčem jako dřív, takže starší uložení platí dál');
+  assert.match(relics, /if \(Game && Game\.player\) Game\.player\.applyStats\(\);/, 'nová relikvie se projeví hned');
+});
+
+test('relikvie: podmínky odpovídají odznakům v appce (každý odznak s relikvií má stejný práh) a ve hře se ukáže, jak ji získat', () => {
+  const arr = html.match(/const RELICS = (\[[\s\S]*?\n\]);/)[1];
+  const RELICS = vm.runInNewContext(arr);
+  assert.deepEqual([...RELICS.map((r) => r.requires)], ['hunter_300', 'boss_10', 'combo_8', 'bomb_20', 'coins_5000', 'ascend_1'], 'klíče dřívějších úspěchů');
+  for (const r of RELICS) {
+    const badge = rocketBadges.find((b) => b.description.includes(`Odemyká relikvii ${r.name}.`));
+    assert.ok(badge, `odznak, který odemyká relikvii ${r.name}`);
+    assert.ok(r.how.endsWith('.') && r.desc, r.id);
+    const stats = { totalKills: 0, totalBossKills: 0, bestCombo: 0, bombsUsed: 0, totalCoinsEarned: 0 };
+    const data = { ascension: 0 };
+    const at = (v) => { const st = { ...stats }; const d = { ...data }; if (badge.stat === 'ascension') d.ascension = v; else st[STAT_SOURCE[badge.stat][1]] = v; return r.check(st, d); };
+    assert.equal(at(badge.threshold - 1), false, `${r.id}: o jedna pod prahem ${badge.id}`);
+    assert.equal(at(badge.threshold), true, `${r.id}: přesně na prahu ${badge.id}`);
+    if (r.progress) assert.equal(r.progress({ totalKills: 5, totalBossKills: 5, bombsUsed: 5, totalCoinsEarned: 5 })[1], badge.threshold, `${r.id}: ukazatel míří na stejný práh`);
+  }
+  assert.match(html, /Jak získat: \$\{r\.how\}\$\{progress\}/);
+});
+
+test('reportRecords hlásí všechny statistiky Rocketu z katalogu appky ve správných jednotkách', () => {
+  for (const s of rocketStats) assert.ok(html.includes(`jomaridRecord('${s.key}'`), s.key);
+  const fn = html.match(/function reportRecords\(\) \{[\s\S]*?\n\}\n/)[0];
+  const keys = [...html.match(/defaults: \{[\s\S]*?upgrades: \{([^}]*)\}/)[1].matchAll(/(\w+):/g)].map((m) => m[1]);
+  assert.equal(keys.length, rocketStats.find((s) => s.key === 'maxed_upgrades').max, 'osm kategorií vylepšení');
+  const calls = {};
+  const upgrades = Object.fromEntries(keys.map((k, i) => [k, i < 5 ? 20 : 19]));
+  const ctx = vm.createContext({ jomaridRecord: (k, v) => { calls[k] = v; }, MAX_LVL: 20, Storage: { defaults: { upgrades: Object.fromEntries(keys.map((k) => [k, 1])) }, data: {
+    best: { normal: 11, hard: 12, inferno: 13, insane: 14, blitz: 15, rush: 16 }, ascension: 2, upgrades,
+    stats: { bestBossLevel: 9, totalKills: 301, totalBossKills: 11, noHitBosses: 1, bestCombo: 8, bombsUsed: 21, totalCoinsEarned: 5001, longestRun: 20 * 60000 + 59999, blitzClears: 3 } } } });
+  vm.runInContext(`${fn}; reportRecords();`, ctx);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), {
+    score_normal: 11, score_hard: 12, score_inferno: 13, score_insane: 14, score_blitz: 15, rush_streak: 16, boss_level: 9, ascension: 2,
+    total_kills: 301, total_boss_kills: 11, no_hit_bosses: 1, best_combo: 8, bombs_used: 21, total_coins_earned: 5001, longest_run: (20 * 60000 + 59999) / 60000, blitz_clears: 3, maxed_upgrades: 5,
+  });
+  // reportRecords se volá i při načtení hry, kdy ještě není definované UPGRADES: seznam kategorií se proto bere z výchozího postupu
+  assert.doesNotMatch(fn.replace(/\/\/.*$/gm, ''), /UPGRADES/);
+});
+
+test('každý nový odznak Rocketu míří na statistiku, kterou hra opravdu počítá', () => {
+  for (const [stat, [, field]] of Object.entries(STAT_SOURCE)) {
+    assert.match(html, new RegExp(`\\b${field}\\b`), `${stat}: ${field} ve hře`);
+    assert.ok(rocketBadges.some((b) => b.stat === stat), `${stat}: má aspoň jeden odznak`);
+  }
+  assert.ok(rocketBadges.some((b) => b.stat === 'maxed_upgrades' && b.threshold === 8));
 });

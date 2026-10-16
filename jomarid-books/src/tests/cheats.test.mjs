@@ -75,6 +75,14 @@ test('cheaty dosáhnou prahů herních odznaků (hlášení rekordů appce se d�
   assert.ok(rushCheat >= badgeMax('rocket', 'rush_streak'), 'rush_streak (série bossů v Boss Rush)');
   assert.match(rocket, /rush: \(\) => \{\s*Storage\.data\.best\.rush = Math\.max\(Storage\.data\.best\.rush \|\| 0, CHEAT_RUSH\);/);
   assert.ok(GAMES.rocket.page.includes('data-cheat="rush"'));
+  // celkové statistiky za celou dobu hraní: jedno cheat tlačítko, které je zvedne na prahy všech odznaků a relikvií (nejdelší běh je v ms, odznak v minutách)
+  const life = JSON.parse(rocket.match(/const CHEAT_LIFETIME = (\{[^}]*\});/)[1].replace(/(\w+):/g, '"$1":'));
+  const lifeStats = { total_kills: ['totalKills', 1], total_boss_kills: ['totalBossKills', 1], no_hit_bosses: ['noHitBosses', 1], best_combo: ['bestCombo', 1], bombs_used: ['bombsUsed', 1], total_coins_earned: ['totalCoinsEarned', 1], longest_run: ['longestRun', 60000], blitz_clears: ['blitzClears', 1] };
+  for (const [stat, [field, unit]] of Object.entries(lifeStats)) assert.ok(life[field] / unit >= badgeMax('rocket', stat), stat);
+  assert.match(rocket, /lifetime: \(\) => \{\s*for \(const k in CHEAT_LIFETIME\) Storage\.data\.stats\[k\] = Math\.max\(Storage\.data\.stats\[k\] \|\| 0, CHEAT_LIFETIME\[k\]\);/);
+  assert.ok(GAMES.rocket.page.includes('data-cheat="lifetime"'));
+  assert.equal(Object.keys(life).length, Object.keys(lifeStats).length, 'každá celková statistika má v cheatu hodnotu');
+  assert.ok(badgeMax('rocket', 'maxed_upgrades') === 8 && /maxship: \(\) => \{ for \(const u of UPGRADES\) Storage\.data\.upgrades\[u\.key\] = MAX_LVL;/.test(rocket), 'Loď na maximum (maxed_upgrades)');
   const boss = Number(rocket.match(/bestBossLevel = Math\.max\(Storage\.data\.stats\.bestBossLevel \|\| 0, (\d+)\)/)[1]);
   assert.ok(boss >= badgeMax('rocket', 'boss_level'), 'boss_level (NEMESIS 8, GLITCH 14)');
   // Polygon aréna: úroveň, bossové, výhry, režimy, vlny, třídy, stupeň třídy a Peklo
@@ -107,7 +115,7 @@ test('cheaty dosáhnou prahů herních odznaků (hlášení rekordů appce se d�
 });
 
 test('cheat se ukládá a hlásí jako skutečný postup (Rocket, Polygon, Kouloví Kámoši, City Clicker)', () => {
-  assert.match(GAMES.rocket.code, /Storage\.save\(\);\s*UI\.refresh\(\);\s*UI\.renderStats\(\);\s*Achv\.check\(\);/);
+  assert.match(GAMES.rocket.code, /Storage\.save\(\);\s*UI\.refresh\(\);\s*UI\.renderStats\(\);\s*Relics\.check\(\);/);
   assert.match(GAMES.polygonarena.code, /persist\(\);[^\n]*\n\s*trackProgress\(\);/);
   assert.match(GAMES.koulovikamosi.code, /cmsg\.textContent=CHEATS\[k\]\(\);save\(\);stats\(\)/);
   assert.match(GAMES.cityclicker.code, /function cheatAddClicks\(\)[\s\S]*?saveGame\(false\);/);

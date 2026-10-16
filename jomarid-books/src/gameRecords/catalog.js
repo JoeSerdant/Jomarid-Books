@@ -16,6 +16,15 @@ export const GAME_CATALOG = [
       { key: 'rush_streak', label: 'Boss Rush (série bossů)', max: 10000 },
       { key: 'boss_level', label: 'Nejvyšší poražený boss', max: 1000 },
       { key: 'ascension', label: 'Vzestupy', max: 10000 },
+      { key: 'total_kills', label: 'Zničení nepřátelé celkem', max: 2000000000 },
+      { key: 'total_boss_kills', label: 'Poražení bossové celkem', max: 100000000 },
+      { key: 'no_hit_bosses', label: 'Bossové poražení bez zásahu', max: 100000000 },
+      { key: 'best_combo', label: 'Nejvyšší kombo', max: 1000 },
+      { key: 'bombs_used', label: 'Použité bomby', max: 1000000000 },
+      { key: 'total_coins_earned', label: 'Vydělané mince celkem', max: 1000000000000 },
+      { key: 'longest_run', label: 'Nejdelší běh (minuty)', max: 100000 },
+      { key: 'blitz_clears', label: 'Dokončené Bleskové vlny', max: 100000000 },
+      { key: 'maxed_upgrades', label: 'Vylepšení lodi na maximu (z 8)', max: 8 },
     ],
   },
   {
@@ -70,7 +79,7 @@ export const GAME_CATALOG = [
   },
 ];
 
-// Odznaky za hry dávají jen XP (ne mince). Ve stejné statistice platí, že čím těžší odznak, tím víc XP; dohromady je to 10 470 XP, takže hry samy
+// Odznaky za hry dávají jen XP (ne mince). Ve stejné statistice platí, že čím těžší odznak, tím víc XP; dohromady je to 12 080 XP, takže hry samy
 // dovedou čtenáře zhruba na úroveň 12 a dál už jen čtení. XP z her se do úrovně přičítá, ale odznaky za úroveň (a s nimi mince) se z něj nevyhodnocují.
 export const GAME_BADGES = [
   { id: 'rocket_ace', game: 'rocket', stat: 'score_normal', threshold: 2500, xp: 100, title: 'Eso hvězd', description: 'Získej v Normální obtížnosti 2 500 bodů.' },
@@ -78,11 +87,24 @@ export const GAME_BADGES = [
   { id: 'rocket_insane', game: 'rocket', stat: 'score_insane', threshold: 1500, xp: 250, title: 'Šílenec', description: 'Získej v Insane Pekle 1 500 bodů.' },
   { id: 'rocket_nemesis', game: 'rocket', stat: 'boss_level', threshold: 8, xp: 150, title: 'Konec NEMESIS', description: 'Poraz osmého bosse (NEMESIS).' },
   { id: 'rocket_glitch', game: 'rocket', stat: 'boss_level', threshold: 14, xp: 250, title: 'Chyba v systému', description: 'Poraz čtrnáctého bosse (GLITCH).' },
-  { id: 'rocket_ascend', game: 'rocket', stat: 'ascension', threshold: 1, xp: 300, title: 'Hvězdný vzestup', description: 'Dokonči první Vzestup.' },
+  { id: 'rocket_ascend', game: 'rocket', stat: 'ascension', threshold: 1, xp: 300, title: 'Hvězdný vzestup', description: 'Dokonči první Vzestup. Odemyká relikvii Fénixovo jádro.' },
   { id: 'rocket_hard', game: 'rocket', stat: 'score_hard', threshold: 2000, xp: 120, title: 'Těžká cesta', description: 'Získej v Těžké obtížnosti 2 000 bodů.' },
   { id: 'rocket_blitz', game: 'rocket', stat: 'score_blitz', threshold: 1500, xp: 100, title: 'Bleskový pilot', description: 'Získej v Bleskové vlně 1 500 bodů.' },
   { id: 'rocket_rush5', game: 'rocket', stat: 'rush_streak', threshold: 5, xp: 150, title: 'Nájezdník', description: 'V Boss Rush poraz 5 bossů v jedné sérii.' },
   { id: 'rocket_rush10', game: 'rocket', stat: 'rush_streak', threshold: 10, xp: 300, title: 'Legenda nájezdů', description: 'V Boss Rush poraz 10 bossů v jedné sérii.' },
+  { id: 'rocket_hunter300', game: 'rocket', stat: 'total_kills', threshold: 300, xp: 50, title: 'Vyhlazovač', description: 'Znič 300 nepřátel. Odemyká relikvii Posílená hlaveň.' },
+  { id: 'rocket_hunter1500', game: 'rocket', stat: 'total_kills', threshold: 1500, xp: 120, title: 'Zkáza hvězd', description: 'Znič 1 500 nepřátel.' },
+  { id: 'rocket_boss10', game: 'rocket', stat: 'total_boss_kills', threshold: 10, xp: 80, title: 'Postrach bossů', description: 'Poraz 10 bossů. Odemyká relikvii Silné pláty.' },
+  { id: 'rocket_boss30', game: 'rocket', stat: 'total_boss_kills', threshold: 30, xp: 200, title: 'Exterminátor', description: 'Poraz 30 bossů.' },
+  { id: 'rocket_nohit', game: 'rocket', stat: 'no_hit_bosses', threshold: 1, xp: 150, title: 'Bez škrábnutí', description: 'Poraz bosse, aniž bys v souboji dostal zásah.' },
+  { id: 'rocket_combo8', game: 'rocket', stat: 'best_combo', threshold: 8, xp: 80, title: 'Nezastavitelný', description: 'Dosáhni násobiče kombo ×8. Odemyká relikvii Rychlá ruka.' },
+  { id: 'rocket_bombs20', game: 'rocket', stat: 'bombs_used', threshold: 20, xp: 40, title: 'Demolice', description: 'Použij bomby 20krát. Odemyká relikvii Nouzové bomby.' },
+  { id: 'rocket_coins5k', game: 'rocket', stat: 'total_coins_earned', threshold: 5000, xp: 40, title: 'Boháč', description: 'Vydělej ve hře celkem 5 000 mincí. Odemyká relikvii Sběrač.' },
+  { id: 'rocket_coins50k', game: 'rocket', stat: 'total_coins_earned', threshold: 50000, xp: 120, title: 'Magnát', description: 'Vydělej ve hře celkem 50 000 mincí.' },
+  { id: 'rocket_run10', game: 'rocket', stat: 'longest_run', threshold: 10, xp: 100, title: 'Vytrvalec', description: 'Přežij 10 minut v jednom běhu.' },
+  { id: 'rocket_run20', game: 'rocket', stat: 'longest_run', threshold: 20, xp: 250, title: 'Železné plíce', description: 'Přežij 20 minut v jednom běhu.' },
+  { id: 'rocket_blitzclear', game: 'rocket', stat: 'blitz_clears', threshold: 1, xp: 80, title: 'Bleskový útok', description: 'Dokonči celé kolo Bleskové vlny.' },
+  { id: 'rocket_maxship', game: 'rocket', stat: 'maxed_upgrades', threshold: 8, xp: 300, title: 'Dokonalá loď', description: 'Vylepši všech osm kategorií lodi na maximum.' },
   { id: 'chess_first', game: 'chess', stat: 'wins_total', threshold: 1, xp: 50, title: 'První výhra', description: 'Vyhraj hodnocenou partii.' },
   { id: 'chess_25', game: 'chess', stat: 'wins_total', threshold: 25, xp: 120, title: 'Stálý hráč', description: 'Vyhraj 25 hodnocených partií.' },
   { id: 'chess_dragon', game: 'chess', stat: 'expert_wins', threshold: 1, xp: 250, title: 'Přemožitel draka', description: 'Poraz Draka v hodnocené partii.' },
