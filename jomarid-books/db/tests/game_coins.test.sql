@@ -1,4 +1,4 @@
--- SQL testy Jomarid Coinů z her (db/game-coins.sql): strop na hru a den, strop ze všech her, nová hra Kouloví Kámoši, hranice, dny, zápis do deníku a zůstatek připsaný přesně jednou.
+-- SQL testy Jomarid Coinů z her (db/game-coins.sql): strop na hru a den (a žádný strop ze všech her dohromady), nová hra Kouloví Kámoši, hranice, dny, zápis do deníku a zůstatek připsaný přesně jednou.
 -- Spouští se přes db/tests/run.sh po game_saves.test.sql (potřebuje mock_schema.sql, ve kterém je dosavadní award_game_coins, a db/game-coins.sql, který ji nahradil).
 \set ON_ERROR_STOP on
 create schema if not exists tt;
@@ -89,29 +89,29 @@ select tt.ok((select count(*) from public.coin_transactions where user_id = tt.c
 with r as (select tt.aw(2, 'rocket', 5) j) select tt.ok(r.j->>'granted' = '0' and tt.capped(r.j) and (r.j->>'balance')::bigint = tt.coins(2), 'po vyčerpání stropu hra nedostane nic (granted 0, capped true, vrácený zůstatek je skutečný) ') from r;
 select tt.ok(tt.earned(2, 'rocket') = 100, 'žádost po vyčerpání stropu nic nezapsala');
 
--- ===== strop na hru se nesčítá přes hry, strop ze všech her je 200 =====
+-- ===== strop na hru se nesčítá přes hry a za všechny hry dohromady žádný strop není =====
 select tt.ok(tt.granted(2, 'warroom', 60) = 60, 'jiná hra má vlastní strop: Warroom dostane 60, i když Rocket je vyčerpaný');
 select tt.ok(tt.granted(2, 'warroom', 60) = 40, 'Warroom: druhých 60 se ořízne na zbývajících 40 (strop hry 100)');
-select tt.ok(tt.earned(2) = 200 and tt.coins(2) = 200, 'dvě plné hry dávají dohromady 200 (celkový strop za den) a zůstatek je přesně 200');
-with r as (select tt.aw(2, 'cityclicker', 10) j) select tt.ok(r.j->>'granted' = '0' and tt.capped(r.j), 'třetí hra nedostane nic: vyčerpaný je celkový strop, i když v ní ten den nic nebylo') from r;
-select tt.ok(tt.earned(2) = 200 and tt.earned(2, 'cityclicker') = 0, 'celkem pořád 200, ve City Clickeru nic');
+select tt.ok(tt.earned(2) = 200 and tt.coins(2) = 200, 'dvě plné hry dávají dohromady 200 a zůstatek je přesně 200');
+with r as (select tt.aw(2, 'cityclicker', 10) j) select tt.ok(r.j->>'granted' = '10' and not tt.capped(r.j), 'třetí hra dostane svých 10, i když dvě jiné hry už jsou plné (žádný celkový strop)') from r;
+select tt.ok(tt.earned(2) = 210 and tt.coins(2) = 210, 'dohromady 210, tedy víc než dřívějších 200 za všechny hry');
 
--- celkový strop jen zčásti
-select tt.ok(tt.granted(3, 'rocket', 100) = 100, 'účet 3: Rocket 100');
-select tt.ok(tt.granted(3, 'warroom', 70) = 70, 'účet 3: Warroom 70, celkem 170');
-with r as (select tt.aw(3, 'cityclicker', 60) j) select tt.ok(r.j->>'granted' = '30' and tt.capped(r.j), 'třetí hra dostane jen zbývajících 30 z celkového stropu (200 - 170)') from r;
-select tt.ok(tt.granted(3, 'chess', 1) = 0 and tt.earned(3) = 200, 'a čtvrtá hra už nic: celkem 200');
+-- všech šest her naplno
+select tt.ok(tt.granted(3, 'rocket', 100) = 100 and tt.granted(3, 'warroom', 100) = 100 and tt.granted(3, 'cityclicker', 100) = 100, 'účet 3: tři hry po 100');
+select tt.ok(tt.granted(3, 'polygonarena', 100) = 100 and tt.granted(3, 'chess', 100) = 100 and tt.granted(3, 'koulovikamosi', 100) = 100, 'účet 3: dalších tři hry po 100');
+select tt.ok(tt.earned(3) = 600 and tt.coins(3) = 600, 'šest plných her dá za den 600 Coinů (6 x 100) a zůstatek je přesně 600');
+select tt.ok(tt.granted(3, 'rocket', 1) = 0 and tt.granted(3, 'chess', 1) = 0 and tt.granted(3, 'koulovikamosi', 1) = 0 and tt.earned(3) = 600, 'každá hra drží svůj strop 100 i při šesti plných hrách: nic navíc');
 
 -- ===== Kouloví Kámoši mají vlastní strop jako ostatní hry =====
 with r as (select tt.aw(4, 'koulovikamosi', 150) j) select tt.ok(r.j->>'granted' = '100' and tt.capped(r.j), 'Kouloví Kámoši: žádost na 150 se ořízne na 100') from r;
 select tt.ok(tt.granted(4, 'koulovikamosi', 1) = 0, 'Kouloví Kámoši: další žádost už nic nedá');
-select tt.ok(tt.granted(4, 'chess', 100) = 100, 'jiná hra vedle plných Kouloví Kámošů pořád dává (celkem 200)');
-select tt.ok(tt.earned(4) = 200, 'Kouloví Kámoši se počítají do celkového stropu za den');
+select tt.ok(tt.granted(4, 'chess', 100) = 100, 'jiná hra vedle plných Kouloví Kámošů pořád dává');
+select tt.ok(tt.earned(4, 'koulovikamosi') = 100 and tt.earned(4, 'chess') = 100, 'každá z obou her má svých 100');
 
 -- ===== hranice stropu =====
 with r as (select tt.aw(6, 'rocket', 100) j) select tt.ok(r.j->>'granted' = '100' and not tt.capped(r.j), 'přesně 100 najednou projde celé a není capped') from r;
 with r as (select tt.aw(6, 'rocket', 1) j) select tt.ok(r.j->>'granted' = '0' and tt.capped(r.j), 'o jedna víc už ne') from r;
-select tt.ok(tt.granted(6, 'warroom', 1) = 1, 'jiná hra pořád dává (celkem 101 z 200)');
+select tt.ok(tt.granted(6, 'warroom', 1) = 1, 'jiná hra pořád dává (celkem 101)');
 
 -- ===== jiné dny se nepočítají =====
 select tt.cmk(9);
@@ -119,7 +119,7 @@ select tt.no_user();   -- zápis do deníku jako ze SQL editoru (spoušť smí u
 insert into public.coin_transactions (user_id, amount, source_type)
   values (tt.cu(9), 100, 'game_event:rocket:' || ((now() at time zone 'utc')::date - 1)::text || ':1:event'),
          (tt.cu(9), 100, 'game_event:warroom:' || ((now() at time zone 'utc')::date - 1)::text || ':1:event');
-select tt.ok(tt.aw(9, 'rocket', 100)->>'granted' = '100', 'včerejší vyčerpaný strop dnes nic neubírá (hra i celkový strop)');
+select tt.ok(tt.aw(9, 'rocket', 100)->>'granted' = '100', 'včerejší vyčerpaný strop hry dnes nic neubírá');
 select tt.ok(tt.earned(9) = 100, 'dnes je v deníku jen dnešních 100');
 
 -- ===== zápis do deníku a důvody =====
@@ -141,5 +141,5 @@ with r as (select tt.aw(8, 'rocket', 5) j) select tt.ok(r.j->>'granted' = '0' an
 
 -- ===== opakované spuštění souboru =====
 select tt.ok((select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'award_game_coins') = 1, 'po opakovaném spuštění souboru je jen jedna funkce award_game_coins (žádné přetížení navíc)');
-select tt.ok(pg_get_functiondef('public.award_game_coins(text, integer, text)'::regprocedure) ~ 'v_per_game_cap constant integer := 100;' and pg_get_functiondef('public.award_game_coins(text, integer, text)'::regprocedure) ~ 'v_global_cap constant integer := 200;', 've funkci jsou stropy 100 a 200');
+select tt.ok(pg_get_functiondef('public.award_game_coins(text, integer, text)'::regprocedure) ~ 'v_per_game_cap constant integer := 100;' and pg_get_functiondef('public.award_game_coins(text, integer, text)'::regprocedure) !~ 'v_global_cap', 've funkci je strop 100 na hru a žádný celkový strop');
 select tt.ok((select prosecdef from pg_proc where oid = 'public.award_game_coins(text, integer, text)'::regprocedure), 'funkce běží s právy vlastníka (security definer), jako dřív');
