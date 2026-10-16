@@ -117,6 +117,17 @@ test('id her v Games.jsx a v mostech jsou stejná (server podle něj hlídá den
   assert.deepEqual(ids.sort(), Object.keys(GAMES).sort());
 });
 
+test('server (db/game-coins.sql) pustí k Coinům všechny hry z Games.jsx a žádnou navíc; stropy jsou 100 na hru a 200 za den', () => {
+  const sql = fs.readFileSync(path.join(SRC, '..', 'db', 'game-coins.sql'), 'utf8').replace(/--[^\n]*/g, '');
+  const list = sql.match(/p_game_id not in \(([^)]*)\)/);
+  assert.ok(list, 'funkce má seznam povolených her');
+  const serverIds = [...list[1].matchAll(/'(\w+)'/g)].map((m) => m[1]).sort();
+  const ids = [...gamesPage.matchAll(/^\s+id: '(\w+)',$/gm)].map((m) => m[1]).sort();
+  assert.deepEqual(serverIds, ids, 'nová hra v appce bez zápisu v award_game_coins by o Coiny žádala marně (invalid_game_id)');
+  assert.match(sql, /v_per_game_cap constant integer := 100;/);
+  assert.match(sql, /v_global_cap constant integer := 200;/);
+});
+
 /* ---------------------------------------------------------------- hub a lišta */
 test('Games.jsx používá lištu, potvrzení ukazuje jen v ní a nic zbytečného neposílá hře', () => {
   assert.match(gamesPage, /<GameBar title=\{game\.title\} onClose=\{handleCloseGame\}/);

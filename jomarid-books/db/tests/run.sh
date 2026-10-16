@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SQL testy na skutečném PostgreSQL: db/push-notifications.sql (oznámení), db/email-change.sql (změna e-mailu přes správce), db/game-records.sql (herní rekordy a odznaky)
-# db/shop.sql (obchůdek) a db/game-saves.sql (uložený postup her)
+# db/shop.sql (obchůdek), db/game-saves.sql (uložený postup her) a db/game-coins.sql (denní limity Coinů z her)
 # proti zjednodušenému schématu Supabase (mock_schema.sql).
 #   bash db/tests/run.sh        (nebo: npm run test:sql)
 # Potřebuje PostgreSQL 14+ (initdb, pg_ctl, psql v PATH nebo v /usr/lib/postgresql/*/bin). Vytvoří dočasný cluster mimo síť (jen unix socket),
@@ -12,6 +12,7 @@ EMAIL_SQL="$HERE/../email-change.sql"
 GAME_SQL="$HERE/../game-records.sql"
 SHOP_SQL="$HERE/../shop.sql"
 SAVES_SQL="$HERE/../game-saves.sql"
+COINS_SQL="$HERE/../game-coins.sql"
 
 BIN=""
 for d in $(command -v initdb >/dev/null 2>&1 && dirname "$(command -v initdb)") /usr/lib/postgresql/*/bin; do
@@ -23,7 +24,7 @@ TMP="$(mktemp -d)"
 RUNAS=""
 if [ "$(id -u)" = "0" ]; then
   id postgres >/dev/null 2>&1 || { echo "Jako root je potřeba uživatel postgres." >&2; rm -rf "$TMP"; exit 77; }
-  chown postgres "$TMP"; chmod 755 "$HERE" "$HERE"/*.sql "$SQL" "$EMAIL_SQL" "$GAME_SQL" "$SHOP_SQL" "$SAVES_SQL" 2>/dev/null || true
+  chown postgres "$TMP"; chmod 755 "$HERE" "$HERE"/*.sql "$SQL" "$EMAIL_SQL" "$GAME_SQL" "$SHOP_SQL" "$SAVES_SQL" "$COINS_SQL" 2>/dev/null || true
   RUNAS="runuser -u postgres --"
 fi
 run() { $RUNAS "$@"; }
@@ -51,12 +52,15 @@ OUT="$TMP/out.txt"
   PSQLQ -f "$SHOP_SQL" &&       # i obchůdek
   PSQLQ -f "$SAVES_SQL" &&
   PSQLQ -f "$SAVES_SQL" &&      # i uložený postup her
+  PSQLQ -f "$COINS_SQL" &&
+  PSQLQ -f "$COINS_SQL" &&      # i denní limity Coinů
   PSQLQ -f "$HERE/push_logic.test.sql" &&
   PSQLQ -f "$HERE/push_rpc.test.sql" &&
   PSQLQ -f "$HERE/email_change.test.sql" &&
   PSQLQ -f "$HERE/game_records.test.sql" &&
   PSQLQ -f "$HERE/shop.test.sql" &&
-  PSQLQ -f "$HERE/game_saves.test.sql"
+  PSQLQ -f "$HERE/game_saves.test.sql" &&
+  PSQLQ -f "$HERE/game_coins.test.sql"
 } >"$OUT" 2>&1
 STATUS=$?
 
@@ -123,6 +127,20 @@ if [ $STATUS -eq 0 ]; then
      "alter table public.tt_unlocks_away rename to game_badge_unlocks;"
   PRICE_BACK=$(PSQL -At -c "select price from public.shop_items where item_id = 'gamefx_noir'" 2>&1)
   [ "$PRICE_BACK" = "250" ] || { echo "SELÁHALO: po úklidu zkoušek kontroly předpokladů se cena nesrovnala ($PRICE_BACK)" >>"$OUT"; STATUS=1; }
+fi
+
+# Kontrola předpokladů v db/game-coins.sql: když funkce award_game_coins v databázi není, soubor se zastaví a žádnou novou (se stropy bez zbytku okolí) nevytvoří.
+if [ $STATUS -eq 0 ]; then
+  PSQLQ -c "alter function public.award_game_coins(text, integer, text) rename to tt_award_away;" || STATUS=1
+  out=$(PSQL -At -f "$COINS_SQL" 2>&1); rc=$?
+  made=$(PSQL -At -c "select count(*) from pg_proc where proname = 'award_game_coins'" 2>&1)
+  PSQLQ -c "alter function public.tt_award_away(text, integer, text) rename to award_game_coins;" || STATUS=1
+  if [ $rc -ne 0 ] && echo "$out" | grep -q "v databázi není" && [ "$made" = "0" ]; then
+    echo "NOTICE:  OK   db/game-coins.sql se zastaví a nic nevytvoří, když award_game_coins v databázi chybí" >>"$OUT"
+  else
+    echo "SELÁHALO: db/game-coins.sql při chybějící funkci (kód $rc, funkcí po pokusu '$made'): $out" >>"$OUT"; STATUS=1
+  fi
+  PSQLQ -f "$COINS_SQL" 2>/dev/null || STATUS=1   # zpátky do pořádku
 fi
 
 OK=$(grep -c "OK   " "$OUT")
