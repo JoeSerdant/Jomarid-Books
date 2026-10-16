@@ -519,7 +519,7 @@ describe('cheat kód v rozhraní', () => {
     const hook = fn('useCheatCode');
     assert.match(hook, /e\.repeat \|\| e\.ctrlKey \|\| e\.metaKey \|\| e\.altKey/);
     assert.match(hook, /buf = \(buf \+ ch\)\.slice\(-CHEAT_CODE\.length\);/);
-    assert.match(ui, /function tryCheatCode\(text\) \{\s*if \(String\(text\)\.trim\(\)\.toUpperCase\(\) !== CHEAT_CODE\) return false;/);
+    assert.match(ui, /useCheatCode\(\(\) => \{ setCheatOpen\(true\); \}\);/);
   });
 
   test('menu: akce do partie jsou jen za rozehrané partie, vizuální kdykoli; menu se zavře Esc i klepnutím mimo', () => {
@@ -528,7 +528,7 @@ describe('cheat kód v rozhraní', () => {
     assert.match(menu, /const live = !!session && !session\.over;/);
     assert.match(menu, /disabled: off/);
     assert.match(menu, /e\.key === "Escape"/);
-    assert.match(menu, /tabIndex: -1, autoFocus: true/, 'fokus na kartě, ne na tlačítku: Enter z pole Tajný kód by jinak hned menu zavřel');
+    assert.match(menu, /tabIndex: -1, autoFocus: true/, 'fokus na kartě, ne na tlačítku: stisk klávesy, který menu otevřel, by jinak hned potvrdil Zavřít');
     assert.doesNotMatch(menu, /btn btn-primary btn-sm", onClick: onClose, autoFocus/);
     assert.match(menu, /session\.cheatWin\(\)/);
     assert.match(ui, /session: view === "game" \? session : null/, 'mimo hru není žádná partie, do které by se zasahovalo');
@@ -542,9 +542,35 @@ describe('cheat kód v rozhraní', () => {
     assert.match(ui, /g\.cheat \? "cheat" : g\.rated === false \? "cvičná" : null/);
   });
 
-  test('pole Tajný kód v Nastavení (pro telefony bez klávesnice) je napojené na stejný kód', () => {
-    assert.match(ui, /h\(SecretCodeRow, \{ onSubmit: onCheatCode \}\)/);
-    assert.match(ui, /onCheatCode: tryCheatCode/);
-    assert.match(fn('SecretCodeRow'), /Tenhle kód neznám\./);
+  test('kód se pozná bez ohledu na velikost písmen a mezery, jiný text ne', () => {
+    const isCheatCode = new Function(`const CHEAT_CODE = "67MILUJU"; ${fn('isCheatCode')}; return isCheatCode;`)();
+    assert.equal(isCheatCode('67MILUJU'), true);
+    assert.equal(isCheatCode('67miluju'), true);
+    assert.equal(isCheatCode('  67 Miluju '), true);
+    for (const bad of ['', '67MILUJ', '67MILUJUU', 'v1.0', '67MILUJU!', null, undefined]) assert.equal(isCheatCode(bad), false, String(bad));
+  });
+
+  test('nenápadné pole u spodního okraje (jako ve Warroom Frontlines) je na každé obrazovce a otevře menu stejným kódem', () => {
+    assert.match(ui, /h\(CheatField, \{ open: cheatOpen, aboveNav: view === "menu", onOpen: \(\) => setCheatOpen\(true\) \}\)/, 'pole je v App, ne jen na jedné obrazovce');
+    const f = fn('CheatField');
+    assert.match(f, /if \(isCheatCode\(text\)\) \{ setVal\(""\);/, 'správný kód pole vyprázdní');
+    assert.match(f, /onOpen\(\);/);
+    assert.match(f, /onBlur: \(\) => setVal\(""\)/, 'špatný text v poli nezůstane');
+    assert.match(f, /if \(open\) \{ setVal\(""\);/, 'po otevření menu (třeba klávesnicí) se pole vyprázdní');
+    assert.match(f, /placeholder: CHEAT_FIELD_HINT/);
+    assert.match(ui, /const CHEAT_FIELD_HINT = "v\d+\.\d+";/, 'vypadá jako číslo verze');
+    assert.match(f, /"aria-label": "Tajný kód"/);
+    assert.match(f, /autoCapitalize: "characters"/);
+    assert.doesNotMatch(ui, /SecretCodeRow|tryCheatCode|onCheatCode/, 'řádek v Nastavení je pryč, nahradilo ho pole u spodního okraje');
+  });
+
+  test('pole je pod okny i dolní lištou a písmo má aspoň 16 px (iOS jinak při klepnutí přiblíží stránku)', () => {
+    const css = fs.readFileSync(path.join(DIR, 'style.css'), 'utf8');
+    const rule = css.match(/\.cheat-field \{[\s\S]*?\n\}/)[0];
+    assert.match(rule, /position: fixed;/);
+    assert.match(rule, /font: 700 16px\//);
+    const z = Number(/z-index: (\d+)/.exec(rule)[1]);
+    assert.ok(z < Number(/\.side-nav \{[^}]*z-index: (\d+)/.exec(css)[1]), 'dolní lišta je nad polem');
+    assert.match(css, /@media \(max-width: 899px\) \{ \.cheat-field\.above-nav \{ bottom: calc\(76px/, 'na menu sedí těsně nad dolní lištou');
   });
 });

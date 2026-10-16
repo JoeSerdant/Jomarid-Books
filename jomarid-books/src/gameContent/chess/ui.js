@@ -473,7 +473,7 @@
   }
 
   // ---------- Cheat menu ----------
-  // Otevře se zadáním kódu na klávesnici kdekoli ve hře, nebo v Nastavení do pole "Tajný kód" (kvůli telefonům bez klávesnice).
+  // Otevře se zadáním kódu na klávesnici kdekoli ve hře, nebo do nenápadného pole u spodního okraje (jako ve Warroom Frontlines; kvůli telefonům bez klávesnice).
   // Zásahy do partie ji označí jako cheat (GameSession.cheated): rating se nezmění, žádné Coiny a nezapočítá se do výher ani rekordů.
   const CHEAT_CODE = "67MILUJU";
   // Znak z klávesy nezávisle na rozložení: číslice podle event.code (na české klávesnici dává řada čísel bez Shiftu písmena s háčky),
@@ -483,6 +483,7 @@
     if (m) return m[1];
     return typeof e.key === "string" && /^[a-z]$/i.test(e.key) ? e.key.toUpperCase() : null;
   }
+  function isCheatCode(text) { return String(text).replace(/\s+/g, "").toUpperCase() === CHEAT_CODE; }
   function useCheatCode(onOpen) {
     useEffect(() => {
       let buf = "";
@@ -517,7 +518,7 @@
       { id: "fanfare", icon: "🎺", label: "Fanfára", note: "Zahraje fanfáru.", run: () => { SoundFX.win(); } }
     ];
     return div({ className: "overlay", onClick: onClose, role: "dialog", "aria-modal": "true", "aria-label": "Cheat menu" },
-      // Fokus jde na kartu, ne na tlačítko: menu se otevírá klávesou Enter (pole Tajný kód), která by jinak hned potvrdila "Zavřít".
+      // Fokus jde na kartu, ne na tlačítko: menu se může otevřít klávesou, jejíž stisk by jinak hned potvrdil "Zavřít".
       div({ className: "modal-card cheat-card", tabIndex: -1, autoFocus: true, onClick: (e) => e.stopPropagation() },
         div({ className: "modal-title" }, "🎭 Cheat menu"),
         div({ className: "modal-text" }, live
@@ -534,21 +535,18 @@
         div({ className: "modal-actions" }, button({ className: "btn btn-primary btn-sm", onClick: onClose }, "Zavřít"))));
   }
 
-  // Pole v Nastavení: kód se píše do něj (telefon bez klávesnice nemá kam "psát po hře").
-  function SecretCodeRow({ onSubmit }) {
+  // Nenápadné pole u spodního okraje na každé obrazovce, jako ve Warroom Frontlines: vypadá jako číslo verze. Klepneš na ně, napíšeš kód a otevře se cheat menu
+  // (telefon bez klávesnice nemá kam "psát po hře"). Po otevření menu a při opuštění pole se vyprázdní, špatný text v něm nezůstane.
+  const CHEAT_FIELD_HINT = "v1.0";
+  function CheatField({ open, aboveNav, onOpen }) {
     const [val, setVal] = useState("");
-    const [bad, setBad] = useState(false);
-    function submit() {
-      if (!val.trim()) return;
-      const ok = onSubmit(val);
-      setBad(!ok);
-      if (ok) setVal("");
+    const ref = useRef(null);
+    useEffect(() => { if (open) { setVal(""); if (ref.current) ref.current.blur(); } }, [open]);
+    function change(text) {
+      if (isCheatCode(text)) { setVal(""); if (ref.current) ref.current.blur(); onOpen(); return; }
+      setVal(text);
     }
-    return div({ className: "settings-row" },
-      span(null, "Tajný kód", small(null, bad ? "Tenhle kód neznám." : "Znáš-li ho.")),
-      div({ className: "secret-code" },
-        h("input", { className: "secret-input", type: "text", value: val, maxLength: 24, autoComplete: "off", autoCapitalize: "characters", spellCheck: false, "aria-label": "Tajný kód", onChange: (e) => { setVal(e.target.value); setBad(false); }, onKeyDown: (e) => { if (e.key === "Enter") submit(); } }),
-        button({ className: "btn btn-ghost btn-sm", onClick: submit }, "OK")));
+    return h("input", { ref, className: "cheat-field" + (aboveNav ? " above-nav" : ""), type: "text", value: val, placeholder: CHEAT_FIELD_HINT, maxLength: 20, autoComplete: "off", autoCorrect: "off", autoCapitalize: "characters", spellCheck: false, "aria-label": "Tajný kód", onChange: (e) => change(e.target.value), onBlur: () => setVal("") });
   }
 
   function RatingHero({ save }) {
@@ -635,7 +633,7 @@
     }));
   }
 
-  function MenuScreen({ save, savedGame, onStart, onResume, onAbandon, onUpdate, onOpenReview, onResetProgress, onCheatCode, theme, setTheme }) {
+  function MenuScreen({ save, savedGame, onStart, onResume, onAbandon, onUpdate, onOpenReview, onResetProgress, theme, setTheme }) {
     const [colorChoice, setColorChoice] = useState(save.playerColor === "b" ? "b" : "w");
     const [tc, setTc] = useState(save.tc || "none");
     const [menuTab, setMenuTab] = useState("play");
@@ -689,7 +687,6 @@
             div({ className: "settings-row" }, span(null, "Hlášky soupeřů", small(null, "Boti občas něco prohodí k průběhu partie.")), h(Toggle, { on: save.botChat, label: "Hlášky soupeřů", onChange: (v) => onUpdate({ botChat: v }) })),
             div({ className: "settings-row" }, span(null, "Automaticky povyšovat na dámu", small(null, "Bez ptaní, když pěšec dojde na konec desky.")), h(Toggle, { on: save.autoQueen, label: "Automaticky povyšovat na dámu", onChange: (v) => onUpdate({ autoQueen: v }) })),
             div({ className: "settings-row" }, span(null, "Motiv"), h(ThemeSeg, { value: theme, onChange: setTheme })),
-            h(SecretCodeRow, { onSubmit: onCheatCode }),
             div({ className: "settings-row" }, span(null, "Resetovat postup", small(null, "Smaže rating, rekordy, výhry i odemčené soupeře.")), button({ className: "btn btn-danger btn-sm", onClick: onResetProgress }, "Resetovat")))))));
   }
 
@@ -1099,13 +1096,8 @@
     const processedRef = useRef(null);
     if (!aiRef.current) aiRef.current = createAIClient();
 
-    // Cheat kód 67MILUJU (kdekoli na klávesnici nebo v Nastavení) otevře cheat menu.
+    // Cheat kód 67MILUJU (kdekoli na klávesnici nebo v poli u spodního okraje) otevře cheat menu.
     useCheatCode(() => { setCheatOpen(true); });
-    function tryCheatCode(text) {
-      if (String(text).trim().toUpperCase() !== CHEAT_CODE) return false;
-      setCheatOpen(true);
-      return true;
-    }
     useEffect(() => { document.body.classList.toggle("disco", disco); return () => document.body.classList.remove("disco"); }, [disco]);
     useEffect(() => {
       if (!confettiKey || !confettiRef.current) return;
@@ -1251,7 +1243,7 @@
     const settings = { sound: save.sound, highlights: save.highlights, chat: save.botChat !== false, autoQueen: !!save.autoQueen };
     let content;
     if (view === "menu") {
-      content = h(MenuScreen, { save, savedGame, onStart: startGame, onResume: resumeGame, onAbandon: () => setConfirm({ abandon: true }), onUpdate: updateSave, onOpenReview: (g) => openReview(g, "menu"), onResetProgress: () => setConfirm({ reset: true }), onCheatCode: tryCheatCode, theme, setTheme: (t) => updateSave({ theme: t }) });
+      content = h(MenuScreen, { save, savedGame, onStart: startGame, onResume: resumeGame, onAbandon: () => setConfirm({ abandon: true }), onUpdate: updateSave, onOpenReview: (g) => openReview(g, "menu"), onResetProgress: () => setConfirm({ reset: true }), theme, setTheme: (t) => updateSave({ theme: t }) });
     } else if (view === "game" && session) {
       content = h(GameScreen, { key: session.startedAt + "-" + session.botIdx, session, save, soundOn: save.sound, onToggleSound: () => updateSave({ sound: !save.sound }), onExit: leaveGame, onFinished, settings });
     } else if (view === "end" && endInfo) {
@@ -1261,6 +1253,7 @@
     }
     return div({ className: "app-shell" },
       content,
+      h(CheatField, { open: cheatOpen, aboveNav: view === "menu", onOpen: () => setCheatOpen(true) }),
       confettiKey > 0 && h("canvas", { key: confettiKey, ref: confettiRef, className: "confetti-canvas", "aria-hidden": "true" }),
       cheatOpen && h(CheatMenu, { session: view === "game" ? session : null, disco, soundOn: save.sound, onDisco: () => setDisco((d) => !d), onConfetti: () => { setConfettiKey((k) => k + 1); }, onClose: () => setCheatOpen(false) }),
       confirm && confirm.abandon && h(ConfirmModal, { title: "Vzdát rozehranou partii?", text: "Zápas se započítá jako prohra.", confirmLabel: "Vzdát", danger: true, onConfirm: () => { setConfirm(null); doAbandon(); }, onCancel: () => setConfirm(null) }),
