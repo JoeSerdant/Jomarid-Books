@@ -117,7 +117,7 @@ test('id her v Games.jsx a v mostech jsou stejná (server podle něj hlídá den
   assert.deepEqual(ids.sort(), Object.keys(GAMES).sort());
 });
 
-test('server (db/game-coins.sql) pustí k Coinům všechny hry z Games.jsx a žádnou navíc; stropy jsou 100 na hru a 200 za den', () => {
+test('server (db/game-coins.sql) pustí k Coinům všechny hry z Games.jsx a žádnou navíc; strop je 100 na hru a žádný za všechny hry dohromady', () => {
   const sql = fs.readFileSync(path.join(SRC, '..', 'db', 'game-coins.sql'), 'utf8').replace(/--[^\n]*/g, '');
   const list = sql.match(/p_game_id not in \(([^)]*)\)/);
   assert.ok(list, 'funkce má seznam povolených her');
@@ -125,7 +125,7 @@ test('server (db/game-coins.sql) pustí k Coinům všechny hry z Games.jsx a ž�
   const ids = [...gamesPage.matchAll(/^\s+id: '(\w+)',$/gm)].map((m) => m[1]).sort();
   assert.deepEqual(serverIds, ids, 'nová hra v appce bez zápisu v award_game_coins by o Coiny žádala marně (invalid_game_id)');
   assert.match(sql, /v_per_game_cap constant integer := 100;/);
-  assert.match(sql, /v_global_cap constant integer := 200;/);
+  assert.doesNotMatch(sql, /v_global_cap|v_used_global/, 'strop ze všech her dohromady se zrušil: kdo hraje víc her, vydělá víc');
   assert.doesNotMatch(sql, /\bset\s+coins\s*=/i, 'zůstatek zvyšuje jen spoušť trg_update_coins při zápisu do coin_transactions; přímá úprava by ho připsala dvakrát');
   assert.match(sql, /insert into public\.coin_transactions[\s\S]*select coins into v_balance from public\.profiles/, 'vrácený zůstatek se čte až po zápisu do deníku');
 });

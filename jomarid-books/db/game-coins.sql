@@ -1,4 +1,4 @@
--- Jomarid Coins z her: denní limity, seznam her, které smějí o Coiny žádat, a správné připsání zůstatku (funkce award_game_coins).
+-- Jomarid Coins z her: denní strop na hru, seznam her, které smějí o Coiny žádat, a správné připsání zůstatku (funkce award_game_coins).
 -- Spusť celý soubor v Supabase SQL Editoru. Jde spustit víckrát: funkce se jen nahrazuje, žádná data se nemění.
 -- Předpoklady, které v databázi už jsou: funkce public.award_game_coins(p_game_id text, p_amount integer, p_reason text), tabulky profiles (coins, lifetime_coins_earned)
 -- a coin_transactions (user_id, amount, source_type) a spoušť trg_update_coins, která při zápisu do coin_transactions sama zvýší profiles.coins o zapsanou částku.
@@ -6,7 +6,8 @@
 --
 -- Co se mění oproti původní funkci (nic dalšího):
 --   1. Strop na jednu hru a den: 75 -> 100 Coinů.
---   2. Strop ze všech her dohromady za den: 150 -> 200 Coinů (poměr dvou plných her zůstává; bez zvýšení tohohle stropu by vyšší strop na hru pomohl jen tomu, kdo hraje jednu hru).
+--   2. Strop ze všech her dohromady za den (dřív 150 Coinů) se ruší: kdo hraje víc her, vydělá víc. Zůstává jen strop na jednu hru, takže víc než 100 Coinů denně z jedné hry
+--      nejde (šest her tedy nejvýš 600 Coinů za den).
 --   3. Seznam her doplněn o 'koulovikamosi'. Dosud ho funkce neznala a každou žádost Kouloví Kámošů (zlatá koule) odmítla výjimkou invalid_game_id, takže ze hry nešly žádné Coiny.
 --   4. Zůstatek se připíše jednou. Původní funkce zvýšila profiles.coins sama a potom zapsala řádek do coin_transactions, kde ho spoušť trg_update_coins zvýšila
 --      ještě jednou, takže hráč dostal dvojnásobek toho, co hra ukázala, a zůstatek vrácený hře byl o udělenou částku nižší než skutečný. Teď zůstatek zvyšuje jen spoušť
@@ -58,10 +59,8 @@ declare
   v_user_id uuid := auth.uid();
   v_today date := (now() at time zone 'utc')::date;
   v_per_game_cap constant integer := 100;
-  v_global_cap constant integer := 200;
   v_prefix text;
   v_used_game integer;
-  v_used_global integer;
   v_n integer;
   v_remaining integer;
   v_grant integer;
@@ -93,13 +92,7 @@ begin
     from public.coin_transactions ct
     where ct.user_id = v_user_id and starts_with(ct.source_type, v_prefix);
 
-  select coalesce(sum(ct.amount), 0) into v_used_global
-    from public.coin_transactions ct
-    where ct.user_id = v_user_id
-      and starts_with(ct.source_type, 'game_event:')
-      and split_part(ct.source_type, ':', 3) = v_today::text;
-
-  v_remaining := least(v_per_game_cap - v_used_game, v_global_cap - v_used_global);
+  v_remaining := v_per_game_cap - v_used_game;
   if v_remaining <= 0 then
     return jsonb_build_object('granted', 0, 'capped', true, 'balance', v_balance);
   end if;
