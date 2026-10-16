@@ -166,15 +166,14 @@ const League = (function () {
   }
 
   // ---------- Dokončení partie ----------
-  // g: { botIdx, botKey, result: win|loss|draw, reason, color, plies, tc, rated, moves, accuracy?, cheated? }
-  // Partie s cheat kódem (cheated) je nehodnocená a navíc se nepočítá do výher ani do odemykání dalšího soupeře.
+  // g: { botIdx, botKey, result: win|loss|draw, reason, color, plies, tc, rated, moves, accuracy? }
   // bots: [{ key, rating }]. Vrací nový postup a souhrn pro obrazovku po zápase.
   function finishGame(save, g, bots, today) {
     const s = JSON.parse(JSON.stringify(save));
     const bot = bots[g.botIdx];
     const score = g.result === "win" ? 1 : g.result === "draw" ? 0.5 : 0;
-    const rated = !!g.rated && !g.cheated; // cheat partie nikdy není hodnocená
-    const summary = { rated, result: g.result, cheated: !!g.cheated };
+    const rated = !!g.rated;
+    const summary = { rated, result: g.result };
 
     // hodnocení
     summary.ratingBefore = s.rating;
@@ -201,7 +200,7 @@ const League = (function () {
 
     // odemykání dalšího soupeře a výhry
     summary.newlyUnlocked = false;
-    if (g.result === "win" && !g.cheated) {
+    if (g.result === "win") {
       s.wins[bot.key] = (s.wins[bot.key] || 0) + 1;
       if (g.botIdx === s.unlockedIndex && g.botIdx < bots.length - 1) { s.unlockedIndex = g.botIdx + 1; summary.newlyUnlocked = true; }
     }
@@ -209,7 +208,7 @@ const League = (function () {
     // historie zápasů
     s.recentGames.unshift({
       botKey: bot.key, result: g.result, reason: g.reason || null, date: today,
-      delta: summary.delta, rated, color: g.color, plies: g.plies, tc: g.tc || "none", ...(g.cheated ? { cheat: true } : {}),
+      delta: summary.delta, rated, color: g.color, plies: g.plies, tc: g.tc || "none",
       ratingBefore: summary.ratingBefore, oppRating: bot.rating, moves: (g.moves || []).join(" "),
       acc: g.accuracy == null ? null : Math.round(g.accuracy)
     });

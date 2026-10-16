@@ -40,17 +40,6 @@
     else if (!timer) { timer = setTimeout(flush, 1200); }
   };
 
-  window.addEventListener('message', function (ev) {
-    var d = ev.data;
-    if (!d || d.source !== 'jomarid-host') return;
-    if (ev.source !== window.parent) return;
-    // Zůstatek Jomarid Coins z účtu (appka ho posílá po načtení hry a po každé změně); hra ho jen zobrazuje.
-    if (d.type === 'balance') {
-      if (typeof d.balance === 'number' && isFinite(d.balance)) { window.jomaridBalance = d.balance; if (window.onJomaridBalance) window.onJomaridBalance(); }
-      return;
-    }
-  });
-
   // Rekordy hry (nejlepší skóre, nejvyšší úroveň...): hra jen hlásí aktuální hodnotu, o zápisu a odznacích rozhoduje server.
   // Hlásí se jen zvýšení oproti naposledy odeslanému (stejná nebo nižší hodnota se neposílá znovu) a víc hlášení v rychlém sledu se sloučí.
   var recSent = {}, recPending = {}, recTimer = null;
@@ -87,12 +76,14 @@
 <canvas id="c" width="540" height="960"></canvas>
 <div id="menu" class="ov">
  <h1>Kouloví<br>Kámoši</h1>
- <div class="mas" id="mas"></div><div style="font-size:1.8em">🪙 <b id="cn">0</b></div><div id="jb" class="hide" style="font-size:1.3em;margin-top:-.5em" title="Jomarid Coins">🔶 <b id="jbn">0</b> <span style="font-size:.6em;opacity:.8">Jomarid Coins</span></div>
+ <div class="mas" id="mas"></div><div style="font-size:1.8em">🪙 <b id="cn">0</b></div>
  <div class="stats"><h2>MOJE STATISTIKY</h2>
   <div class="row"><div><b id="sT">0</b><i>Dnes</i></div><div><b id="sW">0</b><i>Tento týden</i></div><div><b id="sA">0</b><i>Celkem</i></div></div>
   <div class="small">Her: <span id="sG">0</span> · Sloučení: <span id="sM">0</span></div></div>
  <button id="cont" class="hide" style="background:#5be04a;font-size:1.8em">Pokračovat</button><button id="play">Hrát</button><button id="shopb" class="sec">Obchod</button><button id="snd" class="sec" style="font-size:1.1em">🔊</button>
+ <div class="vfoot"><input type="text" id="vf" class="vfield" placeholder="v1.0" maxlength="20" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" aria-label="Tajný kód"></div>
 </div>
+<div id="cheatm" class="ov hide"><h1 style="font-size:2.6em">Cheat menu</h1><div id="cl" class="stats" style="background:#2f95ea;width:22em"><button class="sec" data-c="score" style="display:block;width:100%;font-size:1.1em;margin:.35em 0;padding:.3em .6em;text-align:left">🏆 Skóre v Klasice 3 000</button><button class="sec" data-c="disc" style="display:block;width:100%;font-size:1.1em;margin:.35em 0;padding:.3em .6em;text-align:left">🔮 Objevit všechny koule</button><button class="sec" data-c="coins" style="display:block;width:100%;font-size:1.1em;margin:.35em 0;padding:.3em .6em;text-align:left">🪙 +1 000 mincí</button></div><div id="cmsg" class="small" style="min-height:1.4em"></div><button id="cback" class="sec">Zpět</button></div>
 <div id="modes" class="ov hide"><h1 style="font-size:3em">Herní módy</h1><div id="ml" class="stats" style="background:#2f95ea;width:22em"></div><button id="mback" class="sec">Zpět</button></div>
 <div id="shop" class="ov hide"><h1 style="font-size:3em">Obchod</h1><div style="font-size:1.8em">🪙 <b id="cn2">0</b></div><div id="items" class="stats" style="background:#2f95ea"></div><button id="shopx" class="sec">Zpět</button></div>
 <div id="over" class="ov over hide">

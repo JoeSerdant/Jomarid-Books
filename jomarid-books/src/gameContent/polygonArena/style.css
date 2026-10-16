@@ -119,6 +119,14 @@ h1{margin:0 0 6px;font-size:clamp(30px,9vw,44px);line-height:1;font-weight:700;l
 .grid2 b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
 .grid2 span{font-size:12px;color:var(--dim)}
 .newbest{color:var(--accent);font-weight:700;font-size:13px;margin:-8px 0 12px}
+/* Pole pro tajný kód vypadá jako číslo verze úplně dole v menu. Písmo 16 px (iOS při klepnutí nepřibližuje stránku), vizuálně se zmenší. */
+.vfoot{display:flex;justify-content:center;margin-top:10px}
+.vfield{box-sizing:border-box;width:120px;height:34px;margin:0;padding:0 4px;background:transparent;border:none;border-radius:8px;outline:none;opacity:.5;color:var(--dim);font-family:inherit;font-size:16px;font-weight:600;line-height:34px;text-align:center;letter-spacing:1px;caret-color:transparent;transform:scale(.75);-webkit-appearance:none;appearance:none;user-select:text;-webkit-user-select:text}
+.vfield::placeholder{color:var(--dim);opacity:1}
+.vfield:focus{opacity:1;background:var(--pip);box-shadow:0 0 0 1px var(--line);caret-color:var(--ink);color:var(--ink)}
+.cheatList{display:flex;flex-direction:column;gap:8px;margin:0 0 10px}
+.cheatList .btn{margin-top:0}
+.cheatMsg{min-height:1.4em;margin:0 0 12px;font-size:13px;color:var(--accent)}
 
 
 @media (max-width:760px){

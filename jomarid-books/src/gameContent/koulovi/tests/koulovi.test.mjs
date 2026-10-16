@@ -41,7 +41,7 @@ test('Games.jsx: hra je v seznamu, stahuje se až při spuštění a id sedí s 
 test('most pro odměny: jen žádost o odměnu, server rozhoduje o částce', () => {
   assert.match(shell, /window\.jomaridReward = function/);
   assert.match(shell, /source: 'jomarid-game', type: 'coin'/);
-  assert.match(shell, /ev\.source !== window\.parent/);
+  assert.doesNotMatch(shell, /addEventListener\('message'/, 'hra od appky žádné zprávy nepřijímá (zůstatek ukazuje lišta appky)');
 });
 
 test('hra nenačítá cizí skripty (jen písmo) a ukládá pod vlastním klíčem', () => {
@@ -59,6 +59,7 @@ function makeEnv() {
   const records = [];
   const els = new Map();
   const rafs = [];
+  const docListeners = {};
   const ctx2d = () => {
     const t = { measureText: () => ({ width: 10 }), createPattern: () => ({}), createLinearGradient: () => ({ addColorStop() {} }) };
     return new Proxy(t, { get: (o, k) => (k in o ? o[k] : () => {}), set: (o, k, v) => { o[k] = v; return true; } });
@@ -67,7 +68,7 @@ function makeEnv() {
     const cls = new Set();
     const listeners = {};
     return {
-      style: {}, dataset: {}, textContent: '', innerHTML: '', width: 540, height: 960, clientWidth: 540, clientHeight: 960,
+      style: {}, dataset: {}, textContent: '', innerHTML: '', value: '', blur() {}, focus() {}, width: 540, height: 960, clientWidth: 540, clientHeight: 960,
       classList: { add: (c) => cls.add(c), remove: (c) => cls.delete(c), contains: (c) => cls.has(c), toggle: (c, f) => ((f === undefined ? !cls.has(c) : f) ? cls.add(c) : cls.delete(c)) },
       getContext: ctx2d, setPointerCapture() {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: 540, height: 960 }),
       addEventListener: (type, fn) => { (listeners[type] = listeners[type] || []).push(fn); },
@@ -79,7 +80,7 @@ function makeEnv() {
     createElement: () => mkEl(),
     body: { clientWidth: 540, clientHeight: 960 },
     hidden: false,
-    addEventListener() {},
+    addEventListener: (type, fn) => { (docListeners[type] = docListeners[type] || []).push(fn); },
   };
   const sandbox = {
     document, console,
@@ -97,7 +98,7 @@ function makeEnv() {
   vm.runInContext('(function () { var s = 12345; Math.random = function () { s = (s * 1664525 + 1013904223) % 4294967296; return s / 4294967296; }; })()', sandbox);
   new vm.Script(game, { filename: 'game.js' }).runInContext(sandbox);
   const run = (code) => vm.runInContext(code, sandbox);
-  return { sandbox, run, store, rewards, records };
+  return { sandbox, run, store, rewards, records, docListeners };
 }
 
 test('hra se spustí a ukáže menu bez chyby', () => {
@@ -276,27 +277,59 @@ test('zrušený dotyk koule neodhodí a táhnutí smí dokončit jen prst, kter�
 });
 
 /* ---------------------------------------------------------------- Jomarid Coins ve hře */
-test('appka posílá hře zůstatek (balance) a hra ho umí přijmout', () => {
-  assert.match(gamesPage, /type: 'balance', balance: coins/);
-  assert.match(gamesPage, /onLoad=\{sendBalance\}/);
-  assert.match(shell, /d\.type === 'balance'/);
-  assert.match(shell, /ev\.source !== window\.parent/);
+test('hra nemá vlastní počítadlo Jomarid Coins: zůstatek ukazuje lišta appky nad hrou, appka ho hře neposílá', () => {
+  assert.doesNotMatch(gamesPage, /type: 'balance'/);
+  assert.doesNotMatch(gamesPage, /onLoad=\{sendBalance\}/);
+  assert.doesNotMatch(shell, /balance|jomarid-host|id="jb"|jbn/i, 'most ani menu o zůstatku nic neví');
+  assert.doesNotMatch(game, /jomaridBalance|onJomaridBalance|hasJb|txt\('🔶 '/, 'ani v herním panelu; 🔶 zůstává jen jako značka zlaté koule');
+  const { run, sandbox } = makeEnv();
+  assert.equal(typeof sandbox.onJomaridBalance, 'undefined');
+  assert.doesNotThrow(() => run("start('classic')"));
 });
 
-test('zůstatek 🔶 se ukáže až po zprávě z appky a pak se mění', () => {
-  const { run, sandbox } = makeEnv();
-  assert.equal(run('hasJb()'), false);
-  sandbox.jomaridBalance = 420;
-  sandbox.onJomaridBalance();
-  assert.equal(sandbox.document.getElementById('jbn').textContent, 420);
-  assert.equal(sandbox.document.getElementById('jb').classList.contains('hide'), false);
-  assert.equal(run('hasJb()'), true);
-  sandbox.jomaridBalance = 427;
-  sandbox.onJomaridBalance();
-  assert.equal(sandbox.document.getElementById('jbn').textContent, 427);
-  // nečíselný zůstatek se nepovažuje za známý
-  sandbox.jomaridBalance = 'x';
-  assert.equal(run('hasJb()'), false);
+/* ---------------------------------------------------------------- cheat menu */
+test('cheat menu: pole jako číslo verze úplně dole v menu, bez popisku, a 67MILUJU ho otevře', () => {
+  const menu = shell.slice(shell.indexOf('<div id="menu"'), shell.indexOf('<div id="cheatm"'));
+  assert.match(menu, /<div class="vfoot"><input type="text" id="vf" class="vfield" placeholder="v\d+\.\d+"[^>]*aria-label="Tajný kód"><\/div>\s*<\/div>\s*$/, 'pole je poslední v menu');
+  assert.doesNotMatch(menu, /Tajný kód<|cheat/i, 'v menu není vidět žádný popisek');
+  assert.match(css, /\.vfield\{[^}]*font-size:16px;/, 'písmo aspoň 16 px, ať iOS při klepnutí nepřibližuje');
+  const { run, sandbox, docListeners } = makeEnv();
+  const key = (code, k) => { for (const fn of docListeners.keydown || []) fn({ code, key: k, repeat: false }); };
+  const hidden = () => sandbox.document.getElementById('cheatm').classList.contains('hide');
+  assert.equal(hidden(), false, 'bez hide = zatím není nic zavřeno (stav z jednoduchého stubu)');
+  sandbox.document.getElementById('cheatm').classList.add('hide');
+  // 67MILUJU na české klávesnici: číslice podle kódu klávesy, písmena podle znaku
+  const seq = [['Digit6', 'ž'], ['Digit7', 'ý'], ['KeyM', 'm'], ['KeyI', 'i'], ['KeyL', 'l'], ['KeyU', 'u'], ['KeyJ', 'j']];
+  for (const [c, k] of seq) key(c, k);
+  assert.equal(hidden(), true, 'rozepsaný kód menu neotevře');
+  key('KeyU', 'u');
+  assert.equal(hidden(), false, 'celý kód otevře menu');
+  key('Escape', 'Escape');
+  assert.equal(hidden(), true, 'Esc menu zavře');
+  // pole: hotový text (velká/malá písmena, mezery)
+  const vf = sandbox.document.getElementById('vf');
+  vf.value = '67MILU'; for (const fn of vf.listeners.input) fn(); assert.equal(hidden(), true);
+  vf.value = ' 67miluju '; for (const fn of vf.listeners.input) fn(); assert.equal(hidden(), false);
+  assert.equal(vf.value, '', 'pole se vyprázdní');
+  run('cheatClose()'); vf.value = 'blbost'; for (const fn of vf.listeners.blur) fn(); assert.equal(vf.value, '');
+});
+
+test('cheat menu: cheaty jdou do skutečného postupu, ukládají se a hlásí se appce (odznaky)', () => {
+  const { run, sandbox, records, rewards, store } = makeEnv();
+  const click = (c) => sandbox.document.getElementById('cl').onclick({ target: { closest: () => ({ dataset: { c } }) } });
+  click('score');
+  assert.equal(run('S.bm.classic'), 3000); assert.equal(run('S.best'), 3000);
+  assert.deepEqual(rewards, [['record', 3]], 'nový rekord žádá o odměnu jako každý jiný (strop hlídá server)');
+  assert.ok(records.some(([k, v]) => k === 'score_classic' && v === 3000), 'skóre Klasiky 3 000 (odznak Měkká klasika)');
+  click('disc');
+  assert.equal(run('S.disc'), 11);
+  assert.ok(records.some(([k, v]) => k === 'balls_discovered' && v === 12), 'všech 12 koulí (odznaky Velká koule i Všichni kámoši)');
+  const c0 = run('S.coins'); click('coins'); assert.equal(run('S.coins'), c0 + 1000);
+  const saved = JSON.parse(store['koulovi-kamosi-v1']);
+  assert.equal(saved.bm.classic, 3000); assert.equal(saved.disc, 11); assert.equal(saved.coins, c0 + 1000, 'uloženo');
+  assert.equal(sandbox.document.getElementById('cmsg').textContent.length > 0, true, 'hláška o cheatu');
+  // neznámé hodnoty (dědičné klíče) nic nespustí
+  for (const k of ['constructor', 'toString', 'nope']) assert.doesNotThrow(() => click(k));
 });
 
 test('nový rekord (od 100 bodů, mimo Zen) dá žádost o 3 Jomarid Coins, jen jednou za rekord', () => {

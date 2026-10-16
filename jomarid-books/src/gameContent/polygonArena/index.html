@@ -127,6 +127,7 @@
       <div class="row two"><button id="collBtn" type="button">Sbírka a úspěchy</button><button id="setBtn" type="button">Nastavení</button></div>
       <div class="row"><span id="bestText"></span><button id="soundBtn" type="button">Zvuk: vypnutý</button></div>
       <p class="hint" id="hintText"></p>
+      <div class="vfoot"><input id="versionField" class="vfield" type="text" placeholder="v2.0" maxlength="20" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" aria-label="Tajný kód"></div>
     </div>
   </div>
 
@@ -159,6 +160,20 @@
       <p class="big">Nastavení</p>
       <div id="setBody"></div>
       <button id="setClose" class="btn" type="button">Hotovo</button>
+    </div>
+  </div>
+
+  <div id="cheat" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Cheat menu">
+    <div class="card">
+      <p class="big">Cheat menu</p>
+      <p class="lead">Na testování odznaků a postupu bez hodin hraní. Změny jsou skutečné: počítají se do postupu, rekordů i odznaků.</p>
+      <div class="cheatList" id="cheatList">
+        <button type="button" class="btn ghost" data-cheat="level">🏆 Nejvyšší úroveň 58</button>
+        <button type="button" class="btn ghost" data-cheat="boss">👹 +1 poražený boss</button>
+        <button type="button" class="btn ghost" data-cheat="win">🥇 +1 vítězství v zápase</button>
+      </div>
+      <p class="cheatMsg" id="cheatMsg"></p>
+      <button id="cheatClose" class="btn" type="button">Zpět do menu</button>
     </div>
   </div>
 

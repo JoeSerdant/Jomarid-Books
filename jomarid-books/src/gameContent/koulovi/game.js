@@ -6,9 +6,6 @@ const $=id=>document.getElementById(id),cv=$('c'),ctx=cv.getContext('2d'),stage=
 const KEY='koulovi-kamosi-v1';
 let S;try{S=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){}
 S=S||{best:0,games:0,merges:0,log:[]};S.bm=S.bm||{};S.mute=S.mute||0;S.coins=S.coins||0;S.disc=S.disc||0;S.inv=S.inv||{undo:1,shake:1,pop:1,hit:1};
-const hasJb=()=>typeof window.jomaridBalance==='number';
-window.onJomaridBalance=()=>{$('jbn').textContent=window.jomaridBalance;$('jb').classList.remove('hide')};
-if(hasJb())window.onJomaridBalance();
 // Zapíše nový nejlepší výsledek režimu a při rekordu (od 100 bodů, mimo Zen) požádá o odměnu; stejně se volá při odchodu do menu i na konci hry,
 // takže rekord z přerušené hry o odměnu nepřijde.
 const bump=(m,sc)=>{if(sc<=(S.bm[m]||0))return 0;S.bm[m]=sc;if(m!=='zen'&&sc>=100&&typeof jomaridReward==='function')jomaridReward('record',3);return 1};
@@ -116,7 +113,7 @@ function draw(){
  txt('Skóre: '+g.score,24,50,50,'left','#5be04a');txt('Rekord: '+Math.max(S.bm[g.mode]||0,g.score),24,100,34);if(g.mode==='time')txt(Math.ceil(Math.max(0,g.t)/60)+' s',500,100,36,'right','#ffd92e');if(g.mode==='drops')txt('Hody: '+g.left,500,100,34,'right','#ffd92e');if(g.cb>1&&g.cT<100)txt('Combo x'+Math.min(g.cb,5),W/2,250,40,'center','#ffd92e');
  
  BTN.forEach(([k,s],i)=>{const x=BX(i),on=S.inv[k]>0;rr(x,888,64,64,12,g.tgt&&k==='hit'?'#ffd92e':on?'#35d1c4':'#8a9a9a');txt(s,x+32,914,38,'center');txt(S.inv[k],x+52,942,22,'center')});
- if(hasJb())txt('🔶 '+window.jomaridBalance,500,152,30,'right','#ffd92e');txt('Další:',60,152,22,'center');rr(24,168,72,72,12,'#2f95ea');ball(60,204,Math.min(RAD[g.next],26),g.next,0,1,undefined,1,g.nG);rr(384,888,132,64,12,g.balls.length?'#ffd92e':'#8a9a9a');if(g.cc>g.f)txt('Jistě? Klepni znovu',450,920,17,'center');else if(g.mode==='zen')txt('Ukončit',450,920,28,'center');else{const v=g.balls.reduce((s,b)=>s+CV[b.t],0);txt('Cash Out',450,902,22,'center');txt('+'+v+' 🪙',450,923,24,'center');txt('pád: +'+(v>>2),450,944,16,'center','#fff3b0')}
+ txt('Další:',60,152,22,'center');rr(24,168,72,72,12,'#2f95ea');ball(60,204,Math.min(RAD[g.next],26),g.next,0,1,undefined,1,g.nG);rr(384,888,132,64,12,g.balls.length?'#ffd92e':'#8a9a9a');if(g.cc>g.f)txt('Jistě? Klepni znovu',450,920,17,'center');else if(g.mode==='zen')txt('Ukončit',450,920,28,'center');else{const v=g.balls.reduce((s,b)=>s+CV[b.t],0);txt('Cash Out',450,902,22,'center');txt('+'+v+' 🪙',450,923,24,'center');txt('pád: +'+(v>>2),450,944,16,'center','#fff3b0')}
  rr(430,22,90,48,12,'#8a5bd6');txt('Menu',475,47,26,'center');
  // bowl
  const sw=Math.sin(performance.now()/900)*.004,sq=clamp(bowl.sq,-.08,.08),wl=y=>AL+(y-TOP)/390*60,wr=y=>AR-(y-TOP)/390*60;ctx.save();ctx.translate(W/2,F);ctx.rotate(bowl.r+sw);ctx.scale(1+sq*.6,1-sq);ctx.translate(-W/2,-F);ctx.beginPath();ctx.moveTo(AL,TOP);ctx.lineTo(BL,F+16);ctx.lineTo(BR,F+16);ctx.lineTo(AR,TOP);ctx.lineJoin='round';ctx.lineCap='round';ctx.strokeStyle='#111';ctx.lineWidth=34;ctx.stroke();ctx.strokeStyle=pat;ctx.lineWidth=24;ctx.stroke();ctx.lineCap='butt';
@@ -132,4 +129,28 @@ function draw(){
  for(const p of g.pt){ctx.fillStyle=p.c;ctx.globalAlpha=p.l/30;ctx.beginPath();ctx.arc(p.x,p.y,4,0,7);ctx.fill()}ctx.globalAlpha=1;for(const p of g.pp)txt(p.s||'+'+p.v,p.x,p.y,p.s?30:34,'center',p.c);if(g.tgt)txt('Klepni na kouli',W/2,300,32,'center','#ffd92e');if(g.disc){ctx.fillStyle='rgba(0,0,0,.65)';ctx.fillRect(0,0,W,H);txt('Nová koule objevena!',W/2,280,44,'center');ball(W/2,500,110,g.disc.t);txt('Klepni pro pokračování',W/2,700,26,'center')}}
 function loop(t){requestAnimationFrame(loop);const dt=Math.min(.05,(t-last)/1000||0);last=t;if(st==='menu')return;
  if(st==='play'){acc+=dt;while(acc>=1/60){if(g.disc){g.disc.l--;if(g.disc.l<1)g.disc=null}else step();acc-=1/60;if(st!=='play')break}}draw()}
+// Skryté pole (číslo verze dole v menu) a cheat menu, kód je u všech her 67MILUJU. Cheaty slouží k testování odznaků bez hodin hraní, takže mění skutečný
+// postup: ukládá se a hlásí appce jako jakýkoli jiný výsledek.
+const CHEAT='67MILUJU',vf=$('vf'),chm=$('cheatm'),cmsg=$('cmsg');
+const cheatKey=e=>{const m=/^(?:Digit|Numpad)(\d)$/.exec(e.code||'');if(m)return m[1];return typeof e.key==='string'&&/^[a-z]$/i.test(e.key)?e.key.toUpperCase():null};
+const cheatOpen=()=>{vf.value='';vf.blur();cmsg.textContent='';chm.classList.remove('hide')};
+const cheatClose=()=>chm.classList.add('hide');
+const CHEATS={
+ score:()=>{S.best=Math.max(S.best,3000);bump('classic',3000);return 'Rekord v Klasice je aspoň 3 000.'},
+ disc:()=>{S.disc=11;return 'Objeveno všech 12 typů koulí.'},
+ coins:()=>{S.coins+=1000;return '+1 000 🪙 (mince ve hře).'}
+};
+$('cl').onclick=e=>{const k=(e.target.closest('button')||{dataset:{}}).dataset.c;if(!k||!CHEATS.hasOwnProperty(k))return;cmsg.textContent=CHEATS[k]();save();stats()};
+$('cback').onclick=cheatClose;
+// Kód: na klávesnici kdekoli (hra klávesy jinak nepoužívá), nebo do pole dole v menu (telefon). Číslice se berou podle kódu klávesy kvůli české klávesnici.
+let cheatBuf='';
+document.addEventListener('keydown',e=>{
+ if(e.code==='Escape'&&!chm.classList.contains('hide')){cheatClose();return}
+ if(e.repeat||e.ctrlKey||e.metaKey||e.altKey)return;
+ const c=cheatKey(e);if(!c)return;
+ cheatBuf=(cheatBuf+c).slice(-CHEAT.length);
+ if(cheatBuf===CHEAT){cheatBuf='';cheatOpen()}
+});
+vf.addEventListener('input',()=>{if(vf.value.replace(/\s+/g,'').toUpperCase()===CHEAT)cheatOpen()});
+vf.addEventListener('blur',()=>{vf.value=''});
 g={balls:[],score:0,cur:0,next:0,aimX:W/2,cool:0,overT:0,ab:{}};stats();rec();requestAnimationFrame(loop);
