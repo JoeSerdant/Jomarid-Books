@@ -23,18 +23,31 @@ const STORE_KEY = 'polygon-arena-v1';
 const save = { best: 0, name: '', diff: 'normal', sound: false, mode: 'ffa', skin: 'teal', set: {}, codex: {}, ach: {}, st: {} };
 try { const raw = localStorage.getItem(STORE_KEY); if (raw) Object.assign(save, JSON.parse(raw)); } catch (e) { /* storage nemusí být dostupné */ }
 save.set = Object.assign({ vib: true, lefty: false, ctl: 1, fx: 1 }, save.set || {});
-save.st = Object.assign({ games: 0, kills: 0, deaths: 0, shapes: 0, bosses: 0, secs: 0, bestLevel: 1, wins: 0, perks: 0, crystals: 0, bossKinds: {}, mapsSeen: {}, modesPlayed: {}, bestWave: 0, survWins: 0, hillWins: 0, royaleWins: 0, rushWins: 0, rushBest: 0, bestGold: 0, goldWins: 0 }, save.st || {});
+save.st = Object.assign({ games: 0, kills: 0, deaths: 0, shapes: 0, bosses: 0, secs: 0, bestLevel: 1, wins: 0, perks: 0, crystals: 0, bossKinds: {}, mapsSeen: {}, modesPlayed: {}, bestWave: 0, survWins: 0, hillWins: 0, royaleWins: 0, rushWins: 0, rushBest: 0, bestGold: 0, goldWins: 0, bestTier: 0, hellBest: 0 }, save.st || {});
 save.st.bossKinds = save.st.bossKinds || {}; save.st.mapsSeen = save.st.mapsSeen || {}; save.st.modesPlayed = save.st.modesPlayed || {};
 save.codex = save.codex || {}; save.ach = save.ach || {};
+// Dřívější vlastní úspěchy hry (save.ach) jsou teď odznaky v appce a ve hře se neukazují. Co vyžadovalo výkon z jednoho života (stupeň třídy, Peklo),
+// se z nich přenese do trvalých rekordů, aby o to hráči nepřišli; ostatní se počítá z rekordů, které hra už uložené má. Samotné příznaky zůstávají jen kvůli už odemčeným barvám.
+for (const [flag, key, val] of [['tier3', 'bestTier', 3], ['tier4', 'bestTier', 4], ['tier5', 'bestTier', 5], ['hell5', 'hellBest', 25]]) if (save.ach[flag]) save.st[key] = Math.max(save.st[key] || 0, val);
 function persist() { try { localStorage.setItem(STORE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ } reportRecords(); }
 // Rekordy se hlásí appce (jomaridRecord v mostu); posílá se jen zvýšení, takže volání při každém uložení nic nestojí.
+// Odznaky z nich vyhodnocuje server (src/gameRecords/catalog.js); hra sama žádné úspěchy neeviduje. Poprvé se volá z boot(), až když je načtený celý obsah hry.
 function reportRecords() {
   if (typeof jomaridRecord !== 'function') return;
-  jomaridRecord('best_level', save.st.bestLevel);
-  jomaridRecord('bosses_defeated', save.st.bosses);
-  jomaridRecord('wins', save.st.wins);
+  const st = save.st;
+  jomaridRecord('best_level', st.bestLevel);
+  jomaridRecord('bosses_defeated', st.bosses);
+  jomaridRecord('wins', st.wins);
+  jomaridRecord('best_tier', st.bestTier);
+  jomaridRecord('boss_kinds', BOSS_IDS.filter(id => st.bossKinds[id]).length);
+  jomaridRecord('classes_discovered', codexCount());
+  jomaridRecord('best_wave', st.bestWave);
+  jomaridRecord('hill_wins', st.hillWins);
+  jomaridRecord('royale_wins', st.royaleWins);
+  jomaridRecord('rush_wins', st.rushWins);
+  jomaridRecord('hell_best_level', st.hellBest);
+  jomaridRecord('modes_played', MODE_IDS.filter(m => st.modesPlayed[m]).length);
 }
-reportRecords();
 
 /* ---------- theme (čte CSS tokeny) ---------- */
 const theme = { bg: '#08131a', arena: '#0e1f27', grid: '#16303a', ink: '#e7f2f3', barrel: '#8ea0aa', barrelStroke: '#4a5a63', accent: '#5fe0d4' };

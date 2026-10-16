@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadClasses } from './load.mjs';
 import { loadGame } from './stub.mjs';
+import { GAME_CATALOG, GAME_BADGES } from '../../../gameRecords/catalog.js';
 
 /* =====================================================================
    Generátor tříd
@@ -270,7 +271,8 @@ test('Přežití: vlny se střídají a po poslední výhra; smrt hráče hru uk
   assert.ok(arena.world.over && !arena.world.win && arena.world.end.title, 'smrt v režimu Přežití končí hru');
 });
 test('Král kopce: body se dělí, výhra po dosažení cíle', () => {
-  const { arena } = fresh({ seed: 12 });
+  const { arena, run } = fresh({ seed: 12 });
+  run('globalThis.__rec = {}; globalThis.jomaridRecord = (k, v) => { __rec[k] = v; };');
   arena.setDiff('easy'); arena.mode = 'hill'; arena.startGame(true);
   const W = arena.world, p = arena.player, H = W.hill;
   assert.ok(H && H.goal > 0);
@@ -281,7 +283,8 @@ test('Král kopce: body se dělí, výhra po dosažení cíle', () => {
   p.hillPts = H.goal - 0.5; steps(arena, 60 * 2);
   assert.ok(W.over && W.win && /kopce/i.test(W.end.title));
   assert.ok(arena.save.st.hillWins >= 1);
-  assert.ok(arena.save.ach.hillwin, 'úspěch za výhru se udělí hned při konci zápasu');
+  const rec = run('__rec');
+  assert.equal(rec.hill_wins, 1, 'výhra se appce ohlásí hned při konci zápasu (odznak Král kopce)');
   assert.ok(arena.save.st.secs >= 10, 'odehraný čas se započítá i při výhře');
 });
 test('Poslední přeživší: bouře se zužuje, mimo ni se ubírá zdraví, poslední živý vyhrává', () => {
@@ -355,11 +358,93 @@ test('Peklo: boti jsou přesnější a početnější než na těžké, bossové
   const H = arena.DIFFS.hard, X = arena.DIFFS.hell;
   assert.ok(X.bots > H.bots && X.turn > H.turn && X.dodge > H.dodge && X.aggr > H.aggr && X.botDmg > H.botDmg && X.bossHp > H.bossHp && X.playerHp < H.playerHp && X.inv < H.inv + 1);
 });
-test('úspěchy: nové úspěchy mají podmínky, hell5 vyžaduje Peklo', () => {
+/* ---------- rekordy pro odznaky v appce (hra žádné vlastní úspěchy nemá) ---------- */
+const POLY = GAME_CATALOG.find((g) => g.id === 'polygonarena');
+const recorded = (run) => JSON.parse(run('JSON.stringify(__rec)'));
+const withBridge = (opts) => { const g = fresh(opts); g.run('globalThis.__rec = {}; globalThis.jomaridRecord = (k, v) => { if (v >= 1) __rec[k] = Math.max(__rec[k] || 0, Math.floor(v)); };'); return g; };
+
+test('rekordy: hra hlásí přesně statistiky ze své karty v katalogu a meze sedí na obsah hry', () => {
+  const { arena, run, G } = withBridge();
+  run('reportRecords()');
+  assert.deepEqual(recorded(run), { best_level: 1 }, 'čerstvý postup hlásí jen nejnižší úroveň');
+  const st = arena.save.st;
+  Object.assign(st, { bestLevel: 7, bosses: 3, wins: 2, bestTier: 2, bestWave: 4, hillWins: 1, royaleWins: 2, rushWins: 3, hellBest: 9 });
+  st.bossKinds = { boss_guard: true, neznamy: true }; st.modesPlayed = { ffa: true, hill: true, stary_rezim: true };
+  arena.save.codex = { basic: true, boss_guard: true }; for (const id of Array.from(arena.CLASS_IDS).slice(0, 4)) arena.save.codex[id] = true;
+  run('reportRecords()');
+  const rec = recorded(run);
+  assert.deepEqual(Object.keys(rec).sort(), POLY.stats.map((x) => x.key).sort(), 'každá statistika z katalogu se hlásí');
+  assert.equal(rec.boss_kinds, 1, 'počítají se jen druhy bossů, které hra zná');
+  assert.equal(rec.modes_played, 2, 'počítají se jen režimy, které hra zná');
+  assert.equal(rec.classes_discovered, 4, 'boss do objevených tříd nepatří');
+  assert.equal(rec.hell_best_level, 9); assert.equal(rec.best_tier, 2); assert.equal(rec.best_wave, 4);
+  const max = (key) => POLY.stats.find((x) => x.key === key).max;
+  assert.equal(max('boss_kinds'), arena.BOSS_IDS.length, 'strop druhů bossů = počet bossů ve hře');
+  assert.equal(max('classes_discovered'), arena.CLASS_IDS.length, 'strop objevených tříd = počet tříd ve hře');
+  assert.equal(max('modes_played'), G('MODE_IDS').length, 'strop režimů = počet režimů ve hře');
+  assert.equal(max('best_tier'), G('TIER_LEVELS').length, 'strop stupně třídy = počet stupňů ve hře');
+  assert.ok(max('best_level') >= arena.MAX_LEVEL);
+});
+test('odznaky Polygon arény mají prahy, které ve hře jde splnit, a sedí na obsah hry', () => {
+  const { arena, G } = fresh();
+  const by = Object.fromEntries(GAME_BADGES.filter((b) => b.game === 'polygonarena').map((b) => [b.id, b]));
+  assert.equal(by.polygon_lvl58.threshold, arena.MAX_LEVEL, 'maximální úroveň');
+  assert.equal(by.polygon_bossall.threshold, arena.BOSS_IDS.length, 'všechny druhy bossů');
+  assert.equal(by.polygon_allmodes.threshold, G('MODE_IDS').length, 'všechny režimy');
+  assert.equal(by.polygon_tier5.threshold, G('TIER_LEVELS').length, 'nejvyšší stupeň třídy');
+  assert.ok(by.polygon_cdx400.threshold <= arena.CLASS_IDS.length, 'objevit jde aspoň tolik tříd, kolik odznak chce');
+  for (const b of Object.values(by)) assert.ok(POLY.stats.some((x) => x.key === b.stat && b.threshold <= x.max), b.id);
+});
+test('trackProgress: zapíše třídu, nejvyšší úroveň, stupeň třídy i úroveň na Pekle a hned to ohlásí', () => {
+  const { arena, run } = withBridge({ seed: 14 });
+  arena.setDiff('hell'); arena.mode = 'ffa'; arena.startGame(true);
+  const p = arena.player; p.invuln = 999;
+  arena.addScore(p, arena.xpFor(26)); arena.trackProgress();
+  assert.ok(arena.save.st.bestLevel >= 26 && arena.save.st.hellBest >= 26, 'úroveň na Pekle se zapsala');
+  p.tierDone = 4; arena.trackProgress();
+  assert.equal(arena.save.st.bestTier, 4);
+  const rec = recorded(run);
+  assert.ok(rec.best_level >= 26 && rec.hell_best_level >= 26 && rec.best_tier === 4, 'nahlášeno hned, ne až při konci zápasu: ' + JSON.stringify(rec));
+  arena.setDiff('hard'); arena.startGame(true);
+  arena.addScore(arena.player, arena.xpFor(30)); arena.trackProgress();
+  assert.ok(arena.save.st.bestLevel >= 30);
+  assert.ok(arena.save.st.hellBest < 30, 'úroveň mimo Peklo se do Pekla nezapočítá');
+});
+test('trackProgress: třída se zapíše do sbírky, ale na cvičišti se nic nepočítá', () => {
+  const { arena } = withBridge({ seed: 15 });
+  arena.mode = 'sandbox'; arena.startGame(true); arena.player.tierDone = 5; arena.trackProgress(true);
+  assert.equal(arena.save.st.bestTier, 0); assert.equal(arena.save.st.bestLevel, 1);
+  arena.mode = 'ffa'; arena.startGame(true);
+  arena.player.cls = arena.CLASS_IDS[10]; arena.trackProgress();
+  assert.ok(arena.save.codex[arena.CLASS_IDS[10]]);
+});
+test('starý postup: dřívější úspěchy ze hry se přenesou do rekordů, vlastní úspěchy ve hře už nejsou', () => {
+  const old = { best: 5, skin: 'magma', codex: { basic: true }, ach: { tier3: true, tier4: true, hell5: true, lvl45: true, first: true }, st: { kills: 3, bestLevel: 30, bosses: 2 } };
+  const { arena, run, G } = withBridge({ storage: { 'polygon-arena-v1': JSON.stringify(old) } });
+  assert.equal(arena.save.st.bestTier, 4, 'stupeň 4 z úspěchu');
+  assert.equal(arena.save.st.hellBest, 25, 'úroveň 25 na Pekle z úspěchu');
+  run('reportRecords()');
+  const rec = recorded(run);
+  assert.equal(rec.best_tier, 4); assert.equal(rec.hell_best_level, 25); assert.equal(rec.best_level, 30);
+  // už odemčené barvy zůstanou odemčené i podle starých příznaků
+  const open = (id) => arena.skinOpen(arena.SKINS.find((x) => x.id === id));
+  assert.ok(open('magma') && open('ink') && open('lime'), 'barvy podle starých úspěchů zůstaly (Obsidián i při nižší úrovni, než je dnešní maximum)');
+  assert.ok(open('ice') && open('gold'), 'barvy podle uložených rekordů (úroveň 30, 2 bossové)');
+  assert.ok(!open('pink') && !open('rainbow'), 'ostatní se odemykají až podle rekordů');
+  assert.equal(G('typeof ACH'), 'undefined'); assert.equal(G('typeof renderAch'), 'undefined');
+  assert.deepEqual(Array.from(G('COLL_TABS')).map((t) => t[0]), ['classes', 'perks', 'skins', 'stats'], 'záložka Úspěchy je pryč, třídy a výhody zůstaly');
+});
+test('barvy tanku se odemykají přímo podle rekordů, bez úspěchů', () => {
   const { arena } = fresh();
-  const by = Object.fromEntries(arena.ACH.map((a) => [a.id, a]));
-  for (const id of ['wave10', 'hillwin', 'royale', 'rushall', 'gold300', 'hell5', 'allmodes']) assert.ok(by[id], id);
-  assert.ok(!by.hell5.ok({ diff: 'hard', life: { level: 40 } })); assert.ok(by.hell5.ok({ diff: 'hell', life: { level: 25 } }));
+  const open = (id) => arena.skinOpen(arena.SKINS.find((x) => x.id === id));
+  for (const id of ['teal', 'sun', 'violet']) assert.ok(open(id));
+  for (const id of ['lime', 'pink', 'ice', 'gold', 'ink', 'magma', 'rainbow']) assert.ok(!open(id), id + ' je zamčená');
+  Object.assign(arena.save.st, { kills: 1, shapes: 500, bestLevel: arena.MAX_LEVEL, bosses: 1, hellBest: 25 });
+  for (const id of ['lime', 'pink', 'ice', 'gold', 'ink', 'magma']) assert.ok(open(id), id + ' je odemčená');
+  assert.ok(!open('rainbow'));
+  for (const id of arena.CLASS_IDS.slice(0, 40)) arena.save.codex[id] = true;
+  assert.ok(open('rainbow'), 'Duha po 40 objevených třídách');
+  for (const sk of arena.SKINS) if (sk.need) assert.ok(sk.need.length > 5 && typeof sk.has === 'function', sk.id);
 });
 
 /* ---------- režimy: okrajové případy ---------- */
@@ -372,7 +457,7 @@ test('Hon na bossy: boss poražený až po smrti hráče nic nezapočítá', () 
   assert.ok(W.over && !W.win);
   const wins = arena.save.st.rushWins || 0, best = arena.save.st.rushBest || 0;
   W.boss.hp = -1e9; steps(arena, 3);
-  assert.equal(W.rushN, 11); assert.equal(arena.save.st.rushWins || 0, wins); assert.equal(arena.save.st.rushBest || 0, best); assert.ok(!arena.save.ach.rushall);
+  assert.equal(W.rushN, 11); assert.equal(arena.save.st.rushWins || 0, wins); assert.equal(arena.save.st.rushBest || 0, best);
 });
 test('Po odchodu do nabídky už zápas nic nevyhodnocuje ani nezapisuje', () => {
   const { arena } = fresh({ seed: 32 });
@@ -420,18 +505,18 @@ test('Přežití: smrt dřív než přijde první vlna má vlastní text', () =>
   arena.player.invuln = 0; arena.player.hp = -1e9; steps(arena, 2);
   assert.ok(arena.world.over && /dřív/.test(arena.world.end.text), arena.world.end.text);
 });
-test('Hry s vyšší startovní úrovní se nepočítají do rekordu ani úspěchů za úroveň', () => {
+test('Hry s vyšší startovní úrovní se nepočítají do rekordu ani do stupně třídy', () => {
   const { arena, run } = fresh({ seed: 37 });
   arena.setDiff('easy'); arena.mode = 'rush'; arena.startGame(true);
   assert.ok(arena.world.boost >= 24 && arena.player.level >= 24);
-  steps(arena, 120); arena.checkAch();
-  assert.ok(!arena.save.ach.lvl20 && !arena.save.ach.tier3 && arena.save.st.bestLevel === 1, 'úroveň ze startu se nezapočítá');
+  steps(arena, 120); arena.trackProgress();
+  assert.ok(arena.save.st.bestTier === 0 && arena.save.st.bestLevel === 1 && arena.save.st.hellBest === 0, 'úroveň ze startu se nezapočítá');
   arena.player.invuln = 0; arena.player.hp = -1e9; steps(arena, 2); run('showDead()');
   assert.equal(arena.save.best, 0); assert.equal(arena.save.st.bestLevel, 1);
   // v běžném režimu úroveň počítá
   arena.mode = 'ffa'; arena.startGame(true); assert.equal(arena.world.boost, 0);
-  arena.addScore(arena.player, arena.xpFor(21)); arena.checkAch();
-  assert.ok(arena.save.ach.lvl20 && arena.save.st.bestLevel >= 21);
+  arena.addScore(arena.player, arena.xpFor(21)); arena.trackProgress();
+  assert.ok(arena.save.st.bestLevel >= 21);
 });
 test('Zlatá horečka: krystaly nespouštějí odměnu z webu, v běžných režimech ano', () => {
   const { arena, run } = fresh({ seed: 38 });

@@ -46,7 +46,7 @@ function allocStats(t, w) {
   recalc(t);
 }
 // Hráč na začátku režimů s vyšší startovní úrovní. world.boost si pamatuje, na jakou: takové hry se nepočítají do rekordu
-// skóre ani do úspěchů za úroveň, stupeň třídy a vlastnosti (jinak by se daly získat hned na startu).
+// skóre ani do rekordů úrovně a stupně třídy (jinak by se daly získat hned na startu).
 function boostPlayer(p, lvl) { world.boost = lvl; addScore(p, xpFor(lvl)); allocStats(p, ARCH.balanced.w); p.hp = p.maxHp; }
 // Vlastnosti bota, které přežijí znovuzrození (respawnBot vytvoří nové chování, newPersona je přidá zpět z t.traits).
 function setTraits(t, tr) { t.traits = tr; Object.assign(t.ai, tr); }
@@ -66,7 +66,7 @@ function finishMatch(win, res) {
   state = 'dead'; ui.deadT = 0.8; ui.spec = null; ui.specT = 0;
   Object.assign(deathInfo, { by: '', level: player.level, score: Math.round(player.score), kills: player.kills, time: time - player.born });
   beep(win ? 'ach' : 'die');
-  checkAch(true);                                                           // odměny za výhru hned, ne až v dalším zápase
+  trackProgress(true);                                                      // výhra se započítá hned, ne až v dalším zápase
 }
 // Smrt hráče v režimu bez znovuzrození: hra končí.
 function soloOver(killer) {

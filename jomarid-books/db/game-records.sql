@@ -6,7 +6,7 @@
 --
 -- Důvěra: hry běží v prohlížeči, takže hlášená hodnota jde podvrhnout (stejně jako uložený postup ve hře). Server proto přijme jen
 -- známé statistiky, celá nezáporná čísla do věrohodné meze a nikdy hodnotu nesníží. Odznaky za hry dávají jen XP (ne mince) a dohromady
--- málo (375 XP), takže na úrovni čtenáře skoro nic nezmění. Seznam statistik a odznaků je i v appce (src/gameRecords/catalog.js);
+-- málo (495 XP), takže na úrovni čtenáře skoro nic nezmění. Seznam statistik a odznaků je i v appce (src/gameRecords/catalog.js);
 -- test src/tests/gameRecords.test.mjs hlídá, že si odpovídají.
 
 -- ---------- Tabulky ----------
@@ -72,6 +72,15 @@ insert into public.game_stat_limits (game_id, stat_key, max_value) values
   ('polygonarena', 'best_level', 100),
   ('polygonarena', 'bosses_defeated', 1000000),
   ('polygonarena', 'wins', 1000000),
+  ('polygonarena', 'best_tier', 5),
+  ('polygonarena', 'boss_kinds', 12),
+  ('polygonarena', 'classes_discovered', 540),
+  ('polygonarena', 'best_wave', 1000),
+  ('polygonarena', 'hill_wins', 1000000),
+  ('polygonarena', 'royale_wins', 1000000),
+  ('polygonarena', 'rush_wins', 1000000),
+  ('polygonarena', 'hell_best_level', 100),
+  ('polygonarena', 'modes_played', 8),
   ('chess', 'rating_peak', 4000),
   ('chess', 'wins_total', 1000000),
   ('chess', 'expert_wins', 1000000),
@@ -102,6 +111,19 @@ with seed (badge_id, game_id, stat_key, threshold, xp) as (values
   ('polygon_lvl58', 'polygonarena', 'best_level', 58, 30),
   ('polygon_boss', 'polygonarena', 'bosses_defeated', 1, 10),
   ('polygon_win', 'polygonarena', 'wins', 1, 10),
+  ('polygon_boss5', 'polygonarena', 'bosses_defeated', 5, 5),
+  ('polygon_bossall', 'polygonarena', 'boss_kinds', 12, 15),
+  ('polygon_tier4', 'polygonarena', 'best_tier', 4, 10),
+  ('polygon_tier5', 'polygonarena', 'best_tier', 5, 15),
+  ('polygon_cdx40', 'polygonarena', 'classes_discovered', 40, 5),
+  ('polygon_cdx150', 'polygonarena', 'classes_discovered', 150, 10),
+  ('polygon_cdx400', 'polygonarena', 'classes_discovered', 400, 15),
+  ('polygon_wave10', 'polygonarena', 'best_wave', 10, 5),
+  ('polygon_hill', 'polygonarena', 'hill_wins', 1, 5),
+  ('polygon_royale', 'polygonarena', 'royale_wins', 1, 5),
+  ('polygon_rush', 'polygonarena', 'rush_wins', 1, 10),
+  ('polygon_hell', 'polygonarena', 'hell_best_level', 25, 10),
+  ('polygon_allmodes', 'polygonarena', 'modes_played', 8, 10),
   ('city_prestige', 'cityclicker', 'prestige_count', 1, 15),
   ('city_prestige5', 'cityclicker', 'prestige_count', 5, 25),
   ('city_clicks', 'cityclicker', 'total_clicks', 10000, 10),

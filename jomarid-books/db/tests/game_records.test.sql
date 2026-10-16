@@ -50,10 +50,10 @@ select tt.gmk(6, '   ');
 select tt.gmk(7, 'nový');
 
 -- ===== seznam statistik a odznaků =====
-select tt.ok((select count(*) from public.game_stat_limits) = 24, 'v seznamu je 24 statistik u šesti her');
+select tt.ok((select count(*) from public.game_stat_limits) = 33, 'v seznamu je 33 statistik u šesti her');
 select tt.ok((select count(distinct game_id) from public.game_stat_limits) = 6, 'statistiky patří šesti hrám');
-select tt.ok((select count(*) from public.game_badge_defs) = 24, 'v seznamu je 24 herních odznaků');
-select tt.ok((select sum(xp) from public.game_badge_defs) = 375, 'herní odznaky dohromady dávají 375 XP (méně než úroveň 5 za 506 XP)');
+select tt.ok((select count(*) from public.game_badge_defs) = 37, 'v seznamu je 37 herních odznaků');
+select tt.ok((select sum(xp) from public.game_badge_defs) = 495, 'herní odznaky dohromady dávají 495 XP (méně než úroveň 5 za 506 XP)');
 select tt.ok((select count(*) from public.game_badge_defs d where not exists (select 1 from public.game_stat_limits l where l.game_id = d.game_id and l.stat_key = d.stat_key)) = 0, 'každý odznak sedí na existující statistiku');
 select tt.ok((select count(*) from public.game_badge_defs d join public.game_stat_limits l using (game_id, stat_key) where d.threshold > l.max_value) = 0, 'práh žádného odznaku není nad věrohodnou mezí statistiky');
 
@@ -132,6 +132,16 @@ select tt.ok(not has_table_privilege('authenticated', 'public.game_records', 'se
   and not has_table_privilege('authenticated', 'public.game_records', 'insert') and not has_table_privilege('authenticated', 'public.game_badge_defs', 'select'), 'do tabulek nemá přihlášený přímý přístup (jen přes funkce)');
 select tt.ok((select bool_and(relrowsecurity) from pg_class where oid in ('public.game_records'::regclass, 'public.game_badge_unlocks'::regclass, 'public.game_badge_defs'::regclass, 'public.game_stat_limits'::regclass)), 'u všech čtyř tabulek je zapnutá RLS');
 
+-- ===== Polygon aréna: odznaky za dřívější úspěchy ve hře =====
+select tt.ok((tt.rep(7, 'polygonarena', 'classes_discovered', 541)) = '{"ok": false, "reason": "implausible"}'::jsonb, 'víc objevených tříd, než hra má, vrátí implausible');
+select tt.ok((tt.rep(7, 'polygonarena', 'classes_discovered', 150)) = '{"ok": true, "value": 150, "improved": true, "unlocked": ["polygon_cdx40", "polygon_cdx150"], "xp": 15}'::jsonb, 'objevené třídy: dva odznaky najednou (5 + 10 XP)');
+select tt.ok((tt.rep(7, 'polygonarena', 'best_tier', 5))->'unlocked' = '["polygon_tier4", "polygon_tier5"]'::jsonb, 'stupeň třídy 5 odemkne oba odznaky za stupeň');
+select tt.ok((tt.rep(7, 'polygonarena', 'best_tier', 6)) = '{"ok": false, "reason": "implausible"}'::jsonb, 'stupeň třídy nad 5 je podvrh');
+select tt.ok((tt.rep(7, 'polygonarena', 'modes_played', 8))->'unlocked' = '["polygon_allmodes"]'::jsonb, 'všech 8 režimů odemkne odznak');
+select tt.ok((tt.rep(7, 'polygonarena', 'hell_best_level', 24))->'unlocked' = '[]'::jsonb and (tt.rep(7, 'polygonarena', 'hell_best_level', 25))->'unlocked' = '["polygon_hell"]'::jsonb, 'Peklo: úroveň 24 nic, úroveň 25 odemkne odznak');
+select tt.ok((tt.rep(7, 'polygonarena', 'boss_kinds', 12))->'unlocked' = '["polygon_bossall"]'::jsonb and (tt.rep(7, 'polygonarena', 'bosses_defeated', 5))->'unlocked' = '["polygon_boss", "polygon_boss5"]'::jsonb, 'bossové: všechny druhy a pátý boss');
+select tt.ok((select count(*) from public.game_badge_unlocks where user_id = tt.gu(7)) = 9, 'účet 7 má 9 odemčených odznaků Polygon arény');
+
 -- ===== smazání účtu =====
 select tt.ok((select count(*) from public.game_records where user_id = tt.gu(3)) = 2, 'účet 3 má dva rekordy před smazáním');
 delete from public.profiles where id = tt.gu(3);
@@ -147,7 +157,7 @@ update public.game_badge_defs set xp = 1 where badge_id = 'rocket_ace';
 \ir ../game-records.sql
 select tt.ok(not exists (select 1 from public.game_badge_defs where badge_id = 'zz_zrusen') and not exists (select 1 from public.game_badge_unlocks where badge_id = 'zz_zrusen'), 'odznak mimo seznam zmizel i s odemčením');
 select tt.ok((select xp from public.game_badge_defs where badge_id = 'rocket_ace') = 10, 'změněná hodnota XP se vrátila podle souboru');
-select tt.ok((select count(*) from public.game_badge_defs) = 24 and (select count(*) from public.game_stat_limits) = 24, 'seznamy mají zase 24 a 24 položek');
+select tt.ok((select count(*) from public.game_badge_defs) = 37 and (select count(*) from public.game_stat_limits) = 33, 'seznamy mají zase 37 a 33 položek');
 select tt.ok(tt.gsnap() = :'before_rerun', 'rekordy a odemčené odznaky všech ostatních zůstaly beze změny');
 select tt.as_gu(1);
 select tt.ok(((public.my_game_progress())->>'xp')::int = 80, 'XP účtu 1 je po novém spuštění stejné (80)');
