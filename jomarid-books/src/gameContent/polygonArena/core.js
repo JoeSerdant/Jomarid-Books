@@ -1,6 +1,6 @@
 // Základ: pomocné funkce, uložený postup, motiv, konstanty, obtížnosti a statistiky tanku.
 /* =====================================================================
-   Polygon aréna – offline tanková hra s AI boty
+   Polygon aréna – tanková hra s AI boty
    ===================================================================== */
 
 /* ---------- utils ---------- */

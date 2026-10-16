@@ -571,7 +571,7 @@
         save.peak > League.START_RATING && span(null, "🏆 rekord ", save.peak)),
       prov
         ? div({ className: "hero-calib" }, "Kalibrace ratingu: ", save.ratedGames, " / ", League.PROVISIONAL_GAMES, " hodnocených zápasů", div({ className: "progress-track" }, div({ className: "progress-fill", style: { width: (save.ratedGames / League.PROVISIONAL_GAMES) * 100 + "%" } })))
-        : p({ className: "hero-tagline" }, "Probojuj se žebříčkem botů — čistě offline, jen ty a šachovnice."));
+        : p({ className: "hero-tagline" }, "Probojuj se žebříčkem botů, jen ty a šachovnice."));
   }
 
   function SetupPicker({ save, colorChoice, setColorChoice, tc, setTc }) {
