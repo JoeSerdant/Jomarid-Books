@@ -1112,6 +1112,7 @@ h2 {
             <button class="btn btn-small" data-cheat="score-inferno">😈 Skóre Peklo 3 000</button>
             <button class="btn btn-small" data-cheat="score-insane">💀 Skóre Insane 3 000</button>
             <button class="btn btn-small" data-cheat="score-blitz">⚡ Skóre Blesková 3 000</button>
+            <button class="btn btn-small" data-cheat="rush">🏹 Série Boss Rush 10</button>
         </div>
         <div id="cheat-msg"></div>
 
@@ -5170,9 +5171,15 @@ const CHEATS = {
     'score-hard': () => cheatScore('hard'),
     'score-inferno': () => cheatScore('inferno'),
     'score-insane': () => cheatScore('insane'),
-    'score-blitz': () => cheatScore('blitz')
+    'score-blitz': () => cheatScore('blitz'),
+    rush: () => {
+        Storage.data.best.rush = Math.max(Storage.data.best.rush || 0, CHEAT_RUSH);
+        Storage.data.stats.bestRushStreak = Math.max(Storage.data.stats.bestRushStreak || 0, CHEAT_RUSH);
+        return 'Série v Boss Rush je aspoň ' + CHEAT_RUSH + ' bossů.';
+    }
 };
 const CHEAT_SCORE = 3000;
+const CHEAT_RUSH = 10;
 function cheatScore(mode) {
     Storage.data.best[mode] = Math.max(Storage.data.best[mode] || 0, CHEAT_SCORE);
     return 'Rekord v režimu je aspoň ' + U.num(CHEAT_SCORE) + '.';

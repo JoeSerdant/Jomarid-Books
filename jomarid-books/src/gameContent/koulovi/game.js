@@ -135,8 +135,9 @@ const CHEAT='67MILUJU',vf=$('vf'),chm=$('cheatm'),cmsg=$('cmsg');
 const cheatKey=e=>{const m=/^(?:Digit|Numpad)(\d)$/.exec(e.code||'');if(m)return m[1];return typeof e.key==='string'&&/^[a-z]$/i.test(e.key)?e.key.toUpperCase():null};
 const cheatOpen=()=>{vf.value='';vf.blur();cmsg.textContent='';chm.classList.remove('hide')};
 const cheatClose=()=>chm.classList.add('hide');
+const CHEAT_SCORES={classic:10000,time:1000,drops:500,chaos:1500};   // aspoň tolik, aby šly vyzkoušet odznaky z catalog.js
 const CHEATS={
- score:()=>{S.best=Math.max(S.best,3000);bump('classic',3000);return 'Rekord v Klasice je aspoň 3 000.'},
+ score:()=>{S.best=Math.max(S.best,CHEAT_SCORES.classic);for(const m in CHEAT_SCORES)bump(m,CHEAT_SCORES[m]);return 'Rekordy v Klasice, Časovce, 30 hodech a Chaosu jsou na hodnotách pro odznaky.'},
  disc:()=>{S.disc=11;return 'Objeveno všech 12 typů koulí.'},
  coins:()=>{S.coins+=1000;return '+1 000 🪙 (mince ve hře).'}
 };

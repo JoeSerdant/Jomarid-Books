@@ -41,7 +41,7 @@ test('id her v katalogu jsou stejná jako v Games.jsx a v mostech her', () => {
 });
 
 test('herní odznaky dohromady dávají málo XP: samy nedovedou nikoho na úroveň 5 (506 XP), ta zůstává za čtením', () => {
-  assert.equal(GAME_BADGES_TOTAL_XP, 495);
+  assert.equal(GAME_BADGES_TOTAL_XP, 487);
   assert.ok(calculateLevelAndProgress(GAME_BADGES_TOTAL_XP).level <= 4);
   assert.ok(calculateLevelAndProgress(506).level === 5, 'práh úrovně 5 je 506 XP');
 });
@@ -241,6 +241,20 @@ test('každá hra hlásí všechny statistiky ze svého katalogu a ostatní hry 
     }
     assert.deepEqual([...reported].sort(), g.stats.map((s) => s.key).sort(), g.id);
   }
+});
+
+test('prahy odznaků za „všechno“ sedí na obsah her: 24 scénářů ve Warroom, 5 soupeřů v šachách', () => {
+  const war = decode(['gameContent', 'warroom.js']);
+  const raw = war.slice(war.indexOf('const RAW_SCENARIOS'));
+  const scenarios = [...raw.slice(0, raw.indexOf('];')).matchAll(/\{ id: '(\w+)'/g)].length;
+  const badge = (id) => GAME_BADGES.find((b) => b.id === id);
+  assert.equal(badge('war_scen24').threshold, scenarios, 'všech scénářů ve Warroom');
+  assert.ok(badge('war_scen24').description.includes(`všech ${scenarios} `));
+  assert.ok(badge('war_scen12').threshold < scenarios && badge('war_scen4').threshold < badge('war_scen12').threshold);
+  const bots = [...read('gameContent', 'chess', 'bots.js').matchAll(/^\s+key: "(\w+)", name:/gm)].length;
+  assert.equal(badge('chess_bots5').threshold, bots, 'všech soupeřů v šachách');
+  assert.equal(getStat('chess', 'bots_unlocked').max, bots);
+  assert.ok(badge('chess_bots5').description.includes(`všech ${bots} `));
 });
 
 /* ---------------------------------------------------------------- hub, Statistiky */

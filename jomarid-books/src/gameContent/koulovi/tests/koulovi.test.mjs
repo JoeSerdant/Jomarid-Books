@@ -318,15 +318,16 @@ test('cheat menu: cheaty jdou do skutečného postupu, ukládají se a hlásí s
   const { run, sandbox, records, rewards, store } = makeEnv();
   const click = (c) => sandbox.document.getElementById('cl').onclick({ target: { closest: () => ({ dataset: { c } }) } });
   click('score');
-  assert.equal(run('S.bm.classic'), 3000); assert.equal(run('S.best'), 3000);
-  assert.deepEqual(rewards, [['record', 3]], 'nový rekord žádá o odměnu jako každý jiný (strop hlídá server)');
-  assert.ok(records.some(([k, v]) => k === 'score_classic' && v === 3000), 'skóre Klasiky 3 000 (odznak Měkká klasika)');
+  assert.equal(run('S.bm.classic'), 10000); assert.equal(run('S.best'), 10000);
+  assert.deepEqual([run('S.bm.time'), run('S.bm.drops'), run('S.bm.chaos')], [1000, 500, 1500], 'rekordy ve všech čtyřech režimech');
+  assert.deepEqual(rewards, [['record', 3], ['record', 3], ['record', 3], ['record', 3]], 'každý nový rekord žádá o odměnu jako každý jiný (strop hlídá server)');
+  for (const [k, want] of [['score_classic', 10000], ['score_time', 1000], ['score_drops', 500], ['score_chaos', 1500]]) assert.ok(records.some(([kk, v]) => kk === k && v === want), `${k} ${want} (odznaky za skóre)`);
   click('disc');
   assert.equal(run('S.disc'), 11);
   assert.ok(records.some(([k, v]) => k === 'balls_discovered' && v === 12), 'všech 12 koulí (odznaky Velká koule i Všichni kámoši)');
   const c0 = run('S.coins'); click('coins'); assert.equal(run('S.coins'), c0 + 1000);
   const saved = JSON.parse(store['koulovi-kamosi-v1']);
-  assert.equal(saved.bm.classic, 3000); assert.equal(saved.disc, 11); assert.equal(saved.coins, c0 + 1000, 'uloženo');
+  assert.equal(saved.bm.classic, 10000); assert.equal(saved.bm.chaos, 1500); assert.equal(saved.disc, 11); assert.equal(saved.coins, c0 + 1000, 'uloženo');
   assert.equal(sandbox.document.getElementById('cmsg').textContent.length > 0, true, 'hláška o cheatu');
   // neznámé hodnoty (dědičné klíče) nic nespustí
   for (const k of ['constructor', 'toString', 'nope']) assert.doesNotThrow(() => click(k));
