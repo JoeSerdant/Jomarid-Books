@@ -163,7 +163,7 @@ h1{margin:0 0 6px;font-size:clamp(30px,9vw,44px);line-height:1;font-weight:700;l
 #banner{position:absolute;bottom:68px;left:50%;transform:translate(-50%,8px);max-width:min(92vw,520px);padding:8px 14px;border-radius:12px;background:var(--panel);border:1px solid var(--line);font-weight:700;font-size:13px;text-align:center;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
 #banner.show{opacity:1;transform:translate(-50%,0)}
 #banner.boss{border-color:var(--danger);color:var(--danger)}
-#banner.good,#banner.ach{border-color:var(--accent);color:var(--accent)}
+#banner.good{border-color:var(--accent);color:var(--accent)}
 #banner.event{border-color:#f5c542;color:#f5c542}
 #topbars{position:absolute;top:56px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px}
 #objbar{padding:5px 12px;font-size:13px;font-weight:700;display:flex;gap:10px;align-items:center;white-space:nowrap}
@@ -199,13 +199,6 @@ h1{margin:0 0 6px;font-size:clamp(30px,9vw,44px);line-height:1;font-weight:700;l
 .cc.lock{opacity:.42}
 .cc.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
 button.cc:hover{border-color:var(--accent)}
-.alist{display:flex;flex-direction:column;gap:6px}
-.arow{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:8px 10px}
-.arow .dot{width:22px;height:22px;border-radius:50%;border:2px solid var(--line);flex:none;display:flex;align-items:center;justify-content:center;font-size:12px}
-.arow.done .dot{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
-.arow b{font-size:13px;display:block}
-.arow small{font-size:11px;color:var(--dim)}
-.arow.lock{opacity:.6}
 .skgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
 .sk{border:1px solid var(--line);border-radius:12px;padding:10px 6px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;font-weight:600}
 .sk i{width:38px;height:38px;border-radius:50%;border:3px solid rgba(0,0,0,.25)}

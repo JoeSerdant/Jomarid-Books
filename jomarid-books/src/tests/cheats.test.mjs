@@ -73,14 +73,23 @@ test('cheaty dosáhnou prahů herních odznaků (hlášení rekordů appce se d�
   for (const mode of ['normal', 'hard', 'inferno', 'insane', 'blitz']) assert.ok(rocket.includes(`'score-${mode}': () => cheatScore('${mode}')`), mode);
   const boss = Number(rocket.match(/bestBossLevel = Math\.max\(Storage\.data\.stats\.bestBossLevel \|\| 0, (\d+)\)/)[1]);
   assert.ok(boss >= badgeMax('rocket', 'boss_level'), 'boss_level (NEMESIS 8, GLITCH 14)');
-  // Polygon aréna: nejvyšší úroveň, boss a výhra
+  // Polygon aréna: úroveň, bossové, výhry, režimy, vlny, třídy, stupeň třídy a Peklo
   const core = read('polygonArena', 'core.js');
+  const cheat = GAMES.polygonarena.code;
+  const num = (name) => Number(cheat.match(new RegExp(`${name} = (\\d+)`))[1]);
   const maxLevel = Number(core.match(/const MAX_LEVEL = (\d+);/)[1]);
   assert.ok(maxLevel >= badgeMax('polygonarena', 'best_level'));
-  assert.match(GAMES.polygonarena.code, /bestLevel = Math\.max\(save\.st\.bestLevel \|\| 1, MAX_LEVEL\)/);
-  assert.match(GAMES.polygonarena.code, /save\.st\.bosses = \(save\.st\.bosses \|\| 0\) \+ 1/);
-  assert.match(GAMES.polygonarena.code, /save\.st\.wins = \(save\.st\.wins \|\| 0\) \+ 1/);
-  assert.ok(1 >= badgeMax('polygonarena', 'bosses_defeated') && 1 >= badgeMax('polygonarena', 'wins'));
+  assert.match(cheat, /bestLevel = Math\.max\(save\.st\.bestLevel \|\| 1, MAX_LEVEL\)/);
+  assert.match(cheat, /save\.st\.bosses = \(save\.st\.bosses \|\| 0\) \+ CHEAT_BOSSES/);
+  assert.match(cheat, /save\.st\.wins = \(save\.st\.wins \|\| 0\) \+ 1/);
+  assert.ok(num('CHEAT_BOSSES') >= badgeMax('polygonarena', 'bosses_defeated') && 1 >= badgeMax('polygonarena', 'wins'));
+  assert.match(cheat, /st\.hillWins = \(st\.hillWins \|\| 0\) \+ 1; st\.royaleWins = \(st\.royaleWins \|\| 0\) \+ 1; st\.rushWins = \(st\.rushWins \|\| 0\) \+ 1;/);
+  assert.ok(1 >= Math.max(...['hill_wins', 'royale_wins', 'rush_wins'].map((s) => badgeMax('polygonarena', s))));
+  assert.ok(num('CHEAT_WAVE') >= badgeMax('polygonarena', 'best_wave') && num('CHEAT_CLASSES') >= badgeMax('polygonarena', 'classes_discovered') && num('CHEAT_HELL_LEVEL') >= badgeMax('polygonarena', 'hell_best_level'));
+  assert.match(cheat, /for \(const m of MODE_IDS\) st\.modesPlayed\[m\] = true;/, 'všechny režimy (modes_played)');
+  assert.match(cheat, /for \(const id of BOSS_IDS\) st\.bossKinds\[id\] = true;/, 'všechny druhy bossů (boss_kinds)');
+  assert.match(cheat, /st\.bestTier = Math\.max\(st\.bestTier \|\| 0, TIER_LEVELS\.length\)/, 'nejvyšší stupeň třídy (best_tier)');
+  for (const id of ['level', 'boss', 'win', 'modes', 'collect']) assert.ok(GAMES.polygonarena.page.includes(`data-cheat="${id}"`), `tlačítko ${id}`);
   // Kouloví Kámoši: skóre Klasiky a všech 12 koulí
   const k = GAMES.koulovikamosi.code;
   assert.ok(Number(k.match(/bump\('classic',(\d+)\)/)[1]) >= badgeMax('koulovikamosi', 'score_classic'));
@@ -93,7 +102,7 @@ test('cheaty dosáhnou prahů herních odznaků (hlášení rekordů appce se d�
 
 test('cheat se ukládá a hlásí jako skutečný postup (Rocket, Polygon, Kouloví Kámoši, City Clicker)', () => {
   assert.match(GAMES.rocket.code, /Storage\.save\(\);\s*UI\.refresh\(\);\s*UI\.renderStats\(\);\s*Achv\.check\(\);/);
-  assert.match(GAMES.polygonarena.code, /persist\(\);[^\n]*\n\s*checkAch\(\);/);
+  assert.match(GAMES.polygonarena.code, /persist\(\);[^\n]*\n\s*trackProgress\(\);/);
   assert.match(GAMES.koulovikamosi.code, /cmsg\.textContent=CHEATS\[k\]\(\);save\(\);stats\(\)/);
   assert.match(GAMES.cityclicker.code, /function cheatAddClicks\(\)[\s\S]*?saveGame\(false\);/);
 });

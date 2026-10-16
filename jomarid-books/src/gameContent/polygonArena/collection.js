@@ -1,51 +1,20 @@
-// Sbírka (třídy, výhody, úspěchy, vzhled, statistiky) a nastavení.
+// Sbírka (třídy, výhody, vzhled, statistiky) a nastavení.
 /* =====================================================================
-   Sbírka (třídy, výhody, úspěchy, vzhled, statistiky) a nastavení
+   Sbírka (třídy, výhody, vzhled, statistiky) a nastavení
    ===================================================================== */
+// Barvy tanku. Odemykají se přímo podle toho, co hráč dokázal (need = text do nabídky, has = podmínka, old = dřívější úspěch, který barvu už odemkl).
 const SKINS = [
   { id: 'teal', name: 'Tyrkys', color: '#5fd6cc' },
   { id: 'sun', name: 'Západ', color: '#ff9a5a' },
   { id: 'violet', name: 'Fialka', color: '#a98bff' },
-  { id: 'lime', name: 'Limeta', color: '#9bdc4d', need: 'first' },
-  { id: 'pink', name: 'Růžová', color: '#ff7eb6', need: 'farm' },
-  { id: 'ice', name: 'Led', color: '#9ee7ff', need: 'lvl20' },
-  { id: 'gold', name: 'Zlatá', color: '#f5c542', need: 'boss' },
-  { id: 'ink', name: 'Obsidián', color: '#4b5b6e', need: 'lvl45' },
-  { id: 'magma', name: 'Magma', color: '#ff5a2a', need: 'hell5' },
-  { id: 'rainbow', name: 'Duha', color: '#ffffff', need: 'cdx40', rainbow: true },
+  { id: 'lime', name: 'Limeta', color: '#9bdc4d', need: 'Znič první tank', has: st => st.kills >= 1, old: 'first' },
+  { id: 'pink', name: 'Růžová', color: '#ff7eb6', need: 'Znič 500 tvarů', has: st => st.shapes >= 500, old: 'farm' },
+  { id: 'ice', name: 'Led', color: '#9ee7ff', need: 'Dosáhni úrovně 20', has: st => st.bestLevel >= 20, old: 'lvl20' },
+  { id: 'gold', name: 'Zlatá', color: '#f5c542', need: 'Poraz bosse', has: st => st.bosses >= 1, old: 'boss' },
+  { id: 'ink', name: 'Obsidián', color: '#4b5b6e', need: 'Dosáhni maximální úrovně', has: st => st.bestLevel >= MAX_LEVEL, old: 'lvl45' },
+  { id: 'magma', name: 'Magma', color: '#ff5a2a', need: 'Dosáhni úrovně 25 na Pekle', has: st => st.hellBest >= 25, old: 'hell5' },
+  { id: 'rainbow', name: 'Duha', color: '#ffffff', need: 'Objev 40 tříd', has: () => codexCount() >= 40, old: 'cdx40', rainbow: true },
 ];
-const ACH = [
-  { id: 'first', name: 'První krev', info: 'Znič svůj první tank', ok: c => c.st.kills >= 1 },
-  { id: 'farm', name: 'Farmář', info: 'Znič celkem 500 tvarů', ok: c => c.st.shapes >= 500 },
-  { id: 'lvl20', name: 'Veterán', info: 'Dosáhni úrovně 20', ok: c => c.st.bestLevel >= 20 },
-  { id: 'lvl45', name: 'Legenda', info: 'Dosáhni maximální úrovně', ok: c => c.st.bestLevel >= MAX_LEVEL },
-  { id: 'tier3', name: 'Mistr stavby', info: 'Dosáhni 3. stupně třídy', ok: c => c.life.tier >= 3 },
-  { id: 'tier4', name: 'Vrchol vývoje', info: 'Dosáhni 4. stupně třídy', ok: c => c.life.tier >= 4 },
-  { id: 'tier5', name: 'Vzestoupil jsi', info: 'Dosáhni 5. stupně (Vzestup)', ok: c => c.life.tier >= 5 },
-  { id: 'boss', name: 'Lovec bossů', info: 'Poraz bosse', ok: c => c.st.bosses >= 1 },
-  { id: 'boss5', name: 'Zabiják titánů', info: 'Poraz 5 bossů', ok: c => c.st.bosses >= 5 },
-  { id: 'bossvariety', name: 'Lovec forem', info: 'Poraz aspoň 6 různých druhů bossů', ok: c => Object.keys(c.st.bossKinds || {}).length >= 6 },
-  { id: 'bossall', name: 'Sběratel trofejí', info: 'Poraz všechny druhy bossů', ok: c => Object.keys(c.st.bossKinds || {}).length >= BOSS_IDS.length },
-  { id: 'mapall', name: 'Cestovatel', info: 'Zahraj si na všech typech arény', ok: c => Object.keys(c.st.mapsSeen || {}).length >= MAP_PRESETS.length },
-  { id: 'cdx15', name: 'Sběratel', info: 'Objev 15 tříd', ok: c => c.cdx >= 15 },
-  { id: 'cdx40', name: 'Znalec', info: 'Objev 40 tříd', ok: c => c.cdx >= 40 },
-  { id: 'cdx150', name: 'Archivář', info: 'Objev 150 tříd', ok: c => c.cdx >= 150 },
-  { id: 'cdx400', name: 'Encyklopedie', info: 'Objev 400 tříd', ok: c => c.cdx >= 400 },
-  { id: 'surv5', name: 'Přeživší', info: 'Přežij 5 minut jedním životem', ok: c => c.life.time >= 300 },
-  { id: 'rampage', name: 'Řádění', info: 'Znič 10 tanků jedním životem', ok: c => c.life.kills >= 10 },
-  { id: 'perks', name: 'Kombinátor', info: 'Vyber všech pět výhod v jedné hře', ok: c => c.life.perks >= 5 },
-  { id: 'over', name: 'Nadlimit', info: 'Vylepši vlastnost nad maximum až na 12', ok: c => c.life.maxStat >= 12 },
-  { id: 'teamwin', name: 'Týmový hráč', info: 'Vyhraj týmový zápas', ok: c => c.st.wins >= 1 },
-  { id: 'games10', name: 'Stálice', info: 'Odehraj 10 her', ok: c => c.st.games >= 10 },
-  { id: 'wave10', name: 'Odolný', info: 'Zvládni 10 vln v režimu Přežití', ok: c => c.st.bestWave >= 10 },
-  { id: 'hillwin', name: 'Král kopce', info: 'Vyhraj zápas v režimu Král kopce', ok: c => c.st.hillWins >= 1 },
-  { id: 'royale', name: 'Poslední v bouři', info: 'Vyhraj Posledního přeživšího', ok: c => c.st.royaleWins >= 1 },
-  { id: 'rushall', name: 'Přemožitel', info: 'Poraz všechny bossy v Honu na bossy', ok: c => c.st.rushWins >= 1 },
-  { id: 'gold300', name: 'Zlatokop', info: 'Nasbírej 300 zlata v jedné Zlaté horečce', ok: c => c.st.bestGold >= 300 },
-  { id: 'hell5', name: 'Z pekla', info: 'Dosáhni úrovně 25 na obtížnosti Peklo', ok: c => c.diff === 'hell' && c.life.level >= 25 },
-  { id: 'allmodes', name: 'Všestranný', info: 'Zahraj si všechny režimy', ok: c => Object.keys(c.st.modesPlayed || {}).length >= MODE_IDS.length },
-];
-const ACH_BY = {}; for (const a of ACH) ACH_BY[a.id] = a;
 
 function hueHex(hh) {
   hh = Math.floor(hh / 15) * 15; const s = 0.7, l = 0.6, a = s * Math.min(l, 1 - l);
@@ -57,29 +26,29 @@ function skinColor() {
   const sk = SKINS.find(k => k.id === save.skin) || SKINS[0];
   return sk.rainbow ? hueHex((time * 60) % 360) : sk.color;
 }
-const skinOpen = sk => !sk.need || !!save.ach[sk.need];
+const skinOpen = sk => !sk.has || sk.has(save.st) || !!save.ach[sk.old];
 function codexCount() { let n = 0; for (const id in save.codex) if (CLASSES[id] && !CLASSES[id].boss) n++; return n; }
 
-// force = i když hráč právě skončil (výhry se odměňují hned na obrazovce výsledku). Hry s vyšší startovní úrovní (world.boost)
-// se nepočítají do úrovně, stupně třídy, výhod ani vlastností - ty by se daly získat hned na startu.
-function checkAch(force) {
+// Zapíše do postupu, čeho hráč právě dosáhl: objevenou třídu a nejvyšší úroveň, stupeň třídy a úroveň na Pekle. Odznaky z toho vyhodnocuje appka
+// (persist hlásí rekordy), hra žádné vlastní úspěchy nemá. force = i když hráč právě skončil (výhra se započítá hned na obrazovce výsledku).
+// Hry s vyšší startovní úrovní (world.boost) se nepočítají do úrovně ani stupně třídy - ty by se daly získat hned na startu.
+function trackProgress(force) {
   if (mode === 'sandbox' || (!player.alive && !force)) return;
-  if (!save.codex[player.cls]) save.codex[player.cls] = true;
-  const p = player, st = save.st, bst = world.boost > 0;
-  if (!bst) st.bestLevel = Math.max(st.bestLevel, p.level);
-  const c = { st, cdx: codexCount(), diff: diffKey, life: { time: time - p.born, kills: p.kills, level: bst ? 0 : p.level, tier: bst ? 0 : p.tierDone, perks: bst ? 0 : p.perkN, maxStat: bst ? 0 : Math.max.apply(null, p.stats) } };
+  const p = player, st = save.st;
   let changed = false;
-  for (const a of ACH) if (!save.ach[a.id] && a.ok(c)) {
-    save.ach[a.id] = true; changed = true; banner('Úspěch: ' + a.name, 'ach'); beep('ach'); buzz(40);
-    if (state !== 'play') ui.achNew.push(a.name);                 // zápas už skončil: úspěch se ukáže na obrazovce výsledku
+  if (!save.codex[p.cls]) { save.codex[p.cls] = true; changed = true; }
+  if (!(world.boost > 0)) {
+    if (p.level > st.bestLevel) { st.bestLevel = p.level; changed = true; }
+    if (p.tierDone > st.bestTier) { st.bestTier = p.tierDone; changed = true; }
+    if (diffKey === 'hell' && p.level > st.hellBest) { st.hellBest = p.level; changed = true; }
   }
-  if (changed) persist();
+  if (changed || force) persist();                // konec zápasu uloží a ohlásí i výhru, ne až další uložení
 }
 
 /* ---------- sbírka ---------- */
 const elColl = $('coll'), elCollBody = $('collBody'), elCollTabs = $('collTabs'), elSet = $('settings');
 const collState = { tab: 'classes', paused: false };
-const COLL_TABS = [['classes', 'Třídy'], ['perks', 'Výhody'], ['ach', 'Úspěchy'], ['skins', 'Vzhled'], ['stats', 'Statistiky']];
+const COLL_TABS = [['classes', 'Třídy'], ['perks', 'Výhody'], ['skins', 'Vzhled'], ['stats', 'Statistiky']];
 function inSandbox() { return mode === 'sandbox' && state === 'play'; }
 function openColl(tab) {
   if (tab) collState.tab = tab;
@@ -100,7 +69,7 @@ function renderColl() {
   }
   const top = elCollBody.scrollTop;
   elCollBody.replaceChildren();
-  ({ classes: renderClasses, perks: renderPerks, ach: renderAch, skins: renderSkins, stats: renderStats })[collState.tab]();
+  ({ classes: renderClasses, perks: renderPerks, skins: renderSkins, stats: renderStats })[collState.tab]();
   elCollBody.scrollTop = top;
 }
 function renderClasses() {
@@ -139,26 +108,14 @@ function renderPerks() {
   }
   elCollBody.appendChild(grid);
 }
-function renderAch() {
-  const done = ACH.filter(a => save.ach[a.id]).length;
-  elCollBody.appendChild(h('div', 'tier', 'Splněno ' + done + ' z ' + ACH.length));
-  const list = h('div', 'alist');
-  for (const a of ACH) {
-    const ok = !!save.ach[a.id], row = h('div', 'arow' + (ok ? ' done' : ' lock'));
-    row.appendChild(h('span', 'dot', ok ? '✓' : ''));
-    const box = h('div'); box.appendChild(h('b', null, a.name)); box.appendChild(h('small', null, a.info)); row.appendChild(box);
-    list.appendChild(row);
-  }
-  elCollBody.appendChild(list);
-}
 function renderSkins() {
-  elCollBody.appendChild(h('div', 'tier', 'Barva tvého tanku (v týmovém režimu se použije barva týmu). Další odemykáš úspěchy.'));
+  elCollBody.appendChild(h('div', 'tier', 'Barva tvého tanku (v týmovém režimu se použije barva týmu). Další odemykáš hraním.'));
   const grid = h('div', 'skgrid');
   for (const sk of SKINS) {
     const open = skinOpen(sk), el = h('button', 'sk' + (save.skin === sk.id ? ' sel' : '') + (open ? '' : ' lock')); el.type = 'button';
     const dot = h('i'); dot.style.background = sk.rainbow ? 'conic-gradient(#ff6b6b,#f5c542,#5fdc7a,#5fd6f2,#a98bff,#ff6b6b)' : sk.color; el.appendChild(dot);
     el.appendChild(h('span', null, sk.name));
-    if (!open) el.appendChild(h('small', null, 'Odemkne: ' + ACH_BY[sk.need].name));
+    if (!open) el.appendChild(h('small', null, 'Odemkne: ' + sk.need));
     el.addEventListener('click', () => { if (!open) return; save.skin = sk.id; persist(); if (player && state !== 'play') player.color = skinColor(); renderColl(); });
     grid.appendChild(el);
   }

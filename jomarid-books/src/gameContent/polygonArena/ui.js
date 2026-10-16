@@ -112,7 +112,7 @@ function frameUI(dt) {
   ui.lbT -= dt; if (ui.lbT <= 0) { ui.lbT = 0.4; if (state !== 'menu') updateLB(); }
   ui.miniT -= dt; if (ui.miniT <= 0) { ui.miniT = 0.1; if (state !== 'menu') drawMini(); }
   if (ui.bannerT > 0) { ui.bannerT -= dt; if (ui.bannerT <= 0) elBanner.classList.remove('show'); }
-  ui.achT -= dt; if (ui.achT <= 0) { ui.achT = 1; if (state === 'play') checkAch(); }
+  ui.trackT -= dt; if (ui.trackT <= 0) { ui.trackT = 1; if (state === 'play') trackProgress(); }
   if (state === 'dead' && ui.deadT > 0) { ui.deadT -= dt; if (ui.deadT <= 0) showDead(); }
 }
 
@@ -138,7 +138,7 @@ function startGame(fresh) {
   $('clsBtn').classList.toggle('hidden', mode !== 'sandbox');
   elFeed.replaceChildren(); feedItems.length = 0; elBanner.classList.remove('show');
   cam.x = player.x; cam.y = player.y; cam.z = 1;
-  ui.statsDirty = true; ui.offerKey = '#'; ui.lbT = 0; ui.miniT = 0; ui.statsOpen = false; ui.perkDirty = true; ui.achNew = [];
+  ui.statsDirty = true; ui.offerKey = '#'; ui.lbT = 0; ui.miniT = 0; ui.statsOpen = false; ui.perkDirty = true;
   elLvl.textContent = ''; elScore.textContent = '';
   input.stickL = null; input.stickR = null; shake = 0;
   if (mode === 'teams' && !world.matchT) banner('Aréna: ' + world.mapName + '. Jsi v modrém týmu, cíl: ' + DIFFS[diffKey].goal + ' zničených tanků', 'info');
@@ -163,7 +163,6 @@ function showDead() {
     $('deadTitle').textContent = 'Byl jsi zničen';
     $('deadBy').textContent = d.by ? 'Zničil tě ' + d.by + '.' : 'Zničily tě tvary.';
   }
-  if (ui.achNew.length) { $('deadBy').textContent += ' Úspěch: ' + ui.achNew.join(', ') + '.'; ui.achNew = []; }
   const grid = $('deadGrid'); grid.querySelectorAll('.x').forEach(n => n.remove());
   for (const [label, v] of (E ? E.extra : M().deathExtra && M().deathExtra()) || []) { const bx = h('div', 'x'); bx.appendChild(h('b', null, typeof v === 'number' ? fmt(v) : String(v))); bx.appendChild(h('span', null, label)); grid.appendChild(bx); }
   $('againBtn').textContent = world.over ? 'Nový zápas' : 'Hrát znovu';
@@ -227,6 +226,7 @@ function frame(now) {
 
 function boot() {
   readTheme(); fxState.level = fxLevelNow();
+  reportRecords();                 // uložený postup se appce ohlásí hned po načtení (staré rekordy tak odemknou i nové odznaky)
   try {
     const mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
     if (mq && mq.addEventListener) mq.addEventListener('change', readTheme);

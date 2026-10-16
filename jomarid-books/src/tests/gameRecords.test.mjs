@@ -41,7 +41,7 @@ test('id her v katalogu jsou stejná jako v Games.jsx a v mostech her', () => {
 });
 
 test('herní odznaky dohromady dávají málo XP: samy nedovedou nikoho na úroveň 5 (506 XP), ta zůstává za čtením', () => {
-  assert.equal(GAME_BADGES_TOTAL_XP, 375);
+  assert.equal(GAME_BADGES_TOTAL_XP, 495);
   assert.ok(calculateLevelAndProgress(GAME_BADGES_TOTAL_XP).level <= 4);
   assert.ok(calculateLevelAndProgress(506).level === 5, 'práh úrovně 5 je 506 XP');
 });
