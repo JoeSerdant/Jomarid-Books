@@ -69,8 +69,12 @@ test('cheaty dosáhnou prahů herních odznaků (hlášení rekordů appce se d�
   // Rocket: skóre všech režimů a boss
   const rocket = GAMES.rocket.code;
   const cheatScore = Number(rocket.match(/const CHEAT_SCORE = (\d+);/)[1]);
-  for (const stat of ['score_normal', 'score_inferno', 'score_insane']) assert.ok(cheatScore >= badgeMax('rocket', stat), stat);
+  for (const stat of ['score_normal', 'score_hard', 'score_inferno', 'score_insane', 'score_blitz']) assert.ok(cheatScore >= badgeMax('rocket', stat), stat);
   for (const mode of ['normal', 'hard', 'inferno', 'insane', 'blitz']) assert.ok(rocket.includes(`'score-${mode}': () => cheatScore('${mode}')`), mode);
+  const rushCheat = Number(rocket.match(/const CHEAT_RUSH = (\d+);/)[1]);
+  assert.ok(rushCheat >= badgeMax('rocket', 'rush_streak'), 'rush_streak (série bossů v Boss Rush)');
+  assert.match(rocket, /rush: \(\) => \{\s*Storage\.data\.best\.rush = Math\.max\(Storage\.data\.best\.rush \|\| 0, CHEAT_RUSH\);/);
+  assert.ok(GAMES.rocket.page.includes('data-cheat="rush"'));
   const boss = Number(rocket.match(/bestBossLevel = Math\.max\(Storage\.data\.stats\.bestBossLevel \|\| 0, (\d+)\)/)[1]);
   assert.ok(boss >= badgeMax('rocket', 'boss_level'), 'boss_level (NEMESIS 8, GLITCH 14)');
   // Polygon aréna: úroveň, bossové, výhry, režimy, vlny, třídy, stupeň třídy a Peklo
@@ -92,7 +96,9 @@ test('cheaty dosáhnou prahů herních odznaků (hlášení rekordů appce se d�
   for (const id of ['level', 'boss', 'win', 'modes', 'collect']) assert.ok(GAMES.polygonarena.page.includes(`data-cheat="${id}"`), `tlačítko ${id}`);
   // Kouloví Kámoši: skóre Klasiky a všech 12 koulí
   const k = GAMES.koulovikamosi.code;
-  assert.ok(Number(k.match(/bump\('classic',(\d+)\)/)[1]) >= badgeMax('koulovikamosi', 'score_classic'));
+  const ks = k.match(/const CHEAT_SCORES=\{classic:(\d+),time:(\d+),drops:(\d+),chaos:(\d+)\}/);
+  for (const [i, m] of ['classic', 'time', 'drops', 'chaos'].entries()) assert.ok(Number(ks[i + 1]) >= badgeMax('koulovikamosi', 'score_' + m), 'score_' + m);
+  assert.match(k, /for\(const m in CHEAT_SCORES\)bump\(m,CHEAT_SCORES\[m\]\)/);
   assert.ok(Number(k.match(/S\.disc=(\d+);return/)[1]) + 1 >= badgeMax('koulovikamosi', 'balls_discovered'), 'balls_discovered se hlásí jako S.disc + 1');
   // City Clicker: kliky a přestavba
   const c = GAMES.cityclicker.code;
