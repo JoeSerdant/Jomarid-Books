@@ -47,9 +47,9 @@ describe('výchozí obsah', () => {
   });
   test('pořadí a cíle výchozích kroků (změna je záměrná, ne náhodná)', () => {
     const anchors = (key) => tour.sets[key].map((x) => x.anchor);
-    assert.deepEqual(anchors('reader'), ['none', 'nav-library', 'library-search', 'nav-stats', 'nav-games', 'nav-coins', 'nav-search', 'nav-settings', 'settings-tabs', 'none']);
-    assert.deepEqual(anchors('publisher'), ['none', 'nav-library', 'nav-studio', 'publisher-tabs', 'nav-stats', 'nav-coins', 'nav-settings', 'settings-checks', 'none']);
-    assert.deepEqual(anchors('admin'), ['none', 'nav-library', 'library-search', 'nav-stats', 'nav-games', 'nav-coins', 'nav-search', 'nav-admin', 'nav-settings', 'settings-tabs', 'none']);
+    assert.deepEqual(anchors('reader'), ['none', 'nav-library', 'library-search', 'nav-stats', 'nav-badges', 'nav-games', 'nav-coins', 'nav-search', 'nav-settings', 'settings-tabs', 'none']);
+    assert.deepEqual(anchors('publisher'), ['none', 'nav-library', 'nav-studio', 'publisher-tabs', 'nav-stats', 'nav-badges', 'nav-coins', 'nav-settings', 'settings-checks', 'none']);
+    assert.deepEqual(anchors('admin'), ['none', 'nav-library', 'library-search', 'nav-stats', 'nav-badges', 'nav-games', 'nav-coins', 'nav-search', 'nav-admin', 'nav-settings', 'settings-tabs', 'none']);
   });
   test('texty o mincích a knihovně odpovídají tomu, co appka opravdu dělá', () => {
     const text = (key, id) => tour.sets[key].find((x) => x.id === id).text;
@@ -239,8 +239,8 @@ describe('automatické spuštění', () => {
     assert.equal(go({ createdAt: undefined, seenVersion: 1, tour: { ...tour, version: 2 } }), true);
   });
   test('jen na klidných stránkách', () => {
-    for (const p of ['/', '/app', '/app/', '/stats', '/games', '/publisher', '/settings', '/settings/profile', '/autor/abc']) assert.equal(M.isAutoStartPath(p), true, p);
-    for (const p of ['/read/1', '/games/chess', '/login', '/reset-password', '/admin', '/settingsx', '/apple', '', null, undefined, 5]) assert.equal(M.isAutoStartPath(p), false, String(p));
+    for (const p of ['/', '/app', '/app/', '/stats', '/badges', '/badges/shop', '/games', '/publisher', '/settings', '/settings/profile', '/autor/abc']) assert.equal(M.isAutoStartPath(p), true, p);
+    for (const p of ['/read/1', '/games/chess', '/login', '/reset-password', '/admin', '/settingsx', '/badgesx', '/apple', '', null, undefined, 5]) assert.equal(M.isAutoStartPath(p), false, String(p));
     assert.equal(go({ pathname: '/read/abc' }), false);
   });
   test('stáří účtu: budoucí datum = 0 dní, nesmysl = nekonečno', () => {
