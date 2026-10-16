@@ -1,4 +1,4 @@
--- SQL testy denních limitů Jomarid Coinů z her (db/game-coins.sql): strop na hru a den, strop ze všech her, nová hra Kouloví Kámoši, hranice, dny a zápis do deníku.
+-- SQL testy Jomarid Coinů z her (db/game-coins.sql): strop na hru a den, strop ze všech her, nová hra Kouloví Kámoši, hranice, dny, zápis do deníku a zůstatek připsaný přesně jednou.
 -- Spouští se přes db/tests/run.sh po game_saves.test.sql (potřebuje mock_schema.sql, ve kterém je dosavadní award_game_coins, a db/game-coins.sql, který ji nahradil).
 \set ON_ERROR_STOP on
 create schema if not exists tt;
@@ -79,11 +79,11 @@ select tt.ok(tt.granted(1, 'cityclicker', 1) = 1, 'City Clicker: žádost projde
 select tt.ok(tt.granted(1, 'polygonarena', 1) = 1, 'Polygon Aréna: žádost projde');
 select tt.ok(tt.granted(1, 'chess', 1) = 1, 'Šachy: žádost projde');
 select tt.ok(tt.granted(1, 'koulovikamosi', 1) = 1, 'Kouloví Kámoši: žádost projde (dřív končila chybou invalid_game_id)');
-select tt.ok(tt.earned(1) = 6 and tt.lifetime(1) = 6, 'za šest her je v deníku i v celkově získaných Coinech 6');
+select tt.ok(tt.earned(1) = 6 and tt.lifetime(1) = 6 and tt.coins(1) = 6, 'za šest her je v deníku, v celkově získaných Coinech i na zůstatku přesně 6 (ne dvojnásobek)');
 
 -- ===== strop na jednu hru: 100 za den =====
-with r as (select tt.aw(2, 'rocket', 60) j) select tt.ok(r.j->>'granted' = '60' and not tt.capped(r.j), 'první žádost na 60 projde celá a není capped') from r;
-with r as (select tt.aw(2, 'rocket', 60) j) select tt.ok(r.j->>'granted' = '40' and tt.capped(r.j), 'druhá žádost na 60 se ořízne na zbývajících 40 a odpověď je capped') from r;
+with r as (select tt.aw(2, 'rocket', 60) j) select tt.ok(r.j = '{"granted": 60, "capped": false, "balance": 60}'::jsonb and tt.coins(2) = 60, 'první žádost na 60 projde celá, není capped a vrácený zůstatek 60 je i skutečný zůstatek v profilu') from r;
+with r as (select tt.aw(2, 'rocket', 60) j) select tt.ok(r.j->>'granted' = '40' and tt.capped(r.j) and (r.j->>'balance')::bigint = 100 and tt.coins(2) = 100, 'druhá žádost na 60 se ořízne na zbývajících 40, je capped a zůstatek je 100') from r;
 select tt.ok(tt.earned(2, 'rocket') = 100, 'z Rocketu je za den přesně 100 (strop je 100, ne dosavadních 75)');
 select tt.ok((select count(*) from public.coin_transactions where user_id = tt.cu(2) and source_type like 'game_event:rocket:%:2:%' and amount = 40) = 1, 'druhá žádost se zapsala jen na zbývajících 40');
 with r as (select tt.aw(2, 'rocket', 5) j) select tt.ok(r.j->>'granted' = '0' and tt.capped(r.j) and (r.j->>'balance')::bigint = tt.coins(2), 'po vyčerpání stropu hra nedostane nic (granted 0, capped true, vrácený zůstatek je skutečný) ') from r;
@@ -92,7 +92,7 @@ select tt.ok(tt.earned(2, 'rocket') = 100, 'žádost po vyčerpání stropu nic 
 -- ===== strop na hru se nesčítá přes hry, strop ze všech her je 200 =====
 select tt.ok(tt.granted(2, 'warroom', 60) = 60, 'jiná hra má vlastní strop: Warroom dostane 60, i když Rocket je vyčerpaný');
 select tt.ok(tt.granted(2, 'warroom', 60) = 40, 'Warroom: druhých 60 se ořízne na zbývajících 40 (strop hry 100)');
-select tt.ok(tt.earned(2) = 200, 'dvě plné hry dávají dohromady 200 (celkový strop za den)');
+select tt.ok(tt.earned(2) = 200 and tt.coins(2) = 200, 'dvě plné hry dávají dohromady 200 (celkový strop za den) a zůstatek je přesně 200');
 with r as (select tt.aw(2, 'cityclicker', 10) j) select tt.ok(r.j->>'granted' = '0' and tt.capped(r.j), 'třetí hra nedostane nic: vyčerpaný je celkový strop, i když v ní ten den nic nebylo') from r;
 select tt.ok(tt.earned(2) = 200 and tt.earned(2, 'cityclicker') = 0, 'celkem pořád 200, ve City Clickeru nic');
 
@@ -135,7 +135,9 @@ select tt.ok(tt.earned(7) = 3 + 2 + 1 + 1 + 1, 'deník dává součet všech ud�
 select tt.ok(tt.aw(8, 'rocket', 10)->>'granted' = '10' and tt.lifetime(8) = 10, 'celkově získané Coiny vzrostly o udělenou částku');
 select tt.ok(tt.aw(8, 'rocket', 1000)->>'granted' = '90' and tt.lifetime(8) = 100, 'oříznutá žádost zvýší celkově získané Coiny jen o to, co se udělilo');
 select tt.ok((select count(*) from public.coin_transactions where user_id = tt.cu(8)) = 2, 'každé udělení je v deníku jednou');
-select tt.ok(tt.coins(8) >= 50 + 100, 'zůstatek vzrostl nejméně o udělené Coiny (50 + 100 z her)');
+select tt.ok(tt.coins(8) = 50 + 100, 'zůstatek vzrostl přesně o udělené Coiny (50 + 100 z her), ne o dvojnásobek');
+select tt.ok(tt.coins(8) = 50 + tt.earned(8), 'zůstatek = počáteční zůstatek + součet zápisů z her v deníku (obojí se drží pohromadě)');
+with r as (select tt.aw(8, 'rocket', 5) j) select tt.ok(r.j->>'granted' = '0' and (r.j->>'balance')::bigint = tt.coins(8) and tt.coins(8) = 150, 'odmítnutá žádost nic nepřipsala a vrací skutečný zůstatek') from r;
 
 -- ===== opakované spuštění souboru =====
 select tt.ok((select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'award_game_coins') = 1, 'po opakovaném spuštění souboru je jen jedna funkce award_game_coins (žádné přetížení navíc)');

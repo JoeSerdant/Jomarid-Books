@@ -143,6 +143,32 @@ if [ $STATUS -eq 0 ]; then
   PSQLQ -f "$COINS_SQL" 2>/dev/null || STATUS=1   # zpátky do pořádku
 fi
 
+# Zkušební zápis v db/game-coins.sql: funkce zůstatek přímo neupravuje, spoléhá na spoušť trg_update_coins. Když spoušť zůstatek nezvýší přesně o zapsanou částku
+# (chybí, nebo přičítá jinak), soubor se zastaví a funkci nezmění. Značka: nastavení funkce, které by nahrazení smazalo.
+if [ $STATUS -eq 0 ]; then
+  pfc() {  # pfc <popis> <příprava> <úklid>
+    PSQLQ -c "alter function public.award_game_coins(text, integer, text) set statement_timeout = '7s';" || STATUS=1
+    PSQLQ -c "$2" || STATUS=1
+    local out; out=$(PSQL -At -f "$COINS_SQL" 2>&1); local rc=$?
+    PSQLQ -c "$3" || STATUS=1
+    local kept; kept=$(PSQL -At -c "select coalesce(proconfig::text, '') like '%statement_timeout%' from pg_proc where oid = 'public.award_game_coins(text, integer, text)'::regprocedure" 2>&1)
+    if [ $rc -ne 0 ] && echo "$out" | grep -q "zapsanou částku" && [ "$kept" = "t" ]; then
+      echo "NOTICE:  OK   db/game-coins.sql se zastaví a funkci nezmění, když $1" >>"$OUT"
+    else
+      echo "SELÁHALO: db/game-coins.sql při '$1' (kód $rc, funkce nezměněna: '$kept'): $out" >>"$OUT"; STATUS=1
+    fi
+    PSQLQ -f "$COINS_SQL" 2>/dev/null || STATUS=1   # zpátky do pořádku (značka zmizí)
+  }
+  pfc "zápis do coin_transactions zůstatek vůbec nemění (chybí spoušť)" \
+      "alter table public.coin_transactions disable trigger trg_update_coins;" \
+      "alter table public.coin_transactions enable trigger trg_update_coins;"
+  pfc "zápis do coin_transactions zvýší zůstatek o jinou částku, než se zapsala" \
+      "create or replace function public.update_user_coins_balance() returns trigger language plpgsql as \$f\$ begin update public.profiles set coins = coins + 2 * new.amount where id = new.user_id; return new; end \$f\$;" \
+      "create or replace function public.update_user_coins_balance() returns trigger language plpgsql as \$f\$ begin update public.profiles set coins = coins + new.amount where id = new.user_id; return new; end \$f\$;"
+  MARK=$(PSQL -At -c "select coalesce(proconfig::text, '') like '%statement_timeout%' from pg_proc where oid = 'public.award_game_coins(text, integer, text)'::regprocedure" 2>&1)
+  [ "$MARK" = "f" ] || { echo "SELÁHALO: po úklidu zkoušek db/game-coins.sql zůstala na funkci značka ($MARK)" >>"$OUT"; STATUS=1; }
+fi
+
 OK=$(grep -c "OK   " "$OUT")
 FAILS=$(grep -E "SELÁHALO|ERROR" "$OUT")
 if [ $STATUS -ne 0 ] || [ -n "$FAILS" ]; then
