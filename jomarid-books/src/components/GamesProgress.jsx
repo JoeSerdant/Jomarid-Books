@@ -127,7 +127,7 @@ export const GamesProgress = ({ progress, userId }) => {
           <Gamepad2 size={16} style={{ color: 'var(--bg-primary)' }} /> Hry
         </h3>
         <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-1 m-0 opacity-70" data-testid="games-progress-summary">
-          Herní odznaky: {unlockedCount} z {GAME_BADGES.length}, dohromady {progress.xp} z {GAME_BADGES_TOTAL_XP} XP. Rekordy se ukládají k účtu a hlásí je hry samy.
+          Herní odznaky: {unlockedCount} z {GAME_BADGES.length}, dohromady {fmt(progress.xp)} z {fmt(GAME_BADGES_TOTAL_XP)} XP. Rekordy se ukládají k účtu a hlásí je hry samy.
         </p>
       </div>
       <div className="flex flex-col gap-2">

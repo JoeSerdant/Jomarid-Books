@@ -40,14 +40,20 @@ test('id her v katalogu jsou stejná jako v Games.jsx a v mostech her', () => {
   assert.deepEqual(GAME_CATALOG.map((g) => g.title).sort(), [...games.matchAll(/^\s+title: '([^']+)',$/gm)].map((m) => m[1]).sort(), 'názvy her sedí s hubem');
 });
 
-test('herní odznaky dohromady dávají málo XP: samy nedovedou nikoho na úroveň 5 (506 XP), ta zůstává za čtením', () => {
-  assert.equal(GAME_BADGES_TOTAL_XP, 487);
-  assert.ok(calculateLevelAndProgress(GAME_BADGES_TOTAL_XP).level <= 4);
-  assert.ok(calculateLevelAndProgress(506).level === 5, 'práh úrovně 5 je 506 XP');
+test('XP herních odznaků: ve stejné statistice těžší odznak vždy dává víc, každý dává aspoň 30 XP, hry samy dovedou čtenáře zhruba na úroveň 12', () => {
+  const chains = new Map();
+  for (const b of GAME_BADGES) { const k = `${b.game}.${b.stat}`; chains.set(k, [...(chains.get(k) || []), b]); }
+  for (const [key, list] of chains) {
+    const sorted = [...list].sort((a, b) => a.threshold - b.threshold);
+    for (let i = 1; i < sorted.length; i += 1) assert.ok(sorted[i].xp > sorted[i - 1].xp, `${key}: ${sorted[i].id} (${sorted[i].xp} XP) musí dávat víc než lehčí ${sorted[i - 1].id} (${sorted[i - 1].xp} XP)`);
+  }
+  for (const b of GAME_BADGES) assert.ok(b.xp >= 30 && b.xp % 10 === 0, `${b.id}: ${b.xp} XP`);
+  assert.equal(GAME_BADGES_TOTAL_XP, 10470);
+  assert.equal(calculateLevelAndProgress(GAME_BADGES_TOTAL_XP).level, 12);
 });
 
 test('sumGameBadgeXp a pomocné funkce katalogu', () => {
-  assert.equal(sumGameBadgeXp(['rocket_ace', 'chess_first', 'neznamy', 5]), 15);
+  assert.equal(sumGameBadgeXp(['rocket_ace', 'chess_first', 'neznamy', 5]), 150);
   assert.equal(sumGameBadgeXp('x'), 0);
   assert.equal(sumGameBadgeXp(undefined), 0);
   assert.equal(getBadge('rocket_ace').game, 'rocket');
@@ -75,7 +81,7 @@ test('db/game-records.sql má stejné statistiky, meze, odznaky, prahy a XP jako
   const badges = [...sql.matchAll(/^\s+\('(\w+)', '(\w+)', '(\w+)', (\d+), (\d+)\),?$/gm)].map((m) => `${m[1]}|${m[2]}.${m[3]}>=${m[4]}|${m[5]}`);
   const wantBadges = GAME_BADGES.map((b) => `${b.id}|${b.game}.${b.stat}>=${b.threshold}|${b.xp}`);
   assert.deepEqual(badges, wantBadges, 'odznaky, prahy a XP');
-  assert.match(sql, new RegExp(`dohromady\\s+(?:--\\s+)?málo \\(${GAME_BADGES_TOTAL_XP} XP\\)`), 'komentář o součtu XP');
+  assert.match(sql, new RegExp(`dohromady\\s+(?:--\\s+)?${GAME_BADGES_TOTAL_XP} XP`), 'komentář o součtu XP');
 });
 
 test('SQL: funkce jsou jen pro přihlášené, tabulky mají zapnutou RLS a nikdo k nim nemá přímý přístup', () => {
@@ -98,7 +104,7 @@ test('normalizeProgress zahodí neznámé hry, statistiky a odznaky, zaokrouhlí
   assert.deepEqual(p.records, { rocket: { score_normal: 1500 } });
   assert.deepEqual(p.unlocked, ['rocket_ace', 'chess_first']);
   assert.equal(p.xp, 77);
-  assert.equal(normalizeProgress({ unlocked: ['rocket_ace', 'chess_first'] }).xp, 15, 'bez XP ze serveru se spočítá z odznaků');
+  assert.equal(normalizeProgress({ unlocked: ['rocket_ace', 'chess_first'] }).xp, 150, 'bez XP ze serveru se spočítá z odznaků');
   for (const bad of [null, undefined, 5, 'x', [], true]) assert.deepEqual(normalizeProgress(bad), EMPTY_PROGRESS);
 });
 
@@ -129,13 +135,13 @@ test('loadGameLeaderboard: názvy bez jména jsou „Anonym“, neznámá statis
 
 test('reportGameRecord: neplatné hlášení se neposílá, výsledek se převede na odznaky s názvy a XP', async () => {
   const calls = [];
-  const client = fakeClient({ report_game_record: async (args) => { calls.push(args); return { data: { ok: true, value: 14, improved: true, unlocked: ['rocket_nemesis', 'rocket_glitch', 'neznamy'], xp: 40 }, error: null }; } });
+  const client = fakeClient({ report_game_record: async (args) => { calls.push(args); return { data: { ok: true, value: 14, improved: true, unlocked: ['rocket_nemesis', 'rocket_glitch', 'neznamy'], xp: 400 }, error: null }; } });
   assert.equal(await reportGameRecord(client, 'rocket', 'nic', 5), null);
   assert.equal(await reportGameRecord(client, 'rocket', 'boss_level', 0), null);
   assert.equal(calls.length, 0);
   const r = await reportGameRecord(client, 'rocket', 'boss_level', 14.8);
   assert.deepEqual(calls, [{ p_game_id: 'rocket', p_stat_key: 'boss_level', p_value: 14 }]);
-  assert.equal(r.improved, true); assert.equal(r.xp, 40);
+  assert.equal(r.improved, true); assert.equal(r.xp, 400);
   assert.deepEqual(r.unlocked.map((b) => b.title), ['Konec NEMESIS', 'Chyba v systému']);
   assert.equal(await reportGameRecord(fakeClient({ report_game_record: async () => ({ data: { ok: false, reason: 'implausible' }, error: null }) }), 'rocket', 'boss_level', 5), null);
   assert.equal(await quiet(() => reportGameRecord(fakeClient({}), 'rocket', 'boss_level', 5)), null, 'SQL ještě neběží');
