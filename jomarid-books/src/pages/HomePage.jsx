@@ -28,10 +28,10 @@ import {
 const BADGE_COUNT = BOOK_BADGES.length;
 const BADGES_TEXT = `${BADGE_COUNT} ${plural(BADGE_COUNT, 'odznak', 'odznaky', 'odznaků')}`;
 
-// Názvy kategorií odznaků stejné jako ve filtru na stránce Statistiky.
+// Názvy kategorií odznaků stejné jako ve filtru na stránce Odznaky.
 const BADGE_CATEGORY_LABELS = { books: 'Knihy', streak: 'Streak', levels: 'Úrovně', monthly: 'Výzvy', special: 'Speciální' };
 
-// Ukázkové odznaky se berou přímo z katalogu odznaků, takže se nikdy nerozejdou s tím, co uživatel uvidí ve Statistikách.
+// Ukázkové odznaky se berou přímo z katalogu odznaků, takže se nikdy nerozejdou s tím, co uživatel uvidí na stránce Odznaky.
 const SAMPLE_BADGE_IDS = ['bookworm_1', 'streak_7', 'level_4', 'coins_500', 'badge_collector_25'];
 const SAMPLE_BADGES = SAMPLE_BADGE_IDS
   .map(id => BOOK_BADGES.find(b => b.id === id))
@@ -144,7 +144,7 @@ export const HomePage = () => {
 
   // Osobní data - jen když je někdo přihlášený. Homepage jen čte už uložená
   // data a sama neodemyká odznaky ani nepřipočítává XP. To dělá výhradně
-  // stránka Statistiky, aby dvě stránky nezávisle nepřipsaly stejnou odměnu dvakrát.
+  // sdílené načtení statistik (stránky Statistiky a Odznaky, src/stats/loadStats.js), aby úvodní stránka nezávisle nepřipsala stejnou odměnu dvakrát.
   useEffect(() => {
     if (!user) { setPersonal(null); setPersonalLoading(false); return; }
     // Čeká, až doběhnou veřejná nastavení (settings) - jinak by "doporučeno"
@@ -708,7 +708,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
       <section className="max-w-2xl mx-auto px-4 py-20">
         <h2 className="font-heading text-2xl md:text-3xl font-bold mb-8 text-center">Časté otázky</h2>
         <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="p-6 rounded-2xl border shadow-sm space-y-2">
-          <FaqItem question="Jak funguje systém gamifikace a získávání odznaků?" answer={`XP sbíráš za dočtené knihy (víc při splněných vyšších měsíčních cílech), za denní sérii a za odznaky. Podmínky odznaků se vyhodnotí, když otevřeš Statistiky - tam hned uvidíš nově odemčené odznaky z celkové sbírky ${BADGES_TEXT}.`} />
+          <FaqItem question="Jak funguje systém gamifikace a získávání odznaků?" answer={`XP sbíráš za dočtené knihy (víc při splněných vyšších měsíčních cílech), za denní sérii a za odznaky. Podmínky odznaků se vyhodnotí, když otevřeš Statistiky nebo Odznaky - na stránce Odznaky pak hned uvidíš nově odemčené odznaky z celkové sbírky ${BADGES_TEXT}.`} />
           <FaqItem question="Jak získám přístup ke konkrétním knihám?" answer="V knihovně vidíš celý katalog i knihy, které ještě nevlastníš. Klikem na knihu otevřeš její detail s popisem, hodnocením a komentáři - a rovnou si ji tam koupíš za Jomarid Coins. Přístup se odemkne okamžitě." />
           <FaqItem question="Co jsou ty minihry a musím je hrát?" answer="Vůbec ne - je to šest volitelných her v samostatné sekci appky, čistě pro zábavu mimo čtení. Když si zahraješ alespoň chvilku, dostaneš jednou denně bonusové Jomarid Coins navrch." />
           <FaqItem question="Jak funguje Streak Freeze?" answer={`Koupíš si ho v sekci Statistiky za ${STREAK_FREEZE_PRICE} Jomarid Coins. Jakmile ho vlastníš, jeden zmeškaný den se automaticky počítá jako pokrytý a tvoje série se nepřeruší.`} />
@@ -934,7 +934,7 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
             <button onClick={() => navigate('/games')} style={{ backgroundColor: 'var(--bg-body)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="border rounded-xl p-4 cursor-pointer hover:opacity-80 transition-all flex flex-col items-center gap-2 text-xs font-bold">
               <Gamepad2 size={18} /> Minihry
             </button>
-            <button onClick={() => navigate('/stats')} style={{ backgroundColor: 'var(--bg-body)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="border rounded-xl p-4 cursor-pointer hover:opacity-80 transition-all flex flex-col items-center gap-2 text-xs font-bold">
+            <button onClick={() => navigate('/badges')} style={{ backgroundColor: 'var(--bg-body)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="border rounded-xl p-4 cursor-pointer hover:opacity-80 transition-all flex flex-col items-center gap-2 text-xs font-bold">
               <Trophy size={18} /> Odznaky
             </button>
             <a href={`mailto:${CONTACT_EMAIL}`} style={{ backgroundColor: 'var(--bg-body)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="border rounded-xl p-4 no-underline hover:opacity-80 transition-all flex flex-col items-center gap-2 text-xs font-bold">

@@ -220,18 +220,23 @@ test('Games.jsx přebarví hru jen když je nasazený vzhled, filtr bere z obch�
   assert.match(hook, /if \(!userId\) \{ setFilter\(''\)/);
 });
 
-test('Statistiky: obchůdek se ukáže jen když je v databázi, zůstatek a tituly se berou ze Statistik, titul je u jména i v žebříčku', () => {
+test('Stránka Odznaky: obchůdek se ukáže jen když je v databázi, zůstatek se bere ze stránky; titul je u jména i v žebříčku Statistik', () => {
+  const page = read('pages', 'Badges.jsx');
+  assert.match(page, /import \{ Shop \} from '\.\.\/components\/Shop';/);
+  assert.match(page, /const tabs = cosmetics \? BADGE_TABS : BADGE_TABS\.filter\(\(t\) => t\.id !== 'shop'\);/);
+  assert.match(page, /\{active === 'shop' && cosmetics && \(\s*<Shop/);
+  assert.match(page, /coins=\{stats\.jomaridCoins\}/);
+  assert.match(page, /onBalance=\{\(balance\) => setStats\(\(prev\) => \(\{ \.\.\.prev, jomaridCoins: balance \}\)\)\}/);
+  assert.match(page, /setCosmetics\(mine\.cosmetics\);/);
+  const loader = read('stats', 'loadStats.js');
+  assert.match(loader, /loadMyCosmetics\(client\)/);
+  assert.match(loader, /loadEquippedTitles\(client, allProfiles\.map\(p => p\.id\)\)/);
+  assert.match(loader, /title: boardTitles\.get\(p\.id\) \|\| null/);
   const stats = read('pages', 'UserStats.jsx');
-  assert.match(stats, /import \{ Shop \} from '\.\.\/components\/Shop';/);
-  assert.match(stats, /\{cosmetics && \(\s*<Shop/);
-  assert.match(stats, /coins=\{stats\.jomaridCoins\}/);
-  assert.match(stats, /onBalance=\{\(balance\) => setStats\(prev => \(\{ \.\.\.prev, jomaridCoins: balance \}\)\)\}/);
-  assert.match(stats, /loadEquippedTitles\(supabase, allProfiles\.map\(p => p\.id\)\)/);
-  assert.match(stats, /title: boardTitles\.get\(p\.id\) \|\| null/);
   assert.match(stats, /const rowTitle = row\.isMe \? myTitle : row\.title;/, 'vlastní titul se po nasazení ukáže hned, bez nového načtení žebříčku');
   assert.match(stats, /data-testid="own-title"/);
   assert.match(stats, /data-testid="lb-title"/);
-  assert.match(stats, /setCosmetics\(myCosmetics\);/);
+  assert.match(stats, /setCosmetics\(mine\.cosmetics\);/);
 });
 
 test('Shop.jsx nepoužívá alert, hlásí do stavového řádku a chrání před dvojklikem', () => {

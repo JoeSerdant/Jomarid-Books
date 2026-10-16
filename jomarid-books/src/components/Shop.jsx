@@ -81,7 +81,7 @@ const ItemCard = ({ item, state, coins, busy, onBuy, onEquip, onUnequip }) => {
   );
 };
 
-// Obchůdek ve Statistikách. Stav (koupené a nasazené) i zůstatek patří Statistikám, tady se jen mění přes onCosmetics a onBalance.
+// Obchůdek na stránce Odznaky. Stav (koupené a nasazené) i zůstatek patří stránce, tady se jen mění přes onCosmetics a onBalance.
 //   cosmetics: {owned: [id...], equipped: {title, gamefx}}
 //   unlocked: id herních odznaků, které čtenář má (podle nich se odemykají některé tituly)
 export const Shop = ({ cosmetics, coins, unlocked, onCosmetics, onBalance }) => {

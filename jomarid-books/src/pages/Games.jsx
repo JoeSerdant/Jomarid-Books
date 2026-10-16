@@ -428,7 +428,7 @@ export const GameLauncher = ({ game }) => {
 
         <div style={{ borderColor: 'var(--border-color)' }} className="w-full border-t pt-6 flex flex-col items-center gap-3">
           <p style={{ color: 'var(--text-muted)' }} className="text-xs max-w-sm mx-auto opacity-80">
-            Postup ve hře (vylepšení, nastavení, rozehraná partie), rekordy i herní odznaky se ukládají k tvému účtu, takže je máš na všech zařízeních stejné (rekordy a odznaky najdeš ve Statistikách, záložka Hry). Za to, že si dnes zahraješ, dostaneš i pár skutečných Jomarid Coinů - jednou denně.
+            Postup ve hře (vylepšení, nastavení, rozehraná partie), rekordy i herní odznaky se ukládají k tvému účtu, takže je máš na všech zařízeních stejné (rekordy a odznaky najdeš na stránce Odznaky, záložka Odznaky her). Za to, že si dnes zahraješ, dostaneš i pár skutečných Jomarid Coinů - jednou denně.
           </p>
           <button
             onClick={handleClaimBonus}

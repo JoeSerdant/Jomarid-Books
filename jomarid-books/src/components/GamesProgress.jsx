@@ -115,7 +115,7 @@ const GameCard = ({ game, progress, userId, open, onToggle }) => {
   );
 };
 
-// Sekce Hry ve Statistikách: rekordy, herní odznaky a žebříčky všech her. Postup (progress) předává Statistiky; stejné XP se přičítá do úrovně.
+// Sekce Odznaků her: rekordy, herní odznaky a žebříčky všech her. Postup (progress) předává stránka Odznaky; stejné XP se přičítá do úrovně.
 export const GamesProgress = ({ progress, userId }) => {
   const [openId, setOpenId] = useState(null);
   const unlockedCount = useMemo(() => new Set(progress.unlocked).size, [progress.unlocked]);

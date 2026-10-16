@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { ROLE_READER, ROLE_PUBLISHER, ROLE_ADMIN, ROLE_LABELS } from '../constants/roles';
-import { BarChart3, Coins, Compass, Gamepad2, Library, LogOut, Search, Settings, Shield } from 'lucide-react';
+import { Award, BarChart3, Coins, Compass, Gamepad2, Library, LogOut, Search, Settings, Shield } from 'lucide-react';
 
 export const Navbar = ({ onOpenSearch }) => {
   const { user, logout, role, username: accountName } = useAuth();
@@ -175,6 +175,16 @@ export const Navbar = ({ onOpenSearch }) => {
               >
                 <BarChart3 size={14} className="opacity-70" />
                 <span className="text-[0.5625rem] leading-none sm:sr-only lg:not-sr-only lg:text-xs lg:leading-normal">Statistiky</span>
+              </Link>
+
+              <Link 
+                to="/badges" 
+                data-tour="nav-badges"
+                style={{ color: 'var(--text-body)' }}
+                className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all"
+              >
+                <Award size={14} className="opacity-70" />
+                <span className="text-[0.5625rem] leading-none sm:sr-only lg:not-sr-only lg:text-xs lg:leading-normal">Odznaky</span>
               </Link>
 
               <Link 

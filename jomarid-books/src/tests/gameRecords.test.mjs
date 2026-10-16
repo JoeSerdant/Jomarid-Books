@@ -155,11 +155,11 @@ test('všude, kde se počítá úroveň, se přičítá XP z herních odznaků (
   const home = read('pages', 'HomePage.jsx');
   assert.match(home, /loadGameProgress\(supabase\)/);
   assert.match(home, /gameXp: gameProgress\.xp/);
-  const stats = read('pages', 'UserStats.jsx');
-  assert.match(stats, /const totalXp = xpBeforeBadges \+ badgeBonusXp \+ gameProgress\.xp;/);
-  assert.match(stats, /gameXp: gameXpTotals\.get\(p\.id\) \|\| 0/);
-  assert.doesNotMatch(stats, /xpBeforeBadges = computeTotalXp\(\{[^}]*gameXp/s, 'do vyhodnocení odznaků z úrovně herní XP nevstupuje (jinak by hry odemykaly odznaky a s nimi mince)');
-  assert.match(stats, /<GamesProgress progress=\{stats\.gameProgress \|\| EMPTY_PROGRESS\} userId=\{user\?\.id\} \/>/);
+  const loader = read('stats', 'loadStats.js');
+  assert.match(loader, /const totalXp = xpBeforeBadges \+ badgeBonusXp \+ gameProgress\.xp;/);
+  assert.match(loader, /gameXp: gameXpTotals\.get\(p\.id\) \|\| 0/);
+  assert.doesNotMatch(loader, /xpBeforeBadges = computeTotalXp\(\{[^}]*gameXp/s, 'do vyhodnocení odznaků z úrovně herní XP nevstupuje (jinak by hry odemykaly odznaky a s nimi mince)');
+  assert.match(read('pages', 'Badges.jsx'), /<GamesProgress progress=\{stats\.gameProgress \|\| EMPTY_PROGRESS\} userId=\{user\?\.id\} \/>/);
   assert.match(read('gameBar', 'useReaderSnapshot.js'), /gameXp: gameProgress\.xp/);
   assert.match(read('gameBar', 'readerSnapshot.js'), /gameXp,\n\s*\}\);/);
 });
@@ -264,11 +264,11 @@ test('Games.jsx předává hlášení rekordů serveru, nový odznak potvrdí v 
   assert.match(g, /normalizeRecord\(game\.id, event\.data\.stat, event\.data\.value\)/);
   assert.match(g, /reportGameRecord\(supabase, rec\.game, rec\.stat, rec\.value\)/);
   assert.match(g, /showFlash\(\{ text: `\+\$\{res\.xp\} XP`, label: `Odznak: /);
-  assert.match(g, /rekordy i herní odznaky se ukládají k tvému účtu, takže je máš na všech zařízeních stejné \(rekordy a odznaky najdeš ve Statistikách, záložka Hry\)/);
+  assert.match(g, /rekordy i herní odznaky se ukládají k tvému účtu, takže je máš na všech zařízeních stejné \(rekordy a odznaky najdeš na stránce Odznaky, záložka Odznaky her\)/);
   assert.doesNotMatch(g, /Skóre a vylepšení ve hře jsou jen pro zábavu/);
 });
 
-test('sekce Hry ve Statistikách: shrnutí, karta každé hry s rekordy, odznaky a žebříčkem', () => {
+test('záložka Odznaky her: shrnutí, karta každé hry s rekordy, odznaky a žebříčkem', () => {
   const c = read('components', 'GamesProgress.jsx');
   assert.match(c, /data-testid="games-progress"/);
   assert.match(c, /GAME_CATALOG\.map\(\(game\) =>/);

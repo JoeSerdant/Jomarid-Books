@@ -1,4 +1,4 @@
-// Obchůdek za Jomarid Coins: tituly (u jména ve Statistikách a v žebříčku) a vzhledy her (barevný odstín, kterým appka přebarví hru).
+// Obchůdek za Jomarid Coins: tituly (u jména ve Statistikách a v žebříčku, kupují se na stránce Odznaky) a vzhledy her (barevný odstín, kterým appka přebarví hru).
 // Stejný seznam je v db/shop.sql (tam rozhoduje server o ceně a o požadovaném odznaku); test src/tests/shop.test.mjs hlídá, že si odpovídají.
 // Nic z toho nedává výhodu ve hře ani při čtení, je to jen vzhled.
 import { getBadge, getGame } from '../gameRecords/catalog.js';

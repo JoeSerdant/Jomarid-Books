@@ -23,6 +23,7 @@ export const ANCHORS = {
   none: { label: 'Bez zvýraznění (karta uprostřed)' },
   'nav-library': { label: 'Menu: Knihovna' },
   'nav-stats': { label: 'Menu: Statistiky' },
+  'nav-badges': { label: 'Menu: Odznaky' },
   'nav-games': { label: 'Menu: Hry' },
   'nav-studio': { label: 'Menu: Studio (jen nakladatel)' },
   'nav-admin': { label: 'Menu: Admin (jen správce)' },
@@ -43,7 +44,8 @@ const READER_STEPS = [
   s('welcome', 'none', 'Vítej v Jomarid Books', 'Za minutku ti ukážeme, kde co najdeš. Prohlídku můžeš kdykoli přeskočit a znovu ji spustit v Nastavení v záložce Prohlídka appky.'),
   s('library', 'nav-library', 'Knihovna', 'Tady najdeš celý katalog knih. Ty, které už máš, ukáže filtr Moje knihy. Otevři knihu a čti, appka si pamatuje, kde čtení skončilo.'),
   s('library-search', 'library-search', 'Hledání v knihovně', 'Najdi knihu podle názvu nebo autora a výběr zúž podle žánru.'),
-  s('stats', 'nav-stats', 'Statistiky', 'Série čtení, odznaky, zkušenosti a žebříček. Čím víc čteš, tím víc toho odemkneš.'),
+  s('stats', 'nav-stats', 'Statistiky', 'Série čtení, měsíční cíl, zkušenosti a žebříček. Čím víc čteš, tím výš se dostaneš.'),
+  s('badges', 'nav-badges', 'Odznaky', 'Odznaky za čtení i za hry. Za mince tady koupíš titul u svého jména a vzhled her.'),
   s('games', 'nav-games', 'Mini-hry', 'Krátká odbočka od čtení. Za hraní dostaneš i pár Jomarid Coinů, jednou denně.'),
   s('coins', 'nav-coins', 'Jomarid Coins', 'Mince získáváš odznaky, každodenním přihlášením a hrami. Za mince kupuješ další knihy.'),
   s('search', 'nav-search', 'Rychlé hledání', 'Knihy můžeš hledat odkudkoli v appce.'),
@@ -57,7 +59,8 @@ const PUBLISHER_STEPS = [
   s('library', 'nav-library', 'Knihovna', 'Tady čteš knihy jako každý čtenář: celý katalog i filtr Moje knihy, kde máš i své vlastní knihy.'),
   s('studio', 'nav-studio', 'Studio', 'Tvůj panel nakladatele: statistiky prodejů a čtenářů, správa knih a vydávání nových.'),
   s('studio-tabs', 'publisher-tabs', 'Co ve Studiu najdeš', 'Přehled ukazuje prodeje a čtenáře. V záložce Moje knihy knihy spravuješ a stahuješ z prodeje, v záložce Vydat / upravit knihu vydáš nebo upravíš. V záložce Licence a profil daruješ knihu čtenáři a vidíš jméno, pod kterým se tvé knihy zobrazují.'),
-  s('stats', 'nav-stats', 'Statistiky', 'Tvoje čtenářské statistiky, odznaky a žebříček.'),
+  s('stats', 'nav-stats', 'Statistiky', 'Tvoje čtenářské statistiky a žebříček.'),
+  s('badges', 'nav-badges', 'Odznaky', 'Odznaky za čtení i za hry. Za mince tady koupíš titul u svého jména a vzhled her.'),
   s('coins', 'nav-coins', 'Jomarid Coins', 'Mince dostáváš odznaky, každodenním přihlášením a hrami a také z prodeje svých knih. Za mince můžeš kupovat další knihy.'),
   s('settings', 'nav-settings', 'Nastavení', 'Tady si appku přizpůsobíš a zkontroluješ svůj účet i knihy.'),
   s('settings-checks', 'settings-checks', 'Kontrola účtu a knih', 'V záložce Kontrola účtu uvidíš, co u tvých knih ještě chybí (text, popis, žánr) a jestli máš nastavené krycí jméno. Ve Vzhledu a Čtečce si appku přizpůsobíš.'),
@@ -153,7 +156,7 @@ const normalizePath = (p) => (typeof p === 'string' && p.length > 1 ? p.replace(
 export const isAutoStartPath = (pathname) => {
   const p = normalizePath(pathname);
   if (typeof p !== 'string') return false;
-  return ['/', '/app', '/stats', '/games', '/publisher'].includes(p) || p === '/settings' || p.startsWith('/settings/') || p.startsWith('/autor/');
+  return ['/', '/app', '/stats', '/games', '/publisher'].includes(p) || p === '/badges' || p.startsWith('/badges/') || p === '/settings' || p.startsWith('/settings/') || p.startsWith('/autor/');
 };
 
 export const accountAgeDays = (createdAt, now = Date.now()) => {

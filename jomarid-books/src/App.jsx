@@ -31,6 +31,7 @@ export const lazyPage = (load, name, reload = () => window.location.reload()) =>
 const ReaderPage = lazyPage(() => import('./pages/ReaderPage'), 'ReaderPage');
 const PublisherDashboard = lazyPage(() => import('./pages/PublisherDashboard'), 'PublisherDashboard');
 const UserStats = lazyPage(() => import('./pages/UserStats'), 'UserStats');
+const BadgesPage = lazyPage(() => import('./pages/Badges'), 'BadgesPage');
 const GamesHub = lazyPage(() => import('./pages/Games'), 'GamesHub');
 const GamePage = lazyPage(() => import('./pages/Games'), 'GamePage');
 const AdminDashboard = lazyPage(() => import('./pages/AdminDashboard'), 'AdminDashboard');
@@ -140,6 +141,9 @@ export default function App() {
 
                 {/* Statistiky */}
                 <Route path="/stats" element={<ProtectedUserRoute><UserStats /></ProtectedUserRoute>} />
+
+                {/* Odznaky knih a her, tituly a vzhled her */}
+                <Route path="/badges/:tab?" element={<ProtectedUserRoute><BadgesPage /></ProtectedUserRoute>} />
 
                 {/* Mini-hry */}
                 <Route path="/games" element={<ProtectedUserRoute><GamesHub /></ProtectedUserRoute>} />
