@@ -48,7 +48,7 @@ test('XP herních odznaků: ve stejné statistice těžší odznak vždy dává 
     for (let i = 1; i < sorted.length; i += 1) assert.ok(sorted[i].xp > sorted[i - 1].xp, `${key}: ${sorted[i].id} (${sorted[i].xp} XP) musí dávat víc než lehčí ${sorted[i - 1].id} (${sorted[i - 1].xp} XP)`);
   }
   for (const b of GAME_BADGES) assert.ok(b.xp >= 30 && b.xp % 10 === 0, `${b.id}: ${b.xp} XP`);
-  assert.equal(GAME_BADGES_TOTAL_XP, 10470);
+  assert.equal(GAME_BADGES_TOTAL_XP, 12080);
   assert.equal(calculateLevelAndProgress(GAME_BADGES_TOTAL_XP).level, 12);
 });
 

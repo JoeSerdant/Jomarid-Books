@@ -702,8 +702,8 @@ h2 {
 .mode-card.daily { border-color: rgba(140, 255, 180, 0.4); }
 .mode-card.daily .mode-rec { color: #8cffb4; }
 
-/*------ ÚSPĚCHY - TOASTY ------*/
-#achv-toast-layer {
+/*------ RELIKVIE - TOASTY ------*/
+#toast-layer {
     position: absolute;
     top: calc(96px + env(safe-area-inset-top, 0px));
     left: 50%;
@@ -716,7 +716,7 @@ h2 {
     pointer-events: none;
 }
 
-.achv-toast {
+.relic-toast {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -731,12 +731,12 @@ h2 {
     white-space: nowrap;
 }
 
-.achv-toast.show { opacity: 1; transform: translateY(0) scale(1); }
-.achv-toast-icon { font-size: 20px; }
-.achv-toast-eyebrow { font-size: 10px; color: var(--gold); letter-spacing: 1px; }
-.achv-toast-name { font-size: 13px; font-weight: 700; color: #fff; }
+.relic-toast.show { opacity: 1; transform: translateY(0) scale(1); }
+.relic-toast-icon { font-size: 20px; }
+.relic-toast-eyebrow { font-size: 10px; color: var(--gold); letter-spacing: 1px; }
+.relic-toast-name { font-size: 13px; font-weight: 700; color: #fff; }
 
-/*------ POSTUP A ÚSPĚCHY ------*/
+/*------ POSTUP A RELIKVIE ------*/
 .stats-grid {
     width: 100%;
     max-width: 350px;
@@ -806,7 +806,7 @@ h2 {
     cursor: default;
 }
 
-.relic-list, .achv-list {
+.relic-list {
     width: 100%;
     max-width: 350px;
     margin-bottom: 16px;
@@ -825,6 +825,8 @@ h2 {
 .relic-item.locked { opacity: 0.55; }
 .relic-name { font-size: 13px; font-weight: 700; }
 .relic-desc { font-size: 11px; color: #8992a3; margin-top: 2px; }
+.relic-how { font-size: 10px; color: var(--ui); margin-top: 3px; font-variant-numeric: tabular-nums; }
+.stats-note { width: 100%; max-width: 350px; margin: 0 0 16px; font-size: 11px; color: #8992a3; line-height: 1.4; text-align: left; }
 
 .prestige-list {
     width: 100%;
@@ -858,27 +860,6 @@ h2 {
 
 .btn-prestige.locked { filter: grayscale(0.85); opacity: 0.45; }
 .btn-prestige.maxed { background: none; border: 1px solid #b98bff; color: #b98bff; box-shadow: none; cursor: default; }
-
-.achv-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 9px 12px;
-    margin-bottom: 7px;
-    text-align: left;
-}
-
-.achv-item.unlocked { border-color: rgba(255, 196, 0, 0.4); }
-.achv-item.locked { opacity: 0.55; }
-.achv-icon { font-size: 18px; flex-shrink: 0; }
-.achv-body { flex: 1; min-width: 0; }
-.achv-name { font-size: 13px; font-weight: 700; }
-.achv-desc { font-size: 11px; color: #8992a3; margin-top: 2px; line-height: 1.4; }
-.achv-progress { font-size: 10px; color: var(--ui); margin-top: 3px; font-variant-numeric: tabular-nums; }
-.achv-reward { font-size: 12px; color: var(--gold); font-weight: 700; flex-shrink: 0; }
 </style>
 <script>/* JOMARID-BRIDGE */
 (function () {
@@ -948,7 +929,7 @@ h2 {
     <canvas id="gameCanvas"></canvas>
     <div id="tut-focus-circle"></div>
     <div id="event-text"></div>
-    <div id="achv-toast-layer"></div>
+    <div id="toast-layer"></div>
 
     <div class="hud hidden" id="hud">
         <div class="hud-top">
@@ -1056,7 +1037,7 @@ h2 {
             </button>
         </div>
 
-        <button class="btn btn-ghost btn-small" id="btn-open-stats" style="margin-bottom: 14px;">Postup a úspěchy</button>
+        <button class="btn btn-ghost btn-small" id="btn-open-stats" style="margin-bottom: 14px;">Postup a relikvie</button>
 
         <div class="section-label">Trvalá vylepšení lodi</div>
         <div class="upgrades-container" id="menu-shop"></div>
@@ -1092,8 +1073,7 @@ h2 {
         <div class="section-label">Relikvie</div>
         <div class="relic-list" id="relic-list"></div>
 
-        <div class="section-label">Úspěchy</div>
-        <div class="achv-list" id="achv-list"></div>
+        <p class="stats-note">Úspěchy za hraní jsou odznaky v appce: stránka Odznaky, záložka Odznaky her.</p>
 
         <button class="btn" id="btn-close-stats">Zpět do menu</button>
     </div>
@@ -1113,6 +1093,7 @@ h2 {
             <button class="btn btn-small" data-cheat="score-insane">💀 Skóre Insane 3 000</button>
             <button class="btn btn-small" data-cheat="score-blitz">⚡ Skóre Blesková 3 000</button>
             <button class="btn btn-small" data-cheat="rush">🏹 Série Boss Rush 10</button>
+            <button class="btn btn-small" data-cheat="lifetime">📊 Statistiky na odznaky</button>
         </div>
         <div id="cheat-msg"></div>
 
@@ -1171,6 +1152,7 @@ const Storage = {
         stardust: 0,
         cycleCoins: 0,
         prestige: { hull: 0, aura: 0, magnet: 0, luck: 0, capital: 0, armor: 0, startShield: 0, heal: 0, loot: 0, discount: 0, combo: 0, bomb: 0, zenUnlocked: false, dailyUnlocked: false, insaneUnlocked: false },
+        // Odemčené relikvie pod klíči dřívějších úspěchů (klíč zůstal kvůli už uloženému postupu)
         achievements: {},
         stats: {
             totalKills: 0, totalBossKills: 0, totalCoinsEarned: 0, totalPlaytime: 0,
@@ -1198,7 +1180,7 @@ const Storage = {
                 this.data.daily = (parsed.daily && typeof parsed.daily === 'object')
                     ? { date: String(parsed.daily.date || ''), score: parsed.daily.score }
                     : { ...this.defaults.daily };
-                // Neznámé klíče v achievementech neškodí - nikdy se pod cizím id nečtou
+                // Neznámé klíče v odemčených relikviích neškodí - nikdy se pod cizím id nečtou
                 this.data.achievements = (parsed.achievements && typeof parsed.achievements === 'object') ? { ...parsed.achievements } : {};
             }
         } catch (e) {
@@ -1283,6 +1265,16 @@ function reportRecords() {
     jomaridRecord('rush_streak', d.best.rush);
     jomaridRecord('boss_level', d.stats.bestBossLevel);
     jomaridRecord('ascension', d.ascension);
+    jomaridRecord('total_kills', d.stats.totalKills);
+    jomaridRecord('total_boss_kills', d.stats.totalBossKills);
+    jomaridRecord('no_hit_bosses', d.stats.noHitBosses);
+    jomaridRecord('best_combo', d.stats.bestCombo);
+    jomaridRecord('bombs_used', d.stats.bombsUsed);
+    jomaridRecord('total_coins_earned', d.stats.totalCoinsEarned);
+    jomaridRecord('longest_run', d.stats.longestRun / 60000); // nejdelší běh v minutách
+    jomaridRecord('blitz_clears', d.stats.blitzClears);
+    // Seznam vylepšení (UPGRADES) je definovaný až níže, tady se kategorie berou z výchozího postupu
+    jomaridRecord('maxed_upgrades', Object.keys(Storage.defaults.upgrades).filter(k => d.upgrades[k] >= MAX_LVL).length);
 }
 
 Storage.load();
@@ -1768,10 +1760,10 @@ class Player {
         // Bonus silně slábne po 15. vzestupu - hodně vzestoupený hráč nemá být rychlejší,
         // jen odolnější. Skutečná odměna za další vzestupy jde do Hvězdného prachu.
         const ascMul = 1 + Math.min(asc, 15) * 0.025 + Math.max(0, asc - 15) * 0.006;
-        const relicDmg = Achv.hasRelic('barrel') ? 1.2 : 1;
-        const relicHp = Achv.hasRelic('plating') ? 1.15 : 1;
-        const relicFire = Achv.hasRelic('quickhand') ? 0.85 : 1;
-        const relicBombs = Achv.hasRelic('bombs') ? 1 : 0;
+        const relicDmg = Relics.has('barrel') ? 1.2 : 1;
+        const relicHp = Relics.has('plating') ? 1.15 : 1;
+        const relicFire = Relics.has('quickhand') ? 0.85 : 1;
+        const relicBombs = Relics.has('bombs') ? 1 : 0;
 
         // Strom Vzestupu: ploché/stropované bonusy, nic co by hru zrychlovalo s dalšími vzestupy
         const hullMul = 1 + prestigeBonus('hull', 0.02);
@@ -3423,7 +3415,7 @@ class GameManager {
             if (isRecord) Storage.data.best[this.mode] = primary;
         }
 
-        Achv.check();
+        Relics.check();
         Storage.save();
 
         const secs = Math.floor(this.runTime / 1000);
@@ -3488,7 +3480,7 @@ class GameManager {
     }
 
     damagePlayer(amount, iframes, piercing, fromBoss) {
-        // Zásah vykrytý štítem se stále počítá jako zásah - achievement "Bez škrábnutí"
+        // Zásah vykrytý štítem se stále počítá jako zásah - odznak "Bez škrábnutí"
         // má znamenat skutečné uhýbání, ne tankování za štítem
         if (this.boss) this.bossNoHit = false;
 
@@ -3522,7 +3514,7 @@ class GameManager {
         }
 
         // Fénixovo jádro: jednou za běh přežiješ smrtící zásah s 1 HP
-        if (!this.tutActive && Achv.hasRelic('phoenix') && !this.phoenixUsed) {
+        if (!this.tutActive && Relics.has('phoenix') && !this.phoenixUsed) {
             this.phoenixUsed = true;
             this.player.hp = 1;
             this.player.invulnTimer = Math.max(this.player.invulnTimer, 2200);
@@ -3551,7 +3543,7 @@ class GameManager {
 
             if (now > (Storage.data.stats.bestCombo || 0)) {
                 Storage.data.stats.bestCombo = now;
-                Achv.check();
+                Relics.check();
             }
         }
     }
@@ -3569,7 +3561,7 @@ class GameManager {
         let m = (this.isHardMode ? 2 : 1) + Math.floor(this.phase / 3);
         if (this.inferno) m *= this.hell.coinMult;
         m *= 1 + prestigeBonus('loot', 0.03);
-        if (Achv.hasRelic('collector')) m *= 1.2;
+        if (Relics.has('collector')) m *= 1.2;
         if (this.daily) m *= this.daily.coinMult;
         return m;
     }
@@ -3612,7 +3604,7 @@ class GameManager {
         }
 
         this.trackStat('bombsUsed');
-        if (!this.tutActive) Achv.check();
+        if (!this.tutActive) Relics.check();
 
         this.updateHUD(true);
     }
@@ -3648,7 +3640,7 @@ class GameManager {
                 Storage.queueSave();
             }
 
-            Achv.check();
+            Relics.check();
 
             // Šťastná hvězda ze stromu Vzestupu zvedá šanci na power-up, poměr heal/buff zůstává stejný
             if (!this.daily || this.daily.powerupsAllowed) {
@@ -3717,7 +3709,7 @@ class GameManager {
             if (this.player.bombs < this.player.maxBombs) this.player.bombs++;
             this.showEvent('BOSS ZNIČEN', b.color);
 
-            Achv.check();
+            Relics.check();
         }
 
         this.boss = null;
@@ -3731,7 +3723,7 @@ class GameManager {
         if (!this.tutActive && this.mode === 'rush') {
             this.rushStreak++;
             Storage.data.stats.bestRushStreak = Math.max(Storage.data.stats.bestRushStreak || 0, this.rushStreak);
-            Achv.check();
+            Relics.check();
 
             // Malé doplnění sil mezi souboji, ať má série šanci pokračovat
             this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * 0.12);
@@ -3802,14 +3794,14 @@ class GameManager {
             if (this.comboTimer <= 0) this.combo = 0;
         }
 
-        // Dlouhé přežití se počítá i za běhu, ne jen na konci, ať úspěch naskočí hned
+        // Dlouhé přežití se počítá i za běhu, ne jen na konci, ať odznak naskočí hned
         if (!this.tutActive) {
             const sec = Math.floor(this.runTime / 1000);
             if (sec !== this._lastStatSec) {
                 this._lastStatSec = sec;
                 if (sec > 0 && sec % 30 === 0) {
                     Storage.data.stats.longestRun = Math.max(Storage.data.stats.longestRun || 0, this.runTime);
-                    Achv.check();
+                    Relics.check();
                 }
             }
         }
@@ -4462,7 +4454,7 @@ Object.assign(GameManager.prototype, {
 
             case 11:
                 document.getElementById('btn-pause').classList.add('glow-highlight');
-                this.setTutText('Tlačítkem pauzy hru kdykoliv zastavíš a za mince nakoupíš trvalá vylepšení lodi. Platí i do dalších her. V menu najdeš i další herní režimy, úspěchy a vzestup pro pokročilé.');
+                this.setTutText('Tlačítkem pauzy hru kdykoliv zastavíš a za mince nakoupíš trvalá vylepšení lodi. Platí i do dalších her. V menu najdeš i další herní režimy, relikvie a vzestup pro pokročilé.');
                 btns.innerHTML = `<button class="btn btn-small" id="btn-tut-finish">Dokončit výcvik</button>`;
                 document.getElementById('btn-tut-finish').onclick = () => this.endTutorial();
                 break;
@@ -4523,7 +4515,7 @@ function upgradeCost(up, level) {
 
 const UPGRADES = [
     { key: 'fireRate', name: 'Rychlost palby', step: 10, effect: l => {
-        const relicFire = Achv.hasRelic('quickhand') ? 0.85 : 1;
+        const relicFire = Relics.has('quickhand') ? 0.85 : 1;
         const rate = Math.max(90, Math.round(Math.max(120, 430 - l * 16) * relicFire));
         return `${(1000 / rate).toFixed(1)} salv za sekundu`;
     } },
@@ -4532,7 +4524,7 @@ const UPGRADES = [
         // Bonus silně slábne po 15. vzestupu - hodně vzestoupený hráč nemá být rychlejší,
         // jen odolnější. Skutečná odměna za další vzestupy jde do Hvězdného prachu.
         const ascMul = 1 + Math.min(asc, 15) * 0.025 + Math.max(0, asc - 15) * 0.006;
-        const relicDmg = Achv.hasRelic('barrel') ? 1.2 : 1;
+        const relicDmg = Relics.has('barrel') ? 1.2 : 1;
         return `${Math.round((l + 1) * ascMul * relicDmg)} poškození za střelu`;
     } },
     { key: 'hp', name: 'Maximální život', step: 10, effect: l => {
@@ -4540,12 +4532,12 @@ const UPGRADES = [
         // Bonus silně slábne po 15. vzestupu - hodně vzestoupený hráč nemá být rychlejší,
         // jen odolnější. Skutečná odměna za další vzestupy jde do Hvězdného prachu.
         const ascMul = 1 + Math.min(asc, 15) * 0.025 + Math.max(0, asc - 15) * 0.006;
-        const relicHp = Achv.hasRelic('plating') ? 1.15 : 1;
+        const relicHp = Relics.has('plating') ? 1.15 : 1;
         const hullMul = 1 + prestigeBonus('hull', 0.02);
         return `${Math.round((80 + l * 20) * ascMul * relicHp * hullMul)} bodů života`;
     } },
     { key: 'bombs', name: 'Zásoba bomb 💣', step: 25, effect: l => {
-        const relicBombs = Achv.hasRelic('bombs') ? 1 : 0;
+        const relicBombs = Relics.has('bombs') ? 1 : 0;
         const prestigeBombs = prestigeLevel('bomb');
         return `${Math.min(7, 1 + Math.floor((l - 1) / 3) + relicBombs + prestigeBombs)} na začátku hry`;
     } },
@@ -4565,68 +4557,27 @@ const UPGRADES = [
 ];
 
 //======================================================================
-//  ÚSPĚCHY A RELIKVIE
+//  RELIKVIE
 //======================================================================
 //  Relikvie se neodemykají za mince, ale hraním - jsou to trvalé stopy
-//  po tom, co hráč ve hře dokázal. Každá relikvie visí na jednom úspěchu.
-
-const ACHIEVEMENTS = [
-    { id: 'first_blood', name: 'První krev', desc: 'Znič svého prvního nepřítele.', reward: 20,
-        check: s => s.totalKills >= 1 },
-    { id: 'hunter_100', name: 'Lovec', desc: 'Znič 100 nepřátel.', reward: 50,
-        check: s => s.totalKills >= 100, progress: s => [s.totalKills, 100] },
-    { id: 'hunter_300', name: 'Vyhlazovač', desc: 'Znič 300 nepřátel. Odemyká relikvii Posílená hlaveň.', reward: 150, relic: 'barrel',
-        check: s => s.totalKills >= 300, progress: s => [s.totalKills, 300] },
-    { id: 'hunter_1500', name: 'Zkáza hvězd', desc: 'Znič 1500 nepřátel.', reward: 400,
-        check: s => s.totalKills >= 1500, progress: s => [s.totalKills, 1500] },
-
-    { id: 'boss_first', name: 'První pád', desc: 'Poraz svého prvního bosse.', reward: 40,
-        check: s => s.totalBossKills >= 1 },
-    { id: 'boss_10', name: 'Postrach bossů', desc: 'Poraz 10 bossů. Odemyká relikvii Silné pláty.', reward: 200, relic: 'plating',
-        check: s => s.totalBossKills >= 10, progress: s => [s.totalBossKills, 10] },
-    { id: 'boss_30', name: 'Exterminátor', desc: 'Poraz 30 bossů.', reward: 500,
-        check: s => s.totalBossKills >= 30, progress: s => [s.totalBossKills, 30] },
-    { id: 'no_hit_boss', name: 'Bez škrábnutí', desc: 'Poraz bosse, aniž bys v souboji dostal zásah.', reward: 150,
-        check: s => s.noHitBosses >= 1 },
-
-    { id: 'combo_4', name: 'Řetězová reakce', desc: 'Dosáhni násobiče kombo ×4.', reward: 30,
-        check: s => (s.bestCombo || 0) >= 4 },
-    { id: 'combo_8', name: 'Nezastavitelný', desc: 'Dosáhni násobiče kombo ×8. Odemyká relikvii Rychlá ruka.', reward: 100, relic: 'quickhand',
-        check: s => (s.bestCombo || 0) >= 8 },
-
-    { id: 'bomb_20', name: 'Demolice', desc: 'Použij bomby 20×. Odemyká relikvii Nouzové bomby.', reward: 80, relic: 'bombs',
-        check: s => s.bombsUsed >= 20, progress: s => [s.bombsUsed, 20] },
-
-    { id: 'coins_5000', name: 'Boháč', desc: 'Vydělej za život 5 000 mincí. Odemyká relikvii Sběrač.', reward: 100, relic: 'collector',
-        check: s => s.totalCoinsEarned >= 5000, progress: s => [Math.min(s.totalCoinsEarned, 5000), 5000] },
-    { id: 'coins_50000', name: 'Magnát', desc: 'Vydělej za život 50 000 mincí.', reward: 300,
-        check: s => s.totalCoinsEarned >= 50000, progress: s => [Math.min(s.totalCoinsEarned, 50000), 50000] },
-
-    { id: 'survivor_10', name: 'Vytrvalec', desc: 'Přežij 10 minut v jednom běhu.', reward: 100,
-        check: s => (s.longestRun || 0) >= 600000 },
-    { id: 'survivor_20', name: 'Železné plíce', desc: 'Přežij 20 minut v jednom běhu.', reward: 250,
-        check: s => (s.longestRun || 0) >= 1200000 },
-
-    { id: 'blitz_clear', name: 'Bleskový útok', desc: 'Dokonči celé kolo Blesková vlna.', reward: 60,
-        check: s => (s.blitzClears || 0) >= 1 },
-    { id: 'rush_5', name: 'Nájezdník', desc: 'V Boss Rush poraz 5 bossů v jedné sérii.', reward: 150,
-        check: s => (s.bestRushStreak || 0) >= 5 },
-    { id: 'rush_10', name: 'Legenda nájezdů', desc: 'V Boss Rush poraz 10 bossů v jedné sérii.', reward: 400,
-        check: s => (s.bestRushStreak || 0) >= 10 },
-
-    { id: 'ascend_1', name: 'Vzestup', desc: 'Poprvé vzestup. Odemyká relikvii Fénixovo jádro.', reward: 0, relic: 'phoenix',
-        check: (s, d) => (d.ascension || 0) >= 1 },
-    { id: 'maxed_all', name: 'Dokonalá loď', desc: 'Vylepši všech osm kategorií na maximum.', reward: 300,
-        check: (s, d) => UPGRADES.every(u => (d.upgrades[u.key] || 1) >= MAX_LVL) }
-];
+//  po tom, co hráč ve hře dokázal. Úspěchy za hraní jsou odznaky v appce
+//  (stránka Odznaky), ve hře zůstaly jen relikvie, které dávají výhody.
+//  `requires` je klíč v Storage.data.achievements, kam se odemčení zapisuje;
+//  zůstal stejný jako u dřívějších úspěchů, takže už uložený postup platí dál.
 
 const RELICS = [
-    { id: 'barrel', name: 'Posílená hlaveň', desc: '+20 % poškození.', requires: 'hunter_300' },
-    { id: 'plating', name: 'Silné pláty', desc: '+15 % maximálního života.', requires: 'boss_10' },
-    { id: 'quickhand', name: 'Rychlá ruka', desc: '-15 % prodleva mezi výstřely.', requires: 'combo_8' },
-    { id: 'bombs', name: 'Nouzové bomby', desc: '+1 k maximálnímu počtu bomb.', requires: 'bomb_20' },
-    { id: 'collector', name: 'Sběrač', desc: '+20 % vydělaných mincí.', requires: 'coins_5000' },
-    { id: 'phoenix', name: 'Fénixovo jádro', desc: 'Jednou za běh přežiješ smrtící zásah s 1 HP.', requires: 'ascend_1' }
+    { id: 'barrel', name: 'Posílená hlaveň', desc: '+20 % poškození.', requires: 'hunter_300',
+        how: 'Znič 300 nepřátel.', check: s => s.totalKills >= 300, progress: s => [s.totalKills, 300] },
+    { id: 'plating', name: 'Silné pláty', desc: '+15 % maximálního života.', requires: 'boss_10',
+        how: 'Poraz 10 bossů.', check: s => s.totalBossKills >= 10, progress: s => [s.totalBossKills, 10] },
+    { id: 'quickhand', name: 'Rychlá ruka', desc: '-15 % prodleva mezi výstřely.', requires: 'combo_8',
+        how: 'Dosáhni násobiče kombo ×8.', check: s => (s.bestCombo || 0) >= 8 },
+    { id: 'bombs', name: 'Nouzové bomby', desc: '+1 k maximálnímu počtu bomb.', requires: 'bomb_20',
+        how: 'Použij bomby 20×.', check: s => s.bombsUsed >= 20, progress: s => [s.bombsUsed, 20] },
+    { id: 'collector', name: 'Sběrač', desc: '+20 % vydělaných mincí.', requires: 'coins_5000',
+        how: 'Vydělej celkem 5 000 mincí.', check: s => s.totalCoinsEarned >= 5000, progress: s => [Math.min(s.totalCoinsEarned, 5000), 5000] },
+    { id: 'phoenix', name: 'Fénixovo jádro', desc: 'Jednou za běh přežiješ smrtící zásah s 1 HP.', requires: 'ascend_1',
+        how: 'Poprvé vzestup.', check: (s, d) => (d.ascension || 0) >= 1 }
 ];
 
 //======================================================================
@@ -4684,8 +4635,8 @@ const Toast = {
     queue: [],
     showing: false,
 
-    push(a) {
-        this.queue.push(a);
+    push(relic) {
+        this.queue.push(relic);
         this.pump();
     },
 
@@ -4693,13 +4644,13 @@ const Toast = {
         if (this.showing || !this.queue.length) return;
         this.showing = true;
 
-        const a = this.queue.shift();
-        const layer = document.getElementById('achv-toast-layer');
+        const relic = this.queue.shift();
+        const layer = document.getElementById('toast-layer');
         if (!layer) { this.showing = false; return; }
 
         const el = document.createElement('div');
-        el.className = 'achv-toast';
-        el.innerHTML = `<span class="achv-toast-icon">🏆</span><div><div class="achv-toast-eyebrow">Úspěch odemčen</div><div class="achv-toast-name">${a.name}</div></div>`;
+        el.className = 'relic-toast';
+        el.innerHTML = `<span class="relic-toast-icon">✨</span><div><div class="relic-toast-eyebrow">Relikvie odemčena</div><div class="relic-toast-name">${relic.name}</div></div>`;
         layer.appendChild(el);
 
         requestAnimationFrame(() => el.classList.add('show'));
@@ -4715,8 +4666,8 @@ const Toast = {
     }
 };
 
-const Achv = {
-    hasRelic(id) {
+const Relics = {
+    has(id) {
         const r = RELICS.find(x => x.id === id);
         return !!(r && Storage.data.achievements[r.requires]);
     },
@@ -4726,19 +4677,15 @@ const Achv = {
         const d = Storage.data;
         let changed = false;
 
-        for (const a of ACHIEVEMENTS) {
-            if (Storage.data.achievements[a.id]) continue;
+        for (const r of RELICS) {
+            if (d.achievements[r.requires] || !r.check(s, d)) continue;
 
-            if (a.check(s, d)) {
-                Storage.data.achievements[a.id] = true;
-                Storage.data.coins += a.reward;
-                Storage.data.cycleCoins = (Storage.data.cycleCoins || 0) + a.reward;
-                changed = true;
-                Toast.push(a);
+            d.achievements[r.requires] = true;
+            changed = true;
+            Toast.push(r);
 
-                // Nová relikvie se musí projevit okamžitě, ne až v dalším běhu
-                if (Game && Game.player) Game.player.applyStats();
-            }
+            // Nová relikvie se musí projevit okamžitě, ne až v dalším běhu
+            if (Game && Game.player) Game.player.applyStats();
         }
 
         if (changed) Storage.queueSave();
@@ -4851,7 +4798,7 @@ const UI = {
             Game.updateHUD(true);
         }
 
-        Achv.check();
+        Relics.check();
         this.refresh();
     },
 
@@ -4876,33 +4823,21 @@ const UI = {
     },
 
     renderRelics(containerId) {
+        const stats = Storage.data.stats;
         document.getElementById(containerId).innerHTML = RELICS.map(r => {
-            const unlocked = Achv.hasRelic(r.id);
+            const unlocked = Relics.has(r.id);
+            let how = '';
+
+            if (!unlocked) {
+                const [cur, max] = r.progress ? r.progress(stats) : [0, 0];
+                const progress = max ? ` (${U.num(Math.min(cur, max))} / ${U.num(max)})` : '';
+                how = `<div class="relic-how">Jak získat: ${r.how}${progress}</div>`;
+            }
+
             return `<div class="relic-item ${unlocked ? 'unlocked' : 'locked'}">
                 <div class="relic-name">${unlocked ? '' : '🔒 '}${r.name}</div>
                 <div class="relic-desc">${r.desc}</div>
-            </div>`;
-        }).join('');
-    },
-
-    renderAchievements(containerId) {
-        document.getElementById(containerId).innerHTML = ACHIEVEMENTS.map(a => {
-            const unlocked = !!Storage.data.achievements[a.id];
-            let progressHtml = '';
-
-            if (!unlocked && a.progress) {
-                const [cur, max] = a.progress(Storage.data.stats);
-                progressHtml = `<div class="achv-progress">${U.num(Math.min(cur, max))} / ${U.num(max)}</div>`;
-            }
-
-            return `<div class="achv-item ${unlocked ? 'unlocked' : 'locked'}">
-                <div class="achv-icon">${unlocked ? '🏆' : '🔒'}</div>
-                <div class="achv-body">
-                    <div class="achv-name">${a.name}</div>
-                    <div class="achv-desc">${a.desc}</div>
-                    ${progressHtml}
-                </div>
-                <div class="achv-reward">${a.reward > 0 ? '+' + a.reward : ''}</div>
+                ${how}
             </div>`;
         }).join('');
     },
@@ -4935,7 +4870,6 @@ const UI = {
         this.renderLifetimeStats('lifetime-stats');
         this.renderPrestige('prestige-list');
         this.renderRelics('relic-list');
-        this.renderAchievements('achv-list');
 
         document.getElementById('stardust-count').innerText = U.num(Storage.data.stardust || 0) + ' ✦ prachu';
 
@@ -5004,7 +4938,7 @@ function performAscend() {
     Storage.data.coins = prestigeLevel('capital') * 150;
     Storage.save();
 
-    Achv.check();
+    Relics.check();
 
     if (Game.player) {
         Game.player.applyStats();
@@ -5072,7 +5006,7 @@ document.getElementById('btn-bomb').addEventListener('pointerdown', e => {
 });
 
 document.getElementById('btn-reset').onclick = () => {
-    if (confirm('Opravdu smazat postup? Přijdeš o mince, vylepšení, rekordy, úspěchy, vzestup i hvězdný prach.')) {
+    if (confirm('Opravdu smazat postup? Přijdeš o mince, vylepšení, rekordy, relikvie, vzestup i hvězdný prach.')) {
         Storage.wipe();
         Sounds.setMuted(false);
         document.getElementById('btn-sound').innerText = '🔊';
@@ -5165,7 +5099,7 @@ if (secretInput) {
 const CHEATS = {
     coins: () => { Storage.data.coins = 999999999; return 'Mince doplněny.'; },
     stardust: () => { Storage.data.stardust = Math.min((Storage.data.stardust || 0) + 1000000, 1000000000); return 'Hvězdný prach doplněn.'; },
-    maxship: () => { for (const u of UPGRADES) Storage.data.upgrades[u.key] = MAX_LVL; return 'Loď je na maximum, jde vzestoupit (Postup a úspěchy).'; },
+    maxship: () => { for (const u of UPGRADES) Storage.data.upgrades[u.key] = MAX_LVL; return 'Loď je na maximum, jde vzestoupit (Postup a relikvie).'; },
     boss: () => { Storage.data.stats.bestBossLevel = Math.max(Storage.data.stats.bestBossLevel || 0, 14); return 'Nejvyšší poražený boss je 14.'; },
     'score-normal': () => cheatScore('normal'),
     'score-hard': () => cheatScore('hard'),
@@ -5176,8 +5110,14 @@ const CHEATS = {
         Storage.data.best.rush = Math.max(Storage.data.best.rush || 0, CHEAT_RUSH);
         Storage.data.stats.bestRushStreak = Math.max(Storage.data.stats.bestRushStreak || 0, CHEAT_RUSH);
         return 'Série v Boss Rush je aspoň ' + CHEAT_RUSH + ' bossů.';
+    },
+    // Statistiky za celou dobu hraní na prahy odznaků a relikvií (loď na maximum je zvlášť)
+    lifetime: () => {
+        for (const k in CHEAT_LIFETIME) Storage.data.stats[k] = Math.max(Storage.data.stats[k] || 0, CHEAT_LIFETIME[k]);
+        return 'Statistiky za celou dobu hraní jsou na prazích odznaků.';
     }
 };
+const CHEAT_LIFETIME = { totalKills: 1500, totalBossKills: 30, noHitBosses: 1, bestCombo: 8, bombsUsed: 20, totalCoinsEarned: 50000, longestRun: 1200000, blitzClears: 1 };
 const CHEAT_SCORE = 3000;
 const CHEAT_RUSH = 10;
 function cheatScore(mode) {
@@ -5193,7 +5133,7 @@ cheatOverlay.addEventListener('click', e => {
     Storage.save();
     UI.refresh();
     UI.renderStats();
-    Achv.check();
+    Relics.check();
     cheatTimer = showMsg(cheatMsg, text, '#00ff88', cheatTimer);
 });
 document.getElementById('btn-close-cheat').onclick = closeCheatMenu;
