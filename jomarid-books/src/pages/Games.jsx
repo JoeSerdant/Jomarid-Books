@@ -255,15 +255,6 @@ export const GameLauncher = ({ game }) => {
   // Při najetí myší nebo zaostření se hra stáhne dopředu, takže se po kliknutí obvykle otevře hned.
   const warmUp = useCallback(() => { game.load().catch(() => {}); }, [game]);
 
-  // Zůstatek Jomarid Coins se posílá do hry (po načtení hry a po každé změně), aby ho mohla ukázat. Hry, které ho nečekají, zprávu ignorují.
-  const sendBalance = useCallback(() => {
-    if (!coinsLoaded) return;
-    try {
-      iframeRef.current?.contentWindow?.postMessage({ source: 'jomarid-host', type: 'balance', balance: coins }, '*');
-    } catch { /* okno hry už zaniklo */ }
-  }, [coins, coinsLoaded]);
-  useEffect(() => { if (showGame) sendBalance(); }, [showGame, sendBalance]);
-
   const handleCloseGame = useCallback(() => {
     if (gameOpenedAtRef.current && Date.now() - gameOpenedAtRef.current >= MIN_PLAY_MS) {
       setHasPlayedEnough(true);
@@ -361,7 +352,6 @@ export const GameLauncher = ({ game }) => {
           ref={iframeRef}
           title={game.title}
           srcDoc={gameDoc}
-          onLoad={sendBalance}
           allow="clipboard-write"
           style={{ border: 'none', display: 'block', ...(gameFx ? { filter: gameFx } : {}) }}
           className="flex-1 min-h-0 min-w-0 w-full"

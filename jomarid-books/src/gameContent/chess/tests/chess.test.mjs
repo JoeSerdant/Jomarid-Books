@@ -394,53 +394,57 @@ describe('cheat kód 67MILUJU', () => {
   const BOT_LIST = B.BOTS.map((b) => ({ key: b.key, rating: b.rating }));
   const save0 = () => L.defaultSave();
 
-  test('vyhrát partii: soupeř se vzdá, partie je nehodnocená a označená jako cheat', async () => {
+  test('vyhrát partii: soupeř se vzdá a partie zůstane hodnocená (cheat ji nijak neoznačí)', async () => {
     const s = mk({ bot: B.BOTS[2], botIdx: 2 }); s.start();
     pm(s, 'e2e4'); await until(() => s.moves.length === 2);
-    assert.equal(s.rated, true); assert.equal(s.cheated, false);
+    assert.equal(s.rated, true);
     assert.equal(s.cheatWin(), true);
     assert.deepEqual(plain(s.result), { result: 'win', reason: 'cheat' });
-    assert.equal(s.rated, false); assert.equal(s.cheated, true); assert.equal(s.assisted, true);
+    assert.equal(s.rated, true, 'výsledek se počítá jako skutečný'); assert.equal(s.assisted, false);
+    assert.ok(!('cheated' in s), 'partie se jako cheat neoznačuje');
     assert.equal(s.cheatWin(), false, 'hotová partie se znovu nevyhraje');
     assert.equal(s.cheatDraw(), false);
     s.destroy();
   });
-
-  test('vynutit remízu', async () => {
+  test('vynutit remízu: hodnocená remíza', async () => {
     const s = mk(); s.start();
     assert.equal(s.cheatDraw(), true);
     assert.deepEqual(plain(s.result), { result: 'draw', reason: 'cheat' });
-    assert.equal(s.cheated, true); s.destroy();
+    assert.equal(s.rated, true); s.destroy();
   });
-
-  test('výhra s cheat kódem se nepočítá: žádný rating, rekord, výhra ani odemčení soupeře, v historii je jen poznámka', () => {
+  test('výhra s cheat kódem se počítá jako skutečná: rating podle Elo, rekord, výhra, série i odemčení soupeře', () => {
     const before = plain(save0());
-    const r = L.finishGame(save0(), { botIdx: 0, result: 'win', reason: 'cheat', color: 'w', plies: 0, tc: 'none', rated: false, cheated: true, moves: [] }, BOT_LIST, '2026-10-16');
+    const r = L.finishGame(save0(), { botIdx: 0, result: 'win', reason: 'cheat', color: 'w', plies: 0, tc: 'none', rated: true, moves: [] }, BOT_LIST, '2026-10-16');
     const s = plain(r.save);
-    assert.equal(s.rating, before.rating); assert.equal(s.peak, before.peak); assert.equal(s.ratedGames, 0);
-    assert.deepEqual(s.record, before.record); assert.deepEqual(s.botStats, before.botStats);
-    assert.deepEqual(s.wins, before.wins); assert.equal(s.unlockedIndex, 0); assert.equal(s.winStreak, 0);
-    assert.equal(r.summary.newlyUnlocked, false); assert.equal(r.summary.cheated, true); assert.equal(r.summary.rated, false); assert.equal(r.summary.delta, 0);
+    const exp = L.ratingChange(before.rating, BOT_LIST[0].rating, 1, 0);
+    assert.ok(exp.delta > 0);
+    assert.equal(r.summary.delta, exp.delta); assert.equal(s.rating, before.rating + exp.delta); assert.equal(s.peak, s.rating);
+    assert.equal(s.ratedGames, 1); assert.equal(s.record.w, 1); assert.equal(s.botStats.beginner.w, 1);
+    assert.equal(s.wins.beginner, 1); assert.equal(s.unlockedIndex, 1); assert.equal(s.winStreak, 1);
+    assert.equal(r.summary.newlyUnlocked, true); assert.equal(r.summary.rated, true);
     assert.equal(s.recentGames.length, 1);
-    assert.equal(s.recentGames[0].cheat, true); assert.equal(s.recentGames[0].rated, false); assert.equal(s.recentGames[0].result, 'win');
-    assert.deepEqual(s.ratingHistory, []);
+    assert.equal(s.recentGames[0].rated, true); assert.equal(s.recentGames[0].result, 'win'); assert.equal(s.recentGames[0].reason, 'cheat');
+    assert.ok(!('cheat' in s.recentGames[0]), 'v historii není žádné označení cheat');
+    assert.equal(s.ratingHistory.length, 1);
   });
-
-  test('cheat partie nikdy není hodnocená, ani kdyby ji volající označil jako hodnocenou', () => {
-    const r = L.finishGame(save0(), { botIdx: 1, result: 'win', color: 'w', plies: 20, tc: 'none', rated: true, cheated: true, moves: [] }, BOT_LIST, '2026-10-16');
-    assert.equal(r.summary.rated, false); assert.equal(plain(r.save).ratedGames, 0); assert.equal(plain(r.save).rating, save0().rating);
-    assert.equal(plain(r.save).wins.easy, 0);
+  test('remíza s cheat kódem: rating podle Elo a remíza v rekordu; výhra nad posledním soupeřem se zapíše do výher', () => {
+    const before = plain(save0());
+    const d = L.finishGame(save0(), { botIdx: 1, result: 'draw', reason: 'cheat', color: 'w', plies: 0, tc: 'none', rated: true, moves: [] }, BOT_LIST, '2026-10-16');
+    const exp = L.ratingChange(before.rating, BOT_LIST[1].rating, 0.5, 0);
+    assert.equal(d.summary.delta, exp.delta); assert.equal(plain(d.save).rating, before.rating + exp.delta);
+    assert.equal(plain(d.save).record.d, 1); assert.equal(plain(d.save).wins.easy, 0, 'remíza není výhra');
+    const last = BOT_LIST.length - 1;
+    const w = L.finishGame(Object.assign(save0(), { unlockedIndex: last }), { botIdx: last, result: 'win', reason: 'cheat', color: 'w', plies: 0, tc: 'none', rated: true, moves: [] }, BOT_LIST, '2026-10-16');
+    assert.equal(plain(w.save).wins[BOT_LIST[last].key], 1);
   });
-
-  test('běžná cvičná výhra (s nápovědou) se počítá dál jako dřív: cheat ji nezměnil', () => {
+  test('běžná cvičná výhra (s nápovědou) se počítá do výher jako dřív, jen bez ratingu', () => {
     const r = L.finishGame(save0(), { botIdx: 0, result: 'win', reason: 'checkmate', color: 'w', plies: 30, tc: 'none', rated: false, moves: [] }, BOT_LIST, '2026-10-16');
     assert.equal(plain(r.save).wins.beginner, 1); assert.equal(plain(r.save).unlockedIndex, 1); assert.equal(r.summary.newlyUnlocked, true);
-    assert.equal(r.summary.cheated, false); assert.ok(!('cheat' in plain(r.save).recentGames[0]));
+    assert.equal(r.summary.rated, false); assert.equal(plain(r.save).rating, save0().rating);
     const rated = L.finishGame(save0(), { botIdx: 0, result: 'win', reason: 'checkmate', color: 'w', plies: 30, tc: 'none', rated: true, moves: [] }, BOT_LIST, '2026-10-16');
     assert.equal(rated.summary.rated, true); assert.ok(plain(rated.save).rating > save0().rating);
   });
-
-  test('soupeř naslepo: táhne náhodně bez hledání a bez knihy, a partie je cheat', async () => {
+  test('soupeř naslepo: táhne náhodně bez hledání a bez knihy, partie zůstane hodnocená', async () => {
     // nejdřív normálně: mimo knihu (Pip ji má jen na 2 půltahy) se engine ptá; potom naslepo se neptá vůbec
     const rnd = lcg(5);
     const randomMove = (s) => { const legal = E.generateAllLegalMoves(s.state, s.state.turn); return s.playerMove(legal[Math.floor(rnd() * legal.length)]); };
@@ -452,7 +456,7 @@ describe('cheat kód 67MILUJU', () => {
 
     calls.search = 0;
     const s = mk({ bot: B.BOTS[0], botIdx: 0, rng: lcg(5), chat: false }); s.start();
-    assert.equal(s.setBlindBot(true), true); assert.equal(s.cheated, true); assert.equal(s.cheatBlind, true);
+    assert.equal(s.setBlindBot(true), true); assert.equal(s.rated, true); assert.equal(s.cheatBlind, true);
     for (let i = 0; i < 4 && !s.over; i++) { randomMove(s); await until(() => s.over || (s.moves.length % 2 === 0 && s.isPlayerTurn)); }
     assert.equal(calls.search, 0, 'engine se na tahy soupeře neptal');
     assert.ok(s.moves.filter((x) => x.color === 'b').length >= 3);
@@ -460,13 +464,13 @@ describe('cheat kód 67MILUJU', () => {
     s.destroy();
   });
 
-  test('autopilot hraje za hráče: tahy přibývají sami, partie je cheat; vypnutí ho zastaví', async () => {
+  test('autopilot hraje za hráče: tahy přibývají sami a partie zůstane hodnocená (bez nápovědy); vypnutí ho zastaví', async () => {
     const s = mk({ bot: B.BOTS[0], botIdx: 0, rng: lcg(11), chat: false }); s.start();
-    assert.equal(s.setAutopilot(true), true); assert.equal(s.cheated, true);
+    assert.equal(s.setAutopilot(true), true);
     await until(() => s.moves.length >= 8 || s.over, 60000);
     assert.ok(s.moves.length >= 8 || s.over, 'autopilot odehrál několik tahů');
     assert.ok(s.moves.filter((m) => m.color === 'w').length >= 4, 'bílé tahy (hráče) zahrál autopilot');
-    assert.ok(s.hintsUsed >= 4);
+    assert.equal(s.hintsUsed, 0, 'autopilot nepoužívá nápovědu'); assert.equal(s.assisted, false); assert.equal(s.rated, true); assert.equal(s.hint, null);
     s.setAutopilot(false);
     const n = s.moves.length;
     await sleep(400);
@@ -474,24 +478,23 @@ describe('cheat kód 67MILUJU', () => {
     s.destroy();
   });
 
-  test('cheat přežije uložení a obnovení rozehrané partie; destroy autopilota ukončí', async () => {
+  test('rozehraná partie s cheatem se uloží a obnoví jako obyčejná hodnocená; destroy autopilota ukončí', async () => {
     const s = mk(); s.start(); pm(s, 'e2e4'); await until(() => s.moves.length === 2);
     s.setBlindBot(true);
     const ser = plain(s.serialize());
-    assert.equal(ser.cheated, true);
+    assert.ok(!('cheated' in ser), 'v uložené partii není žádné označení cheat');
+    assert.equal(ser.assisted, false);
     s.destroy();
     const r = mk().restore(ser);
-    assert.equal(r.cheated, true); assert.equal(r.rated, false);
+    assert.equal(r.rated, true); assert.equal(r.cheatBlind, false, 'režim soupeře naslepo se neukládá');
     const t = mk(); t.start(); t.setAutopilot(true); t.destroy();
     assert.equal(t.cheatAuto, false); assert.equal(t._autoTimer, null);
-    const clean = mk().restore({ moves: ['e2e4', 'e7e5'] });
-    assert.equal(clean.cheated, false);
   });
 
   test('vyděsit soupeře: řekne hlášku jen když jsou zapnuté', () => {
     const said = [];
     const a = mk({ chat: true }); a.onEvent = (t, d) => { if (t === 'say') said.push(d.kind); };
-    a.cheatScare(); assert.deepEqual(said, ['losing']); assert.equal(a.cheated, false, 'hláška partii neoznačí');
+    a.cheatScare(); assert.deepEqual(said, ['losing']); assert.equal(a.rated, true, 'hláška partii nijak nezmění');
     const b = mk({ chat: false }); b.onEvent = (t) => { said.push(t); }; b.cheatScare(); assert.equal(said.length, 1);
   });
 });
@@ -534,12 +537,13 @@ describe('cheat kód v rozhraní', () => {
     assert.match(ui, /session: view === "game" \? session : null/, 'mimo hru není žádná partie, do které by se zasahovalo');
   });
 
-  test('výsledek cheat partie se do postupu nezapíše: předává se cheated a závěrečná obrazovka to říká', () => {
-    assert.match(ui, /rated, cheated: sess\.cheated, moves: coords \}, BOT_LIST/);
-    assert.match(ui, /cheated: !!saved\.cheated/);
-    assert.match(ui, /cheat: "cheat kódem"/);
-    assert.match(ui, /🎭 Cheat partie: rating, výhry ani odemykání soupeřů se nezměnily/);
-    assert.match(ui, /g\.cheat \? "cheat" : g\.rated === false \? "cvičná" : null/);
+  test('výsledek cheat partie se do postupu zapíše jako každý jiný: rozhraní žádné označení cheat nepředává ani nezobrazuje', () => {
+    assert.match(ui, /rated, moves: coords \}, BOT_LIST/);
+    assert.match(ui, /rated: !saved\.assisted, moves: saved\.moves \}/);
+    assert.match(ui, /cheat: "cheat kódem"/, 'konec partie říká, jak skončila');
+    assert.doesNotMatch(ui, /cheated/);
+    assert.doesNotMatch(ui, /🎭 Cheat partie/);
+    assert.match(ui, /g\.rated === false \? "cvičná" : null/);
   });
 
   test('kód se pozná bez ohledu na velikost písmen a mezery, jiný text ne', () => {
@@ -551,7 +555,7 @@ describe('cheat kód v rozhraní', () => {
   });
 
   test('nenápadné pole u spodního okraje (jako ve Warroom Frontlines) je na každé obrazovce a otevře menu stejným kódem', () => {
-    assert.match(ui, /h\(CheatField, \{ open: cheatOpen, aboveNav: view === "menu", onOpen: \(\) => setCheatOpen\(true\) \}\)/, 'pole je v App, ne jen na jedné obrazovce');
+    assert.match(ui, /content,\s*h\(CheatField, \{ open: cheatOpen, withNav: view === "menu", onOpen: \(\) => setCheatOpen\(true\) \}\)/, 'pole je v App hned za obsahem obrazovky (úplně dole), ne jen na jedné obrazovce');
     const f = fn('CheatField');
     assert.match(f, /if \(isCheatCode\(text\)\) \{ setVal\(""\);/, 'správný kód pole vyprázdní');
     assert.match(f, /onOpen\(\);/);
@@ -564,13 +568,14 @@ describe('cheat kód v rozhraní', () => {
     assert.doesNotMatch(ui, /SecretCodeRow|tryCheatCode|onCheatCode/, 'řádek v Nastavení je pryč, nahradilo ho pole u spodního okraje');
   });
 
-  test('pole je pod okny i dolní lištou a písmo má aspoň 16 px (iOS jinak při klepnutí přiblíží stránku)', () => {
+  test('pole je v toku stránky úplně dole (nic nepřekrývá), písmo má 16 px (iOS jinak při klepnutí přiblíží stránku) a na menu se vejde nad dolní lištu', () => {
     const css = fs.readFileSync(path.join(DIR, 'style.css'), 'utf8');
     const rule = css.match(/\.cheat-field \{[\s\S]*?\n\}/)[0];
-    assert.match(rule, /position: fixed;/);
+    assert.doesNotMatch(rule, /position: (fixed|absolute)/, 'pole není nad obsahem');
     assert.match(rule, /font: 700 16px\//);
-    const z = Number(/z-index: (\d+)/.exec(rule)[1]);
-    assert.ok(z < Number(/\.side-nav \{[^}]*z-index: (\d+)/.exec(css)[1]), 'dolní lišta je nad polem');
-    assert.match(css, /@media \(max-width: 899px\) \{ \.cheat-field\.above-nav \{ bottom: calc\(76px/, 'na menu sedí těsně nad dolní lištou');
+    assert.match(rule, /transform: scale\(\.75\)/, 'vizuálně menší než 16 px');
+    assert.match(css, /\.version-foot \{ flex: none; display: flex; justify-content: center;/, 'patička je v toku stránky jako poslední prvek');
+    assert.match(css, /@media \(max-width: 899px\) \{ \.version-foot\.with-nav \{ padding-bottom: calc\(72px/, 'na menu patička neleží pod dolní lištou');
+    assert.doesNotMatch(css, /\.dash-shell \{[^}]*88px/, 'místo pod lištou řeší patička');
   });
 });

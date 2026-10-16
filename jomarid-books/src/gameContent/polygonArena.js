@@ -23,6 +23,7 @@
 //   render.js      - vykreslování scény, mini mapa
 //   ui.js          - rozhraní, stavy hry, hlavní smyčka
 //   collection.js  - sbírka a nastavení
+//   cheat.js       - skryté pole (číslo verze dole v menu) a cheat menu pro testování
 //   main.js        - start
 //
 // Skripty jsou obyčejné (ne moduly) a sdílejí globální rozsah, takže pozdější soubory používají
@@ -47,6 +48,7 @@ import draw from './polygonArena/draw.js?raw';
 import render from './polygonArena/render.js?raw';
 import ui from './polygonArena/ui.js?raw';
 import collection from './polygonArena/collection.js?raw';
+import cheat from './polygonArena/cheat.js?raw';
 import main from './polygonArena/main.js?raw';
 
 const SCRIPTS = [
@@ -68,6 +70,7 @@ const SCRIPTS = [
   ['render', render],
   ['ui', ui],
   ['collection', collection],
+  ['cheat', cheat],
   ['main', main],
 ]
   .map(([id, code]) => `<script id="src-${id}">\n${code}\n</script>`)

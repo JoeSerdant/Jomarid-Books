@@ -547,8 +547,30 @@ h2 {
 #secret-msg {
     font-size: 12px;
     min-height: 16px;
-    margin-top: 8px;
+    margin-bottom: 4px;
 }
+
+/* Pole pro tajný kód vypadá jako číslo verze úplně dole v menu. Písmo 16 px (iOS při klepnutí nepřibližuje stránku), vizuálně se zmenší. */
+.overlay > .vfoot { margin-top: auto; margin-bottom: 0; padding-top: 22px; width: 100%; display: flex; flex-direction: column; align-items: center; }
+.vfield {
+    box-sizing: border-box; width: 120px; height: 34px; padding: 0 4px; margin: 0;
+    background: transparent; border: none; border-radius: 8px; outline: none;
+    color: #656b78; opacity: 0.6; font-family: inherit; font-size: 16px; font-weight: 600; line-height: 34px; text-align: center; letter-spacing: 1px;
+    caret-color: transparent; transform: scale(0.75); -webkit-appearance: none; appearance: none;
+}
+.vfield::placeholder { color: #656b78; opacity: 1; }
+.vfield:focus { opacity: 1; background: rgba(0, 0, 0, 0.6); box-shadow: 0 0 0 1px var(--ui-dim); caret-color: #fff; color: #fff; }
+
+.cheat-grid {
+    width: 100%;
+    max-width: 350px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.cheat-grid .btn-small { width: 100%; padding: 12px 8px; font-size: 13px; line-height: 1.25; }
+#cheat-msg { font-size: 12px; min-height: 16px; margin-bottom: 8px; color: #00ff88; }
 
 /*------ VÝCVIK ------*/
 .tut-box {
@@ -1041,15 +1063,14 @@ h2 {
 
         <button class="btn btn-danger" id="btn-reset" style="opacity: 0.6; font-size: 12px; padding: 8px; width: auto;">Smazat postup</button>
 
-        <div style="margin-top: 14px; display: flex; gap: 6px; justify-content: center; align-items: center;">
-            <input type="text" id="secret-input" placeholder="Tajný kód" autocomplete="off" style="padding: 8px 12px; border-radius: 15px; border: 1px solid var(--ui-dim); background: rgba(0,0,0,0.6); color: #fff; width: 130px; text-align: center; font-size: 13px; outline: none;">
-            <button class="btn btn-small" id="btn-secret" style="margin: 0; padding: 8px 14px;">Aktivovat</button>
-        </div>
-        <div id="secret-msg"></div>
-
         <div class="hint">
             Počítač: šipky, WASD nebo myš. Esc pauza, B bomba, M zvuk.<br>
             Mobil: táhni prstem, bomba tlačítkem vpravo dole.
+        </div>
+
+        <div class="vfoot">
+            <div id="secret-msg"></div>
+            <input type="text" id="secret-input" class="vfield" placeholder="v2.9" maxlength="40" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" aria-label="Tajný kód">
         </div>
     </div>
 
@@ -1075,6 +1096,26 @@ h2 {
         <div class="achv-list" id="achv-list"></div>
 
         <button class="btn" id="btn-close-stats">Zpět do menu</button>
+    </div>
+
+    <div id="cheat-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Cheat menu">
+        <h1 style="font-size: 24px;">🛠️ CHEAT MENU</h1>
+        <p class="tagline">Na testování odznaků a postupu bez hodin hraní. Počítá se jako skutečný postup.</p>
+
+        <div class="cheat-grid">
+            <button class="btn btn-small" data-cheat="coins">💰 Mince na maximum</button>
+            <button class="btn btn-small" data-cheat="stardust">✦ +1 000 000 prachu</button>
+            <button class="btn btn-small" data-cheat="maxship">🔧 Loď na maximum</button>
+            <button class="btn btn-small" data-cheat="boss">👹 Poražený boss 14</button>
+            <button class="btn btn-small" data-cheat="score-normal">🚀 Skóre Normální 3 000</button>
+            <button class="btn btn-small" data-cheat="score-hard">🔥 Skóre Těžká 3 000</button>
+            <button class="btn btn-small" data-cheat="score-inferno">😈 Skóre Peklo 3 000</button>
+            <button class="btn btn-small" data-cheat="score-insane">💀 Skóre Insane 3 000</button>
+            <button class="btn btn-small" data-cheat="score-blitz">⚡ Skóre Blesková 3 000</button>
+        </div>
+        <div id="cheat-msg"></div>
+
+        <button class="btn" id="btn-close-cheat">Zpět do menu</button>
     </div>
 
     <div id="pause-overlay" class="overlay hidden">
@@ -5041,48 +5082,117 @@ document.getElementById('btn-reset').onclick = () => {
     }
 };
 
-const secretBtn = document.getElementById('btn-secret');
+// ---------- Skryté pole (číslo verze úplně dole v menu) a cheat menu ----------
+// Kód je u všech her stejný: 67MILUJU otevře cheat menu. Výjimka je IMAGINEFLEXITSTVOJIMMENEM: hned doplní hvězdný prach (jako dřív).
+const CHEAT_CODE = '67MILUJU';
+const STARDUST_CODE = 'IMAGINEFLEXITSTVOJIMMENEM';
 const secretInput = document.getElementById('secret-input');
 const secretMsg = document.getElementById('secret-msg');
+const cheatMsg = document.getElementById('cheat-msg');
 let secretTimer = null;
+let cheatTimer = null;
 
-const showSecretMsg = (text, color) => {
-    secretMsg.style.color = color;
-    secretMsg.innerText = text;
-
-    clearTimeout(secretTimer);
-    secretTimer = setTimeout(() => { secretMsg.innerText = ''; }, 2500);
+const showMsg = (el, text, color, timer) => {
+    el.style.color = color;
+    el.innerText = text;
+    clearTimeout(timer);
+    return setTimeout(() => { el.innerText = ''; }, 2500);
 };
 
-const applySecret = () => {
-    const code = secretInput.value.trim().toUpperCase();
-    if (!code) return;
+const addStardust = () => {
+    // Hvězdný prach (měna za Vzestup), ne mince
+    Storage.data.stardust = Math.min((Storage.data.stardust || 0) + 1000000, 1000000000);
+    Storage.save();
+    UI.refresh();
+    UI.renderStats();
+};
 
-    if (code === '67MILUJU') {
-        Storage.data.coins = 999999999;
-        Storage.save();
-        UI.refresh();
+const openCheatMenu = () => {
+    cheatMsg.innerText = '';
+    document.getElementById('cheat-overlay').classList.remove('hidden');
+};
+
+const closeCheatMenu = () => {
+    document.getElementById('cheat-overlay').classList.add('hidden');
+};
+
+// Znak z klávesy nezávisle na rozložení: na české klávesnici dává řada čísel bez Shiftu písmena s háčky, proto se číslice berou podle e.code.
+const codeChar = e => {
+    const m = /^(?:Digit|Numpad)(\d)$/.exec(e.code || '');
+    if (m) return m[1];
+    return typeof e.key === 'string' && /^[a-z]$/i.test(e.key) ? e.key.toUpperCase() : null;
+};
+
+const applyCode = value => {
+    const code = String(value || '').replace(/\s+/g, '').toUpperCase();
+    if (code === CHEAT_CODE) {
         secretInput.value = '';
-        showSecretMsg('Kód přijat, mince doplněny.', '#00ff88');
-    } else if (code === 'IMAGINEFLEXITSTVOJIMMENEM') {
-        // Hvězdný prach (měna za Vzestup), ne mince
-        Storage.data.stardust = Math.min((Storage.data.stardust || 0) + 1000000, 1000000000);
-        Storage.save();
-        UI.refresh();
-        UI.renderStats();
-        secretInput.value = '';
-        showSecretMsg('Kód přijat, hvězdný prach doplněn.', '#b98bff');
-    } else {
-        showSecretMsg('Tenhle kód neznám.', 'var(--danger)');
+        secretInput.blur();
+        openCheatMenu();
+        return true;
     }
+    if (code === STARDUST_CODE) {
+        secretInput.value = '';
+        secretInput.blur();
+        addStardust();
+        secretTimer = showMsg(secretMsg, 'Kód přijat, hvězdný prach doplněn.', '#b98bff', secretTimer);
+        return true;
+    }
+    return false;
 };
 
-if (secretBtn && secretInput) {
-    secretBtn.onclick = applySecret;
+if (secretInput) {
+    // Psaní z měkké klávesnice nebo vložení: hotový text v poli
+    secretInput.addEventListener('input', () => { applyCode(secretInput.value); });
+    // Psaní z klávesnice počítače: posledních znaků podle kódu klávesy (česká klávesnice)
+    let keyBuf = '';
     secretInput.addEventListener('keydown', e => {
-        if (e.key === 'Enter') applySecret();
+        if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+        const ch = codeChar(e);
+        if (!ch) return;
+        keyBuf = (keyBuf + ch).slice(-STARDUST_CODE.length);
+        if (keyBuf.endsWith(CHEAT_CODE) || keyBuf.endsWith(STARDUST_CODE)) {
+            const which = keyBuf.endsWith(STARDUST_CODE) ? STARDUST_CODE : CHEAT_CODE;
+            keyBuf = '';
+            applyCode(which);
+        }
     });
+    secretInput.addEventListener('blur', () => { secretInput.value = ''; keyBuf = ''; });
 }
+
+// Cheaty jsou na testování (odznaky, postup, vzestup bez hodin hraní), takže měnějí skutečný postup: výsledky se uloží a nahlásí appce jako každé jiné.
+const CHEATS = {
+    coins: () => { Storage.data.coins = 999999999; return 'Mince doplněny.'; },
+    stardust: () => { Storage.data.stardust = Math.min((Storage.data.stardust || 0) + 1000000, 1000000000); return 'Hvězdný prach doplněn.'; },
+    maxship: () => { for (const u of UPGRADES) Storage.data.upgrades[u.key] = MAX_LVL; return 'Loď je na maximum, jde vzestoupit (Postup a úspěchy).'; },
+    boss: () => { Storage.data.stats.bestBossLevel = Math.max(Storage.data.stats.bestBossLevel || 0, 14); return 'Nejvyšší poražený boss je 14.'; },
+    'score-normal': () => cheatScore('normal'),
+    'score-hard': () => cheatScore('hard'),
+    'score-inferno': () => cheatScore('inferno'),
+    'score-insane': () => cheatScore('insane'),
+    'score-blitz': () => cheatScore('blitz')
+};
+const CHEAT_SCORE = 3000;
+function cheatScore(mode) {
+    Storage.data.best[mode] = Math.max(Storage.data.best[mode] || 0, CHEAT_SCORE);
+    return 'Rekord v režimu je aspoň ' + U.num(CHEAT_SCORE) + '.';
+}
+
+const cheatOverlay = document.getElementById('cheat-overlay');
+cheatOverlay.addEventListener('click', e => {
+    const btn = e.target.closest ? e.target.closest('[data-cheat]') : null;
+    if (!btn || !CHEATS[btn.dataset.cheat]) return;
+    const text = CHEATS[btn.dataset.cheat]();
+    Storage.save();
+    UI.refresh();
+    UI.renderStats();
+    Achv.check();
+    cheatTimer = showMsg(cheatMsg, text, '#00ff88', cheatTimer);
+});
+document.getElementById('btn-close-cheat').onclick = closeCheatMenu;
+document.addEventListener('keydown', e => {
+    if (e.code === 'Escape' && !cheatOverlay.classList.contains('hidden')) closeCheatMenu();
+});
 </script>
 </body>
 </html>

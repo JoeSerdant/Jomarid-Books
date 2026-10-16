@@ -8,6 +8,10 @@ canvas{width:100%;height:100%;display:block}
 .ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.2em;background:#e6e4df linear-gradient(#d4d1ca 1px,transparent 1px) 0 0/2.5em 2.5em;color:#fff;text-align:center}
 .ov.over{background:rgba(20,20,30,.78)}
 .hide{display:none}
+.vfoot{position:absolute;left:0;right:0;bottom:.4em;display:flex;justify-content:center}
+.vfield{box-sizing:border-box;width:120px;height:34px;margin:0;padding:0 4px;background:transparent;border:none;border-radius:8px;outline:none;opacity:.5;color:#555;font-family:inherit;font-size:16px;line-height:34px;text-align:center;letter-spacing:1px;caret-color:transparent;transform:scale(.75);-webkit-appearance:none;appearance:none;user-select:text;-webkit-user-select:text;touch-action:manipulation}
+.vfield::placeholder{color:#555;opacity:1}
+.vfield:focus{opacity:1;background:rgba(255,255,255,.7);box-shadow:0 0 0 1px #888;caret-color:#111;color:#111}
 h1{margin:0;font-size:4.4em;line-height:.95;color:#ffd92e;-webkit-text-stroke:.09em #111;paint-order:stroke fill;text-shadow:0 .08em 0 #111}
 button{font:inherit;font-size:2.4em;padding:.25em 1.6em;color:#fff;background:#ffd92e;border:.12em solid #111;border-radius:.4em;box-shadow:0 .14em 0 #111;cursor:pointer;-webkit-text-stroke:.07em #111;paint-order:stroke fill}
 button:active{transform:translateY(.1em);box-shadow:0 .04em 0 #111}

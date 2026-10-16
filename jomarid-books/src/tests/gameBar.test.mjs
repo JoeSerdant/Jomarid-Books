@@ -103,13 +103,11 @@ test('každá hra má most, který jen žádá o odměnu a sám nic nezobrazuje 
   }
 });
 
-test('mosty ve všech hrách jsou až na id hry a zůstatek v Kouloví Kámoších stejné', () => {
+test('mosty ve všech šesti hrách jsou až na id hry stejné (zůstatek ukazuje jen lišta appky, žádná hra ho nepřijímá)', () => {
   const norm = (b) => b.replace(/var GAME_ID = '\w+';/, '');
   const base = norm(bridgeOf(GAMES.rocket));
-  for (const id of ['polygonarena', 'chess', 'cityclicker', 'warroom']) assert.equal(norm(bridgeOf(GAMES[id])), base, id);
-  const k = bridgeOf(GAMES.koulovikamosi);
-  assert.match(k, /d\.type === 'balance'/);
-  assert.match(k, /ev\.source !== window\.parent/);
+  for (const id of ['polygonarena', 'chess', 'cityclicker', 'warroom', 'koulovikamosi']) assert.equal(norm(bridgeOf(GAMES[id])), base, id);
+  for (const id of Object.keys(GAMES)) assert.doesNotMatch(bridgeOf(GAMES[id]), /balance/i, id);
 });
 
 test('id her v Games.jsx a v mostech jsou stejná (server podle něj hlídá denní limit)', () => {
@@ -137,7 +135,7 @@ test('Games.jsx používá lištu, potvrzení ukazuje jen v ní a nic zbytečné
   assert.match(gamesPage, /showFlash\(\{ text: REWARD_LIMIT_NOTE, warn: true \}\)/);
   assert.match(gamesPage, /limitShownRef\.current = false;/, 'poznámka o limitu se při dalším otevření hry ukáže znovu');
   assert.doesNotMatch(gamesPage, /type: 'coin-result'/);
-  assert.match(gamesPage, /type: 'balance', balance: coins/);
+  assert.doesNotMatch(gamesPage, /type: 'balance'|sendBalance/, 'hrám se zůstatek neposílá, ukazuje ho lišta');
   assert.doesNotMatch(gamesPage, /backgroundColor: '#05050f'/, 'černý pruh je pryč');
 });
 

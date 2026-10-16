@@ -69,11 +69,33 @@ test('v Pekle se do vlny nepočítají asteroidy, takže nepřátelé chodí i b
   assert.match(html, /g\.enemies\.filter\(e => e\.type !== 'asteroid'\)\.length : g\.enemies\.length/);
 });
 
-test('tajné kódy: starý dává mince, IMAGINEFLEXITSTVOJIMMENEM hvězdný prach', () => {
-  assert.match(html, /code === '67MILUJU'/);
-  assert.match(html, /code === 'IMAGINEFLEXITSTVOJIMMENEM'/);
-  assert.match(html, /const code = secretInput\.value\.trim\(\)\.toUpperCase\(\);/);
-  assert.match(html, /Storage\.data\.stardust = Math\.min\(\(Storage\.data\.stardust \|\| 0\) \+ 1000000, 1000000000\)/);
+test('tajné kódy: pole vypadá jako číslo verze úplně dole v menu, 67MILUJU otevře cheat menu, IMAGINEFLEXITSTVOJIMMENEM dál doplní hvězdný prach', () => {
+  assert.match(html, /const CHEAT_CODE = '67MILUJU';/);
+  assert.match(html, /const STARDUST_CODE = 'IMAGINEFLEXITSTVOJIMMENEM';/);
+  assert.match(html, /String\(value \|\| ''\)\.replace\(\/\\s\+\/g, ''\)\.toUpperCase\(\)/, 'velikost písmen a mezery nevadí');
+  // pole je poslední věc v menu, vypadá jako verze (placeholder v2.9), nemá tlačítko Aktivovat ani popisek „Tajný kód“
+  const menu = html.slice(html.indexOf('<div id="menu-overlay"'), html.indexOf('<div id="stats-overlay"'));
+  assert.match(menu, /<div class="vfoot">[\s\S]*<input type="text" id="secret-input" class="vfield" placeholder="v\d+\.\d+"[\s\S]*<\/div>\s*<\/div>\s*$/, 'patička s polem je úplně na konci menu');
+  assert.doesNotMatch(menu, /btn-secret|Aktivovat|placeholder="Tajný kód"/);
+  assert.match(menu, /aria-label="Tajný kód"/);
+  // výjimka: starý kód na hvězdný prach funguje beze změny (+1 000 000, strop 1 mld.)
+  assert.match(html, /Storage\.data\.stardust = Math\.min\(\(Storage\.data\.stardust \|\| 0\) \+ 1000000, 1000000000\);/);
+  assert.match(html, /code === STARDUST_CODE/);
+  // česká klávesnice: číslice podle kódu klávesy
+  assert.match(html, /const m = \/\^\(\?:Digit\|Numpad\)\(\\d\)\$\/\.exec\(e\.code \|\| ''\);/);
+  // CSS: písmo aspoň 16 px, ať iOS při klepnutí nepřibližuje
+  assert.match(html, /\.vfield \{[^}]*font-size: 16px;/);
+});
+
+test('cheat menu v Rocketu: mince, prach, loď na maximum, boss 14 a rekordy skóre ve všech režimech se zapíšou do skutečného postupu a nahlásí appce', () => {
+  const overlay = html.slice(html.indexOf('<div id="cheat-overlay"'), html.indexOf('<div id="pause-overlay"'));
+  for (const id of ['coins', 'stardust', 'maxship', 'boss', 'score-normal', 'score-hard', 'score-inferno', 'score-insane', 'score-blitz']) assert.ok(overlay.includes(`data-cheat="${id}"`), id);
+  assert.match(html, /boss: \(\) => \{ Storage\.data\.stats\.bestBossLevel = Math\.max\(Storage\.data\.stats\.bestBossLevel \|\| 0, 14\);/, 'boss 14 odemkne NEMESIS i GLITCH');
+  assert.match(html, /Storage\.data\.best\[mode\] = Math\.max\(Storage\.data\.best\[mode\] \|\| 0, CHEAT_SCORE\);/, 'rekord se jen zvyšuje');
+  assert.match(html, /const CHEAT_SCORE = 3000;/);
+  assert.match(html, /maxship: \(\) => \{ for \(const u of UPGRADES\) Storage\.data\.upgrades\[u\.key\] = MAX_LVL;/);
+  // po každém cheatu se postup uloží (to ho nahlásí appce přes reportRecords), obnoví se menu a vyhodnotí úspěchy
+  assert.match(html, /const text = CHEATS\[btn\.dataset\.cheat\]\(\);\s*Storage\.save\(\);\s*UI\.refresh\(\);\s*UI\.renderStats\(\);\s*Achv\.check\(\);/);
 });
 
 test('strom Vzestupu: nové uzly za hvězdný prach mají cenu, strop, uložení a napojení do hry', () => {
