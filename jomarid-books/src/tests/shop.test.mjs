@@ -7,10 +7,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   SHOP_ITEMS, SHOP_KINDS, SHOP_ERRORS, SHOP_FALLBACK_ERROR, KIND_TITLE, KIND_GAMEFX,
-  getShopItem, itemsOfKind, titleLabel, gameFilter, requirementText, missingCoins, itemState, shopErrorText,
+  getShopItem, itemsOfKind, groupsOfKind, titleLabel, gameFilter, requirementText, missingCoins, itemState, shopErrorText,
 } from '../shop/catalog.js';
 import { EMPTY_COSMETICS, normalizeCosmetics, loadMyCosmetics, buyCosmetic, equipCosmetic, loadEquippedTitles, errorReason } from '../shop/api.js';
-import { GAME_BADGES } from '../gameRecords/catalog.js';
+import { GAME_BADGES, GAME_CATALOG } from '../gameRecords/catalog.js';
 
 const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DB = path.join(SRC, '..', 'db');
@@ -30,7 +30,7 @@ test('katalog: unikátní id s předponou podle skupiny, ceny 100 až 400 mincí
     const labels = itemsOfKind(kind).map((i) => i.label);
     assert.equal(new Set(labels).size, labels.length, `názvy ve skupině ${kind}`);
   }
-  assert.equal(itemsOfKind(KIND_TITLE).length, 12);
+  assert.equal(itemsOfKind(KIND_TITLE).length, 39);
   assert.equal(itemsOfKind(KIND_GAMEFX).length, 6);
 });
 
@@ -47,6 +47,36 @@ test('katalog: požadovaný odznak existuje a mají ho jen tituly; vzhledy her m
     }
   }
   assert.equal(new Set(SHOP_ITEMS.filter((i) => i.requires).map((i) => i.requires)).size, SHOP_ITEMS.filter((i) => i.requires).length, 'každý odznak odemyká jediný titul');
+});
+
+test('tituly: obecné jen za mince a u každé hry aspoň tři, další se odemykají odznaky ze hry', () => {
+  const titles = itemsOfKind(KIND_TITLE);
+  assert.ok(titles.filter((t) => !t.requires).length >= 12, 'obecných titulů za mince je aspoň dvanáct');
+  const badgeGame = new Map(GAME_BADGES.map((b) => [b.id, b.game]));
+  for (const game of GAME_CATALOG) {
+    const own = titles.filter((t) => t.requires && badgeGame.get(t.requires) === game.id);
+    assert.ok(own.length >= 3, `${game.title}: má jen ${own.length} titulů`);
+  }
+});
+
+test('groupsOfKind: tituly po skupinách (obecné, pak hry v pořadí katalogu), každý titul v jediné skupině, vzhledy her bez nadpisu', () => {
+  const groups = groupsOfKind(KIND_TITLE);
+  assert.deepEqual(groups.map((g) => g.id), ['reading', ...GAME_CATALOG.map((g) => g.id)]);
+  assert.deepEqual(groups.map((g) => g.label), ['Čtení a obecné', ...GAME_CATALOG.map((g) => g.title)]);
+  assert.equal(groups.reduce((n, g) => n + g.items.length, 0), itemsOfKind(KIND_TITLE).length);
+  assert.equal(new Set(groups.flatMap((g) => g.items.map((i) => i.id))).size, itemsOfKind(KIND_TITLE).length, 'žádný titul dvakrát');
+  assert.ok(groups[0].items.every((i) => i.requires === null), 'v obecné skupině jsou jen tituly bez odznaku');
+  const badgeGame = new Map(GAME_BADGES.map((b) => [b.id, b.game]));
+  for (const g of groups.slice(1)) assert.ok(g.items.every((i) => badgeGame.get(i.requires) === g.id), `${g.id}: tituly patří hře`);
+  const fx = groupsOfKind(KIND_GAMEFX);
+  assert.equal(fx.length, 1); assert.equal(fx[0].label, null); assert.equal(fx[0].items.length, 6);
+});
+
+test('Shop.jsx kreslí zboží po skupinách s nadpisem (u vzhledů her bez nadpisu)', () => {
+  const shop = read('components', 'Shop.jsx');
+  assert.match(shop, /groupsOfKind\(kind\)\.map\(\(group\) => \(/);
+  assert.match(shop, /data-testid=\{`shop-group-\$\{group\.id\}`\}/);
+  assert.match(shop, /\{group\.label && <h4/);
 });
 
 test('titleLabel, gameFilter, requirementText, missingCoins', () => {

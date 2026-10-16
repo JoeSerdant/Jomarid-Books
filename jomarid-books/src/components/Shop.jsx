@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Coins, Check, Lock, Loader2, Store } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { SHOP_KINDS, KIND_GAMEFX, itemsOfKind, itemState, missingCoins, requirementText, shopErrorText } from '../shop/catalog';
+import { SHOP_KINDS, KIND_GAMEFX, groupsOfKind, itemState, missingCoins, requirementText, shopErrorText } from '../shop/catalog';
 import { buyCosmetic, equipCosmetic, loadMyCosmetics } from '../shop/api';
 
 const fmt = (n) => Number(n || 0).toLocaleString('cs-CZ');
@@ -160,20 +160,25 @@ export const Shop = ({ cosmetics, coins, unlocked, onCosmetics, onBalance }) => 
       </div>
       <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] font-bold m-0 mb-3">{current.hint}</p>
 
-      <ul className="list-none m-0 p-0 grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {itemsOfKind(kind).map((item) => (
-          <ItemCard
-            key={item.id}
-            item={item}
-            state={itemState(item, state)}
-            coins={coins}
-            busy={busyId === item.id}
-            onBuy={buy}
-            onEquip={equip}
-            onUnequip={unequip}
-          />
-        ))}
-      </ul>
+      {groupsOfKind(kind).map((group) => (
+        <section key={group.id} data-testid={`shop-group-${group.id}`} aria-label={group.label || undefined} className="mb-5 last:mb-0">
+          {group.label && <h4 style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider m-0 mb-2">{group.label}</h4>}
+          <ul className="list-none m-0 p-0 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {group.items.map((item) => (
+              <ItemCard
+                key={item.id}
+                item={item}
+                state={itemState(item, state)}
+                coins={coins}
+                busy={busyId === item.id}
+                onBuy={buy}
+                onEquip={equip}
+                onUnequip={unequip}
+              />
+            ))}
+          </ul>
+        </section>
+      ))}
 
       <p
         role="status"
