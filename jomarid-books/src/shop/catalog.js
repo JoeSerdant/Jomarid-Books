@@ -1,7 +1,7 @@
 // Obchůdek za Jomarid Coins: tituly (u jména ve Statistikách a v žebříčku, kupují se na stránce Odznaky) a vzhledy her (barevný odstín, kterým appka přebarví hru).
 // Stejný seznam je v db/shop.sql (tam rozhoduje server o ceně a o požadovaném odznaku); test src/tests/shop.test.mjs hlídá, že si odpovídají.
 // Nic z toho nedává výhodu ve hře ani při čtení, je to jen vzhled.
-import { getBadge, getGame } from '../gameRecords/catalog.js';
+import { GAME_CATALOG, getBadge, getGame } from '../gameRecords/catalog.js';
 
 export const KIND_TITLE = 'title';
 export const KIND_GAMEFX = 'gamefx';
@@ -16,14 +16,41 @@ export const SHOP_ITEMS = [
   { id: 'title_night', kind: KIND_TITLE, label: 'Noční sova', price: 120, requires: null },
   { id: 'title_morning', kind: KIND_TITLE, label: 'Ranní ptáče', price: 120, requires: null },
   { id: 'title_collector', kind: KIND_TITLE, label: 'Sběratel', price: 150, requires: null },
+  { id: 'title_reader', kind: KIND_TITLE, label: 'Čtenář', price: 100, requires: null },
+  { id: 'title_dreamer', kind: KIND_TITLE, label: 'Snílek', price: 120, requires: null },
+  { id: 'title_wanderer', kind: KIND_TITLE, label: 'Poutník', price: 120, requires: null },
+  { id: 'title_detective', kind: KIND_TITLE, label: 'Detektiv', price: 150, requires: null },
+  { id: 'title_librarian', kind: KIND_TITLE, label: 'Knihovník', price: 150, requires: null },
+  { id: 'title_chronicler', kind: KIND_TITLE, label: 'Kronikář', price: 200, requires: null },
+  { id: 'title_wizard', kind: KIND_TITLE, label: 'Čaroděj', price: 250, requires: null },
+  { id: 'title_legend', kind: KIND_TITLE, label: 'Legenda', price: 400, requires: null },
   { id: 'title_pilot', kind: KIND_TITLE, label: 'Pilot', price: 150, requires: 'rocket_ace' },
   { id: 'title_hellrider', kind: KIND_TITLE, label: 'Pán pekel', price: 250, requires: 'rocket_hell' },
+  { id: 'title_nemesis', kind: KIND_TITLE, label: 'Lovec Nemesis', price: 250, requires: 'rocket_nemesis' },
+  { id: 'title_raider', kind: KIND_TITLE, label: 'Nájezdník', price: 200, requires: 'rocket_rush5' },
+  { id: 'title_astro', kind: KIND_TITLE, label: 'Hvězdoplavec', price: 200, requires: 'rocket_ascend' },
   { id: 'title_chess', kind: KIND_TITLE, label: 'Šachista', price: 100, requires: 'chess_first' },
   { id: 'title_dragon', kind: KIND_TITLE, label: 'Drakobijec', price: 250, requires: 'chess_dragon' },
+  { id: 'title_grandmaster', kind: KIND_TITLE, label: 'Velmistr', price: 300, requires: 'chess_r1300' },
+  { id: 'title_matador', kind: KIND_TITLE, label: 'Šachový matador', price: 150, requires: 'chess_25' },
+  { id: 'title_dragonfear', kind: KIND_TITLE, label: 'Postrach draků', price: 300, requires: 'chess_expert5' },
   { id: 'title_koulovi', kind: KIND_TITLE, label: 'Mistr koulí', price: 250, requires: 'koulovi_all' },
+  { id: 'title_koulovi_king', kind: KIND_TITLE, label: 'Král klasiky', price: 250, requires: 'koulovi_10k' },
+  { id: 'title_chaos', kind: KIND_TITLE, label: 'Pán chaosu', price: 200, requires: 'koulovi_chaos' },
+  { id: 'title_koular', kind: KIND_TITLE, label: 'Koulař', price: 100, requires: 'koulovi_3000' },
   { id: 'title_arena', kind: KIND_TITLE, label: 'Velitel arény', price: 200, requires: 'polygon_win' },
+  { id: 'title_hunter', kind: KIND_TITLE, label: 'Lovec bossů', price: 150, requires: 'polygon_boss' },
+  { id: 'title_polylegend', kind: KIND_TITLE, label: 'Legenda arény', price: 300, requires: 'polygon_lvl58' },
+  { id: 'title_builder', kind: KIND_TITLE, label: 'Konstruktér', price: 200, requires: 'polygon_tier4' },
+  { id: 'title_helltank', kind: KIND_TITLE, label: 'Pekelný tankista', price: 250, requires: 'polygon_hell' },
   { id: 'title_mayor', kind: KIND_TITLE, label: 'Starosta', price: 150, requires: 'city_prestige' },
+  { id: 'title_tycoon', kind: KIND_TITLE, label: 'Magnát', price: 200, requires: 'city_prestige5' },
+  { id: 'title_clicker', kind: KIND_TITLE, label: 'Klikač', price: 120, requires: 'city_clicks' },
+  { id: 'title_primator', kind: KIND_TITLE, label: 'Primátor', price: 300, requires: 'city_prestige10' },
   { id: 'title_strategist', kind: KIND_TITLE, label: 'Stratég', price: 200, requires: 'war_sector10' },
+  { id: 'title_commander', kind: KIND_TITLE, label: 'Velitel front', price: 250, requires: 'war_scen12' },
+  { id: 'title_lieutenant', kind: KIND_TITLE, label: 'Poručík', price: 120, requires: 'war_sector5' },
+  { id: 'title_general', kind: KIND_TITLE, label: 'Generál', price: 350, requires: 'war_sector25' },
   { id: 'gamefx_noir', kind: KIND_GAMEFX, label: 'Noir', price: 250, requires: null, description: 'Černobílé hry s o něco větším kontrastem.', filter: 'grayscale(1) contrast(1.15)' },
   { id: 'gamefx_retro', kind: KIND_GAMEFX, label: 'Retro', price: 250, requires: null, description: 'Teplé, trochu vybledlé barvy jako ze starého filmu.', filter: 'sepia(0.85) saturate(1.15) contrast(1.05)' },
   { id: 'gamefx_neon', kind: KIND_GAMEFX, label: 'Neon', price: 300, requires: null, description: 'Sytější, zářivější barvy.', filter: 'saturate(1.9) contrast(1.12) brightness(1.05)' },
@@ -36,6 +63,18 @@ const ITEM_BY_ID = new Map(SHOP_ITEMS.map((item) => [item.id, item]));
 
 export const getShopItem = (id) => ITEM_BY_ID.get(id) || null;
 export const itemsOfKind = (kind) => SHOP_ITEMS.filter((item) => item.kind === kind);
+
+// Nabídka po skupinách. Tituly se dělí na obecné (jen za mince) a po hrách podle odznaku, který titul odemyká; ostatní zboží je jedna skupina bez nadpisu.
+export function groupsOfKind(kind) {
+  const items = itemsOfKind(kind);
+  if (kind !== KIND_TITLE) return [{ id: 'all', label: null, items }];
+  const groups = [{ id: 'reading', label: 'Čtení a obecné', items: [] }, ...GAME_CATALOG.map((g) => ({ id: g.id, label: g.title, items: [] }))];
+  for (const item of items) {
+    const gameId = item.requires ? getBadge(item.requires)?.game : null;
+    (groups.find((g) => g.id === gameId) || groups[0]).items.push(item);
+  }
+  return groups.filter((g) => g.items.length > 0);
+}
 
 // Text titulu pro zobrazení u jména; neznámé nebo chybějící id nevrátí nic (a nic se u jména neukáže).
 export const titleLabel = (id) => {

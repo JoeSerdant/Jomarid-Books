@@ -54,10 +54,11 @@ select tt.smk(4, 'Ema', 0);            -- bez mincí
 select tt.smk(5, 'Skrytý', 1000, false);
 select tt.smk(6, null, 1000);          -- bez uživatelského jména
 select tt.smk(7, 'Pavel', 100);        -- přesně na nejlevnější zboží
+select tt.smk(8, 'Karel', 1000);       -- dostane odznak za Warroom (nové tituly za odznaky dalších her)
 
 -- ===== zboží =====
-select tt.ok((select count(*) from public.shop_items) = 18 and (select count(*) from public.shop_items where kind = 'title') = 12 and (select count(*) from public.shop_items where kind = 'gamefx') = 6, 'v obchůdku je 12 titulů a 6 vzhledů her');
-select tt.ok((select count(*) from public.shop_items where active) = 18, 'všechno zboží se prodává');
+select tt.ok((select count(*) from public.shop_items) = 45 and (select count(*) from public.shop_items where kind = 'title') = 39 and (select count(*) from public.shop_items where kind = 'gamefx') = 6, 'v obchůdku je 39 titulů a 6 vzhledů her');
+select tt.ok((select count(*) from public.shop_items where active) = 45, 'všechno zboží se prodává');
 select tt.ok(not exists (select 1 from public.shop_items where requires_badge is not null and requires_badge not in (select badge_id from public.game_badge_defs)), 'každý požadovaný odznak opravdu existuje mezi herními odznaky');
 select tt.ok(not exists (select 1 from public.shop_items where kind = 'gamefx' and requires_badge is not null), 'vzhledy her se nekoupí za odznak, jen za mince');
 select tt.ok(not exists (select 1 from public.shop_items where price < 100 or price > 400), 'ceny jsou od 100 do 400 mincí (jako kniha nebo Streak Freeze)');
@@ -109,6 +110,14 @@ select tt.sfails($$select tt.buy(3, 'title_hellrider')$$, 'locked', 'jiný titul
 select tt.ok(tt.srep(2, 'rocket', 'score_normal', 2500)->>'ok' = 'true', 'Petr také získá odznak Eso hvězd');
 select tt.sfails($$select tt.buy(2, 'title_pilot')$$, 'insufficient_coins', 'odznak je, ale mincí je málo: důvod je "málo mincí"');
 select tt.ok(tt.coins(2) = 99, 'Petrovi se nic nestrhlo');
+
+-- nové tituly za odznaky dalších her (každý odznak odemyká jediný titul)
+select tt.sfails($$select tt.buy(8, 'title_general')$$, 'locked', 'titul Generál je bez odznaku za 25. sektor zamčený');
+select tt.ok(tt.srep(8, 'warroom', 'best_sector', 25)->>'ok' = 'true', 'Karel dojde ve Warroom do 25. sektoru');
+select tt.ok(tt.buy(8, 'title_general')->>'new_balance' = '650', 'po odznaku Generál jde koupit titul Generál (1000 - 350)');
+select tt.ok(tt.buy(8, 'title_lieutenant')->>'new_balance' = '530', 'titul Poručík se odemkl už odznakem za 5. sektor (650 - 120)');
+select tt.sfails($$select tt.buy(8, 'title_commander')$$, 'locked', 'titul Velitel front čeká na jiný odznak (12 odemčených scénářů)');
+select tt.ok(tt.mine(8)->'equipped'->>'title' = 'title_lieutenant', 'nasazený je naposledy koupený titul');
 
 -- ===== nasazení a sundání =====
 select tt.ok(tt.mine(1)->'equipped' = '{"title": "title_night", "gamefx": "gamefx_noir"}'::jsonb, 'poslední koupený titul nahradil předchozí, vzhled her zůstal');
@@ -166,7 +175,7 @@ create temp table before_rerun as select (select coins from public.profiles wher
 \ir ../shop.sql
 select tt.ok((select price from public.shop_items where item_id = 'title_hellrider') = 250 and (select requires_badge from public.shop_items where item_id = 'title_hellrider') = 'rocket_hell'
   and (select label from public.shop_items where item_id = 'title_hellrider') = 'Pán pekel', 'po novém spuštění se cena, název i požadovaný odznak zboží srovnají se seznamem');
-select tt.ok((select count(*) from public.shop_items where active) = 18, 'zboží ze seznamu se prodává dál');
+select tt.ok((select count(*) from public.shop_items where active) = 45, 'zboží ze seznamu se prodává dál');
 select tt.ok((select active from public.shop_items where item_id = 'title_old') = false, 'zboží, které ze seznamu zmizelo, se přestalo prodávat, ale nesmazalo se');
 select tt.sfails($$select tt.buy(7, 'title_old')$$, 'unknown_item', 'staré zboží už nikdo další nekoupí');
 select tt.ok(tt.mine(6)->'owned' = '["title_bookworm", "title_old"]'::jsonb and tt.mine(6)->'equipped'->>'title' = 'title_old', 'kdo ho koupil, ho má dál (i nasazené)');
