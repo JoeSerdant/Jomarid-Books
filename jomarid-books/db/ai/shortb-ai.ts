@@ -201,6 +201,8 @@ if (D && typeof D.serve === 'function') {
     },
     generate: async (system, user) => {
       if (!key) { console.error('shortb-ai: chybí GEMINI_API_KEY (Edge Functions -> Secrets)'); return { error: 'upstream', detail: 'v Supabase (Edge Functions → Secrets) chybí GEMINI_API_KEY' }; }
+      const started = Date.now();
+      const BUDGET_MS = 130000; // Supabase funkci po zhruba 150 s ukončí, retry se proto vejde jen do rozpočtu
       const call = (structured: boolean) => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
@@ -213,11 +215,18 @@ if (D && typeof D.serve === 'function') {
             ...(structured ? { responseMimeType: 'application/json', responseSchema: { type: 'OBJECT', properties: { title: { type: 'STRING' }, genres: { type: 'ARRAY', items: { type: 'STRING' } }, text: { type: 'STRING' } }, required: ['title', 'genres', 'text'] } } : {}),
           },
         }),
-        signal: AbortSignal.timeout(120000),
+        signal: AbortSignal.timeout(Math.max(10000, Math.min(120000, BUDGET_MS - (Date.now() - started)))),
       });
       // Strukturovaná odpověď dá název a žánry spolehlivě; kdyby ji model nebo API odmítly (400), zkusí se prostý text s hlavičkou.
       let res = await call(true);
-      if (res.status === 400) { console.error('shortb-ai: strukturovaná odpověď odmítnuta, zkouším prostý text', (await res.text()).slice(0, 200)); res = await call(false); }
+      let structured = true;
+      if (res.status === 400) { console.error('shortb-ai: strukturovaná odpověď odmítnuta, zkouším prostý text', (await res.text()).slice(0, 200)); structured = false; res = await call(false); }
+      // Google občas hlásí 503 (model je přetížený); ten většinou za pár vteřin přejde, tak se zkusí znovu (nejvýš 2x, jen když zbývá čas).
+      for (let attempt = 1; attempt <= 2 && [500, 502, 503, 504].includes(res.status) && BUDGET_MS - (Date.now() - started) > 30000; attempt++) {
+        console.error('shortb-ai: Gemini vrátilo', res.status, '- zkouším znovu', attempt);
+        await new Promise((r) => setTimeout(r, attempt * 2500));
+        res = await call(structured);
+      }
       if (res.status === 429) return { error: 'quota' };
       if (!res.ok) {
         const raw = (await res.text()).slice(0, 600);
