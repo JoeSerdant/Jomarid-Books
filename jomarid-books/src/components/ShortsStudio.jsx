@@ -28,7 +28,7 @@ export const ShortsStudio = ({ all = false }) => {
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
-  const [ai, setAi] = useState({ open: false, prompt: '', length: 'medium', busy: false, error: '' });
+  const [ai, setAi] = useState({ open: false, prompt: '', length: 'medium', busy: false, error: '', detail: '' });
 
   const refresh = useCallback(async () => {
     const res = await loadMyShorts(supabase, all);
@@ -45,7 +45,7 @@ export const ShortsStudio = ({ all = false }) => {
     setErrors({}); setNotice(null);
     setForm({ id: s.id, title: s.title, body: s.body, genresText: s.genres.join(', '), seriesName: s.seriesName || '', seriesPart: s.seriesPart ?? '', hidden: s.isHidden, publishNow: !s.isHidden });
   };
-  const cancel = () => { setForm(null); setErrors({}); setAi((a) => ({ ...a, busy: false, error: '' })); };
+  const cancel = () => { setForm(null); setErrors({}); setAi((a) => ({ ...a, busy: false, error: '', detail: '' })); };
 
   // Další díl série: navazuje na nejvyšší díl téže série, který už je mezi shortB (jen u nového shortB).
   const previousPart = form && !form.id ? latestPart(items, form.seriesName) : null;
@@ -55,11 +55,11 @@ export const ShortsStudio = ({ all = false }) => {
     const built = buildAiRequest({ mode, prompt: ai.prompt, length: ai.length, previous: mode === 'next' ? previousPart : null });
     if (built.error) { setAi((a) => ({ ...a, error: built.error })); return; }
     if (form.body.trim() && !window.confirm('Přepsat stávající text návrhem od AI?')) return;
-    setAi((a) => ({ ...a, busy: true, error: '' }));
+    setAi((a) => ({ ...a, busy: true, error: '', detail: '' }));
     const res = await generateShortText(supabase, built.request);
-    if (res.error) { setAi((a) => ({ ...a, busy: false, error: res.error })); return; }
+    if (res.error) { setAi((a) => ({ ...a, busy: false, error: res.error, detail: res.detail || '' })); return; }
     setForm((f) => (f ? { ...f, body: res.text, ...(mode === 'next' && previousPart ? { seriesPart: String(Math.max(Number(f.seriesPart) || 0, previousPart.seriesPart + 1)) } : {}) } : f));
-    setAi((a) => ({ ...a, busy: false, error: '' }));
+    setAi((a) => ({ ...a, busy: false, error: '', detail: '' }));
     setNotice({ type: 'success', text: res.trimmed ? `Návrh od AI je ve formuláři, byl delší než ${fmt(SHORT_LIMITS.body)} znaků, tak se zkrátil. Přečti ho a uprav.` : 'Návrh od AI je ve formuláři. Přečti ho a uprav, než ho zveřejníš.' });
   };
 
@@ -203,7 +203,12 @@ export const ShortsStudio = ({ all = false }) => {
                 </div>
                 {previousPart && <p style={mutedStyle} className="text-[0.6875rem] m-0 opacity-80" data-testid="shorts-ai-prev">Další díl naváže na díl {previousPart.seriesPart} série {previousPart.seriesName}: {previousPart.title}. Zadání můžeš nechat prázdné.</p>}
                 {ai.busy && <p role="status" style={mutedStyle} className="text-[0.6875rem] m-0 font-bold">AI píše, může to trvat až půl minuty.</p>}
-                {ai.error && <p role="alert" data-testid="shorts-ai-error" className="text-[0.6875rem] font-bold m-0" style={{ color: '#ef4444' }}>{ai.error}</p>}
+                {ai.error && (
+                  <div role="alert" data-testid="shorts-ai-error" className="text-[0.6875rem] font-bold m-0 space-y-1" style={{ color: '#ef4444' }}>
+                    <p className="m-0">{ai.error}</p>
+                    {ai.detail && <p className="m-0 font-medium break-words" style={mutedStyle} data-testid="shorts-ai-detail">Podrobnosti: {ai.detail}</p>}
+                  </div>
+                )}
               </div>
             )}
           </div>

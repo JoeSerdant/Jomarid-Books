@@ -212,3 +212,35 @@ test('Studio je napojené na AI: panel, tlačítka a potvrzení přepsání text
   for (const needle of ['data-testid="shorts-ai"', 'data-testid="shorts-ai-write"', 'data-testid="shorts-ai-next"', "runAi('new')", "runAi('next')", 'buildAiRequest(', 'generateShortText(supabase', 'latestPart(items, form.seriesName)', 'Přepsat stávající text návrhem od AI?']) assert.ok(studio.includes(needle), needle);
   assert.match(studio, /form && !form\.id \? latestPart/, 'další díl jen u nového shortB');
 });
+
+test('Edge Function: technický popis chyby (stav a věta od Googlu) jde do odpovědi, klíč v něm nikdy není', { skip }, async () => {
+  const { deps } = mkDeps({ generate: async () => ({ error: 'upstream', detail: 'Gemini odpovědělo 404: models/gemini-9 is not found. Zkus key=AIzaSyA1234567890abcdefghijklmnop nebo AQ.Ab8RN6JJRrxfIZdKv0arRIEQcU31 ' + 'x'.repeat(500) }) });
+  const quiet = console.error; console.error = () => {};
+  try {
+    const r = await EDGE.handle(req({ prompt: 'x' }), deps);
+    const b = await body(r);
+    assert.equal(r.status, 502);
+    assert.match(b.detail, /^Gemini odpovědělo 404: models\/gemini-9 is not found/);
+    assert.doesNotMatch(JSON.stringify(b), /AIza|AQ\.Ab8|key=/);
+    assert.ok(b.detail.length <= 300);
+    const none = await body(await EDGE.handle(req({ prompt: 'x' }), mkDeps({ generate: async () => ({ error: 'quota' }) }).deps));
+    assert.equal('detail' in none, false, 'bez popisu se pole neposílá');
+    const thrown = await body(await EDGE.handle(req({ prompt: 'x' }), mkDeps({ generate: async () => { throw new Error('síť spadla'); } }).deps));
+    assert.equal(thrown.detail, 'volání modelu selhalo (Error)');
+    assert.doesNotMatch(JSON.stringify(thrown), /síť spadla/, 'text vyhozené chyby se neposílá, jen její druh');
+  } finally { console.error = quiet; }
+  assert.equal(EDGE.safeDetail('a   b\n c'), 'a b c');
+  assert.equal(EDGE.safeDetail(null), '');
+});
+
+test('generateShortText: podrobnosti z funkce se předají do appky (a jen z funkce)', async () => {
+  const withBody = (b) => ({ functions: { invoke: async () => ({ data: null, error: { name: 'FunctionsHttpError', message: 'x', context: { status: 502, json: async () => b } } }) } });
+  const r = await generateShortText(withBody({ error: 'upstream', message: 'x', detail: 'Gemini odpovědělo 403: API key not valid' }), {});
+  assert.match(r.error, /neodpovídá/);
+  assert.equal(r.detail, 'Gemini odpovědělo 403: API key not valid');
+  assert.equal('detail' in (await generateShortText(withBody({ error: 'quota', message: '' }), {})), false);
+  const long = await generateShortText(withBody({ error: 'upstream', detail: 'y'.repeat(900) }), {});
+  assert.equal(long.detail.length, 300);
+  const studio = fs.readFileSync(path.join(SRC, 'components', 'ShortsStudio.jsx'), 'utf8');
+  assert.ok(studio.includes('data-testid="shorts-ai-detail"') && studio.includes('Podrobnosti: {ai.detail}'));
+});
