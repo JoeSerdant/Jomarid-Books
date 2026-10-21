@@ -212,6 +212,8 @@ if (D && typeof D.serve === 'function') {
           generationConfig: {
             temperature: 1,
             maxOutputTokens: 8192,
+            // Nový model jinak dlouho „přemýšlí“ a odpověď trvá přes minutu. Nízká úroveň uvažování ji zkrátí; kdyby ji API neznalo (400), jde se na prostý požadavek.
+            ...(structured ? { thinkingConfig: { thinkingLevel: 'low' } } : {}),
             ...(structured ? { responseMimeType: 'application/json', responseSchema: { type: 'OBJECT', properties: { title: { type: 'STRING' }, genres: { type: 'ARRAY', items: { type: 'STRING' } }, text: { type: 'STRING' } }, required: ['title', 'genres', 'text'] } } : {}),
           },
         }),
@@ -220,7 +222,7 @@ if (D && typeof D.serve === 'function') {
       // Strukturovaná odpověď dá název a žánry spolehlivě; kdyby ji model nebo API odmítly (400), zkusí se prostý text s hlavičkou.
       let res = await call(true);
       let structured = true;
-      if (res.status === 400) { console.error('shortb-ai: strukturovaná odpověď odmítnuta, zkouším prostý text', (await res.text()).slice(0, 200)); structured = false; res = await call(false); }
+      if (res.status === 400) { console.error('shortb-ai: požadavek se schématem a nízkým uvažováním odmítnut, zkouším prostý text', (await res.text()).slice(0, 200)); structured = false; res = await call(false); }
       // Google občas hlásí 503 (model je přetížený); ten většinou za pár vteřin přejde, tak se zkusí znovu (nejvýš 2x, jen když zbývá čas).
       for (let attempt = 1; attempt <= 2 && [500, 502, 503, 504].includes(res.status) && BUDGET_MS - (Date.now() - started) > 30000; attempt++) {
         console.error('shortb-ai: Gemini vrátilo', res.status, '- zkouším znovu', attempt);
