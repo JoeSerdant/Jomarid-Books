@@ -3,7 +3,7 @@
 // Nastavení a nasazení: db/ai/README.md. Tajné hodnoty: GEMINI_API_KEY (povinná), GEMINI_MODEL (nepovinná, výchozí gemini-3.8-flash).
 // SUPABASE_URL a SUPABASE_ANON_KEY dodává Supabase sám.
 //
-// AI dodává jen TEXT (odstavce oddělené prázdným řádkem). Název, žánry a sérii vyplňuje nakladatel sám a návrh si před zveřejněním přečte a upraví.
+// AI dodává TEXT (odstavce oddělené prázdným řádkem) a k němu návrh názvu a žánrů; sérii vyplňuje nakladatel sám. Návrh si před zveřejněním přečte a upraví.
 // Logika je ve funkcích handle() a buildPrompt() se závislostmi zvenku, takže jde testovat v Node (src/tests/shortsAi.test.mjs) bez Deno a sítě.
 
 export const MAX_BODY_CHARS = 6000;   // stejný strop jako db/shorts.sql
@@ -11,6 +11,10 @@ export const PROMPT_MAX = 2000;       // zadání od nakladatele
 export const PREVIOUS_MAX = 6000;     // předchozí díl série, ze kterého se navazuje
 export const LENGTHS = { short: 2000, medium: 4000, long: 5500 } as const;
 export type LengthKey = keyof typeof LENGTHS;
+
+export const TITLE_MAX = 120;       // stejný strop jako db/shorts.sql
+export const GENRES_MAX = 5;
+export const GENRE_LEN = 40;
 
 export type GenResult = { text: string } | { error: 'quota' | 'blocked' | 'upstream' | 'empty'; detail?: string };
 export interface AiDeps {
@@ -63,8 +67,9 @@ export function buildPrompt(input: AiInput): { system: string; user: string } {
     'Jsi zkušený spisovatel krátké prózy pro čtecí aplikaci. Píšeš česky, přirozeně, živě a bez klišé.',
     `Napiš jeden uzavřený text o délce zhruba ${target} znaků. Nikdy nepřekroč ${MAX_BODY_CHARS - 500} znaků.`,
     'Text začni silným prvním odstavcem, který čtenáře chytí, a skonči tak, aby měl konec váhu.',
-    'Odstavce odděluj prázdným řádkem. Použij běžné odstavce, žádné nadpisy, odrážky ani značky Markdown (*, #, _), žádný název textu.',
-    'Vrať pouze samotný text. Bez úvodu, bez poznámek, bez shrnutí a bez vysvětlování, co jsi napsal.',
+    'Odstavce odděluj prázdným řádkem. Použij běžné odstavce, žádné nadpisy, odrážky ani značky Markdown (*, #, _) a název do samotného textu nepiš.',
+    'Odpověď má přesně tenhle tvar: první řádek „NÁZEV: “ a krátký výstižný název (nejvýš 60 znaků), druhý řádek „ŽÁNRY: “ a 2 až 4 české žánry oddělené čárkami (například horor, thriller), pak prázdný řádek a samotný text.',
+    'Kromě toho nic: bez úvodu, bez poznámek, bez shrnutí a bez vysvětlování, co jsi napsal.',
     'Nepoužívej skutečné žijící osoby, neuváděj návody k ublížení ani explicitní sexuální obsah.',
   ].join('\n');
 
@@ -86,6 +91,22 @@ export function buildPrompt(input: AiInput): { system: string; user: string } {
     user = `Zadání: ${input.prompt}`;
   }
   return { system, user };
+}
+
+/** Z odpovědi modelu oddělí řádky „NÁZEV:“ a „ŽÁNRY:“ na začátku. Když tam nejsou, vrátí celý text a prázdný název i žánry. */
+export function splitMeta(raw: string): { title: string; genres: string[]; rest: string } {
+  let rest = String(raw ?? '').replace(/\r\n?/g, '\n').replace(/^\s*```[a-z]*\n/i, '').trimStart();
+  let title = '';
+  let genres: string[] = [];
+  for (let i = 0; i < 2; i++) {
+    const m = rest.match(/^[ \t]*[*_#]*[ \t]*(NÁZEV|NAZEV|ŽÁNRY|ZANRY|ŽÁNR|ZANR)[ \t]*[*_]*[ \t]*:[ \t]*[*_]*([^\n]*)\n?/i);
+    if (!m) break;
+    const value = m[2].replace(/[*_]+/g, ' ').replace(/^["„“»\s]+|["“”«\s]+$/g, '').trim();
+    if (/^N/i.test(m[1])) title = [...value].slice(0, TITLE_MAX).join('');
+    else genres = value.split(',').map((g) => [...g.replace(/[#*_.]/g, '').trim().toLowerCase()].slice(0, GENRE_LEN).join('')).filter(Boolean).slice(0, GENRES_MAX);
+    rest = rest.slice(m[0].length);
+  }
+  return { title, genres, rest: rest.replace(/^\n+/, '') };
 }
 
 /** Uklidí odpověď modelu: ohrazení kódu, Markdown, zdvojené prázdné řádky; text delší než strop ořízne na hranici odstavce nebo věty. */
@@ -136,9 +157,10 @@ export async function handle(req: Request, deps: AiDeps): Promise<Response> {
     const e = ERRORS[result.error] ?? ERRORS.upstream;
     return json({ error: result.error, message: e.message, ...(result.detail ? { detail: safeDetail(result.detail) } : {}) }, e.status);
   }
-  const { text, trimmed } = cleanText(result.text);
+  const meta = splitMeta(result.text);
+  const { text, trimmed } = cleanText(meta.rest);
   if (!text) return json({ error: 'empty', message: ERRORS.empty.message }, ERRORS.empty.status);
-  return json({ text, chars: [...text].length, trimmed });
+  return json({ text, title: meta.title, genres: meta.genres, chars: [...text].length, trimmed });
 }
 
 // Spuštění v Supabase (Deno). V Node (testy) se tahle část přeskočí.

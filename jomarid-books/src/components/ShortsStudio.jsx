@@ -50,7 +50,7 @@ export const ShortsStudio = ({ all = false }) => {
   // Další díl série: navazuje na nejvyšší díl téže série, který už je mezi shortB (jen u nového shortB).
   const previousPart = form && !form.id ? latestPart(items, form.seriesName) : null;
 
-  // AI napíše jen text; název, žánry a sérii vyplňuje nakladatel. Návrh se vloží do formuláře, nic se neukládá.
+  // AI napíše text a navrhne název a žánry (vyplní se jen prázdná pole, nic nepřepíše); sérii vyplňuje nakladatel. Návrh se vloží do formuláře, nic se neukládá.
   const runAi = async (mode) => {
     const built = buildAiRequest({ mode, prompt: ai.prompt, length: ai.length, previous: mode === 'next' ? previousPart : null });
     if (built.error) { setAi((a) => ({ ...a, error: built.error })); return; }
@@ -58,7 +58,7 @@ export const ShortsStudio = ({ all = false }) => {
     setAi((a) => ({ ...a, busy: true, error: '', detail: '' }));
     const res = await generateShortText(supabase, built.request);
     if (res.error) { setAi((a) => ({ ...a, busy: false, error: res.error, detail: res.detail || '' })); return; }
-    setForm((f) => (f ? { ...f, body: res.text, ...(mode === 'next' && previousPart ? { seriesPart: String(Math.max(Number(f.seriesPart) || 0, previousPart.seriesPart + 1)) } : {}) } : f));
+    setForm((f) => (f ? { ...f, body: res.text, ...(!f.title.trim() && res.title ? { title: res.title } : {}), ...(!parseGenresInput(f.genresText).length && res.genres.length ? { genresText: res.genres.join(', ') } : {}), ...(mode === 'next' && previousPart ? { seriesPart: String(Math.max(Number(f.seriesPart) || 0, previousPart.seriesPart + 1)) } : {}) } : f));
     setAi((a) => ({ ...a, busy: false, error: '', detail: '' }));
     setNotice({ type: 'success', text: res.trimmed ? `Návrh od AI je ve formuláři, byl delší než ${fmt(SHORT_LIMITS.body)} znaků, tak se zkrátil. Přečti ho a uprav.` : 'Návrh od AI je ve formuláři. Přečti ho a uprav, než ho zveřejníš.' });
   };
@@ -179,7 +179,7 @@ export const ShortsStudio = ({ all = false }) => {
             </button>
             {ai.open && (
               <div className="space-y-3">
-                <p style={mutedStyle} className="text-[0.6875rem] m-0 opacity-80">Napiš zadání a AI navrhne text. Název, žánry a sérii vyplňuješ ty. Návrh si přečti a uprav, za zveřejněný text odpovídáš ty.</p>
+                <p style={mutedStyle} className="text-[0.6875rem] m-0 opacity-80">Napiš zadání a AI navrhne text, název a žánry (vyplní jen prázdná pole). Sérii vyplňuješ ty. Návrh si přečti a uprav, za zveřejněný text odpovídáš ty.</p>
                 <div className="space-y-1">
                   <label htmlFor="short-ai-prompt" style={mutedStyle} className={labelCls}>Zadání</label>
                   <textarea id="short-ai-prompt" rows={3} maxLength={AI_PROMPT_MAX} value={ai.prompt} onChange={(e) => setAi((a) => ({ ...a, prompt: e.target.value }))}

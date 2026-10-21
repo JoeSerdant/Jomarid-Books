@@ -90,6 +90,25 @@ test('Edge Function: úspěch vrátí uklizený text, počet znaků a model dost
   assert.match(calls.gen[0].system, /zhruba 5500 znaků/);
 });
 
+test('Edge Function: název a žánry z úvodních řádků se oddělí od textu, bez nich zůstane jen text', { skip }, async () => {
+  const run = async (text) => body(await EDGE.handle(req({ prompt: 'x' }), mkDeps({ generate: async () => ({ text }) }).deps));
+  const a = await run('NÁZEV: „Prázdná lednice“\nŽÁNRY: Horor, #thriller, , Mysteriózní.\n\nPrvní odstavec.\n\nDruhý.');
+  assert.equal(a.title, 'Prázdná lednice');
+  assert.deepEqual(a.genres, ['horor', 'thriller', 'mysteriózní']);
+  assert.equal(a.text, 'První odstavec.\n\nDruhý.');
+  const b = await run('**Název:** Maják\n**Žánry:** drama\n\nText.');
+  assert.equal(b.title, 'Maják');
+  assert.deepEqual(b.genres, ['drama']);
+  assert.equal(b.text, 'Text.');
+  const c = await run('Jen text bez hlavičky.');
+  assert.equal(c.title, '');
+  assert.deepEqual(c.genres, []);
+  assert.equal(c.text, 'Jen text bez hlavičky.');
+  const d = await run(`NÁZEV: ${'x'.repeat(300)}\nŽÁNRY: a, b, c, d, e, f, g\n\nText.`);
+  assert.equal([...d.title].length, 120);
+  assert.equal(d.genres.length, 5);
+});
+
 test('Edge Function: text nad 6 000 znaků se ořízne na hranici odstavce', { skip }, async () => {
   const para = 'Věta o pár slovech, která se opakuje. '.repeat(20).trim();
   const long = Array.from({ length: 12 }, () => para).join('\n\n');
@@ -142,7 +161,7 @@ test('Edge Function: další díl série pošle modelu předchozí díl, číslo
 
 test('Edge Function: pokyny modelu zakazují Markdown a úvod, chtějí odstavce a omezují obsah', { skip }, () => {
   const { system } = EDGE.buildPrompt({ mode: 'new', prompt: 'x', length: 'medium', previous: null });
-  for (const re of [/česky/, /zhruba 4000 znaků/, /prázdným řádkem/, /Markdown/, /pouze samotný text/, /skutečné žijící osoby/, /explicitní sexuální obsah/]) assert.match(system, re);
+  for (const re of [/česky/, /zhruba 4000 znaků/, /prázdným řádkem/, /Markdown/, /NÁZEV: .*ŽÁNRY: /s, /skutečné žijící osoby/, /explicitní sexuální obsah/]) assert.match(system, re);
   assert.equal(EDGE.MAX_BODY_CHARS, 6000, 'stejný strop jako db/shorts.sql');
   assert.match(read('..', 'db', 'shorts.sql'), /between 1 and 6000/);
 });
@@ -187,7 +206,10 @@ test('buildAiRequest: kontrola zadání, délky a předchozího dílu', () => {
 
 test('generateShortText: úspěch, chyba funkce s kódem, funkce není nasazená a vyhozená výjimka', async () => {
   const ok = await generateShortText({ functions: { invoke: async (name, o) => { assert.equal(name, 'shortb-ai'); assert.deepEqual(o.body, { mode: 'new' }); return { data: { text: 'Text.', chars: 5, trimmed: true }, error: null }; } } }, { mode: 'new' });
-  assert.deepEqual(ok, { text: 'Text.', chars: 5, trimmed: true });
+  assert.deepEqual(ok, { text: 'Text.', title: '', genres: [], chars: 5, trimmed: true });
+  const meta = await generateShortText({ functions: { invoke: async () => ({ data: { text: 'T.', title: '  Prázdná lednice ', genres: ['horor', 7, ' ', 'thriller'] }, error: null }) } }, {});
+  assert.equal(meta.title, 'Prázdná lednice');
+  assert.deepEqual(meta.genres, ['horor', 'thriller']);
   const withCode = (code, message) => ({ functions: { invoke: async () => ({ data: null, error: { name: 'FunctionsHttpError', message: 'Edge Function returned a non-2xx status code', context: { json: async () => ({ error: code, message }) } } }) } });
   assert.match((await generateShortText(withCode('quota', ''), {})).error, /plno/);
   assert.match((await generateShortText(withCode('forbidden', ''), {})).error, /nakladatel/);

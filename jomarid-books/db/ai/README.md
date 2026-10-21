@@ -1,7 +1,7 @@
 # AI pomocník pro shortB (Gemini): nastavení
 
 Ve Studiu (Nakladatelský panel → záložka shortB → Nový shortB) je panel **Napsat s AI**. Nakladatel napíše zadání, AI navrhne **text** a vloží ho do formuláře.
-Název, žánry a sérii vyplňuje nakladatel sám, nic se neukládá samo a návrh si nakladatel před zveřejněním přečte a upraví. U série je tlačítko
+Název a žánry AI navrhne (do formuláře se vyplní jen prázdná pole), sérii vyplňuje nakladatel sám, nic se neukládá samo a návrh si nakladatel před zveřejněním přečte a upraví. U série je tlačítko
 **Napsat další díl**: naváže na nejvyšší díl téže série, který už je mezi shortB. Žádný denní limit.
 
 Volání Gemini jde přes Edge Function **`shortb-ai`**, protože klíč nesmí být v appce (kdokoli by ho z prohlížeče vytáhl). Funkci smí zavolat jen přihlášený
