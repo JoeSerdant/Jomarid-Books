@@ -192,7 +192,14 @@ test('generateShortText: úspěch, chyba funkce s kódem, funkce není nasazená
   assert.match((await generateShortText(withCode('quota', ''), {})).error, /plno/);
   assert.match((await generateShortText(withCode('forbidden', ''), {})).error, /nakladatel/);
   assert.equal((await generateShortText(withCode('neznamy', 'Vlastní věta ze serveru.'), {})).error, 'Vlastní věta ze serveru.');
-  assert.match((await generateShortText({ functions: { invoke: async () => ({ data: null, error: { name: 'FunctionsFetchError', message: 'Failed to send a request to the Edge Function' } }) } }, {})).error, /zatím není nastavený/);
+  const failing = (error) => ({ functions: { invoke: async () => ({ data: null, error }) } });
+  const quietWarn = async (fn) => { const w = console.warn; console.warn = () => {}; try { return await fn(); } finally { console.warn = w; } };
+  assert.match((await quietWarn(() => generateShortText(failing({ name: 'FunctionsFetchError', message: 'Failed to send a request to the Edge Function' }), {}))).error, /Nepodařilo se spojit/);
+  assert.match((await quietWarn(() => generateShortText(failing({ name: 'FunctionsRelayError', message: 'Relay Error invoking the Edge Function' }), {}))).error, /se nespustila.*Logs/);
+  assert.match((await quietWarn(() => generateShortText(failing({ name: 'FunctionsHttpError', message: 'Edge Function returned a non-2xx status code', context: { status: 404, json: async () => ({ code: 'NOT_FOUND', message: 'Requested function was not found' }) } }), {}))).error, /nebyla nalezena.*přesně/);
+  assert.match((await quietWarn(() => generateShortText(failing({ name: 'FunctionsHttpError', message: 'x', context: { status: 401, json: async () => ({ code: 401, message: 'Invalid JWT' }) } }), {}))).error, /Verify JWT/);
+  const e500 = (await quietWarn(() => generateShortText(failing({ name: 'FunctionsHttpError', message: 'x', context: { status: 500, json: async () => ({}) } }), {}))).error;
+  assert.match(e500, /neodpovídá.*kód 500.*Logs/);
   assert.match((await generateShortText({ functions: { invoke: async () => ({ data: { text: ' ' }, error: null }) } }, {})).error, /nevrátila/);
   assert.match((await generateShortText({ functions: { invoke: async () => { throw new Error('x'); } } }, {})).error, /neodpovídá/);
   assert.match((await generateShortText({ functions: { invoke: async () => ({ data: null, error: { message: 'divné', context: { json: async () => { throw new Error('ne json'); } } } }) } }, {})).error, /neodpovídá/);
