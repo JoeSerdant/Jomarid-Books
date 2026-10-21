@@ -23,7 +23,8 @@ Supabase → **Edge Functions → Secrets** → přidej:
 
 ## 2. Nasazení funkce
 Supabase → **Edge Functions → Deploy a new function → Via Editor** → název **`shortb-ai`** → vlož obsah `jomarid-books/db/ai/shortb-ai.ts` → Deploy.
-**„Verify JWT“ nech zapnuté** (funkce ji volá přihlášený uživatel z appky; roli nakladatel nebo správce si funkce navíc kontroluje sama).
+**„Verify JWT“ (v nastavení funkce) vypni**, stejně jako u `send-push`. Funkce si přihlášení ověřuje sama (token ověří Supabase Auth) a roli nakladatel nebo správce
+kontroluje taky sama, takže bez zapnutého ověření nic neriskuješ. Zapnuté ověření v některých projektech (s novými klíči) přihlášeného uživatele odmítne dřív, než se funkce vůbec spustí.
 
 ## 3. Zkouška
 Přihlas se jako nakladatel nebo správce → Studio → **shortB** → **Nový shortB** → **Napsat s AI** → zadání (třeba „Horor o opuštěném majáku“) → **Napsat text**.
@@ -32,7 +33,10 @@ Do pole Text se vloží návrh (může to trvat až půl minuty).
 ## Kdyby to nešlo
 | Hláška v appce | Co to znamená |
 | --- | --- |
-| „AI pomocník zatím není nastavený“ | Funkce `shortb-ai` není nasazená, nebo má jiný název. Zkontroluj krok 2. |
+| „Funkce shortb-ai nebyla nalezena“ | Funkce má jiný název. V Edge Functions musí být přesně `shortb-ai` (malými písmeny, s pomlčkou). |
+| „Funkce shortb-ai se nespustila“ | Funkce spadla hned při startu (třeba chyba při vložení kódu: vlož celý soubor `shortb-ai.ts` od první do poslední řádky) nebo má špatný název. Detail je v Edge Functions → `shortb-ai` → **Logs**. |
+| „Nepodařilo se spojit s funkcí“ | Spojení se nepovedlo: funkce není nasazená, je vypnutá, nebo selhala síť. Zkus to znovu a podívej se do **Logs**. |
+| „Funkce shortb-ai odmítla přihlášení“ | Je zapnuté „Verify JWT“. Vypni ho v nastavení funkce a ulož. |
 | „AI teď neodpovídá“ | Chybí nebo nesedí `GEMINI_API_KEY`, nebo model neexistuje (`GEMINI_MODEL`). Detail je v Edge Functions → `shortb-ai` → **Logs**. |
 | „AI má teď plno nebo vyčerpaný limit“ | Google vrátil 429: překročený limit klíče nebo zdarma dostupných dotazů. Zkus později, nebo v AI Studiu zkontroluj využití a nastavení účtu. |
 | „AI tohle zadání odmítla“ | Bezpečnostní filtr Googlu. Zadání přeformuluj. |

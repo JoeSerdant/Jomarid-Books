@@ -19,7 +19,10 @@ const ERROR_TEXT = {
   upstream: 'AI teď neodpovídá. Zkus to za chvíli.',
   empty: 'AI nevrátila žádný text. Zkus to znovu.',
 };
-const NOT_DEPLOYED = 'AI pomocník zatím není nastavený (správce musí nasadit funkci shortb-ai).';
+const NOT_FOUND = 'Funkce shortb-ai nebyla nalezena. V Supabase (Edge Functions) musí mít přesně tenhle název.';
+const RELAY = 'Funkce shortb-ai se nespustila: buď nemá správný název, nebo spadla hned při startu. Podrobnosti jsou v Supabase: Edge Functions → shortb-ai → Logs.';
+const FETCH = 'Nepodařilo se spojit s funkcí shortb-ai (síť, nebo funkce není nasazená). Zkus to znovu; když se to opakuje, zkontroluj v Supabase Edge Functions → shortb-ai → Logs.';
+const REJECTED_JWT = 'Funkce shortb-ai odmítla přihlášení. V jejím nastavení vypni „Verify JWT“ (funkce si přihlášení a roli ověřuje sama) a zkus to znovu.';
 
 /** Nejvyšší díl série mezi shortB (stejný název série bez ohledu na velikost písmen a diakritiku), bez shortB, který se právě upravuje. */
 export function latestPart(items, seriesName, exceptId = null) {
@@ -70,8 +73,14 @@ export async function generateShortText(client, request) {
     if (error) {
       const { code, message } = await errorCode(error);
       if (code) return { error: aiErrorMessage(code, message) };
-      if (/not found|404|FunctionsRelayError|Failed to send a request/i.test(String(error?.message || '') + String(error?.name || ''))) return { error: NOT_DEPLOYED };
-      return { error: ERROR_TEXT.upstream };
+      // Bez kódu z funkce: odpověď přišla od Supabase (ne od funkce) nebo se spojení nepovedlo. Pro snazší hledání příčiny se skutečná chyba vypíše do konzole.
+      const status = Number(error?.context?.status);
+      console.warn('shortb-ai:', error?.name, status || '', error?.message);
+      if (error?.name === 'FunctionsFetchError') return { error: FETCH };
+      if (error?.name === 'FunctionsRelayError') return { error: RELAY };
+      if (status === 404) return { error: NOT_FOUND };
+      if (status === 401) return { error: REJECTED_JWT };
+      return { error: status >= 500 ? `${ERROR_TEXT.upstream} (chyba funkce, kód ${status}; detail je v Edge Functions → shortb-ai → Logs)` : ERROR_TEXT.upstream };
     }
     const text = typeof data?.text === 'string' ? data.text : '';
     if (!text.trim()) return { error: ERROR_TEXT.empty };
