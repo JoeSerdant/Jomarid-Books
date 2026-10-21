@@ -58,21 +58,21 @@ async function errorCode(error) {
     const ctx = error?.context;
     if (ctx && typeof ctx.json === 'function') {
       const body = await ctx.json();
-      if (body && typeof body.error === 'string') return { code: body.error, message: typeof body.message === 'string' ? body.message : '' };
+      if (body && typeof body.error === 'string') return { code: body.error, message: typeof body.message === 'string' ? body.message : '', detail: typeof body.detail === 'string' ? body.detail.slice(0, 300) : '' };
     }
   } catch { /* tělo nešlo přečíst */ }
-  return { code: '', message: '' };
+  return { code: '', message: '', detail: '' };
 }
 
 export const aiErrorMessage = (code, message = '') => ERROR_TEXT[code] || message || ERROR_TEXT.upstream;
 
-/** Zavolá funkci a vrátí { text, chars, trimmed } nebo { error }. */
+/** Zavolá funkci a vrátí { text, chars, trimmed } nebo { error, detail? } (detail je technický popis od serveru, třeba odpověď Googlu). */
 export async function generateShortText(client, request) {
   try {
     const { data, error } = await client.functions.invoke('shortb-ai', { body: request });
     if (error) {
-      const { code, message } = await errorCode(error);
-      if (code) return { error: aiErrorMessage(code, message) };
+      const { code, message, detail } = await errorCode(error);
+      if (code) return { error: aiErrorMessage(code, message), ...(detail ? { detail } : {}) };
       // Bez kódu z funkce: odpověď přišla od Supabase (ne od funkce) nebo se spojení nepovedlo. Pro snazší hledání příčiny se skutečná chyba vypíše do konzole.
       const status = Number(error?.context?.status);
       console.warn('shortb-ai:', error?.name, status || '', error?.message);

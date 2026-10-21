@@ -12,7 +12,7 @@ export const PREVIOUS_MAX = 6000;     // předchozí díl série, ze kterého se
 export const LENGTHS = { short: 2000, medium: 4000, long: 5500 } as const;
 export type LengthKey = keyof typeof LENGTHS;
 
-export type GenResult = { text: string } | { error: 'quota' | 'blocked' | 'upstream' | 'empty' };
+export type GenResult = { text: string } | { error: 'quota' | 'blocked' | 'upstream' | 'empty'; detail?: string };
 export interface AiDeps {
   /** Ověří přihlášení a roli (nakladatel nebo správce). */
   authorize: (token: string) => Promise<{ ok: true } | { ok: false; reason: 'not_authenticated' | 'forbidden' }>;
@@ -29,6 +29,10 @@ const CORS = {
   'access-control-allow-methods': 'POST, OPTIONS',
 };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...CORS, 'content-type': 'application/json' } });
+
+/** Stručný popis chyby pro nakladatele (stav a věta od Googlu). Klíč v něm nikdy není: vše, co se klíči podobá, se vymaže. */
+export const safeDetail = (v: unknown): string =>
+  String(v ?? '').replace(/AIza[0-9A-Za-z_-]{20,}|AQ\.[0-9A-Za-z_-]{20,}|key=[^\s&"']+/g, '[klíč]').replace(/\s+/g, ' ').trim().slice(0, 300);
 
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.replace(/\r\n?/g, '\n').trim().slice(0, max) : '');
 
@@ -127,10 +131,10 @@ export async function handle(req: Request, deps: AiDeps): Promise<Response> {
 
   const { system, user } = buildPrompt(parsed.input);
   let result: GenResult;
-  try { result = await deps.generate(system, user); } catch (e) { console.error('shortb-ai: model selhal', e); result = { error: 'upstream' }; }
+  try { result = await deps.generate(system, user); } catch (e) { console.error('shortb-ai: model selhal', e); result = { error: 'upstream', detail: `volání modelu selhalo (${(e as Error)?.name ?? 'chyba'})` }; }
   if ('error' in result) {
     const e = ERRORS[result.error] ?? ERRORS.upstream;
-    return json({ error: result.error, message: e.message }, e.status);
+    return json({ error: result.error, message: e.message, ...(result.detail ? { detail: safeDetail(result.detail) } : {}) }, e.status);
   }
   const { text, trimmed } = cleanText(result.text);
   if (!text) return json({ error: 'empty', message: ERRORS.empty.message }, ERRORS.empty.status);
@@ -157,7 +161,7 @@ if (D && typeof D.serve === 'function') {
       return role === 'nakladatel' || role === 'správce' ? { ok: true } : { ok: false, reason: 'forbidden' };
     },
     generate: async (system, user) => {
-      if (!key) { console.error('shortb-ai: chybí GEMINI_API_KEY (Edge Functions -> Secrets)'); return { error: 'upstream' }; }
+      if (!key) { console.error('shortb-ai: chybí GEMINI_API_KEY (Edge Functions -> Secrets)'); return { error: 'upstream', detail: 'v Supabase (Edge Functions → Secrets) chybí GEMINI_API_KEY' }; }
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
@@ -169,12 +173,18 @@ if (D && typeof D.serve === 'function') {
         signal: AbortSignal.timeout(50000),
       });
       if (res.status === 429) return { error: 'quota' };
-      if (!res.ok) { console.error('shortb-ai: Gemini vrátilo', res.status, (await res.text()).slice(0, 300)); return { error: 'upstream' }; }
+      if (!res.ok) {
+        const raw = (await res.text()).slice(0, 600);
+        console.error('shortb-ai: Gemini vrátilo', res.status, raw.slice(0, 300));
+        let msg = raw;
+        try { msg = JSON.parse(raw)?.error?.message ?? raw; } catch { /* nebyl JSON */ }
+        return { error: 'upstream', detail: `Gemini odpovědělo ${res.status}: ${msg}` };
+      }
       const data = await res.json();
       if (data?.promptFeedback?.blockReason) return { error: 'blocked' };
       const cand = data?.candidates?.[0];
       const text = (cand?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? '').join('');
-      if (!text.trim()) return { error: cand?.finishReason === 'SAFETY' || cand?.finishReason === 'PROHIBITED_CONTENT' ? 'blocked' : 'empty' };
+      if (!text.trim()) return { error: cand?.finishReason === 'SAFETY' || cand?.finishReason === 'PROHIBITED_CONTENT' ? 'blocked' : 'empty', detail: cand?.finishReason ? `důvod ukončení: ${cand.finishReason}` : undefined };
       return { text };
     },
   };
