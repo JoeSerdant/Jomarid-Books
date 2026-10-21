@@ -11,8 +11,8 @@ export const SHORT_LIMITS = Object.freeze({
   genreLength: GENRE_MAX_LENGTH,
 });
 
-// Kolik znaků má jedna stránka karty ve feedu (6 000 znaků je zhruba 9 stránek). Čte se do strany, po poslední stránce se jde dolů na další shortB.
-export const PAGE_CHARS = 700;
+// Kolik znaků má jedna stránka karty ve feedu (6 000 znaků je zhruba 10 stránek). Čte se do strany, po poslední stránce se jde dolů na další shortB.
+export const PAGE_CHARS = 600;
 
 /** Počet znaků jako v databázi (char_length): emoji a znaky mimo základní rovinu se počítají za jeden. */
 export const countChars = (text) => {
@@ -122,3 +122,33 @@ export function paginate(body, maxChars = PAGE_CHARS) {
   }
   return pages.map(render);
 }
+
+// ---- karta ve feedu ----
+
+/**
+ * Karty shortB: úvodní strana (název, autor), stránky textu a závěrečná strana (lajk, další). Čte se po nich do strany.
+ * Vrací [{ kind: 'cover' }, { kind: 'page', text, n, of }, ..., { kind: 'end' }].
+ */
+export function buildSlides(body, maxChars = PAGE_CHARS) {
+  const pages = paginate(body, maxChars);
+  return [{ kind: 'cover' }, ...pages.map((text, i) => ({ kind: 'page', text, n: i + 1, of: pages.length })), { kind: 'end' }];
+}
+
+/** Na které straně karty je čtenář podle posunu karuselu (nejbližší strana, v mezích). */
+export const slideIndexFromScroll = (scrollLeft, width, count) => {
+  if (!(width > 0) || !(count > 0)) return 0;
+  return Math.min(count - 1, Math.max(0, Math.round(scrollLeft / width)));
+};
+
+/**
+ * Z nejdál navštívené strany karty vyčte postup pro server: kolik stránek textu viděl a zda je dočetl (došel na poslední
+ * stránku textu nebo na závěrečnou stranu). Úvodní strana se jako stránka textu nepočítá.
+ */
+export const progressFromSlide = (slideCount, maxSlide) => {
+  const total = Math.max(1, slideCount - 2);
+  const seen = Math.min(total, Math.max(0, Math.floor(maxSlide)));
+  return { pagesSeen: seen, pagesTotal: total, finished: seen >= total };
+};
+
+/** Přibližná doba čtení v minutách (zhruba 1 200 znaků za minutu, aspoň 1). */
+export const readMinutes = (chars) => Math.max(1, Math.round(Math.max(0, Number(chars) || 0) / 1200));

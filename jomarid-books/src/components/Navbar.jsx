@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { ROLE_READER, ROLE_PUBLISHER, ROLE_ADMIN, ROLE_LABELS } from '../constants/roles';
-import { Award, BarChart3, Coins, Compass, Gamepad2, Library, LogOut, Search, Settings, Shield } from 'lucide-react';
+import { Award, BarChart3, Coins, Compass, Gamepad2, Layers, Library, LogOut, Search, Settings, Shield } from 'lucide-react';
 
 export const Navbar = ({ onOpenSearch }) => {
   const { user, logout, role, username: accountName } = useAuth();
@@ -167,6 +167,16 @@ export const Navbar = ({ onOpenSearch }) => {
                 <span className="text-[0.5625rem] leading-none sm:sr-only lg:not-sr-only lg:text-xs lg:leading-normal">Knihovna</span>
               </Link>
               
+              <Link 
+                to="/shorts" 
+                data-tour="nav-shorts"
+                style={{ color: 'var(--text-body)' }}
+                className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all"
+              >
+                <Layers size={14} className="opacity-70" />
+                <span className="text-[0.5625rem] leading-none sm:sr-only lg:not-sr-only lg:text-xs lg:leading-normal">shortB</span>
+              </Link>
+
               <Link 
                 to="/stats" 
                 data-tour="nav-stats"

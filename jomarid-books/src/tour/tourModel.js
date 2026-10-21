@@ -22,6 +22,7 @@ export const setKeyForRole = (role) => (role === ROLE_PUBLISHER ? 'publisher' : 
 export const ANCHORS = {
   none: { label: 'Bez zvýraznění (karta uprostřed)' },
   'nav-library': { label: 'Menu: Knihovna' },
+  'nav-shorts': { label: 'Menu: shortB' },
   'nav-stats': { label: 'Menu: Statistiky' },
   'nav-badges': { label: 'Menu: Odznaky' },
   'nav-games': { label: 'Menu: Hry' },
@@ -44,6 +45,7 @@ const READER_STEPS = [
   s('welcome', 'none', 'Vítej v Jomarid Books', 'Za minutku ti ukážeme, kde co najdeš. Prohlídku můžeš kdykoli přeskočit a znovu ji spustit v Nastavení v záložce Prohlídka appky.'),
   s('library', 'nav-library', 'Knihovna', 'Tady najdeš celý katalog knih. Ty, které už máš, ukáže filtr Moje knihy. Otevři knihu a čti, appka si pamatuje, kde čtení skončilo.'),
   s('library-search', 'library-search', 'Hledání v knihovně', 'Najdi knihu podle názvu nebo autora a výběr zúž podle žánru.'),
+  s('shorts', 'nav-shorts', 'shortB', 'Krátké knihy na jedno sezení. Listuj je do strany, po dočtení jedeš dolů na další. Feed se přizpůsobí tomu, co čteš.'),
   s('stats', 'nav-stats', 'Statistiky', 'Série čtení, měsíční cíl, zkušenosti a žebříček. Čím víc čteš, tím výš se dostaneš.'),
   s('badges', 'nav-badges', 'Odznaky', 'Odznaky za čtení i za hry. Za mince tady koupíš titul u svého jména a vzhled her.'),
   s('games', 'nav-games', 'Mini-hry', 'Krátká odbočka od čtení. Za hraní dostaneš i pár Jomarid Coinů, jednou denně.'),
@@ -59,6 +61,7 @@ const PUBLISHER_STEPS = [
   s('library', 'nav-library', 'Knihovna', 'Tady čteš knihy jako každý čtenář: celý katalog i filtr Moje knihy, kde máš i své vlastní knihy.'),
   s('studio', 'nav-studio', 'Studio', 'Tvůj panel nakladatele: statistiky prodejů a čtenářů, správa knih a vydávání nových.'),
   s('studio-tabs', 'publisher-tabs', 'Co ve Studiu najdeš', 'Přehled ukazuje prodeje a čtenáře. V záložce Moje knihy knihy spravuješ a stahuješ z prodeje, v záložce Vydat / upravit knihu vydáš nebo upravíš. V záložce Licence a profil daruješ knihu čtenáři a vidíš jméno, pod kterým se tvé knihy zobrazují.'),
+  s('shorts', 'nav-shorts', 'shortB', 'Krátké knihy do 6 000 znaků, které čtenáři listují ve feedu. Své shortB píšeš v záložce shortB ve Studiu.'),
   s('stats', 'nav-stats', 'Statistiky', 'Tvoje čtenářské statistiky a žebříček.'),
   s('badges', 'nav-badges', 'Odznaky', 'Odznaky za čtení i za hry. Za mince tady koupíš titul u svého jména a vzhled her.'),
   s('coins', 'nav-coins', 'Jomarid Coins', 'Mince dostáváš odznaky, každodenním přihlášením a hrami a také z prodeje svých knih. Za mince můžeš kupovat další knihy.'),
@@ -156,7 +159,7 @@ const normalizePath = (p) => (typeof p === 'string' && p.length > 1 ? p.replace(
 export const isAutoStartPath = (pathname) => {
   const p = normalizePath(pathname);
   if (typeof p !== 'string') return false;
-  return ['/', '/app', '/stats', '/games', '/publisher'].includes(p) || p === '/badges' || p.startsWith('/badges/') || p === '/settings' || p.startsWith('/settings/') || p.startsWith('/autor/');
+  return ['/', '/app', '/stats', '/games', '/publisher'].includes(p) || p === '/shorts' || p === '/badges' || p.startsWith('/badges/') || p === '/settings' || p.startsWith('/settings/') || p.startsWith('/autor/');
 };
 
 export const accountAgeDays = (createdAt, now = Date.now()) => {
