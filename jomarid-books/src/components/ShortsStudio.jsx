@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, Eye, EyeOff, Feather, Heart, Loader2, Pencil, PlusCircle, Trash2, Users, X } from 'lucide-react';
+import { Check, Eye, EyeOff, Feather, Heart, Loader2, Pencil, PlusCircle, Sparkles, Trash2, Users, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { plural } from '../lib/plural';
 import { SHORT_LIMITS, countChars, validateShort, parseGenresInput, paginate } from '../shorts/shortsModel';
 import { loadMyShorts, saveShort, setShortHidden, deleteShort } from '../shorts/shortsApi';
+import { AI_LENGTHS, AI_PROMPT_MAX, buildAiRequest, generateShortText, latestPart } from '../shorts/shortsAi';
 
 const nf = new Intl.NumberFormat('cs-CZ');
 const fmt = (n) => nf.format(Math.round(Number(n) || 0));
@@ -27,6 +28,7 @@ export const ShortsStudio = ({ all = false }) => {
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [ai, setAi] = useState({ open: false, prompt: '', length: 'medium', busy: false, error: '' });
 
   const refresh = useCallback(async () => {
     const res = await loadMyShorts(supabase, all);
@@ -43,7 +45,23 @@ export const ShortsStudio = ({ all = false }) => {
     setErrors({}); setNotice(null);
     setForm({ id: s.id, title: s.title, body: s.body, genresText: s.genres.join(', '), seriesName: s.seriesName || '', seriesPart: s.seriesPart ?? '', hidden: s.isHidden, publishNow: !s.isHidden });
   };
-  const cancel = () => { setForm(null); setErrors({}); };
+  const cancel = () => { setForm(null); setErrors({}); setAi((a) => ({ ...a, busy: false, error: '' })); };
+
+  // Další díl série: navazuje na nejvyšší díl téže série, který už je mezi shortB (jen u nového shortB).
+  const previousPart = form && !form.id ? latestPart(items, form.seriesName) : null;
+
+  // AI napíše jen text; název, žánry a sérii vyplňuje nakladatel. Návrh se vloží do formuláře, nic se neukládá.
+  const runAi = async (mode) => {
+    const built = buildAiRequest({ mode, prompt: ai.prompt, length: ai.length, previous: mode === 'next' ? previousPart : null });
+    if (built.error) { setAi((a) => ({ ...a, error: built.error })); return; }
+    if (form.body.trim() && !window.confirm('Přepsat stávající text návrhem od AI?')) return;
+    setAi((a) => ({ ...a, busy: true, error: '' }));
+    const res = await generateShortText(supabase, built.request);
+    if (res.error) { setAi((a) => ({ ...a, busy: false, error: res.error })); return; }
+    setForm((f) => (f ? { ...f, body: res.text, ...(mode === 'next' && previousPart ? { seriesPart: String(Math.max(Number(f.seriesPart) || 0, previousPart.seriesPart + 1)) } : {}) } : f));
+    setAi((a) => ({ ...a, busy: false, error: '' }));
+    setNotice({ type: 'success', text: res.trimmed ? `Návrh od AI je ve formuláři, byl delší než ${fmt(SHORT_LIMITS.body)} znaků, tak se zkrátil. Přečti ho a uprav.` : 'Návrh od AI je ve formuláři. Přečti ho a uprav, než ho zveřejníš.' });
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -152,6 +170,42 @@ export const ShortsStudio = ({ all = false }) => {
             <label htmlFor="short-title" style={mutedStyle} className={labelCls}>Název</label>
             <input id="short-title" type="text" value={form.title} onChange={(e) => set({ title: e.target.value })} aria-invalid={!!errors.title} aria-describedby={errors.title ? 'short-title-err' : undefined} style={inputStyle} className={fieldCls} />
             {errors.title && <p id="short-title-err" role="alert" className="text-[0.6875rem] font-bold m-0 pl-1" style={{ color: '#ef4444' }}>{errors.title}</p>}
+          </div>
+
+          <div style={{ borderColor: 'var(--border-color)' }} className="border rounded-xl p-4 space-y-3" data-testid="shorts-ai">
+            <button type="button" onClick={() => setAi((a) => ({ ...a, open: !a.open }))} aria-expanded={ai.open} data-testid="shorts-ai-toggle"
+              className="bg-transparent border-none p-0 cursor-pointer flex items-center gap-2 font-black text-xs uppercase tracking-wider" style={{ color: 'var(--text-body)' }}>
+              <Sparkles size={14} style={{ color: 'var(--bg-primary)' }} aria-hidden="true" /> Napsat s AI
+            </button>
+            {ai.open && (
+              <div className="space-y-3">
+                <p style={mutedStyle} className="text-[0.6875rem] m-0 opacity-80">Napiš zadání a AI navrhne text. Název, žánry a sérii vyplňuješ ty. Návrh si přečti a uprav, za zveřejněný text odpovídáš ty.</p>
+                <div className="space-y-1">
+                  <label htmlFor="short-ai-prompt" style={mutedStyle} className={labelCls}>Zadání</label>
+                  <textarea id="short-ai-prompt" rows={3} maxLength={AI_PROMPT_MAX} value={ai.prompt} onChange={(e) => setAi((a) => ({ ...a, prompt: e.target.value }))}
+                    placeholder="např. Horor o opuštěném majáku, vypráví hlídač, který slyší zvony pod hladinou" style={inputStyle} className={`${fieldCls} font-medium resize-y`} />
+                </div>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="space-y-1">
+                    <label htmlFor="short-ai-length" style={mutedStyle} className={labelCls}>Délka</label>
+                    <select id="short-ai-length" value={ai.length} onChange={(e) => setAi((a) => ({ ...a, length: e.target.value }))} style={inputStyle} className={fieldCls}>
+                      {AI_LENGTHS.map((l) => <option key={l.key} value={l.key}>{l.label}</option>)}
+                    </select>
+                  </div>
+                  <button type="button" onClick={() => runAi('new')} disabled={ai.busy} data-testid="shorts-ai-write" style={primaryBtn} className="px-4 py-3 rounded-xl border-none font-black uppercase text-xs cursor-pointer disabled:opacity-50 flex items-center gap-2">
+                    {ai.busy ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Sparkles size={14} aria-hidden="true" />} {ai.busy ? 'Píšu...' : 'Napsat text'}
+                  </button>
+                  {previousPart && (
+                    <button type="button" onClick={() => runAi('next')} disabled={ai.busy} data-testid="shorts-ai-next" style={ghostBtn} className="px-4 py-3 rounded-xl border font-black uppercase text-xs cursor-pointer disabled:opacity-50">
+                      Napsat další díl
+                    </button>
+                  )}
+                </div>
+                {previousPart && <p style={mutedStyle} className="text-[0.6875rem] m-0 opacity-80" data-testid="shorts-ai-prev">Další díl naváže na díl {previousPart.seriesPart} série {previousPart.seriesName}: {previousPart.title}. Zadání můžeš nechat prázdné.</p>}
+                {ai.busy && <p role="status" style={mutedStyle} className="text-[0.6875rem] m-0 font-bold">AI píše, může to trvat až půl minuty.</p>}
+                {ai.error && <p role="alert" data-testid="shorts-ai-error" className="text-[0.6875rem] font-bold m-0" style={{ color: '#ef4444' }}>{ai.error}</p>}
+              </div>
+            )}
           </div>
 
           <div className="space-y-1">

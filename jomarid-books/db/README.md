@@ -14,6 +14,8 @@ Jak soubor spustit: na GitHubu ho otevři → **Copy raw file** → v Supabase o
 | `game-coins.sql` | Jomarid Coins z her: denní strop 100 na jednu hru (dřív 75) a žádný strop za všechny hry dohromady (dřív 150), Kouloví Kámoši mezi hrami, které smějí o Coiny žádat, a zůstatek připsaný jednou (dřív dvakrát). Nahrazuje funkci `award_game_coins`. |
 | `shorts.sql` | shortB: krátké knihy (do 6 000 znaků) ve feedu přizpůsobeném čtenáři. Nakladatel nebo správce shortB píše, čtenář je prochází a server si pamatuje, co dočetl, olajkoval nebo přeskočil (podle toho appka skládá feed). Žádný denní limit. |
 
+AI pomocník pro shortB (Gemini) není SQL, ale Edge Function: nastavení a nasazení je v [`ai/README.md`](ai/README.md).
+
 ## Pořadí a předpoklady
 
 1. `push-notifications.sql` podle [`push/README.md`](push/README.md).
