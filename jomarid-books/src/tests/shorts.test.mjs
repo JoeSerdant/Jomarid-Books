@@ -349,3 +349,18 @@ test('SQL: hlavní funkce jsou jen pro přihlášené, tabulky mají RLS a klien
   assert.match(sql, /revoke all on public\.shorts, public\.short_progress from public, anon, authenticated;/);
   assert.equal((sql.match(/security definer set search_path to 'public'/g) || []).length, 11, 'všech 11 funkcí s právy vlastníka má pevné search_path');
 });
+
+/* ---------------------------------------------------------------- napojení do panelů */
+test('Nakladatelský panel i správa mají záložku shortB, správce vidí všechny', () => {
+  const pub = fs.readFileSync(path.join(SRC, 'pages', 'PublisherDashboard.jsx'), 'utf8');
+  const admin = fs.readFileSync(path.join(SRC, 'pages', 'AdminDashboard.jsx'), 'utf8');
+  const studio = fs.readFileSync(path.join(SRC, 'components', 'ShortsStudio.jsx'), 'utf8');
+  assert.match(pub, /import ShortsStudio from '\.\.\/components\/ShortsStudio';/);
+  assert.match(pub, /\{ id: 'shorts', label: 'shortB', icon: Feather \}/);
+  assert.match(pub, /\{tab === 'shorts' && <ShortsStudio \/>\}/);
+  assert.match(admin, /\{ id: 'shorts', label: 'shortB', icon: <Feather size=\{14\} \/> \}/);
+  assert.match(admin, /\{activeTab === 'shorts' && <ShortsStudio all \/>\}/);
+  assert.match(studio, /loadMyShorts\(supabase, all\)/);
+  assert.match(studio, /validateShort\(/, 'formulář kontroluje vstup stejnou funkcí jako server');
+  assert.match(studio, /window\.confirm\(/, 'smazání se potvrzuje');
+});
