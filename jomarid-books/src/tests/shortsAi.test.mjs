@@ -109,6 +109,21 @@ test('Edge Function: název a žánry z úvodních řádků se oddělí od textu
   assert.equal(d.genres.length, 5);
 });
 
+test('Edge Function: odpověď v JSON (název, žánry, text) se zpracuje a hlavička v textu taky', { skip }, async () => {
+  const run = async (text) => body(await EDGE.handle(req({ prompt: 'x' }), mkDeps({ generate: async () => ({ text }) }).deps));
+  const a = await run(JSON.stringify({ title: '**Hladová noc**', genres: ['Horor', ' mysteriózní ', 5], text: 'První.\n\nDruhý.' }));
+  assert.equal(a.title, 'Hladová noc');
+  assert.deepEqual(a.genres, ['horor', 'mysteriózní']);
+  assert.equal(a.text, 'První.\n\nDruhý.');
+  const b = await run('```json\n' + JSON.stringify({ title: '', genres: [], text: 'NÁZEV: Maják\nŽÁNRY: drama\n\nText.' }) + '\n```');
+  assert.equal(b.title, 'Maják');
+  assert.deepEqual(b.genres, ['drama']);
+  assert.equal(b.text, 'Text.');
+  const c = await run('{"nejde": "o text"}');
+  assert.equal(c.title, '');
+  assert.equal(c.text, '{"nejde": "o text"}', 'JSON bez textu se bere jako prostý text');
+});
+
 test('Edge Function: text nad 6 000 znaků se ořízne na hranici odstavce', { skip }, async () => {
   const para = 'Věta o pár slovech, která se opakuje. '.repeat(20).trim();
   const long = Array.from({ length: 12 }, () => para).join('\n\n');
