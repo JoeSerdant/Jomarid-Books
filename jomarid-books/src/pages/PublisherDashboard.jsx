@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { fetchBookText, saveBookText } from '../bookText/bookText';
 import BookTextField from '../components/BookTextField';
+import ShortsStudio from '../components/ShortsStudio';
 import { usePagedList } from '../browse/usePagedList';
 import { LoadMore } from '../browse/BrowseParts';
 import { cleanGenres, GENRES_PER_BOOK, GENRE_MAX_LENGTH } from '../browse/libraryModel';
@@ -412,6 +413,7 @@ const TABS = [
   { id: 'overview', label: 'Přehled', icon: BarChart3 },
   { id: 'books', label: 'Moje knihy', icon: BookOpen },
   { id: 'editor', label: 'Vydat / upravit', icon: PlusCircle },
+  { id: 'shorts', label: 'shortB', icon: Feather },
   { id: 'licenses', label: 'Licence a profil', icon: Gift },
 ];
 
@@ -766,6 +768,9 @@ export const PublisherDashboard = () => {
           </form>
         </Card>
       )}
+
+      {/* ============================ SHORTB ============================ */}
+      {tab === 'shorts' && <ShortsStudio />}
 
       {/* ============================ LICENCE A PROFIL ============================ */}
       {tab === 'licenses' && (

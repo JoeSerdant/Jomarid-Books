@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchBookText, saveBookText, removeBookText } from '../bookText/bookText';
 import BookTextField from '../components/BookTextField';
+import ShortsStudio from '../components/ShortsStudio';
 import PushAdminCard from '../push/PushAdminCard';
 import { Button, Card } from '../components/ui';
 import { TourEditor, peekAdminTabRequest } from '../tour/TourEditor';
@@ -17,7 +18,7 @@ import { USERNAME_MIN, USERNAME_MAX } from '../lib/username';
 import { EMAIL_MAX, EMAIL_REQUEST_KIND, ADMIN_EMAIL_ERRORS, isValidEmail, normalizeEmail, sameEmail } from '../emailChange';
 import { BOOK_BADGES } from '../constants/badges';
 import { DEFAULT_MONTHLY_GOAL } from '../constants/leveling';
-import { Award, Coins, Database, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle, LayoutDashboard, UserCog, Loader2, CheckCircle2, X, ChevronLeft, ChevronRight, Ban, KeyRound, Trash2, ShieldCheck, Bell, Copy, Flag, Eye, EyeOff, Download, Mail } from 'lucide-react';
+import { Award, Coins, Database, Feather, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle, LayoutDashboard, UserCog, Loader2, CheckCircle2, X, ChevronLeft, ChevronRight, Ban, KeyRound, Trash2, ShieldCheck, Bell, Copy, Flag, Eye, EyeOff, Download, Mail } from 'lucide-react';
 
 // ============================================================================
 // Admin: Přehled a správa účtů (pomocné prvky, záložka Přehled, záložka Účty)
@@ -1298,7 +1299,7 @@ export const AdminDashboard = () => {
   const [comments, setComments] = useState([]);
   
   // --- Stavy rozhraní (UX) ---
-  const [activeTab, setActiveTab] = useState(() => peekAdminTabRequest() || 'overview'); // po náhledu prohlídky rovnou záložka Prohlídka appky; overview | notifications | accounts | books | homepage | tour | users | logs
+  const [activeTab, setActiveTab] = useState(() => peekAdminTabRequest() || 'overview'); // po náhledu prohlídky rovnou záložka Prohlídka appky; overview | notifications | accounts | books | shorts | homepage | tour | users | logs
   const [pendingCount, setPendingCount] = useState(0); // otevřená upozornění (odznak na záložce)
   const [logCount, setLogCount] = useState(0); // počet záznamů v systémovém logu (karta nahoře)
   useEffect(() => {
@@ -1932,6 +1933,7 @@ export const AdminDashboard = () => {
           { id: 'notifications', label: 'Upozornění', icon: <Bell size={14} />, badge: pendingCount },
           { id: 'accounts', label: 'Účty', icon: <UserCog size={14} /> },
           { id: 'books', label: 'Knihovna & Editace', icon: <Database size={14} /> },
+          { id: 'shorts', label: 'shortB', icon: <Feather size={14} /> },
           { id: 'homepage', label: 'Domovská stránka', icon: <Layout size={14} /> },
           { id: 'tour', label: 'Prohlídka appky', icon: <Sparkles size={14} /> },
           { id: 'users', label: 'Licence, XP a mince', icon: <Users size={14} /> },
@@ -2672,6 +2674,7 @@ export const AdminDashboard = () => {
 
       {/* ZÁLOŽKA: SYSTÉMOVÝ LOG */}
       {activeTab === 'logs' && <LogsTab />}
+      {activeTab === 'shorts' && <ShortsStudio all />}
 
       <TypedConfirm
         open={bulkGrantOpen}
