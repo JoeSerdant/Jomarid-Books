@@ -8,6 +8,7 @@ import { Navbar } from './components/Navbar';
 import { SettingsPage } from './components/SettingsModal';
 import { TourProvider } from './tour/TourProvider';
 import { SearchModal } from './components/SearchModal';
+import { HelpBot } from './components/HelpBot';
 import { HomePage } from './pages/HomePage';
 import { LoginPage, ResetPasswordPage } from './pages/LoginPage';
 import { UserLibrary, AuthorPage } from './pages/UserLibrary';
@@ -164,6 +165,7 @@ export default function App() {
             </main>
 
             <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+            <HelpBot />
           </div>
           </TourProvider>
         </Router>
