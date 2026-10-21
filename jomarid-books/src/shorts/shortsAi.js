@@ -1,4 +1,4 @@
-// Napsání textu shortB pomocí AI (Edge Function db/ai/shortb-ai.ts, nasazení v db/ai/README.md). AI dodává jen text; název, žánry a sérii vyplňuje nakladatel.
+// Napsání textu shortB pomocí AI (Edge Function db/ai/shortb-ai.ts, nasazení v db/ai/README.md). AI dodává text s návrhem názvu a žánrů; sérii vyplňuje nakladatel.
 // Klient (supabase) se předává zvenku, ať jde modul zkoušet bez prohlížeče. Chyby se vracejí jako česká věta, nikdy se nevyhazují.
 import { foldText } from '../browse/browseModel.js';
 
@@ -66,7 +66,7 @@ async function errorCode(error) {
 
 export const aiErrorMessage = (code, message = '') => ERROR_TEXT[code] || message || ERROR_TEXT.upstream;
 
-/** Zavolá funkci a vrátí { text, chars, trimmed } nebo { error, detail? } (detail je technický popis od serveru, třeba odpověď Googlu). */
+/** Zavolá funkci a vrátí { text, title, genres, chars, trimmed } nebo { error, detail? } (detail je technický popis od serveru, třeba odpověď Googlu). */
 export async function generateShortText(client, request) {
   try {
     const { data, error } = await client.functions.invoke('shortb-ai', { body: request });
@@ -84,7 +84,9 @@ export async function generateShortText(client, request) {
     }
     const text = typeof data?.text === 'string' ? data.text : '';
     if (!text.trim()) return { error: ERROR_TEXT.empty };
-    return { text, chars: Number(data.chars) || [...text].length, trimmed: data.trimmed === true };
+    const title = typeof data?.title === 'string' ? data.title.trim().slice(0, 120) : '';
+    const genres = Array.isArray(data?.genres) ? data.genres.filter((g) => typeof g === 'string' && g.trim()).map((g) => g.trim()).slice(0, 8) : [];
+    return { text, title, genres, chars: Number(data.chars) || [...text].length, trimmed: data.trimmed === true };
   } catch {
     return { error: ERROR_TEXT.upstream };
   }
