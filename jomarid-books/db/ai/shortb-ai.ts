@@ -1,6 +1,6 @@
 // Supabase Edge Function "shortb-ai": napíše návrh textu shortB pomocí Gemini (Google AI). Volá ji Studio (tlačítko „Napsat s AI“) s přihlášením
 // nakladatele nebo správce. Klíč ke Gemini je jen tady (Edge Functions -> Secrets), do prohlížeče se nikdy nedostane.
-// Nastavení a nasazení: db/ai/README.md. Tajné hodnoty: GEMINI_API_KEY (povinná), GEMINI_MODEL (nepovinná, výchozí gemini-2.5-flash).
+// Nastavení a nasazení: db/ai/README.md. Tajné hodnoty: GEMINI_API_KEY (povinná), GEMINI_MODEL (nepovinná, výchozí gemini-3.8-flash).
 // SUPABASE_URL a SUPABASE_ANON_KEY dodává Supabase sám.
 //
 // AI dodává jen TEXT (odstavce oddělené prázdným řádkem). Název, žánry a sérii vyplňuje nakladatel sám a návrh si před zveřejněním přečte a upraví.
@@ -149,7 +149,7 @@ if (D && typeof D.serve === 'function') {
   const url = D.env.get('SUPABASE_URL')!;
   const anon = D.env.get('SUPABASE_ANON_KEY')!;
   const key = D.env.get('GEMINI_API_KEY') ?? '';
-  const model = D.env.get('GEMINI_MODEL') || 'gemini-2.5-flash';
+  const model = D.env.get('GEMINI_MODEL') || 'gemini-3.8-flash';
 
   const deps: AiDeps = {
     authorize: async (token) => {
@@ -170,7 +170,7 @@ if (D && typeof D.serve === 'function') {
           contents: [{ role: 'user', parts: [{ text: user }] }],
           generationConfig: { temperature: 1, maxOutputTokens: 8192 },
         }),
-        signal: AbortSignal.timeout(50000),
+        signal: AbortSignal.timeout(120000),
       });
       if (res.status === 429) return { error: 'quota' };
       if (!res.ok) {

@@ -17,7 +17,7 @@ Supabase → **Edge Functions → Secrets** → přidej:
 | Název | Hodnota |
 | --- | --- |
 | `GEMINI_API_KEY` | klíč z kroku 0 |
-| `GEMINI_MODEL` | nepovinné; název modelu z AI Studia. Výchozí je `gemini-2.5-flash` (rychlý a levný). Kdyby ho Google zrušil, dej sem aktuální název |
+| `GEMINI_MODEL` | nepovinné; název modelu z AI Studia. Výchozí je `gemini-3.8-flash` (rychlý a levný; Google starší 2.5-flash novým uživatelům zrušil). Kdyby ho Google zrušil, dej sem aktuální název |
 
 `SUPABASE_URL` a `SUPABASE_ANON_KEY` dodává Supabase sám.
 
