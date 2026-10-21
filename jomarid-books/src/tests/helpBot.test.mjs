@@ -155,6 +155,8 @@ test('Funkce a SQL: klíč není v repu, model je z Secrets, limit hlídá datab
   const ts = fs.readFileSync(path.join(SRC, '..', 'db', 'ai', 'help-bot.ts'), 'utf8');
   assert.ok(!/AIza[0-9A-Za-z_-]{20,}/.test(ts), 'klíč není v kódu');
   assert.match(ts, /HELP_BOT_MODEL/);
+  assert.match(ts, /HELP_BOT_API_KEY/);
+  assert.match(ts, /GEMINI_API_KEY/, 'záloha na klíč ze shortb-ai');
   assert.match(ts, /gemini-3\.5-flash-lite/);
   assert.match(ts, /help_bot_take/);
   assert.match(ts, /responseSchema/);

@@ -1,7 +1,7 @@
 // Supabase Edge Function "help-bot": pomocník v appce (chat). Odpovídá jen na otázky o používání Jomarid Books podle příručky níž,
 // na cokoli jiného (programování, eseje, školní úkoly, obecné otázky...) odpoví pevnou větou. Používá lehčí a rychlejší model než shortb-ai.
 // Volá ji přihlášený uživatel (kdokoli, ne jen nakladatel). Klíč ke Gemini je jen tady (Edge Functions -> Secrets), do prohlížeče se nedostane.
-// Nastavení a nasazení: db/ai/README.md. Tajné hodnoty: GEMINI_API_KEY (povinná, stejná jako u shortb-ai), HELP_BOT_MODEL (nepovinná, výchozí
+// Nastavení a nasazení: db/ai/README.md. Tajné hodnoty: HELP_BOT_API_KEY (vlastní klíč pomocníka; když chybí, použije se GEMINI_API_KEY ze shortb-ai), HELP_BOT_MODEL (nepovinná, výchozí
 // gemini-3.5-flash-lite). Denní limit otázek hlídá db/help-bot.sql (funkce help_bot_take).
 //
 // Jak je pomocník zajištěný proti zneužití (žádná ochrana není stoprocentní, proto je jich víc):
@@ -187,7 +187,7 @@ if (D && typeof D.serve === 'function') {
   const { createClient } = await import('npm:@supabase/supabase-js@2');
   const url = D.env.get('SUPABASE_URL')!;
   const anon = D.env.get('SUPABASE_ANON_KEY')!;
-  const key = D.env.get('GEMINI_API_KEY') ?? '';
+  const key = D.env.get('HELP_BOT_API_KEY') || D.env.get('GEMINI_API_KEY') || '';   // pomocník může mít vlastní klíč (a tím i vlastní limity u Googlu)
   const model = D.env.get('HELP_BOT_MODEL') || 'gemini-3.5-flash-lite';
   const asUser = (token: string) => createClient(url, anon, { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false } });
 
@@ -203,7 +203,7 @@ if (D && typeof D.serve === 'function') {
     },
     refund: async (token) => { await asUser(token).rpc('help_bot_refund'); },
     generate: async (system, history) => {
-      if (!key) { console.error('help-bot: chybí GEMINI_API_KEY (Edge Functions -> Secrets)'); return { error: 'upstream', detail: 'v Supabase (Edge Functions → Secrets) chybí GEMINI_API_KEY' }; }
+      if (!key) { console.error('help-bot: chybí HELP_BOT_API_KEY (Edge Functions -> Secrets)'); return { error: 'upstream', detail: 'v Supabase (Edge Functions → Secrets) chybí HELP_BOT_API_KEY' }; }
       const started = Date.now();
       const BUDGET_MS = 45000;
       const call = () => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {

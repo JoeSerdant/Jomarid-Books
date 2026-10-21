@@ -68,7 +68,7 @@ a pošle pevnou větu, takže z modelu nic nevyteče. Strop odpovědi i denní l
 Spusť `db/help-bot.sql` v Supabase SQL Editoru (stejně jako ostatní soubory v `db/`). **Před** nasazením funkce.
 
 ## 2. Tajné hodnoty
-`GEMINI_API_KEY` už máš z shortb-ai. Nepovinně `HELP_BOT_MODEL`: název modelu z AI Studia (výchozí `gemini-3.5-flash-lite`, nejlehčí a nejlevnější model řady). Kdyby ho Google zrušil, dej sem aktuální název.
+Přidej **`HELP_BOT_API_KEY`**: vlastní klíč z Google AI Studia jen pro pomocníka (má pak vlastní limity, nezávislé na shortb-ai). Když ho nepřidáš, použije se `GEMINI_API_KEY` z shortb-ai. Klíč nedávej do chatu ani do repozitáře, jen sem. Nepovinně `HELP_BOT_MODEL`: název modelu z AI Studia (výchozí `gemini-3.5-flash-lite`, nejlehčí a nejlevnější model řady). Kdyby ho Google zrušil, dej sem aktuální název.
 
 ## 3. Nasazení funkce
 Supabase → **Edge Functions → Deploy a new function → Via Editor** → název **`help-bot`** (přesně) → vlož obsah `jomarid-books/db/ai/help-bot.ts` → Deploy.
