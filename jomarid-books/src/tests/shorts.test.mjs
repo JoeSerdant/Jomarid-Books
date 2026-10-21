@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SHORT_LIMITS, PAGE_CHARS, countChars, validateShort, parseGenresInput, paginate } from '../shorts/shortsModel.js';
+import { SHORT_LIMITS, PAGE_CHARS, countChars, validateShort, parseGenresInput, paginate, buildSlides, slideIndexFromScroll, progressFromSlide, readMinutes } from '../shorts/shortsModel.js';
+import { loadBookTaste } from '../shorts/shortsTaste.js';
 import { WEIGHTS, EXPLORE_EVERY, MAX_AUTHOR_RUN, makeRng, buildPreferences, nextSeriesPart, scoreCandidate, rankFeed, reasonLabel } from '../shorts/shortsRanking.js';
 import { normalizeCandidate, normalizeShort, normalizeSignal, loadCandidates, loadShortsByIds, loadSignals, reportShort, saveShort, setShortHidden, deleteShort, loadMyShorts, shortErrorMessage } from '../shorts/shortsApi.js';
 
@@ -363,4 +364,89 @@ test('Nakladatelský panel i správa mají záložku shortB, správce vidí vše
   assert.match(studio, /loadMyShorts\(supabase, all\)/);
   assert.match(studio, /validateShort\(/, 'formulář kontroluje vstup stejnou funkcí jako server');
   assert.match(studio, /window\.confirm\(/, 'smazání se potvrzuje');
+});
+
+/* ---------------------------------------------------------------- karta ve feedu */
+test('buildSlides: úvodní strana, stránky textu a závěr; prázdný text má jen úvod a závěr', () => {
+  const slides = buildSlides('První odstavec.\n\nDruhý odstavec.');
+  assert.deepEqual(slides.map((s) => s.kind), ['cover', 'page', 'end']);
+  assert.deepEqual(slides[1], { kind: 'page', text: 'První odstavec.\n\nDruhý odstavec.', n: 1, of: 1 });
+  const long = buildSlides('Věta o pár slovech. '.repeat(250));
+  assert.ok(long.length > 4 && long[0].kind === 'cover' && long[long.length - 1].kind === 'end');
+  const pages = long.filter((s) => s.kind === 'page');
+  assert.deepEqual(pages.map((p) => p.n), pages.map((_, i) => i + 1));
+  assert.ok(pages.every((p) => p.of === pages.length));
+  assert.deepEqual(buildSlides('').map((s) => s.kind), ['cover', 'end']);
+});
+
+test('slideIndexFromScroll: nejbližší strana v mezích, špatné míry dají nulu', () => {
+  assert.equal(slideIndexFromScroll(0, 390, 5), 0);
+  assert.equal(slideIndexFromScroll(390, 390, 5), 1);
+  assert.equal(slideIndexFromScroll(250, 390, 5), 1, 'víc než polovina strany = další strana');
+  assert.equal(slideIndexFromScroll(150, 390, 5), 0);
+  assert.equal(slideIndexFromScroll(99999, 390, 5), 4);
+  assert.equal(slideIndexFromScroll(-50, 390, 5), 0);
+  assert.equal(slideIndexFromScroll(100, 0, 5), 0);
+  assert.equal(slideIndexFromScroll(100, 390, 0), 0);
+});
+
+test('progressFromSlide: úvod se nepočítá, dočteno je poslední stránka textu nebo závěr', () => {
+  assert.deepEqual(progressFromSlide(5, 0), { pagesSeen: 0, pagesTotal: 3, finished: false });
+  assert.deepEqual(progressFromSlide(5, 1), { pagesSeen: 1, pagesTotal: 3, finished: false });
+  assert.deepEqual(progressFromSlide(5, 3), { pagesSeen: 3, pagesTotal: 3, finished: true });
+  assert.deepEqual(progressFromSlide(5, 4), { pagesSeen: 3, pagesTotal: 3, finished: true }, 'závěrečná strana je pořád dočteno, stránek textu je 3');
+  assert.deepEqual(progressFromSlide(2, 1), { pagesSeen: 1, pagesTotal: 1, finished: true });
+  assert.deepEqual(progressFromSlide(5, -3), { pagesSeen: 0, pagesTotal: 3, finished: false });
+});
+
+test('readMinutes: zhruba 1 200 znaků za minutu, aspoň minuta', () => {
+  assert.equal(readMinutes(0), 1);
+  assert.equal(readMinutes(600), 1);
+  assert.equal(readMinutes(6000), 5);
+  assert.equal(readMinutes('x'), 1);
+  assert.equal(PAGE_CHARS, 600);
+});
+
+/* ---------------------------------------------------------------- chuť podle knih */
+const chain = (rows, calls) => {
+  const q = { eq: () => q, limit: () => q, in: (_, ids) => { calls.push(ids.length); return q; }, then: (res) => res({ data: rows, error: null }) };
+  return q;
+};
+test('loadBookTaste: bere jen knihy, ke kterým čtenář něco udělal, a žánry čistí', async () => {
+  const inCalls = [];
+  const client = {
+    from: (table) => ({
+      select: () => {
+        if (table === 'user_books') return chain([{ book_id: 'r', is_read: true, scroll_position: 100 }, { book_id: 'p', is_read: false, scroll_position: 20 }, { book_id: 'n', is_read: false, scroll_position: 0 }], []);
+        if (table === 'book_likes') return chain([{ book_id: 'l' }, { book_id: 'r' }], []);
+        return chain([{ id: 'r', author_id: 'a1', genres: ['Fantasy', 'fantasy'] }, { id: 'p', author_id: 'a2', genres: null }, { id: 'l', author_id: null, genres: ['Drama'] }], inCalls);
+      },
+    }),
+  };
+  const taste = await loadBookTaste(client, 'u1');
+  assert.equal(taste.length, 3);
+  assert.deepEqual(taste.find((t) => t.authorId === 'a1'), { authorId: 'a1', genres: ['Fantasy'], isRead: true, liked: true, inProgress: false });
+  assert.deepEqual(taste.find((t) => t.authorId === 'a2'), { authorId: 'a2', genres: [], isRead: false, liked: false, inProgress: true });
+  assert.deepEqual(taste.find((t) => t.authorId === null), { authorId: null, genres: ['Drama'], isRead: false, liked: true, inProgress: false });
+  assert.deepEqual(inCalls, [3], 'nepřečtená a nerozečtená kniha bez lajku se nedotazuje (r, p, l)');
+});
+
+test('loadBookTaste: velký počet knih se dotazuje po dávkách a chyba vrátí prázdný seznam', async () => {
+  const ids = Array.from({ length: 230 }, (_, i) => ({ book_id: `b${i}`, is_read: true, scroll_position: 0 }));
+  const inCalls = [];
+  const client = { from: (table) => ({ select: () => (table === 'user_books' ? chain(ids, []) : table === 'book_likes' ? chain([], []) : chain([], inCalls)) }) };
+  assert.deepEqual(await loadBookTaste(client, 'u'), []);
+  assert.deepEqual(inCalls, [100, 100, 30]);
+  const broken = { from: () => ({ select: () => ({ eq: () => ({ limit: () => ({ then: (res) => res({ data: null, error: { message: 'chyba' } }) }) }) }) }) };
+  assert.deepEqual(await quiet(() => loadBookTaste(broken, 'u')), []);
+});
+
+test('feed je napojený: trasa /shorts, odkaz v navigaci a stránka používá pořadí, hlášení a chuť', () => {
+  const app = fs.readFileSync(path.join(SRC, 'App.jsx'), 'utf8');
+  const nav = fs.readFileSync(path.join(SRC, 'components', 'Navbar.jsx'), 'utf8');
+  const page = fs.readFileSync(path.join(SRC, 'pages', 'Shorts.jsx'), 'utf8');
+  assert.match(app, /const ShortsPage = lazyPage\(\(\) => import\('\.\/pages\/Shorts'\), 'ShortsPage'\);/);
+  assert.match(app, /<Route path="\/shorts" element=\{<ProtectedUserRoute><ShortsPage \/><\/ProtectedUserRoute>\} \/>/);
+  assert.match(nav, /to="\/shorts"[\s\S]*?data-tour="nav-shorts"[\s\S]*?<Layers size=\{14\}/);
+  for (const needle of ['rankFeed(', 'buildPreferences(', 'loadBookTaste(', 'reportShort(', 'loadSignals(', 'loadCandidates(', 'progressFromSlide(', "overflowAnchor: 'none'"]) assert.ok(page.includes(needle), needle);
 });
