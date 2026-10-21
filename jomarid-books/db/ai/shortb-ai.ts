@@ -68,7 +68,8 @@ export function buildPrompt(input: AiInput): { system: string; user: string } {
     `Napiš jeden uzavřený text o délce zhruba ${target} znaků. Nikdy nepřekroč ${MAX_BODY_CHARS - 500} znaků.`,
     'Text začni silným prvním odstavcem, který čtenáře chytí, a skonči tak, aby měl konec váhu.',
     'Odstavce odděluj prázdným řádkem. Použij běžné odstavce, žádné nadpisy, odrážky ani značky Markdown (*, #, _) a název do samotného textu nepiš.',
-    'Odpověď má přesně tenhle tvar: první řádek „NÁZEV: “ a krátký výstižný název (nejvýš 60 znaků), druhý řádek „ŽÁNRY: “ a 2 až 4 české žánry oddělené čárkami (například horor, thriller), pak prázdný řádek a samotný text.',
+    'Vrať krátký výstižný název (nejvýš 60 znaků), 2 až 4 české žánry (například horor, thriller) a samotný text.',
+    'Pokud odpovídáš prostým textem, dej na první řádek „NÁZEV: “ a název, na druhý „ŽÁNRY: “ a žánry oddělené čárkami, pak prázdný řádek a samotný text.',
     'Kromě toho nic: bez úvodu, bez poznámek, bez shrnutí a bez vysvětlování, co jsi napsal.',
     'Nepoužívej skutečné žijící osoby, neuváděj návody k ublížení ani explicitní sexuální obsah.',
   ].join('\n');
@@ -107,6 +108,20 @@ export function splitMeta(raw: string): { title: string; genres: string[]; rest:
     rest = rest.slice(m[0].length);
   }
   return { title, genres, rest: rest.replace(/^\n+/, '') };
+}
+
+/** Odpověď modelu v JSON režimu ({title, genres, text}); když to JSON není (nebo chybí text), vrátí null a použije se splitMeta. */
+export function parseJsonReply(raw: string): { title: string; genres: string[]; text: string } | null {
+  const t = String(raw ?? '').trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
+  if (!t.startsWith('{')) return null;
+  try {
+    const o = JSON.parse(t);
+    if (!o || typeof o.text !== 'string' || !o.text.trim()) return null;
+    const title = typeof o.title === 'string' ? [...o.title.replace(/[*_#]+/g, ' ').replace(/^["„“»\s]+|["“”«\s]+$/g, '').trim()].slice(0, TITLE_MAX).join('') : '';
+    const genres = (Array.isArray(o.genres) ? o.genres : []).filter((g: unknown) => typeof g === 'string')
+      .map((g: string) => [...g.replace(/[#*_.]/g, '').trim().toLowerCase()].slice(0, GENRE_LEN).join('')).filter(Boolean).slice(0, GENRES_MAX);
+    return { title, genres, text: o.text };
+  } catch { return null; }
 }
 
 /** Uklidí odpověď modelu: ohrazení kódu, Markdown, zdvojené prázdné řádky; text delší než strop ořízne na hranici odstavce nebo věty. */
@@ -157,7 +172,9 @@ export async function handle(req: Request, deps: AiDeps): Promise<Response> {
     const e = ERRORS[result.error] ?? ERRORS.upstream;
     return json({ error: result.error, message: e.message, ...(result.detail ? { detail: safeDetail(result.detail) } : {}) }, e.status);
   }
-  const meta = splitMeta(result.text);
+  const js = parseJsonReply(result.text);
+  const inner = splitMeta(js ? js.text : result.text); // i v JSON může být na začátku textu hlavička
+  const meta = { title: js?.title || inner.title, genres: js?.genres?.length ? js.genres : inner.genres, rest: inner.rest };
   const { text, trimmed } = cleanText(meta.rest);
   if (!text) return json({ error: 'empty', message: ERRORS.empty.message }, ERRORS.empty.status);
   return json({ text, title: meta.title, genres: meta.genres, chars: [...text].length, trimmed });
@@ -184,16 +201,23 @@ if (D && typeof D.serve === 'function') {
     },
     generate: async (system, user) => {
       if (!key) { console.error('shortb-ai: chybí GEMINI_API_KEY (Edge Functions -> Secrets)'); return { error: 'upstream', detail: 'v Supabase (Edge Functions → Secrets) chybí GEMINI_API_KEY' }; }
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      const call = (structured: boolean) => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: system }] },
           contents: [{ role: 'user', parts: [{ text: user }] }],
-          generationConfig: { temperature: 1, maxOutputTokens: 8192 },
+          generationConfig: {
+            temperature: 1,
+            maxOutputTokens: 8192,
+            ...(structured ? { responseMimeType: 'application/json', responseSchema: { type: 'OBJECT', properties: { title: { type: 'STRING' }, genres: { type: 'ARRAY', items: { type: 'STRING' } }, text: { type: 'STRING' } }, required: ['title', 'genres', 'text'] } } : {}),
+          },
         }),
         signal: AbortSignal.timeout(120000),
       });
+      // Strukturovaná odpověď dá název a žánry spolehlivě; kdyby ji model nebo API odmítly (400), zkusí se prostý text s hlavičkou.
+      let res = await call(true);
+      if (res.status === 400) { console.error('shortb-ai: strukturovaná odpověď odmítnuta, zkouším prostý text', (await res.text()).slice(0, 200)); res = await call(false); }
       if (res.status === 429) return { error: 'quota' };
       if (!res.ok) {
         const raw = (await res.text()).slice(0, 600);
