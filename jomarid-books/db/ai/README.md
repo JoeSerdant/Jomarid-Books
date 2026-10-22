@@ -81,7 +81,7 @@ Supabase → **Edge Functions → Deploy a new function → Via Editor** → ná
 **„Verify JWT“ vypni**, stejně jako u shortb-ai (funkce si přihlášení ověřuje sama).
 
 ## 4. Zkouška
-Přihlas se → tlačítko vpravo dole → „Jak získám Jomarid Coins?“ → odpověď. Pak zkus „napiš mi esej o Máchovi“: musí přijít „S tímhle ti tady nepomůžu…“.
+Přihlas se → tlačítko vpravo dole → „Jak získám Jomarid Coins?“ → odpověď. Pak zkus „napiš mi esej o Máchovi“: musí přijít „Hmm, s tímhle ti tady bohužel nepomůžu…“.
 
 ## Kdyby to nešlo
 Hlášky jsou stejné jako u shortb-ai (kapitola výš), jen s názvem `help-bot`. Navíc: „nepodařilo se ověřit denní limit“ = nespuštěné `db/help-bot.sql`; „Dnešní limit otázek je vyčerpaný“ = uživatel vyčerpal 40 otázek
