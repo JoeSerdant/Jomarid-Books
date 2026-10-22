@@ -59,10 +59,10 @@ async function errorCode(error) {
 
 export const helpErrorMessage = (code, message = '') => ERROR_TEXT[code] || message || ERROR_TEXT.upstream;
 
-/** Zeptá se pomocníka. Vrací { answer, onTopic, left } nebo { error, detail? }. page je adresa stránky appky (třeba "/stats"). */
-export async function askHelpBot(client, { messages, page = '' }) {
+/** Zeptá se pomocníka. Vrací { answer, onTopic, left } nebo { error, detail? }. page je adresa stránky appky (třeba "/stats"); personalize: false vypne, aby pomocník dostal údaje o uživateli (jméno, četba...). */
+export async function askHelpBot(client, { messages, page = '', personalize = true }) {
   try {
-    const { data, error } = await client.functions.invoke('help-bot', { body: { messages, page } });
+    const { data, error } = await client.functions.invoke('help-bot', { body: { messages, page, personalize: personalize !== false } });
     if (error) {
       const { code, message, detail } = await errorCode(error);
       if (code) return { error: helpErrorMessage(code, message), ...(detail ? { detail } : {}) };

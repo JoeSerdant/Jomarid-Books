@@ -10,8 +10,10 @@ const inputStyle = { backgroundColor: 'var(--bg-secondary)', borderColor: 'var(-
 const mutedStyle = { color: 'var(--text-muted)' };
 const primaryBtn = { backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' };
 
-const WELCOME = 'Ahoj! Jsem pomocník k aplikaci Jomarid Books. Zeptej se mě, jak se v ní co dělá.';
-const SUGGESTIONS = ['Jak získám Jomarid Coins?', 'K čemu je Streak Freeze?', 'Jak se stanu nakladatelem?'];
+const WELCOME = 'Ahoj! Jsem pomocník k aplikaci Jomarid Books. Zeptej se mě, jak se v ní co dělá, nebo na tip, co číst.';
+const PERSONAL_KEY = 'jomarid_helpbot_personal';
+const readPersonal = () => { try { return localStorage.getItem(PERSONAL_KEY) !== '0'; } catch { return true; } };
+const SUGGESTIONS = ['Poraď mi, co číst', 'Jak získám Jomarid Coins?', 'K čemu je Streak Freeze?'];
 
 // Na těchhle stránkách by plovoucí tlačítko překáželo (čtečka, hry mají vlastní lištu a ovládání, feed shortB má tlačítka u okraje).
 const HIDDEN_ON = [/^\/read\//, /^\/games\/[^/]+/, /^\/shorts/];
@@ -26,6 +28,7 @@ export const HelpBot = () => {
   const [busy, setBusy] = useState(false);
   const [left, setLeft] = useState(null);
   const [hint, setHint] = useState('');
+  const [personal, setPersonal] = useState(readPersonal);
   const endRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -51,7 +54,7 @@ export const HelpBot = () => {
     setChat(next);
     setText('');
     setBusy(true);
-    const res = await askHelpBot(supabase, { messages: toRequestMessages(next), page: pathname });
+    const res = await askHelpBot(supabase, { messages: toRequestMessages(next), page: pathname, personalize: personal });
     setBusy(false);
     if (res.error) { setChat((c) => [...c, { from: 'bot', text: res.error, error: true, detail: res.detail }]); return; }
     if (res.left !== null) setLeft(res.left);
@@ -104,6 +107,11 @@ export const HelpBot = () => {
                 aria-label="Tvoje otázka" placeholder="Na co se chceš zeptat?" data-testid="helpbot-input" style={inputStyle} className="flex-1 min-w-0 border rounded-xl px-3 py-2 text-sm font-medium outline-none resize-none max-h-28" />
               <button type="button" onClick={() => send(text)} disabled={busy || !text.trim()} aria-label="Odeslat" data-testid="helpbot-send" style={primaryBtn} className="border-none rounded-xl p-2.5 cursor-pointer disabled:opacity-50 flex"><Send size={16} aria-hidden="true" /></button>
             </div>
+            <label className="flex items-start gap-2 text-[0.625rem] cursor-pointer" style={mutedStyle}>
+              <input type="checkbox" checked={personal} data-testid="helpbot-personal" className="mt-0.5"
+                onChange={(e) => { setPersonal(e.target.checked); try { localStorage.setItem(PERSONAL_KEY, e.target.checked ? '1' : '0'); } catch { /* bez úložiště se volba jen nezapamatuje */ } }} />
+              <span>Pomocník smí znát moje jméno, mince, sérii a četbu (kvůli tipům na knihy). Posílá se to jen s otázkou, e-mail ne.</span>
+            </label>
             <p style={mutedStyle} className="m-0 text-[0.625rem] opacity-80">Odpovídám jen na otázky o aplikaci a můžu se mýlit.{left !== null ? ` Dnes ti zbývá ${left} ${left === 1 ? 'otázka' : left >= 2 && left <= 4 ? 'otázky' : 'otázek'}.` : ''}</p>
           </div>
         </section>

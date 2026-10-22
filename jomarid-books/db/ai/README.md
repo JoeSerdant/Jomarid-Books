@@ -65,6 +65,11 @@ Plovoucí tlačítko vpravo dole pro každého přihlášeného (mimo čtečku, 
 v kódu funkce (`APP_GUIDE` v `help-bot.ts`; změní-li se appka, uprav příručku). Na cokoli jiného (kód, eseje, úkoly, obecné otázky) odpoví pevnou větou.
 Používá **lehčí a rychlejší model** než shortb-ai, odpověď je krátká (do 700 znaků) a každý uživatel má **40 otázek denně**.
 
+## Co pomocník ví o uživateli
+Funkce na serveru (podle ověřeného přihlášení, klient nic neposílá) přečte uživatelovo **uživatelské jméno, roli, zůstatek mincí, sérii, měsíční cíl, počet přečtených a rozečtených knih, nejčtenější žánry** a z katalogu vybere až 6 knih k doporučení (podle žánrů, hodnocení a toho, co už má). Model to dostane jako krátký text (do 2 200 znaků) a umí pak oslovit jménem, říct, kolik má mincí nebo série, a poradit, co číst. **E-mail, heslo ani texty knih se neposílají.** Nic se nezapisuje.
+V okně pomocníka je zaškrtávátko „Pomocník smí znát moje jméno, mince, sérii a četbu“ (výchozí zapnuto, pamatuje se v zařízení); po vypnutí se údaje vůbec nenačítají. Čtení probíhá s právy uživatele (RLS), takže vidí jen to, co smí vidět v appce. Když se údaje nepodaří načíst, pomocník odpovídá bez nich.
+**Soukromí:** údaje jdou ke Googlu s otázkou. U bezplatného klíče Google podle svých podmínek smí obsah používat ke zlepšování služeb, u placeného ne. Chceš-li tohle vyloučit, dej do `HELP_BOT_API_KEY` klíč z projektu s placeným účtem, nebo nech zaškrtávátko ve výchozím stavu vypnuté (v `HelpBot.jsx` konstanta `readPersonal`).
+
 ## Jak je zajištěný proti zneužití
 Žádná ochrana není stoprocentní, proto je jich víc: přihlášení; denní limit započítaný dřív, než se model zavolá; vstup se čistí (jen zprávy uživatele a pomocníka, krátké, nejvýš 8 posledních);
 přísné pokyny; a hlavně model vrací strukturovaně `{onTopic, answer}` a když není `onTopic` pravda (nebo odpověď obsahuje kód), server odpověď modelu **zahodí**
