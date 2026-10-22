@@ -206,7 +206,12 @@ export const ShortsStudio = ({ all = false }) => {
                 {ai.error && (
                   <div role="alert" data-testid="shorts-ai-error" className="text-[0.6875rem] font-bold m-0 space-y-1" style={{ color: '#ef4444' }}>
                     <p className="m-0">{ai.error}</p>
-                    {ai.detail && <p className="m-0 font-medium break-words" style={mutedStyle} data-testid="shorts-ai-detail">Podrobnosti: {ai.detail}</p>}
+                    {ai.detail && (
+                      <details className="font-medium" style={mutedStyle}>
+                        <summary className="cursor-pointer">Technické podrobnosti</summary>
+                        <p className="m-0 mt-1 break-words" data-testid="shorts-ai-detail">{ai.detail}</p>
+                      </details>
+                    )}
                   </div>
                 )}
               </div>

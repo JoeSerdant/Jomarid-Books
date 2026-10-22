@@ -4,19 +4,23 @@
 export const HELP_MSG_MAX = 500;      // stejný strop jako ve funkci
 export const HELP_HISTORY_MAX = 8;    // kolik posledních zpráv se posílá
 
+import { FRIENDLY } from '../lib/friendlyError.js';
+
 const ERROR_TEXT = {
-  not_authenticated: 'Nejsi přihlášený.',
+  not_authenticated: 'Vypršelo ti přihlášení. Přihlas se prosím znovu.',
   invalid_input: 'Zprávu se nepodařilo odeslat. Zkontroluj ji.',
   limit: 'Dnešní limit otázek pro pomocníka je vyčerpaný. Zítra se můžeš ptát znovu.',
-  quota: 'Pomocník má teď plno. Zkus to za chvíli.',
-  blocked: 'S tímhle ti pomocník neporadí. Zkus otázku přeformulovat.',
-  upstream: 'Pomocník teď neodpovídá. Zkus to za chvíli.',
-  empty: 'Pomocník nevrátil žádnou odpověď. Zkus to znovu.',
+  quota: 'Pomalu, pomalu! Pomocník má teď plno. Zkus to za chvíli.',
+  blocked: 'S tímhle ti pomocník neporadí. Zkus otázku napsat jinak.',
+  upstream: 'Promiň! Pomocník teď zažívá závratě. Počkej chvilku a zkus to znovu.',
+  timeout: 'Pomocník přemýšlí nějak dlouho. Zkus to za chvilku znovu.',
+  empty: 'Pomocník se zasekl a nic neodpověděl. Zkus to znovu.',
 };
+const UNAVAILABLE = 'Pomocník teď není dostupný. Zkus to později.';
 const NOT_FOUND = 'Funkce help-bot nebyla nalezena. V Supabase (Edge Functions) musí mít přesně tenhle název.';
 const RELAY = 'Funkce help-bot se nespustila: buď nemá správný název, nebo spadla hned při startu. Podrobnosti jsou v Supabase: Edge Functions → help-bot → Logs.';
-const FETCH = 'Nepodařilo se spojit s pomocníkem (síť, nebo funkce help-bot není nasazená). Zkus to znovu.';
-const REJECTED_JWT = 'Funkce help-bot odmítla přihlášení. V jejím nastavení vypni „Verify JWT“ a zkus to znovu.';
+const FETCH = 'Nepodařilo se spojit s funkcí help-bot (síť, nebo funkce není nasazená).';
+const REJECTED_JWT = 'Funkce help-bot odmítla přihlášení. V jejím nastavení vypni „Verify JWT“.';
 
 /** Zprávy z chatu ({ from: 'me' | 'bot', text }) na tvar pro funkci: jen posledních několik, bez chybových bublin a otázek, na které odpověď selhala, a s krácením. */
 export function toRequestMessages(chat) {
@@ -64,10 +68,10 @@ export async function askHelpBot(client, { messages, page = '' }) {
       if (code) return { error: helpErrorMessage(code, message), ...(detail ? { detail } : {}) };
       const status = Number(error?.context?.status);
       console.warn('help-bot:', error?.name, status || '', error?.message);
-      if (error?.name === 'FunctionsFetchError') return { error: FETCH };
-      if (error?.name === 'FunctionsRelayError') return { error: RELAY };
-      if (status === 404) return { error: NOT_FOUND };
-      if (status === 401) return { error: REJECTED_JWT };
+      if (error?.name === 'FunctionsFetchError') return { error: FRIENDLY.network, detail: FETCH };
+      if (error?.name === 'FunctionsRelayError') return { error: UNAVAILABLE, detail: RELAY };
+      if (status === 404) return { error: UNAVAILABLE, detail: NOT_FOUND };
+      if (status === 401) return { error: UNAVAILABLE, detail: REJECTED_JWT };
       return { error: ERROR_TEXT.upstream };
     }
     const answer = typeof data?.answer === 'string' ? data.answer.trim() : '';

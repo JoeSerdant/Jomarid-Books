@@ -227,19 +227,24 @@ test('generateShortText: úspěch, chyba funkce s kódem, funkce není nasazená
   assert.deepEqual(meta.genres, ['horor', 'thriller']);
   const withCode = (code, message) => ({ functions: { invoke: async () => ({ data: null, error: { name: 'FunctionsHttpError', message: 'Edge Function returned a non-2xx status code', context: { json: async () => ({ error: code, message }) } } }) } });
   assert.match((await generateShortText(withCode('quota', ''), {})).error, /plno/);
+  assert.match((await generateShortText(withCode('timeout', ''), {})).error, /dlouho/);
   assert.match((await generateShortText(withCode('forbidden', ''), {})).error, /nakladatel/);
   assert.equal((await generateShortText(withCode('neznamy', 'Vlastní věta ze serveru.'), {})).error, 'Vlastní věta ze serveru.');
   const failing = (error) => ({ functions: { invoke: async () => ({ data: null, error }) } });
   const quietWarn = async (fn) => { const w = console.warn; console.warn = () => {}; try { return await fn(); } finally { console.warn = w; } };
-  assert.match((await quietWarn(() => generateShortText(failing({ name: 'FunctionsFetchError', message: 'Failed to send a request to the Edge Function' }), {}))).error, /Nepodařilo se spojit/);
-  assert.match((await quietWarn(() => generateShortText(failing({ name: 'FunctionsRelayError', message: 'Relay Error invoking the Edge Function' }), {}))).error, /se nespustila.*Logs/);
-  assert.match((await quietWarn(() => generateShortText(failing({ name: 'FunctionsHttpError', message: 'Edge Function returned a non-2xx status code', context: { status: 404, json: async () => ({ code: 'NOT_FOUND', message: 'Requested function was not found' }) } }), {}))).error, /nebyla nalezena.*přesně/);
-  assert.match((await quietWarn(() => generateShortText(failing({ name: 'FunctionsHttpError', message: 'x', context: { status: 401, json: async () => ({ code: 401, message: 'Invalid JWT' }) } }), {}))).error, /Verify JWT/);
-  const e500 = (await quietWarn(() => generateShortText(failing({ name: 'FunctionsHttpError', message: 'x', context: { status: 500, json: async () => ({}) } }), {}))).error;
-  assert.match(e500, /neodpovídá.*kód 500.*Logs/);
-  assert.match((await generateShortText({ functions: { invoke: async () => ({ data: { text: ' ' }, error: null }) } }, {})).error, /nevrátila/);
-  assert.match((await generateShortText({ functions: { invoke: async () => { throw new Error('x'); } } }, {})).error, /neodpovídá/);
-  assert.match((await generateShortText({ functions: { invoke: async () => ({ data: null, error: { message: 'divné', context: { json: async () => { throw new Error('ne json'); } } } }) } }, {})).error, /neodpovídá/);
+  const fetchRes = await quietWarn(() => generateShortText(failing({ name: 'FunctionsFetchError', message: 'Failed to send a request to the Edge Function' }), {}));
+  assert.match(fetchRes.error, /internetem/);
+  assert.match(fetchRes.detail, /Nepodařilo se spojit.*Logs/);
+  assert.match((await quietWarn(() => generateShortText(failing({ name: 'FunctionsRelayError', message: 'Relay Error invoking the Edge Function' }), {}))).detail, /se nespustila.*Logs/);
+  assert.match((await quietWarn(() => generateShortText(failing({ name: 'FunctionsHttpError', message: 'Edge Function returned a non-2xx status code', context: { status: 404, json: async () => ({ code: 'NOT_FOUND', message: 'Requested function was not found' }) } }), {}))).detail, /nebyla nalezena.*přesně/);
+  assert.match((await quietWarn(() => generateShortText(failing({ name: 'FunctionsHttpError', message: 'x', context: { status: 401, json: async () => ({ code: 401, message: 'Invalid JWT' }) } }), {}))).detail, /Verify JWT/);
+  const e500 = await quietWarn(() => generateShortText(failing({ name: 'FunctionsHttpError', message: 'x', context: { status: 500, json: async () => ({}) } }), {}));
+  assert.match(e500.error, /závratě/);
+  assert.match(e500.detail, /kód 500.*Logs/);
+  for (const res of [fetchRes, e500]) assert.ok(!/\b[45]\d\d\b|Supabase|Verify|JWT|Logs/.test(res.error), 'lidská věta neobsahuje technické věci: ' + res.error);
+  assert.match((await generateShortText({ functions: { invoke: async () => ({ data: { text: ' ' }, error: null }) } }, {})).error, /zasekla/);
+  assert.match((await generateShortText({ functions: { invoke: async () => { throw new Error('x'); } } }, {})).error, /závratě/);
+  assert.match((await generateShortText({ functions: { invoke: async () => ({ data: null, error: { message: 'divné', context: { json: async () => { throw new Error('ne json'); } } } }) } }, {})).error, /závratě/);
   assert.equal(aiErrorMessage('blocked').length > 10, true);
   assert.equal(aiErrorMessage('', 'zpráva'), 'zpráva');
 });
@@ -273,11 +278,26 @@ test('Edge Function: technický popis chyby (stav a věta od Googlu) jde do odpo
 test('generateShortText: podrobnosti z funkce se předají do appky (a jen z funkce)', async () => {
   const withBody = (b) => ({ functions: { invoke: async () => ({ data: null, error: { name: 'FunctionsHttpError', message: 'x', context: { status: 502, json: async () => b } } }) } });
   const r = await generateShortText(withBody({ error: 'upstream', message: 'x', detail: 'Gemini odpovědělo 403: API key not valid' }), {});
-  assert.match(r.error, /neodpovídá/);
+  assert.match(r.error, /závratě/);
   assert.equal(r.detail, 'Gemini odpovědělo 403: API key not valid');
   assert.equal('detail' in (await generateShortText(withBody({ error: 'quota', message: '' }), {})), false);
   const long = await generateShortText(withBody({ error: 'upstream', detail: 'y'.repeat(900) }), {});
   assert.equal(long.detail.length, 300);
   const studio = fs.readFileSync(path.join(SRC, 'components', 'ShortsStudio.jsx'), 'utf8');
-  assert.ok(studio.includes('data-testid="shorts-ai-detail"') && studio.includes('Podrobnosti: {ai.detail}'));
+  assert.ok(studio.includes('data-testid="shorts-ai-detail"') && studio.includes('Technické podrobnosti') && studio.includes('{ai.detail}'));
+});
+
+test('Edge Function: překročený čas modelu je samostatná chyba 504 s lidskou větou', { skip }, async () => {
+  const quiet = console.error; console.error = () => {};
+  try {
+    const slow = new Error('Signal timed out.'); slow.name = 'TimeoutError';
+    const { deps } = mkDeps({ generate: async () => { throw slow; } });
+    const r = await EDGE.handle(req({ prompt: 'x' }), deps);
+    assert.equal(r.status, 504);
+    const out = await body(r);
+    assert.equal(out.error, 'timeout');
+    assert.match(out.message, /dlouho/);
+    assert.match(out.detail, /TimeoutError/);
+    assert.ok(!/\b[45]\d\d\b|Gemini/.test(out.message), 'věta pro uživatele bez technických věcí');
+  } finally { console.error = quiet; }
 });

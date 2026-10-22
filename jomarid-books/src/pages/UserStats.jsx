@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { friendlyError } from '../lib/friendlyError';
 import { BOOK_BADGES } from '../constants/badges';
 import { GAME_BADGES } from '../gameRecords/catalog';
 import { EMPTY_LEADERBOARDS, EMPTY_STATS, loadLeaderboards, loadMyStats } from '../stats/loadStats';
@@ -96,7 +97,8 @@ export const UserStats = () => {
         }
         alert(`Nemáš dost Jomarid Coinů. Streak Freeze stojí ${STREAK_FREEZE_PRICE}, ty máš ${realBalance}.`);
       } else {
-        alert('Nákup se nezdařil: ' + msg);
+        console.error('Streak Freeze:', err);
+        alert(friendlyError(err, 'Nákup se nezdařil. Zkus to znovu.'));
       }
     } finally {
       setBuyingFreeze(false);
@@ -129,7 +131,8 @@ export const UserStats = () => {
       setIsEditingGoal(false);
       fetchFullStats();
     } catch (err) {
-      setGoalError(err.message || 'Uložení selhalo.');
+      console.error('Měsíční cíl:', err);
+      setGoalError(friendlyError(err, 'Cíl se nepodařilo uložit. Zkus to znovu.'));
     }
   };
 

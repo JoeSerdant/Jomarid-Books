@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, supabaseUrl, supabaseKey } from '../lib/supabase';
+import { friendlyError } from '../lib/friendlyError';
 import { Coins, Loader2, Rocket, Swords, Building2, Target, Crown, Smile, Lock } from 'lucide-react';
 import { GameBar } from '../components/GameBar';
 import { useReaderSnapshot } from '../gameBar/useReaderSnapshot';
@@ -329,7 +330,8 @@ export const GameLauncher = ({ game }) => {
         setClaimedToday(true);
       }
     } catch (err) {
-      alert('Nepodařilo se vyzvednout odměnu: ' + (err.message || 'neznámá chyba'));
+      console.error('Odměna za hraní:', err);
+      alert(friendlyError(err, 'Odměnu se nepodařilo vyzvednout. Zkus to znovu.'));
     } finally {
       setClaiming(false);
     }

@@ -195,16 +195,16 @@ test('askHelpBot: úspěch, kódy chyb z funkce, funkce není nasazená a vyhoze
   const failing = (error) => ({ functions: { invoke: async () => ({ data: null, error }) } });
   const quiet = console.warn; console.warn = () => {};
   try {
-    assert.match((await askHelpBot(failing({ name: 'FunctionsFetchError', message: 'x' }), {})).error, /spojit/);
-    assert.match((await askHelpBot(failing({ name: 'FunctionsRelayError', message: 'x' }), {})).error, /nespustila/);
-    assert.match((await askHelpBot(failing({ name: 'FunctionsHttpError', message: 'x', context: { status: 404, json: async () => ({ code: 'NOT_FOUND' }) } }), {})).error, /nebyla nalezena/);
-    assert.match((await askHelpBot(failing({ name: 'FunctionsHttpError', message: 'x', context: { status: 401, json: async () => ({ code: 401 }) } }), {})).error, /Verify JWT/);
+    assert.match((await askHelpBot(failing({ name: 'FunctionsFetchError', message: 'x' }), {})).error, /internetem/);
+    assert.match((await askHelpBot(failing({ name: 'FunctionsRelayError', message: 'x' }), {})).detail, /nespustila/);
+    assert.match((await askHelpBot(failing({ name: 'FunctionsHttpError', message: 'x', context: { status: 404, json: async () => ({ code: 'NOT_FOUND' }) } }), {})).detail, /nebyla nalezena/);
+    assert.match((await askHelpBot(failing({ name: 'FunctionsHttpError', message: 'x', context: { status: 401, json: async () => ({ code: 401 }) } }), {})).detail, /Verify JWT/);
   } finally { console.warn = quiet; }
   const withDetail = await askHelpBot({ functions: { invoke: async () => ({ data: null, error: { name: 'FunctionsHttpError', message: 'x', context: { json: async () => ({ error: 'upstream', detail: 'Gemini odpovědělo 503' }) } } }) } }, {});
   assert.equal(withDetail.detail, 'Gemini odpovědělo 503');
-  assert.match((await askHelpBot({ functions: { invoke: async () => ({ data: { answer: ' ' }, error: null }) } }, {})).error, /nevrátil/);
-  assert.match((await askHelpBot({ functions: { invoke: async () => { throw new Error('x'); } } }, {})).error, /neodpovídá/);
-  assert.equal(helpErrorMessage('nic'), 'Pomocník teď neodpovídá. Zkus to za chvíli.');
+  assert.match((await askHelpBot({ functions: { invoke: async () => ({ data: { answer: ' ' }, error: null }) } }, {})).error, /zasekl/);
+  assert.match((await askHelpBot({ functions: { invoke: async () => { throw new Error('x'); } } }, {})).error, /závratě/);
+  assert.match(helpErrorMessage('nic'), /závratě/);
 });
 
 test('Zapojení: pomocník je v appce jen pro přihlášené a mluví s funkcí help-bot', () => {
@@ -213,4 +213,18 @@ test('Zapojení: pomocník je v appce jen pro přihlášené a mluví s funkcí 
   const comp = read('components', 'HelpBot.jsx');
   for (const needle of ['askHelpBot(supabase', 'toRequestMessages', 'checkQuestion', 'data-testid="helpbot-open"', 'data-testid="helpbot-input"', 'useAuth', 'useLocation']) assert.ok(comp.includes(needle), needle);
   assert.ok(/if \(!user\) return null/.test(comp), 'bez přihlášení se nezobrazí');
+});
+
+test('Edge Function: překročený čas modelu vrátí otázku a ukáže lidskou větu (504)', { skip }, async () => {
+  const quiet = console.error; console.error = () => {};
+  try {
+    const slow = new Error('Signal timed out.'); slow.name = 'TimeoutError';
+    const m = mkDeps({ generate: async () => { throw slow; } });
+    const r = await EDGE.handle(ask('x'), m.deps);
+    assert.equal(r.status, 504);
+    const out = await body(r);
+    assert.equal(out.error, 'timeout');
+    assert.match(out.message, /dlouho/);
+    assert.equal(m.calls.refund, 1, 'otázka se vrátí');
+  } finally { console.error = quiet; }
 });

@@ -85,7 +85,12 @@ export const HelpBot = () => {
                   style={m.from === 'me' ? primaryBtn : m.error ? { backgroundColor: 'var(--bg-secondary)', color: '#ef4444' } : { backgroundColor: 'var(--bg-secondary)' }}
                   className="max-w-[85%] rounded-xl px-3 py-2 font-medium whitespace-pre-wrap break-words">
                   {m.text}
-                  {m.detail && <span className="block text-[0.6875rem] opacity-80 mt-1" style={mutedStyle}>Podrobnosti: {m.detail}</span>}
+                  {m.detail && (
+                    <details className="text-[0.6875rem] opacity-80 mt-1" style={mutedStyle}>
+                      <summary className="cursor-pointer">Technické podrobnosti</summary>
+                      <span className="block break-words" data-testid="helpbot-detail">{m.detail}</span>
+                    </details>
+                  )}
                 </div>
               </div>
             ))}

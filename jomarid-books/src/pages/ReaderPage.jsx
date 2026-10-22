@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } fr
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { friendlyError } from '../lib/friendlyError';
 import { fetchBookText } from '../bookText/bookText';
 import {
   FONT_FAMILIES, LINE_HEIGHTS, TEXT_WIDTHS, ALIGNMENTS, PAGE_BREAKS, FONT_SIZE_RANGE, AUTO_ADVANCE_RANGE, READER_PREFS_EVENT,
@@ -655,7 +656,8 @@ export const ReaderPage = () => {
       if (error) throw error;
       setBookmarks(prev => [data, ...prev]);
     } catch (err) {
-      alert('Nepodařilo se uložit záložku: ' + err.message);
+      console.error('Záložka:', err);
+      alert(friendlyError(err, 'Záložku se nepodařilo uložit. Zkus to znovu.'));
     }
   }, [user, id, currentScrollPercent]);
 
@@ -740,7 +742,8 @@ export const ReaderPage = () => {
       setPendingSelection(null);
       window.getSelection()?.removeAllRanges();
     } catch (err) {
-      alert('Zvýraznění se nepodařilo uložit: ' + err.message);
+      console.error('Zvýraznění:', err);
+      alert(friendlyError(err, 'Zvýraznění se nepodařilo uložit. Zkus to znovu.'));
     }
   };
 
@@ -753,7 +756,8 @@ export const ReaderPage = () => {
       setHighlights(prev => prev.map(h => h.id === activeHighlight.id ? { ...h, note: trimmed || null } : h));
       setActiveHighlight(null);
     } catch (err) {
-      alert('Poznámku se nepodařilo uložit: ' + err.message);
+      console.error('Poznámka:', err);
+      alert(friendlyError(err, 'Poznámku se nepodařilo uložit. Zkus to znovu.'));
     }
   };
 

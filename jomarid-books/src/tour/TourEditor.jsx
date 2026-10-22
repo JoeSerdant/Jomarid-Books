@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { friendlyErrorWithDetail } from '../lib/friendlyError';
 import { ArrowDown, ArrowUp, Compass, Loader2, Play, Plus, RotateCcw, Save, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Card } from '../components/ui';
@@ -157,7 +158,7 @@ export const TourEditor = () => {
       window.dispatchEvent(new Event(TOUR_CONFIG_EVENT));
       setMessage({ type: 'success', text: 'Prohlídka uložena.' });
     } catch (err) {
-      setMessage({ type: 'error', text: 'Uložení prohlídky selhalo: ' + (err?.message || 'neznámá chyba') });
+      setMessage({ type: 'error', text: friendlyErrorWithDetail(err, 'Prohlídku se nepodařilo uložit.') });
     } finally {
       setSaving(false);
     }

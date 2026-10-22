@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { friendlyErrorWithDetail } from '../lib/friendlyError';
 import { Copy, KeyRound, Loader2, Send } from 'lucide-react';
 import { Card } from '../components/ui';
 import { plural } from '../lib/plural';
@@ -56,7 +57,7 @@ export default function PushAdminCard({ client }) {
       if (saveError) throw saveError;
       setKeys(pair); setSaved(true); setSavedKey(pair.publicKey);
     } catch (e) {
-      setError(`Klíče se nepodařilo vytvořit nebo uložit: ${e?.message || 'neznámá chyba'}`);
+      setError(friendlyErrorWithDetail(e, 'Klíče se nepodařilo vytvořit nebo uložit.'));
     }
     setBusy(false);
   };

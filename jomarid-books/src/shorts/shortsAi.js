@@ -1,6 +1,7 @@
 // Napsání textu shortB pomocí AI (Edge Function db/ai/shortb-ai.ts, nasazení v db/ai/README.md). AI dodává text s návrhem názvu a žánrů; sérii vyplňuje nakladatel.
 // Klient (supabase) se předává zvenku, ať jde modul zkoušet bez prohlížeče. Chyby se vracejí jako česká věta, nikdy se nevyhazují.
 import { foldText } from '../browse/browseModel.js';
+import { FRIENDLY } from '../lib/friendlyError.js';
 
 export const AI_PROMPT_MAX = 2000;
 export const AI_LENGTHS = Object.freeze([
@@ -11,18 +12,21 @@ export const AI_LENGTHS = Object.freeze([
 const PREVIOUS_MAX = 6000;
 
 const ERROR_TEXT = {
-  not_authenticated: 'Nejsi přihlášený.',
+  not_authenticated: 'Vypršelo ti přihlášení. Přihlas se prosím znovu.',
   forbidden: 'ShortB smí psát jen nakladatel nebo správce.',
   invalid_input: 'Zadání se nepodařilo odeslat. Zkontroluj ho.',
-  quota: 'AI má teď plno nebo vyčerpaný limit. Zkus to za chvíli.',
-  blocked: 'AI tohle zadání odmítla. Zkus ho přeformulovat.',
-  upstream: 'AI teď neodpovídá. Zkus to za chvíli.',
-  empty: 'AI nevrátila žádný text. Zkus to znovu.',
+  quota: 'Pomalu, pomalu! AI má teď plno nebo je vyčerpaný dnešní limit. Zkus to za chvíli.',
+  blocked: 'S tímhle zadáním AI nepomůže. Zkus ho napsat jinak.',
+  upstream: 'Promiň! AI teď zažívá závratě. Počkej chvilku a zkus to znovu.',
+  timeout: 'AI přemýšlí nějak dlouho. Zkus to za chvilku znovu.',
+  empty: 'AI se zasekla a nic nenapsala. Zkus to znovu.',
 };
+// Technické příčiny (špatný název funkce, Verify JWT...) jsou v „Technických podrobnostech“, uživatel dostane lidskou větu.
+const UNAVAILABLE = 'AI teď není dostupná. Zkus to později.';
 const NOT_FOUND = 'Funkce shortb-ai nebyla nalezena. V Supabase (Edge Functions) musí mít přesně tenhle název.';
 const RELAY = 'Funkce shortb-ai se nespustila: buď nemá správný název, nebo spadla hned při startu. Podrobnosti jsou v Supabase: Edge Functions → shortb-ai → Logs.';
-const FETCH = 'Nepodařilo se spojit s funkcí shortb-ai (síť, nebo funkce není nasazená). Zkus to znovu; když se to opakuje, zkontroluj v Supabase Edge Functions → shortb-ai → Logs.';
-const REJECTED_JWT = 'Funkce shortb-ai odmítla přihlášení. V jejím nastavení vypni „Verify JWT“ (funkce si přihlášení a roli ověřuje sama) a zkus to znovu.';
+const FETCH = 'Nepodařilo se spojit s funkcí shortb-ai (síť, nebo funkce není nasazená). Zkontroluj v Supabase Edge Functions → shortb-ai → Logs.';
+const REJECTED_JWT = 'Funkce shortb-ai odmítla přihlášení. V jejím nastavení vypni „Verify JWT“ (funkce si přihlášení a roli ověřuje sama).';
 
 /** Nejvyšší díl série mezi shortB (stejný název série bez ohledu na velikost písmen a diakritiku), bez shortB, který se právě upravuje. */
 export function latestPart(items, seriesName, exceptId = null) {
@@ -76,11 +80,11 @@ export async function generateShortText(client, request) {
       // Bez kódu z funkce: odpověď přišla od Supabase (ne od funkce) nebo se spojení nepovedlo. Pro snazší hledání příčiny se skutečná chyba vypíše do konzole.
       const status = Number(error?.context?.status);
       console.warn('shortb-ai:', error?.name, status || '', error?.message);
-      if (error?.name === 'FunctionsFetchError') return { error: FETCH };
-      if (error?.name === 'FunctionsRelayError') return { error: RELAY };
-      if (status === 404) return { error: NOT_FOUND };
-      if (status === 401) return { error: REJECTED_JWT };
-      return { error: status >= 500 ? `${ERROR_TEXT.upstream} (chyba funkce, kód ${status}; detail je v Edge Functions → shortb-ai → Logs)` : ERROR_TEXT.upstream };
+      if (error?.name === 'FunctionsFetchError') return { error: FRIENDLY.network, detail: FETCH };
+      if (error?.name === 'FunctionsRelayError') return { error: UNAVAILABLE, detail: RELAY };
+      if (status === 404) return { error: UNAVAILABLE, detail: NOT_FOUND };
+      if (status === 401) return { error: UNAVAILABLE, detail: REJECTED_JWT };
+      return { error: ERROR_TEXT.upstream, ...(status >= 500 ? { detail: `chyba funkce, kód ${status}; podrobnosti jsou v Edge Functions → shortb-ai → Logs` } : {}) };
     }
     const text = typeof data?.text === 'string' ? data.text : '';
     if (!text.trim()) return { error: ERROR_TEXT.empty };

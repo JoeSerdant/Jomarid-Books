@@ -112,7 +112,7 @@ export const LoginPage = () => {
       if (mode === 'signup') {
         setError(msg.includes('already registered') || msg.includes('already been registered')
           ? ACCOUNT_EXISTS_TEXT
-          : (err.message || 'Chyba při vytváření účtu.'));
+          : mapAuthError(err));
       } else if (mode === 'forgot') {
         setError(err?.status === 429 || msg.includes('rate limit') ? 'Příliš mnoho pokusů. Zkus to za chvíli.' : 'Žádost se nepodařilo odeslat. Zkus to znovu.');
       } else {
