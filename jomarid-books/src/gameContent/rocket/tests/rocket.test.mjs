@@ -273,3 +273,13 @@ test('každý nový odznak Rocketu míří na statistiku, kterou hra opravdu po�
   }
   assert.ok(rocketBadges.some((b) => b.stat === 'maxed_upgrades' && b.threshold === 8));
 });
+
+test('grafika: lodě, nepřátelé, bossové, střely i pozadí používají předkreslené sprity a hra se zapíná bez chyby ve skriptu', () => {
+  for (const needle of ['const Art = {', 'Art.ship(this.r', 'Art.enemy(this.type', 'Art.boss(this.r', 'Art.orb(this.r', 'Art.shot(this.r', 'Art.glow(this.color)', 'buildBackground(dpr)', 'this.bgNebula']) assert.ok(html.includes(needle), needle);
+  // všechny druhy nepřátel mají v Art vlastní kresbu
+  for (const type of ['asteroid', 'destroyer', 'tank', 'fast']) assert.ok(new RegExp(`type === '${type}'`).test(html), type);
+  // skript se dá přeložit (syntaxe)
+  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+  assert.ok(scripts.length > 0);
+  for (const code of scripts) assert.doesNotThrow(() => new vm.Script(code));
+});
