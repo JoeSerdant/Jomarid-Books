@@ -1426,6 +1426,488 @@ const U = {
 //  ČÁSTICE A TEXTY
 //======================================================================
 
+//======================================================================
+//  GRAFIKA (předkreslené sprity)
+//======================================================================
+//  Lodě, nepřátelé, bossové a střely se nakreslí jednou do skrytého plátna (ve dvojnásobném rozlišení)
+//  a ve hře se jen kopírují. Vypadají detailněji (barevné přechody, plechy, světla) a běží rychleji než
+//  kreslení se stíny v každém snímku. Samotná hra (pohyb, zásahy, střelba) se tím nemění.
+
+const Art = {
+    SCALE: 2,
+    cache: new Map(),
+
+    // Smíchá barvu #rrggbb s bílou (p > 0) nebo černou (p < 0): p v rozsahu -1 až 1
+    shade(hex, p) {
+        const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+        if (!m) return hex;
+        const n = parseInt(m[1], 16);
+        const mix = c => Math.round(p >= 0 ? c + (255 - c) * p : c * (1 + p));
+        return `rgb(${mix((n >> 16) & 255)},${mix((n >> 8) & 255)},${mix(n & 255)})`;
+    },
+
+    // Skryté plátno w x h (střed v 0,0), do kterého fn nakreslí tvar; sprite se pamatuje podle klíče
+    sprite(key, w, h, fn) {
+        let s = this.cache.get(key);
+        if (s) return s;
+        const c = document.createElement('canvas');
+        c.width = Math.ceil(w * this.SCALE);
+        c.height = Math.ceil(h * this.SCALE);
+        const g = c.getContext('2d');
+        g.scale(this.SCALE, this.SCALE);
+        g.translate(w / 2, h / 2);
+        fn(g);
+        s = { c, w, h };
+        if (this.cache.size > 500) this.cache.clear();
+        this.cache.set(key, s);
+        return s;
+    },
+
+    // Bílá kopie sprite: blikne při zásahu
+    white(key, spr) {
+        const k = key + ':w';
+        let s = this.cache.get(k);
+        if (s) return s;
+        const c = document.createElement('canvas');
+        c.width = spr.c.width;
+        c.height = spr.c.height;
+        const g = c.getContext('2d');
+        g.drawImage(spr.c, 0, 0);
+        g.globalCompositeOperation = 'source-atop';
+        g.fillStyle = '#ffffff';
+        g.fillRect(0, 0, c.width, c.height);
+        s = { c, w: spr.w, h: spr.h };
+        this.cache.set(k, s);
+        return s;
+    },
+
+    blit(ctx, spr) {
+        ctx.drawImage(spr.c, -spr.w / 2, -spr.h / 2, spr.w, spr.h);
+    },
+
+    // Svítící tečka (částice, záře): kruh s plynulým přechodem do průhledna
+    glow(color) {
+        return this.sprite('glow:' + color, 32, 32, g => {
+            const r = g.createRadialGradient(0, 0, 0, 0, 0, 16);
+            r.addColorStop(0, '#ffffff');
+            r.addColorStop(0.22, color);
+            r.addColorStop(1, 'rgba(0,0,0,0)');
+            g.fillStyle = r;
+            g.beginPath();
+            g.arc(0, 0, 16, 0, Math.PI * 2);
+            g.fill();
+        });
+    },
+
+    // Vlastní loď (nos nahoře)
+    ship(r, rapid) {
+        const key = 'ship:' + r + ':' + (rapid ? 1 : 0);
+        return this.sprite(key, r * 4, r * 4, g => {
+            const hull = rapid ? '#ff5a2a' : '#00e5ff';
+            // křídla
+            for (const s of [-1, 1]) {
+                const wing = g.createLinearGradient(0, -r * 0.2, s * r * 1.3, r * 0.9);
+                wing.addColorStop(0, '#2a6fb0');
+                wing.addColorStop(0.6, '#123a6b');
+                wing.addColorStop(1, '#0a1f3d');
+                g.fillStyle = wing;
+                g.beginPath();
+                g.moveTo(s * r * 0.2, -r * 0.2);
+                g.lineTo(s * r * 1.3, r * 0.75);
+                g.lineTo(s * r * 1.05, r * 1.0);
+                g.lineTo(s * r * 0.25, r * 0.6);
+                g.closePath();
+                g.fill();
+                g.strokeStyle = hull;
+                g.lineWidth = 1.2;
+                g.beginPath();
+                g.moveTo(s * r * 0.2, -r * 0.2);
+                g.lineTo(s * r * 1.3, r * 0.75);
+                g.stroke();
+                // světlo na špičce křídla
+                g.fillStyle = s < 0 ? '#ff3355' : '#33ff88';
+                g.beginPath();
+                g.arc(s * r * 1.22, r * 0.78, 1.6, 0, Math.PI * 2);
+                g.fill();
+                // motorová gondola
+                g.fillStyle = '#0a1f3d';
+                g.fillRect(s * r * 0.32 - 2.5, r * 0.15, 5, r * 0.62);
+                g.fillStyle = '#ff9a3c';
+                g.fillRect(s * r * 0.32 - 1.6, r * 0.72, 3.2, 2);
+            }
+            // trup se zářivým okrajem
+            g.shadowColor = hull;
+            g.shadowBlur = 9;
+            const body = g.createLinearGradient(-r * 0.5, 0, r * 0.5, 0);
+            body.addColorStop(0, '#0b2545');
+            body.addColorStop(0.32, '#3d9be0');
+            body.addColorStop(0.5, '#d6f6ff');
+            body.addColorStop(0.68, '#3d9be0');
+            body.addColorStop(1, '#0b2545');
+            g.fillStyle = body;
+            g.beginPath();
+            g.moveTo(0, -r * 1.2);
+            g.quadraticCurveTo(r * 0.5, -r * 0.35, r * 0.46, r * 0.72);
+            g.lineTo(0, r * 0.55);
+            g.lineTo(-r * 0.46, r * 0.72);
+            g.quadraticCurveTo(-r * 0.5, -r * 0.35, 0, -r * 1.2);
+            g.closePath();
+            g.fill();
+            g.shadowBlur = 0;
+            // rýha a pruhy na trupu
+            g.strokeStyle = 'rgba(8,30,60,0.55)';
+            g.lineWidth = 1;
+            g.beginPath();
+            g.moveTo(0, r * 0.05);
+            g.lineTo(0, r * 0.55);
+            g.stroke();
+            g.fillStyle = hull;
+            g.fillRect(-r * 0.3, r * 0.2, r * 0.6, 1.6);
+            // kabina
+            const glass = g.createRadialGradient(-r * 0.06, -r * 0.5, 1, 0, -r * 0.35, r * 0.4);
+            glass.addColorStop(0, '#ffffff');
+            glass.addColorStop(0.35, '#7be9ff');
+            glass.addColorStop(1, '#0a3b66');
+            g.fillStyle = glass;
+            g.beginPath();
+            g.ellipse(0, -r * 0.33, r * 0.2, r * 0.36, 0, 0, Math.PI * 2);
+            g.fill();
+            g.fillStyle = 'rgba(255,255,255,0.7)';
+            g.beginPath();
+            g.ellipse(-r * 0.07, -r * 0.46, r * 0.05, r * 0.12, -0.3, 0, Math.PI * 2);
+            g.fill();
+        });
+    },
+
+    // Nepřátelé (nos dolů, tedy směrem k hráči)
+    enemy(type, r, color) {
+        const key = 'enemy:' + type + ':' + Math.round(r) + ':' + color;
+        return { key, spr: this.sprite(key, r * 3.2, r * 3.2, g => this.drawEnemy(g, type, r, color)) };
+    },
+
+    drawEnemy(g, type, r, color) {
+        const light = this.shade(color, 0.55);
+        const dark = this.shade(color, -0.6);
+        g.shadowColor = color;
+        g.shadowBlur = 10;
+
+        if (type === 'asteroid') {
+            g.shadowBlur = 0;
+            const rock = g.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.1, 0, 0, r * 1.15);
+            rock.addColorStop(0, '#9a9aa6');
+            rock.addColorStop(0.55, '#5b5b66');
+            rock.addColorStop(1, '#25252d');
+            g.fillStyle = rock;
+            g.beginPath();
+            g.moveTo(-r * 0.8, -r * 0.5);
+            g.lineTo(0, -r);
+            g.lineTo(r * 0.9, -r * 0.4);
+            g.lineTo(r, r * 0.6);
+            g.lineTo(r * 0.2, r);
+            g.lineTo(-r * 0.7, r * 0.8);
+            g.closePath();
+            g.fill();
+            g.strokeStyle = 'rgba(200,200,215,0.35)';
+            g.lineWidth = 1.2;
+            g.stroke();
+            // krátery
+            for (const [cx, cy, cr] of [[-0.2, -0.1, 0.26], [0.45, 0.35, 0.17], [-0.45, 0.4, 0.13], [0.35, -0.5, 0.11]]) {
+                g.fillStyle = 'rgba(20,20,28,0.55)';
+                g.beginPath();
+                g.arc(r * cx, r * cy, r * cr, 0, Math.PI * 2);
+                g.fill();
+                g.strokeStyle = 'rgba(210,210,225,0.3)';
+                g.lineWidth = 1;
+                g.beginPath();
+                g.arc(r * cx, r * cy, r * cr, Math.PI * 0.15, Math.PI * 0.95);
+                g.stroke();
+            }
+            return;
+        }
+
+        if (type === 'destroyer') {
+            const hull = g.createLinearGradient(0, -r * 0.5, 0, r * 0.65);
+            hull.addColorStop(0, light);
+            hull.addColorStop(0.45, color);
+            hull.addColorStop(1, dark);
+            g.fillStyle = hull;
+            g.beginPath();
+            g.moveTo(-r, -r * 0.45);
+            g.lineTo(r, -r * 0.45);
+            g.lineTo(r * 0.6, r * 0.6);
+            g.lineTo(-r * 0.6, r * 0.6);
+            g.closePath();
+            g.fill();
+            g.shadowBlur = 0;
+            g.strokeStyle = light;
+            g.lineWidth = 1.3;
+            g.stroke();
+            // desky trupu
+            g.strokeStyle = 'rgba(0,0,0,0.4)';
+            g.lineWidth = 1;
+            for (const x of [-0.45, 0, 0.45]) { g.beginPath(); g.moveTo(r * x, -r * 0.4); g.lineTo(r * x * 0.7, r * 0.55); g.stroke(); }
+            g.beginPath(); g.moveTo(-r * 0.9, r * 0.05); g.lineTo(r * 0.9, r * 0.05); g.stroke();
+            // věže s hlavněmi
+            for (const x of [-0.5, 0.5]) {
+                g.fillStyle = dark;
+                g.beginPath(); g.arc(r * x, r * 0.1, r * 0.2, 0, Math.PI * 2); g.fill();
+                g.fillStyle = '#2b2b33';
+                g.fillRect(r * x - 1.8, r * 0.1, 3.6, r * 0.42);
+                g.fillStyle = light;
+                g.beginPath(); g.arc(r * x, r * 0.1, r * 0.09, 0, Math.PI * 2); g.fill();
+            }
+            // můstek a hlavní kanón
+            g.fillStyle = '#ffcc66';
+            g.fillRect(-4, r * 0.4, 8, 7);
+            g.fillStyle = '#ff7a1a';
+            g.fillRect(-2, r * 0.4 + 7, 4, 2);
+            // motory nahoře
+            for (const x of [-0.7, -0.35, 0, 0.35, 0.7]) {
+                const eg = g.createRadialGradient(r * x, -r * 0.46, 0, r * x, -r * 0.46, 5);
+                eg.addColorStop(0, '#fff2c0');
+                eg.addColorStop(0.5, 'rgba(255,140,40,0.8)');
+                eg.addColorStop(1, 'rgba(255,60,0,0)');
+                g.fillStyle = eg;
+                g.fillRect(r * x - 5, -r * 0.46 - 5, 10, 10);
+            }
+            return;
+        }
+
+        if (type === 'tank') {
+            const shell = g.createLinearGradient(-r, -r, r, r);
+            shell.addColorStop(0, light);
+            shell.addColorStop(0.5, color);
+            shell.addColorStop(1, dark);
+            g.fillStyle = shell;
+            g.beginPath();
+            g.moveTo(0, r); g.lineTo(-r, 0); g.lineTo(0, -r); g.lineTo(r, 0);
+            g.closePath();
+            g.fill();
+            g.shadowBlur = 0;
+            g.strokeStyle = light;
+            g.lineWidth = 1.4;
+            g.stroke();
+            // vnitřní pancíř
+            const plate = g.createLinearGradient(-r * 0.6, -r * 0.6, r * 0.6, r * 0.6);
+            plate.addColorStop(0, this.shade(color, 0.25));
+            plate.addColorStop(1, this.shade(color, -0.45));
+            g.fillStyle = plate;
+            g.beginPath();
+            g.moveTo(0, r * 0.62); g.lineTo(-r * 0.62, 0); g.lineTo(0, -r * 0.62); g.lineTo(r * 0.62, 0);
+            g.closePath();
+            g.fill();
+            g.strokeStyle = 'rgba(0,0,0,0.45)';
+            g.lineWidth = 1;
+            g.beginPath(); g.moveTo(-r * 0.62, 0); g.lineTo(r * 0.62, 0); g.moveTo(0, -r * 0.62); g.lineTo(0, r * 0.62); g.stroke();
+            // nýty
+            g.fillStyle = light;
+            for (const [x, y] of [[0, 0.82], [-0.82, 0], [0, -0.82], [0.82, 0]]) { g.beginPath(); g.arc(r * x, r * y, 1.6, 0, Math.PI * 2); g.fill(); }
+            // jádro
+            const core = g.createRadialGradient(0, 0, 0, 0, 0, r * 0.34);
+            core.addColorStop(0, '#ffffff');
+            core.addColorStop(0.4, '#ffd27a');
+            core.addColorStop(1, 'rgba(255,100,0,0)');
+            g.fillStyle = core;
+            g.beginPath(); g.arc(0, 0, r * 0.34, 0, Math.PI * 2); g.fill();
+            return;
+        }
+
+        if (type === 'fast') {
+            const wing = g.createLinearGradient(0, -r, 0, r);
+            wing.addColorStop(0, dark);
+            wing.addColorStop(0.5, color);
+            wing.addColorStop(1, light);
+            g.fillStyle = wing;
+            g.beginPath();
+            g.moveTo(0, r * 1.15);
+            g.lineTo(-r * 0.95, -r * 0.95);
+            g.lineTo(0, -r * 0.45);
+            g.lineTo(r * 0.95, -r * 0.95);
+            g.closePath();
+            g.fill();
+            g.shadowBlur = 0;
+            g.strokeStyle = light;
+            g.lineWidth = 1.1;
+            g.stroke();
+            g.strokeStyle = 'rgba(0,0,0,0.4)';
+            g.beginPath(); g.moveTo(0, r * 1.0); g.lineTo(0, -r * 0.4); g.stroke();
+            // kabina
+            const cp = g.createRadialGradient(0, r * 0.25, 0, 0, r * 0.25, r * 0.4);
+            cp.addColorStop(0, '#ffffff');
+            cp.addColorStop(0.5, this.shade(color, 0.6));
+            cp.addColorStop(1, color);
+            g.fillStyle = cp;
+            g.beginPath(); g.ellipse(0, r * 0.25, r * 0.2, r * 0.38, 0, 0, Math.PI * 2); g.fill();
+            // trysky
+            for (const x of [-0.5, 0.5]) {
+                const eg = g.createRadialGradient(r * x, -r * 0.85, 0, r * x, -r * 0.85, r * 0.5);
+                eg.addColorStop(0, '#ffffff');
+                eg.addColorStop(0.35, this.shade(color, 0.5));
+                eg.addColorStop(1, 'rgba(255,0,180,0)');
+                g.fillStyle = eg;
+                g.beginPath(); g.arc(r * x, -r * 0.85, r * 0.5, 0, Math.PI * 2); g.fill();
+            }
+            return;
+        }
+
+        // základní dron: lesklá koule s prstencem a svítícím okem
+        const sph = g.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.1, 0, 0, r * 1.05);
+        sph.addColorStop(0, light);
+        sph.addColorStop(0.5, color);
+        sph.addColorStop(1, dark);
+        g.fillStyle = sph;
+        g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
+        g.shadowBlur = 0;
+        g.strokeStyle = 'rgba(0,0,0,0.5)';
+        g.lineWidth = r * 0.16;
+        g.beginPath(); g.ellipse(0, 0, r * 0.98, r * 0.34, 0, 0, Math.PI * 2); g.stroke();
+        g.strokeStyle = light;
+        g.lineWidth = 1.1;
+        g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.stroke();
+        // antény
+        g.strokeStyle = dark;
+        g.lineWidth = 1.5;
+        for (const s of [-1, 1]) { g.beginPath(); g.moveTo(s * r * 0.5, -r * 0.8); g.lineTo(s * r * 0.8, -r * 1.25); g.stroke(); g.fillStyle = light; g.beginPath(); g.arc(s * r * 0.8, -r * 1.25, 1.8, 0, Math.PI * 2); g.fill(); }
+        // oko
+        const eye = g.createRadialGradient(0, r * 0.05, 0, 0, r * 0.05, r * 0.36);
+        eye.addColorStop(0, '#ffffff');
+        eye.addColorStop(0.35, '#ffe9a8');
+        eye.addColorStop(1, 'rgba(255,60,60,0)');
+        g.fillStyle = eye;
+        g.beginPath(); g.arc(0, r * 0.05, r * 0.36, 0, Math.PI * 2); g.fill();
+    },
+
+    // Bossové: trup z plechů s přechodem, křídla s hranami a otvor pro jádro (jádro a oči se kreslí zvlášť)
+    boss(r, color) {
+        const key = 'boss:' + Math.round(r) + ':' + color;
+        return { key, spr: this.sprite(key, r * 4.4, r * 3.6, g => {
+            const light = this.shade(color, 0.6);
+            const dark = this.shade(color, -0.65);
+            // křídla
+            for (const s of [-1, 1]) {
+                const wing = g.createLinearGradient(s * r * 0.6, -r * 0.4, s * r * 1.5, r * 0.2);
+                wing.addColorStop(0, this.shade(color, -0.25));
+                wing.addColorStop(1, dark);
+                g.fillStyle = wing;
+                g.beginPath();
+                g.moveTo(s * r, -r * 0.45);
+                g.lineTo(s * r * 1.5, r * 0.15);
+                g.lineTo(s * r * 1.25, r * 0.32);
+                g.lineTo(s * r * 0.6, r * 0.25);
+                g.closePath();
+                g.fill();
+                g.strokeStyle = light;
+                g.lineWidth = 1.5;
+                g.beginPath(); g.moveTo(s * r, -r * 0.45); g.lineTo(s * r * 1.5, r * 0.15); g.stroke();
+                // hroty na křídlech
+                g.fillStyle = light;
+                for (const t of [0.35, 0.6, 0.85]) {
+                    g.beginPath();
+                    g.moveTo(s * r * (1 + t * 0.5), -r * 0.45 + t * r * 0.6);
+                    g.lineTo(s * r * (1.06 + t * 0.5), -r * 0.45 + t * r * 0.6 + 6);
+                    g.lineTo(s * r * (0.96 + t * 0.5), -r * 0.45 + t * r * 0.6 + 6);
+                    g.closePath();
+                    g.fill();
+                }
+            }
+            // trup
+            g.shadowColor = color;
+            g.shadowBlur = 16;
+            const hull = g.createLinearGradient(0, -r, 0, r);
+            hull.addColorStop(0, light);
+            hull.addColorStop(0.35, color);
+            hull.addColorStop(1, dark);
+            g.fillStyle = hull;
+            g.beginPath();
+            g.moveTo(0, r);
+            g.lineTo(-r * 0.55, r * 0.4);
+            g.lineTo(-r, -r * 0.45);
+            g.lineTo(-r * 0.4, -r);
+            g.lineTo(r * 0.4, -r);
+            g.lineTo(r, -r * 0.45);
+            g.lineTo(r * 0.55, r * 0.4);
+            g.closePath();
+            g.fill();
+            g.shadowBlur = 0;
+            g.strokeStyle = light;
+            g.lineWidth = 2;
+            g.stroke();
+            // desky a žebra
+            g.strokeStyle = 'rgba(0,0,0,0.4)';
+            g.lineWidth = 1.3;
+            g.beginPath();
+            g.moveTo(-r * 0.7, -r * 0.7); g.lineTo(-r * 0.3, r * 0.5);
+            g.moveTo(r * 0.7, -r * 0.7); g.lineTo(r * 0.3, r * 0.5);
+            g.moveTo(-r * 0.9, -r * 0.2); g.lineTo(r * 0.9, -r * 0.2);
+            g.stroke();
+            // otvor pro jádro
+            const hole = g.createRadialGradient(0, -r * 0.15, r * 0.1, 0, -r * 0.15, r * 0.42);
+            hole.addColorStop(0, 'rgba(0,0,0,0.75)');
+            hole.addColorStop(1, 'rgba(0,0,0,0)');
+            g.fillStyle = hole;
+            g.beginPath(); g.arc(0, -r * 0.15, r * 0.42, 0, Math.PI * 2); g.fill();
+            g.strokeStyle = light;
+            g.lineWidth = 1.5;
+            g.beginPath(); g.arc(0, -r * 0.15, r * 0.34, 0, Math.PI * 2); g.stroke();
+            // motorové otvory nahoře
+            for (const x of [-0.25, 0.25]) {
+                const eg = g.createRadialGradient(r * x, -r * 0.95, 0, r * x, -r * 0.95, r * 0.22);
+                eg.addColorStop(0, '#ffffff');
+                eg.addColorStop(0.4, light);
+                eg.addColorStop(1, 'rgba(255,255,255,0)');
+                g.fillStyle = eg;
+                g.beginPath(); g.arc(r * x, -r * 0.95, r * 0.22, 0, Math.PI * 2); g.fill();
+            }
+        }) };
+    },
+
+    // Power-up: skleněná koule se zářivým okrajem (ikona se kreslí zvlášť)
+    orb(r, color) {
+        const key = 'orb:' + r + ':' + color;
+        return this.sprite(key, r * 4, r * 4, g => {
+            g.shadowColor = color;
+            g.shadowBlur = 16;
+            const ball = g.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.1, 0, 0, r * 1.05);
+            ball.addColorStop(0, '#ffffff');
+            ball.addColorStop(0.35, this.shade(color, 0.45));
+            ball.addColorStop(1, this.shade(color, -0.35));
+            g.fillStyle = ball;
+            g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
+            g.shadowBlur = 0;
+            g.strokeStyle = 'rgba(255,255,255,0.85)';
+            g.lineWidth = 1.5;
+            g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.stroke();
+            g.fillStyle = 'rgba(255,255,255,0.55)';
+            g.beginPath(); g.ellipse(-r * 0.3, -r * 0.45, r * 0.3, r * 0.14, -0.6, 0, Math.PI * 2); g.fill();
+        });
+    },
+
+    // Střela: zářící kapsle (hráč) nebo koule s halem (nepřítel)
+    shot(r, color, enemy) {
+        const key = 'shot:' + (enemy ? 'e' : 'p') + ':' + r + ':' + color;
+        return this.sprite(key, r * 8, r * 8, g => {
+            const halo = g.createRadialGradient(0, 0, 0, 0, 0, r * 3.6);
+            halo.addColorStop(0, color);
+            halo.addColorStop(0.25, color);
+            halo.addColorStop(1, 'rgba(0,0,0,0)');
+            g.globalAlpha = enemy ? 0.55 : 0.45;
+            g.fillStyle = halo;
+            g.beginPath(); g.arc(0, 0, r * 3.6, 0, Math.PI * 2); g.fill();
+            g.globalAlpha = 1;
+            g.fillStyle = color;
+            g.beginPath();
+            if (enemy) g.arc(0, 0, r, 0, Math.PI * 2);
+            else g.ellipse(0, 0, r * 0.95, r * 2.1, 0, 0, Math.PI * 2);
+            g.fill();
+            g.fillStyle = 'rgba(255,255,255,0.92)';
+            g.beginPath();
+            if (enemy) g.arc(0, 0, r * 0.45, 0, Math.PI * 2);
+            else g.ellipse(0, 0, r * 0.42, r * 1.5, 0, 0, Math.PI * 2);
+            g.fill();
+        });
+    }
+};
+
 class Particle {
     constructor(x, y, color, speed, size, decay, angle) {
         this.x = x;
@@ -1451,11 +1933,10 @@ class Particle {
     }
 
     draw(ctx) {
-        ctx.globalAlpha = Math.max(0, this.life);
-        ctx.fillStyle = this.color;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size * Math.max(0.2, this.life), 0, Math.PI * 2);
-        ctx.fill();
+        const life = Math.max(0, this.life);
+        const d = this.size * Math.max(0.35, life) * 4;
+        ctx.globalAlpha = Math.min(1, life * 1.2);
+        ctx.drawImage(Art.glow(this.color).c, this.x - d / 2, this.y - d / 2, d, d);
         ctx.globalAlpha = 1;
     }
 }
@@ -1513,29 +1994,29 @@ class Bullet {
     }
 
     draw(ctx) {
-        ctx.shadowColor = this.color;
-        ctx.shadowBlur = 10;
+        const spr = Art.shot(this.r, this.color, this.isEnemy);
 
-        if (this.isEnemy) {
-            ctx.fillStyle = this.color;
+        if (!this.isEnemy) {
+            // světelná stopa za střelou
+            const len = this.r * 7;
+            const sp = Math.hypot(this.vx, this.vy) || 1;
+            const bx = this.x - (this.vx / sp) * len;
+            const by = this.y - (this.vy / sp) * len;
+            const g = ctx.createLinearGradient(this.x, this.y, bx, by);
+            g.addColorStop(0, this.color);
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.globalAlpha = 0.55;
+            ctx.strokeStyle = g;
+            ctx.lineWidth = this.r * 1.3;
+            ctx.lineCap = 'round';
             ctx.beginPath();
-            ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Světlé jádro odliší střelu od pozadí i přes výbuchy
-            ctx.shadowBlur = 0;
-            ctx.fillStyle = 'rgba(255,255,255,0.85)';
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.r * 0.42, 0, Math.PI * 2);
-            ctx.fill();
-        } else {
-            ctx.fillStyle = this.color;
-            ctx.beginPath();
-            ctx.ellipse(this.x, this.y, this.r, this.r * 2.1, 0, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.moveTo(this.x, this.y);
+            ctx.lineTo(bx, by);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
         }
 
-        ctx.shadowBlur = 0;
+        ctx.drawImage(spr.c, this.x - spr.w / 2, this.y - spr.h / 2, spr.w, spr.h);
     }
 }
 
@@ -1635,18 +2116,24 @@ class Shockwave {
         const alpha = U.clamp(1 - this.r / this.maxR, 0, 1) * 0.8;
         if (alpha <= 0) return;
 
-        ctx.globalAlpha = alpha;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = alpha * 0.55;
         ctx.strokeStyle = this.color;
-        ctx.lineWidth = this.band;
+        ctx.lineWidth = this.band * 1.5;
         ctx.beginPath();
         ctx.arc(this.x, this.y, Math.max(0, this.r), 0, Math.PI * 2);
         ctx.stroke();
 
-        ctx.globalAlpha = alpha * 0.6;
+        ctx.globalAlpha = alpha;
+        ctx.lineWidth = this.band * 0.6;
+        ctx.stroke();
+
+        ctx.globalAlpha = alpha * 0.8;
         ctx.lineWidth = 2;
         ctx.strokeStyle = '#ffffff';
         ctx.stroke();
-        ctx.globalAlpha = 1;
+        ctx.restore();
     }
 }
 
@@ -1698,18 +2185,24 @@ class Powerup {
 
     draw(ctx) {
         const pulse = 1 + Math.sin(this.t * 0.007) * 0.09;
+        const orb = Art.orb(this.r, this.color);
 
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.scale(pulse, pulse);
 
-        ctx.fillStyle = this.color;
-        ctx.shadowColor = this.color;
-        ctx.shadowBlur = 14;
+        Art.blit(ctx, orb);
+
+        // otáčející se přerušovaný kroužek kolem koule
+        ctx.rotate(this.t * 0.003);
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        ctx.lineWidth = 1.4;
+        ctx.setLineDash([5, 7]);
         ctx.beginPath();
-        ctx.arc(0, 0, this.r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
+        ctx.arc(0, 0, this.r + 5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.rotate(-this.t * 0.003);
 
         ctx.fillStyle = '#000';
         ctx.font = '14px sans-serif';
@@ -1894,47 +2387,72 @@ class Player {
             ctx.globalAlpha = (Math.floor(Date.now() / 70) % 2) ? 0.3 : 1;
         }
 
+        // Plamen z motorů: dvě zářící trysky, dozadu se ztrácí
+        const rapid = this.rapidTimer > 0;
+        const flick = 0.75 + Math.random() * 0.5;
+        const flameLen = (rapid ? 30 : 22) * flick;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        for (const sx of [-1, 1]) {
+            const fx = sx * this.r * 0.32;
+            const fy = this.r * 0.72;
+            const fg = ctx.createLinearGradient(0, fy, 0, fy + flameLen);
+            fg.addColorStop(0, '#ffffff');
+            fg.addColorStop(0.25, rapid ? '#ffb060' : '#8be9ff');
+            fg.addColorStop(1, rapid ? 'rgba(255,50,0,0)' : 'rgba(0,120,255,0)');
+            ctx.fillStyle = fg;
+            ctx.beginPath();
+            ctx.moveTo(fx - 3, fy);
+            ctx.lineTo(fx + 3, fy);
+            ctx.lineTo(fx, fy + flameLen);
+            ctx.closePath();
+            ctx.fill();
+        }
+        const glow = ctx.createRadialGradient(0, this.r * 0.75, 0, 0, this.r * 0.75, 16);
+        glow.addColorStop(0, rapid ? 'rgba(255,120,40,0.5)' : 'rgba(80,220,255,0.45)');
+        glow.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(-16, this.r * 0.75 - 16, 32, 32);
+        ctx.restore();
+
+        Art.blit(ctx, Art.ship(this.r, rapid));
+
         if (this.shieldTimer > 0) {
             const pulse = 0.28 + Math.sin(Date.now() / 110) * 0.09;
+            const sg = ctx.createRadialGradient(0, 0, this.r * 0.5, 0, 0, this.r + 11);
+            sg.addColorStop(0, 'rgba(0,170,255,0.04)');
+            sg.addColorStop(0.75, `rgba(0, 170, 255, ${pulse * 0.6})`);
+            sg.addColorStop(1, `rgba(120, 220, 255, ${pulse + 0.25})`);
             ctx.beginPath();
             ctx.arc(0, 0, this.r + 11, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(0, 170, 255, ${pulse})`;
+            ctx.fillStyle = sg;
             ctx.fill();
-            ctx.strokeStyle = '#00aaff';
+            ctx.strokeStyle = 'rgba(150,225,255,0.9)';
             ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // šestiúhelníkový lesk štítu
+            ctx.strokeStyle = 'rgba(200,240,255,0.25)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const a = (Math.PI / 3) * i + Date.now() / 1800;
+                const x = Math.cos(a) * (this.r + 5);
+                const y = Math.sin(a) * (this.r + 5);
+                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.closePath();
             ctx.stroke();
 
             // Poslední vteřina štítu bliká, ať konec nepřekvapí
             if (this.shieldTimer < 1200 && Math.floor(this.shieldTimer / 120) % 2) {
                 ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.arc(0, 0, this.r + 11, 0, Math.PI * 2);
                 ctx.stroke();
             }
         }
-
-        ctx.fillStyle = this.rapidTimer > 0 ? '#ff3300' : (Math.random() > 0.5 ? '#ff8800' : '#ffcc00');
-        ctx.beginPath();
-        ctx.moveTo(-5, 11);
-        ctx.lineTo(5, 11);
-        ctx.lineTo(0, 20 + Math.random() * 9);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.fillStyle = '#00f0ff';
-        ctx.shadowColor = '#00f0ff';
-        ctx.shadowBlur = 12;
-        ctx.beginPath();
-        ctx.moveTo(0, -this.r);
-        ctx.lineTo(-this.r, this.r - 5);
-        ctx.lineTo(0, this.r - 10);
-        ctx.lineTo(this.r, this.r - 5);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = '#d8fbff';
-        ctx.beginPath();
-        ctx.arc(0, -2, 3.2, 0, Math.PI * 2);
-        ctx.fill();
 
         ctx.restore();
     }
@@ -2041,68 +2559,17 @@ class Enemy {
         ctx.save();
         ctx.translate(this.x, this.y);
 
-        const fill = this.hitFlash > 0 ? '#ffffff' : this.color;
+        const { key, spr } = Art.enemy(this.type, this.r, this.color);
+        const img = this.hitFlash > 0 ? Art.white(key, spr) : spr;
 
         if (this.type === 'asteroid') {
             ctx.rotate(this.angle);
-            ctx.fillStyle = fill;
-            ctx.beginPath();
-            ctx.moveTo(-this.r * 0.8, -this.r * 0.5);
-            ctx.lineTo(0, -this.r);
-            ctx.lineTo(this.r * 0.9, -this.r * 0.4);
-            ctx.lineTo(this.r, this.r * 0.6);
-            ctx.lineTo(this.r * 0.2, this.r);
-            ctx.lineTo(-this.r * 0.7, this.r * 0.8);
-            ctx.closePath();
-            ctx.fill();
-
-            ctx.fillStyle = 'rgba(0,0,0,0.3)';
-            ctx.beginPath();
-            ctx.arc(-this.r * 0.2, -this.r * 0.1, this.r * 0.26, 0, Math.PI * 2);
-            ctx.fill();
-
+            Art.blit(ctx, img);
             ctx.restore();
             return;
         }
 
-        ctx.shadowColor = this.color;
-        ctx.shadowBlur = 11;
-        ctx.fillStyle = fill;
-
-        if (this.type === 'destroyer') {
-            ctx.beginPath();
-            ctx.moveTo(-this.r, -this.r * 0.45);
-            ctx.lineTo(this.r, -this.r * 0.45);
-            ctx.lineTo(this.r * 0.6, this.r * 0.6);
-            ctx.lineTo(-this.r * 0.6, this.r * 0.6);
-            ctx.closePath();
-            ctx.fill();
-
-            ctx.shadowBlur = 0;
-            ctx.fillStyle = '#ffcc66';
-            ctx.fillRect(-4, this.r * 0.4, 8, 7);
-        } else if (this.type === 'tank') {
-            ctx.beginPath();
-            ctx.moveTo(0, this.r);
-            ctx.lineTo(-this.r, 0);
-            ctx.lineTo(0, -this.r);
-            ctx.lineTo(this.r, 0);
-            ctx.closePath();
-            ctx.fill();
-        } else if (this.type === 'fast') {
-            ctx.beginPath();
-            ctx.moveTo(0, this.r);
-            ctx.lineTo(-this.r * 0.75, -this.r);
-            ctx.lineTo(this.r * 0.75, -this.r);
-            ctx.closePath();
-            ctx.fill();
-        } else {
-            ctx.beginPath();
-            ctx.arc(0, 0, this.r, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        ctx.shadowBlur = 0;
+        Art.blit(ctx, img);
 
         // Odolní nepřátelé ukážou zbývající život, jakmile schytají první ránu
         if (this.hp < this.maxHp && (this.type === 'tank' || this.type === 'destroyer')) {
@@ -2701,58 +3168,65 @@ class Boss {
         ctx.arc(0, 0, auraR, 0, Math.PI * 2);
         ctx.fill();
 
-        let body = glitchy ? this.bulletColor() : this.color;
-        if (this.hitFlash > 0) body = '#ffffff';
-        else if (telegraphing && Math.floor(this.t / 90) % 2) body = '#ffffff';
-        else if (charging) body = '#ffdddd';
+        // Široká záře v barvě bosse (sčítá světlo), ve třetí fázi červená
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const halo = ctx.createRadialGradient(0, 0, this.r * 0.4, 0, 0, this.r * 2.4);
+        halo.addColorStop(0, this.phase >= 3 ? 'rgba(255,40,40,0.32)' : 'rgba(255,255,255,0.12)');
+        halo.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = halo;
+        ctx.fillRect(-this.r * 2.4, -this.r * 2.4, this.r * 4.8, this.r * 4.8);
+        ctx.restore();
 
-        ctx.fillStyle = body;
-        ctx.shadowColor = this.color;
-        ctx.shadowBlur = telegraphing ? 30 : 16;
+        const { key, spr } = Art.boss(this.r, this.color);
+        const white = this.hitFlash > 0 || (telegraphing && Math.floor(this.t / 90) % 2);
+        Art.blit(ctx, white ? Art.white(key, spr) : spr);
 
-        // Trup
-        ctx.beginPath();
-        ctx.moveTo(0, this.r);
-        ctx.lineTo(-this.r * 0.55, this.r * 0.4);
-        ctx.lineTo(-this.r, -this.r * 0.45);
-        ctx.lineTo(-this.r * 0.4, -this.r);
-        ctx.lineTo(this.r * 0.4, -this.r);
-        ctx.lineTo(this.r, -this.r * 0.45);
-        ctx.lineTo(this.r * 0.55, this.r * 0.4);
-        ctx.closePath();
-        ctx.fill();
+        // GLITCH přebarvuje trup duhovou září
+        if (glitchy) {
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalAlpha = 0.35;
+            ctx.fillStyle = this.bulletColor();
+            ctx.beginPath();
+            ctx.arc(0, 0, this.r * 0.9, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        } else if (charging) {
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalAlpha = 0.3;
+            ctx.fillStyle = '#ffdddd';
+            ctx.beginPath();
+            ctx.arc(0, 0, this.r * 0.9, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
 
-        // Křídla
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = 'rgba(0,0,0,0.35)';
-        ctx.beginPath();
-        ctx.moveTo(-this.r, -this.r * 0.45);
-        ctx.lineTo(-this.r * 1.5, this.r * 0.15);
-        ctx.lineTo(-this.r * 0.6, this.r * 0.25);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.moveTo(this.r, -this.r * 0.45);
-        ctx.lineTo(this.r * 1.5, this.r * 0.15);
-        ctx.lineTo(this.r * 0.6, this.r * 0.25);
-        ctx.closePath();
-        ctx.fill();
-
-        // Jádro
+        // Jádro: pulzující zářící koule
         const core = telegraphing ? 1 : 0.55 + Math.sin(this.t * 0.006) * 0.2;
-        ctx.globalAlpha = core;
-        ctx.fillStyle = '#fff';
+        const cr = this.r * (0.2 + core * 0.16);
+        const cg = ctx.createRadialGradient(0, -this.r * 0.15, 0, 0, -this.r * 0.15, cr * 2.2);
+        cg.addColorStop(0, '#ffffff');
+        cg.addColorStop(0.3, this.phase >= 3 ? '#ff7766' : '#e8f6ff');
+        cg.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = Math.min(1, core + 0.2);
+        ctx.fillStyle = cg;
         ctx.beginPath();
-        ctx.arc(0, -this.r * 0.15, this.r * 0.28, 0, Math.PI * 2);
+        ctx.arc(0, -this.r * 0.15, cr * 2.2, 0, Math.PI * 2);
         ctx.fill();
-        ctx.globalAlpha = 1;
+        ctx.restore();
 
         // Oči podle fáze
         ctx.fillStyle = this.phase >= 3 ? '#ff2200' : '#ffffff';
+        ctx.shadowColor = this.phase >= 3 ? '#ff2200' : '#ffffff';
+        ctx.shadowBlur = 6;
         for (let i = 0; i < this.phase; i++) {
             ctx.fillRect(-10 + i * 10 - (this.phase - 1) * 5 + 5 - 5, -this.r * 0.55, 4, 4);
         }
+        ctx.shadowBlur = 0;
 
         ctx.restore();
     }
@@ -3177,6 +3651,72 @@ class GameManager {
         this.hudCache = {};
     }
 
+    // Pozadí: hluboký přechod s vzdálenou planetou (stálé) a mlhoviny, které se pomalu posouvají dolů
+    buildBackground(dpr) {
+        const w = this.width, h = this.height;
+        const mk = () => {
+            const c = document.createElement('canvas');
+            c.width = Math.max(1, Math.round(w * dpr));
+            c.height = Math.max(1, Math.round(h * dpr));
+            const g = c.getContext('2d');
+            g.setTransform(dpr, 0, 0, dpr, 0, 0);
+            return { c, g };
+        };
+
+        const base = mk();
+        const bg = base.g.createLinearGradient(0, 0, 0, h);
+        bg.addColorStop(0, '#02030f');
+        bg.addColorStop(0.55, '#070b24');
+        bg.addColorStop(1, '#150a2b');
+        base.g.fillStyle = bg;
+        base.g.fillRect(0, 0, w, h);
+
+        // vzdálená planeta s atmosférou
+        const pr = Math.min(w, h) * 0.34;
+        const px = w * 0.82, py = h * 0.78;
+        const atm = base.g.createRadialGradient(px, py, pr * 0.9, px, py, pr * 1.35);
+        atm.addColorStop(0, 'rgba(90,120,255,0.20)');
+        atm.addColorStop(1, 'rgba(90,120,255,0)');
+        base.g.fillStyle = atm;
+        base.g.beginPath(); base.g.arc(px, py, pr * 1.35, 0, Math.PI * 2); base.g.fill();
+        const body = base.g.createRadialGradient(px - pr * 0.4, py - pr * 0.4, pr * 0.1, px, py, pr);
+        body.addColorStop(0, '#2a3a7a');
+        body.addColorStop(0.6, '#0f1840');
+        body.addColorStop(1, '#04061a');
+        base.g.fillStyle = body;
+        base.g.beginPath(); base.g.arc(px, py, pr, 0, Math.PI * 2); base.g.fill();
+        base.g.strokeStyle = 'rgba(140,170,255,0.18)';
+        base.g.lineWidth = 2;
+        base.g.beginPath(); base.g.ellipse(px, py, pr * 1.55, pr * 0.32, -0.35, 0, Math.PI * 2); base.g.stroke();
+
+        // mlhoviny: kresleny i o výšku obrazovky výš a níž, ať se při posunu plynule opakují
+        const neb = mk();
+        const blobs = [];
+        for (let i = 0; i < 7; i++) {
+            blobs.push({
+                x: Math.random() * w,
+                y: Math.random() * h,
+                r: (0.22 + Math.random() * 0.3) * Math.max(w, h) * 0.6,
+                c: ['120,60,255', '0,170,200', '255,60,160', '60,90,255'][i % 4],
+                a: 0.07 + Math.random() * 0.08
+            });
+        }
+        for (const b of blobs) {
+            for (const dy of [-h, 0, h]) {
+                const y = b.y + dy;
+                const grad = neb.g.createRadialGradient(b.x, y, 0, b.x, y, b.r);
+                grad.addColorStop(0, `rgba(${b.c},${b.a})`);
+                grad.addColorStop(1, `rgba(${b.c},0)`);
+                neb.g.fillStyle = grad;
+                neb.g.fillRect(b.x - b.r, y - b.r, b.r * 2, b.r * 2);
+            }
+        }
+
+        this.bgBase = base.c;
+        this.bgNebula = neb.c;
+        this.bgScroll = 0;
+    }
+
     resize() {
         const container = document.getElementById('game-container');
         this.width = container.clientWidth;
@@ -3187,16 +3727,21 @@ class GameManager {
         this.canvas.height = Math.round(this.height * dpr);
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-        this.stars = Array.from({ length: 95 }, () => {
+        const STAR_COLORS = ['#ffffff', '#cfe3ff', '#ffe9c4', '#bfffe8'];
+        this.stars = Array.from({ length: 140 }, () => {
             const layer = Math.floor(Math.random() * 3);
             return {
                 x: Math.random() * this.width,
                 y: Math.random() * this.height,
                 s: 1 + layer * 0.8,
                 v: 0.35 + layer * 0.9,
-                a: 0.2 + layer * 0.3
+                a: 0.2 + layer * 0.3,
+                c: STAR_COLORS[Math.floor(Math.random() * STAR_COLORS.length)],
+                ph: Math.random() * Math.PI * 2,
+                layer
             };
         });
+        this.buildBackground(dpr);
 
         if (this.player) {
             this.player.gw = this.width;
@@ -4190,18 +4735,33 @@ class GameManager {
     draw() {
         const ctx = this.ctx;
 
-        ctx.fillStyle = '#020617';
-        ctx.fillRect(0, 0, this.width, this.height);
+        if (this.bgBase) {
+            ctx.drawImage(this.bgBase, 0, 0, this.width, this.height);
+            const off = this.bgScroll % this.height;
+            ctx.drawImage(this.bgNebula, 0, off, this.width, this.height);
+            ctx.drawImage(this.bgNebula, 0, off - this.height, this.width, this.height);
+        } else {
+            ctx.fillStyle = '#020617';
+            ctx.fillRect(0, 0, this.width, this.height);
+        }
 
         ctx.save();
         if (this.shake > 0) {
             ctx.translate(U.rand(-this.shake, this.shake), U.rand(-this.shake, this.shake));
         }
 
-        ctx.fillStyle = '#fff';
-        for (const s of this.stars) {
-            ctx.globalAlpha = s.a;
-            ctx.fillRect(s.x, s.y, s.s, s.s);
+        const now = Date.now() / 1000;
+        for (const st of this.stars) {
+            const tw = st.layer === 0 ? 1 : 0.75 + 0.25 * Math.sin(now * (1.5 + st.layer) + st.ph);
+            ctx.globalAlpha = Math.min(1, st.a * tw);
+            ctx.fillStyle = st.c;
+            ctx.fillRect(st.x, st.y, st.s, st.s);
+            // velké hvězdy mají jemný křížový třpyt
+            if (st.layer === 2) {
+                ctx.globalAlpha *= 0.45;
+                ctx.fillRect(st.x - 2, st.y + st.s / 2 - 0.4, st.s + 4, 0.8);
+                ctx.fillRect(st.x + st.s / 2 - 0.4, st.y - 2, 0.8, st.s + 4);
+            }
         }
         ctx.globalAlpha = 1;
 
@@ -4215,7 +4775,9 @@ class GameManager {
 
             this.player.draw(ctx);
 
+            ctx.globalCompositeOperation = 'lighter';
             for (const p of this.particles) p.draw(ctx);
+            ctx.globalCompositeOperation = 'source-over';
             for (const t of this.texts) t.draw(ctx);
         }
 
@@ -4256,6 +4818,7 @@ class GameManager {
 
     updateStars(dt) {
         const boost = this.state === 'PLAY' ? 1 + this.phase * 0.04 : 1;
+        this.bgScroll = ((this.bgScroll || 0) + 0.18 * boost * (dt / 16)) % (this.height || 1);
 
         for (const s of this.stars) {
             s.y += s.v * boost * (dt / 16);
