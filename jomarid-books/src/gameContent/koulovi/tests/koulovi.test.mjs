@@ -61,7 +61,7 @@ function makeEnv() {
   const rafs = [];
   const docListeners = {};
   const ctx2d = () => {
-    const t = { measureText: () => ({ width: 10 }), createPattern: () => ({}), createLinearGradient: () => ({ addColorStop() {} }) };
+    const t = { measureText: () => ({ width: 10 }), createPattern: () => ({}), createLinearGradient: () => ({ addColorStop() {} }), createRadialGradient: () => ({ addColorStop() {} }) };
     return new Proxy(t, { get: (o, k) => (k in o ? o[k] : () => {}), set: (o, k, v) => { o[k] = v; return true; } });
   };
   const mkEl = () => {
@@ -459,4 +459,22 @@ test('rekordy se hlásí appce: skóre režimů a objevené koule při startu i 
   b.records.length = 0;
   b.run('g.balls = [mk(270, 600, 4), mk(270, 600, 4)]; S.disc = 3; step();');
   assert.ok(b.records.some(([k, v]) => k === 'balls_discovered' && v === 6), 'objevení nové koule (typ 5) nahlásí 6 objevených');
+});
+
+test('grafika: koule mají stínování a lesk, mísa vnitřek, částice konfety a kruh a celé kreslení proběhne ve všech stavech bez chyby', () => {
+  for (const needle of ['createRadialGradient(-r*.38', 'function rr(', 'bg2', 'g.rg', 'const shd=']) assert.ok(game.includes(needle), needle);
+  const { run } = makeEnv();
+  for (const mode of ['classic', 'time', 'drops', 'chaos', 'zen']) {
+    run(`start('${mode}')`);
+    for (let i = 0; i < 240; i += 1) {
+      run(`g.aimX = ${150 + ((i * 53) % 240)}; if (g.cool <= 0) drop(); step();`);
+      if (i % 20 === 0) run('draw()');
+      if (run('st') !== 'play') break;
+    }
+    run('fx(270, 600, 320, COL[3]); g.disc = { t: 7, l: 100 }; g.tgt = true; draw();');
+    assert.ok(run('g.rg.length') > 0 && run('g.pt.length') > 0, 'fx přidá kruh i konfety');
+    for (let i = 0; i < 60; i += 1) run('step()');
+    assert.equal(run('g.rg.length'), 0, 'kruh po čase zmizí');
+  }
+  run("start('classic'); S.disc = 11; g.balls.push(Object.assign(mk(270, 600, 1), { gold: 1 })); draw()");
 });
