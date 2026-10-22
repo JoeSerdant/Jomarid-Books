@@ -2,6 +2,7 @@
 //   npm run test:polygon
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { loadClasses } from './load.mjs';
 import { loadGame } from './stub.mjs';
 import { GAME_CATALOG, GAME_BADGES } from '../../../gameRecords/catalog.js';
@@ -557,4 +558,18 @@ test('Kvalita vykreslování: trvale pomalé snímky ji sníží, jednorázová 
   slow.run('lastT = 1000');
   for (let i = 1; i <= 40; i++) slow.run(`frame(${1000 + 300 * i})`);                  // 300 ms na snímek, i to je potřeba zachytit
   assert.ok(slow.arena.fxState.auto < 2, 'pomalá zařízení se dočkají nižší kvality: ' + slow.arena.fxState.auto);
+});
+
+test('Grafika: art.js se načítá před kreslením a snímky se v každé kvalitě vykreslí bez chyby v kreslicím kódu', () => {
+  const order = fs.readFileSync(new URL('../../polygonArena.js', import.meta.url), 'utf8').match(/\['[a-z0-9]+', [a-z0-9]+\]/g).map((s) => s.match(/'([a-z0-9]+)'/)[1]);
+  assert.ok(order.indexOf('art') > order.indexOf('fx') && order.indexOf('art') < order.indexOf('draw'), 'art.js patří mezi fx.js a draw.js');
+  for (const lv of [0, 1, 2]) {
+    const g = fresh({ seed: 60 + lv });
+    g.arena.setDiff('hard'); g.arena.mode = 'ffa'; g.arena.startGame(true);
+    g.arena.fxState.forced = lv;
+    g.run('lastT = 1000');
+    for (let i = 1; i <= 90; i++) g.run(`frame(${1000 + 17 * i})`);
+    assert.ok(!g.run('render.warned'), 'kreslení v kvalitě ' + lv + ' shodilo snímek');
+    assert.ok(g.run('typeof Art.ensure === "function" && typeof bevelPoly === "function"'));
+  }
 });

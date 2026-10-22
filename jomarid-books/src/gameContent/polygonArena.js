@@ -13,6 +13,7 @@
 //   data.js        - výhody, bonusy, zkušenosti, tvary
 //   state.js       - stav hry, výpočet statistik, výběr tříd
 //   fx.js          - zvuk a efekty
+//   art.js         - předrenderovaná grafika (textura arény, zóny, zkosené tvary, osvětlení)
 //   tanks.js       - vytváření tvarů a tanků, osobnosti botů
 //   sim.js         - simulace: střelba, pohyb, střely, kolize, smrt
 //   ai.js          - AI botů a ovládání hráče
@@ -38,6 +39,7 @@ import ascension from './polygonArena/ascension.js?raw';
 import data from './polygonArena/data.js?raw';
 import state from './polygonArena/state.js?raw';
 import fx from './polygonArena/fx.js?raw';
+import art from './polygonArena/art.js?raw';
 import tanks from './polygonArena/tanks.js?raw';
 import sim from './polygonArena/sim.js?raw';
 import ai from './polygonArena/ai.js?raw';
@@ -60,6 +62,7 @@ const SCRIPTS = [
   ['data', data],
   ['state', state],
   ['fx', fx],
+  ['art', art],
   ['tanks', tanks],
   ['sim', sim],
   ['ai', ai],

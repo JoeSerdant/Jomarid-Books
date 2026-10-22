@@ -20,6 +20,7 @@ function drawBarrel(g, b, R, rec, q) {
   const base = theme.barrel, edge = theme.barrelStroke;
   g.save(); g.rotate(b.a);
   g.lineWidth = lw; g.strokeStyle = edge; g.fillStyle = base;
+  if (q >= 1) { const bg = g.createLinearGradient(0, y0, 0, y0 + w); bg.addColorStop(0, tint(base, 0.4)); bg.addColorStop(0.45, base); bg.addColorStop(1, deepen(base, 0.4)); g.fillStyle = bg; }
   g.beginPath();
   if (b.kind === 'missile') {                                       // trubice s kuželem a ploutvemi
     const t = w * 0.78, ty = b.off * R - t / 2;
@@ -44,7 +45,10 @@ function drawBarrel(g, b, R, rec, q) {
   } else if (b.kind === 'missile') {
     g.beginPath(); g.moveTo(0, b.off * R - w * 0.62); g.lineTo(len * 0.26, b.off * R - w * 0.36); g.lineTo(0, b.off * R - w * 0.1); g.closePath();
     g.moveTo(0, b.off * R + w * 0.62); g.lineTo(len * 0.26, b.off * R + w * 0.36); g.lineTo(0, b.off * R + w * 0.1); g.closePath(); g.fill();
-  } else if (!b.flare) g.fillRect(len * 0.9, y0 - w * 0.04, len * 0.1, w * 1.08);      // ústí hlavně
+  } else if (!b.flare) {
+    g.fillRect(len * 0.9, y0 - w * 0.04, len * 0.1, w * 1.08);                       // ústí hlavně
+    if (q >= 1) { g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(len * 0.9, y0 - w * 0.04, len * 0.1, w * 0.3); g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(len * 0.985, y0 + w * 0.12, len * 0.015, w * 0.76); g.fillStyle = edge; }
+  }
   // značky druhu střel
   const cy = b.off * R;
   if (b.pierce >= 2 || b.streak) {                                    // cívky průrazné hlavně
@@ -96,6 +100,12 @@ function drawTankBody(g, x, y, R, angle, clsId, color, rec, flash, tur, q) {
     for (const s of [-1, 1]) { g.beginPath(); g.moveTo(-R * 0.35, s * R * 0.8); g.lineTo(-R * 1.12, s * R * 1.12); g.lineTo(-R * 0.82, s * R * 0.4); g.closePath(); g.fill(); g.stroke(); }
   }
   // tělo
+  const poly3 = cls.boss || L.n >= 3;
+  if (poly3 && q >= 1) {                                              // hranatá těla: zkosené stěny jako u tvarů
+    const nn = cls.boss ? cls.bn : L.n, RR = cls.boss ? R : R * (L.n === 3 ? 1.3 : L.n === 4 ? 1.1 : 1.04), rr = cls.boss ? 0 : (L.rot || 0);
+    bevelPoly(g, 0, 0, RR, nn, rr, color, angle, q, 0.66);
+    g.strokeStyle = deepen(color, 0.5); g.lineWidth = Math.max(1.5, R * 0.12); poly(g, 0, 0, RR, nn, rr); g.stroke();
+  } else {
   bodyPath(g, R, cls, L);
   if (q >= 1) {                                                       // osvětlení stojí na místě bez ohledu na otočení tanku
     const ca = Math.cos(angle), sa = Math.sin(angle), ox = -R * 0.32, oy = -R * 0.34;
@@ -106,6 +116,14 @@ function drawTankBody(g, x, y, R, angle, clsId, color, rec, flash, tur, q) {
   } else g.fillStyle = color;
   g.strokeStyle = deepen(color, 0.4); g.lineWidth = Math.max(1.5, R * 0.14);
   g.fill(); g.stroke();
+  }
+  if (q >= 1 && !poly3) {                                             // kulatý trup: zkosený okraj, odlesk a kupole
+    const la = LIGHT - angle;
+    g.lineCap = 'round'; g.lineWidth = Math.max(1.2, R * 0.09);
+    g.strokeStyle = 'rgba(255,255,255,0.3)'; g.beginPath(); g.arc(0, 0, R * 0.84, la - 1.0, la + 1.0); g.stroke();
+    g.strokeStyle = 'rgba(0,0,0,0.26)'; g.beginPath(); g.arc(0, 0, R * 0.84, la + PI - 1.0, la + PI + 1.0); g.stroke();
+    g.lineCap = 'butt';
+  }
   // desky na obvodu
   if (L.plates) {
     g.strokeStyle = deepen(color, 0.5); g.lineWidth = R * 0.2; g.lineCap = 'round';
@@ -120,7 +138,13 @@ function drawTankBody(g, x, y, R, angle, clsId, color, rec, flash, tur, q) {
     case 'dots': g.fillStyle = rgbaStr(tone, 0.8); for (let k = 0; k < 6; k++) { const a = k * TAU / 6; g.beginPath(); g.arc(Math.cos(a) * R * 0.6, Math.sin(a) * R * 0.6, R * 0.085, 0, TAU); g.fill(); } break;
     case 'core': g.fillStyle = rgbaStr(tone, 0.55); g.beginPath(); g.arc(0, 0, R * 0.38, 0, TAU); g.fill(); g.strokeStyle = rgbaStr(tone, 0.9); g.lineWidth = R * 0.06; g.stroke(); break;
     case 'cross': g.strokeStyle = rgbaStr(tone, 0.6); g.lineWidth = R * 0.1; g.beginPath(); g.moveTo(-R * 0.62, 0); g.lineTo(R * 0.62, 0); g.moveTo(0, -R * 0.62); g.lineTo(0, R * 0.62); g.stroke(); break;
-    default: if (q >= 1) { g.fillStyle = 'rgba(255,255,255,0.1)'; g.beginPath(); g.arc(0, 0, R * 0.42, 0, TAU); g.fill(); }
+    default: if (q >= 1) {                                            // kupole uprostřed
+      const la = LIGHT - angle, dr = poly3 ? R * 0.34 : R * 0.46;
+      const dg = g.createRadialGradient(Math.cos(la) * dr * 0.4, Math.sin(la) * dr * 0.4, dr * 0.1, 0, 0, dr);
+      dg.addColorStop(0, tint(color, 0.55)); dg.addColorStop(0.6, tint(color, 0.08)); dg.addColorStop(1, deepen(color, 0.3));
+      g.fillStyle = dg; g.beginPath(); g.arc(0, 0, dr, 0, TAU); g.fill();
+      g.strokeStyle = deepen(color, 0.45); g.lineWidth = Math.max(1, R * 0.06); g.stroke();
+    }
   }
   if (cls.boss && q >= 1) {                                           // bossové: vnitřní jádro
     g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = R * 0.06; poly(g, 0, 0, R * 0.62, cls.bn, 0); g.stroke();
@@ -167,16 +191,11 @@ function drawShape(g, s, px) {
     else if (s.type === 'alpha') glowAt(g, s.x, s.y, Rw * 2.2, '#b46cf2', 0.5 + 0.2 * Math.sin(time * 2));
     shadowAt(g, s.x, s.y, Rw * 0.95, 0.5);
   }
-  poly(g, s.x, s.y, Rw, s.n, s.rot);
-  if (q >= 1) {
-    const gr = g.createRadialGradient(s.x - Rw * 0.35, s.y - Rw * 0.4, Rw * 0.1, s.x, s.y, Rw * 1.1);
-    gr.addColorStop(0, tint(col, 0.45)); gr.addColorStop(0.6, col); gr.addColorStop(1, deepen(col, 0.28));
-    g.fillStyle = gr;
-  } else g.fillStyle = col;
-  g.strokeStyle = deepen(col, 0.42); g.lineWidth = 3; g.fill(); g.stroke();
-  if (q >= 1) {
-    g.strokeStyle = 'rgba(255,255,255,0.22)'; g.lineWidth = 1.5; poly(g, s.x, s.y, Rw * 0.62, s.n, s.rot); g.stroke();
-    if (s.n >= 5) { g.beginPath(); for (let k = 0; k < s.n; k++) { const a = s.rot + k * TAU / s.n; g.moveTo(s.x, s.y); g.lineTo(s.x + Math.cos(a) * Rw * 0.9, s.y + Math.sin(a) * Rw * 0.9); } g.strokeStyle = 'rgba(255,255,255,0.12)'; g.stroke(); }
+  if (q >= 1) {                                                          // zkosené stěny podle světla
+    bevelPoly(g, s.x, s.y, Rw, s.n, s.rot, col, 0, q, 0.6);
+    g.strokeStyle = deepen(col, 0.5); g.lineWidth = 3; g.lineJoin = 'round'; poly(g, s.x, s.y, Rw, s.n, s.rot); g.stroke();
+  } else {
+    poly(g, s.x, s.y, Rw, s.n, s.rot); g.fillStyle = col; g.strokeStyle = deepen(col, 0.42); g.lineWidth = 3; g.fill(); g.stroke();
   }
   if (s.hit > 0) { g.fillStyle = 'rgba(255,255,255,.4)'; poly(g, s.x, s.y, Rw, s.n, s.rot); g.fill(); }
   if (s.type === 'bomb') {
@@ -184,7 +203,8 @@ function drawShape(g, s, px) {
     glowAt(g, s.x, s.y, Rw * 1.5, '#ff4a3a', 0.45 * pulse);
     g.fillStyle = 'rgba(255,90,70,' + pulse + ')'; g.beginPath(); g.arc(s.x, s.y, Rw * 0.34, 0, TAU); g.fill();
   } else if (s.type === 'crystal') {
-    poly(g, s.x, s.y, Rw * 0.55, 6, s.rot + 0.5); g.fillStyle = 'rgba(255,255,255,.4)'; g.fill();
+    poly(g, s.x, s.y, Rw * 0.55, 6, s.rot + 0.5); g.fillStyle = 'rgba(255,255,255,.32)'; g.fill();
+    if (q >= 1) { g.strokeStyle = 'rgba(255,255,255,0.45)'; g.lineWidth = 1.2; g.beginPath(); for (let k = 0; k < 6; k++) { const a = s.rot + 0.5 + k * TAU / 6; g.moveTo(s.x, s.y); g.lineTo(s.x + Math.cos(a) * Rw * 0.55, s.y + Math.sin(a) * Rw * 0.55); } g.stroke(); }
     if (q >= 2) { const tw = 0.5 + 0.5 * Math.sin(time * 5 + s.id * 2); g.fillStyle = 'rgba(255,255,255,' + tw + ')'; g.save(); g.translate(s.x - Rw * 0.35, s.y - Rw * 0.4); starPath(g, 5 + 3 * tw, 4, 0.3); g.fill(); g.restore(); }
   } else if (s.type === 'alpha') {
     poly(g, s.x, s.y, Rw * 0.62, 5, s.rot + time * 0.6); g.fillStyle = 'rgba(255,255,255,.18)'; g.fill(); g.lineWidth = 3; g.stroke();
@@ -205,10 +225,11 @@ function drawShape(g, s, px) {
 function drawBullet(g, b, px) {
   const q = fxState.level, col = b.color;
   if (q >= 1 && !b.trap) glowAt(g, b.x, b.y, b.r * (b.missile || b.blast ? 4.4 : 3.3), col, b.drone ? 0.3 : 0.5);
-  if (q >= 1 && !b.drone && !b.trap && !b.bomb && !b.streak) {         // stopa za střelou
-    const k = b.missile ? 0.06 : 0.045, tx = b.x - b.vx * k, ty = b.y - b.vy * k;
-    g.lineCap = 'round'; g.strokeStyle = rgbaStr(col, 0.2); g.lineWidth = b.r * 1.7; g.beginPath(); g.moveTo(tx, ty); g.lineTo(b.x, b.y); g.stroke();
-    g.strokeStyle = rgbaStr(col, 0.38); g.lineWidth = b.r * 0.9; g.beginPath(); g.moveTo(b.x - b.vx * k * 0.6, b.y - b.vy * k * 0.6); g.lineTo(b.x, b.y); g.stroke(); g.lineCap = 'butt';
+  if (q >= 1 && !b.drone && !b.trap && !b.bomb && !b.streak) {         // zúžená stopa za střelou (kometa)
+    const k = b.missile ? 0.07 : 0.055, tx = b.x - b.vx * k, ty = b.y - b.vy * k, sp = Math.hypot(b.vx, b.vy) || 1, nx = -b.vy / sp, ny = b.vx / sp;
+    for (const [wk, al] of [[1.15, 0.2], [0.6, 0.4]]) {
+      g.fillStyle = rgbaStr(col, al); g.beginPath(); g.moveTo(b.x + nx * b.r * wk, b.y + ny * b.r * wk); g.lineTo(tx, ty); g.lineTo(b.x - nx * b.r * wk, b.y - ny * b.r * wk); g.closePath(); g.fill();
+    }
   }
   g.fillStyle = col; g.strokeStyle = deepen(col, 0.4); g.lineWidth = Math.max(1.5, b.r * 0.3);
   if (b.drone) {
@@ -240,7 +261,7 @@ function drawBullet(g, b, px) {
     g.fillStyle = col; g.strokeStyle = deepen(col, 0.4); g.lineWidth = Math.max(1.5, b.r * 0.3); poly(g, b.x, b.y, b.r * 1.35, 3, ang); g.fill(); g.stroke();
   } else {
     g.beginPath(); g.arc(b.x, b.y, b.r, 0, TAU); g.fill(); g.stroke();
-    if (q >= 1) { g.fillStyle = 'rgba(255,255,255,0.4)'; g.beginPath(); g.arc(b.x - b.r * 0.28, b.y - b.r * 0.3, b.r * 0.38, 0, TAU); g.fill(); }
+    if (q >= 1) { g.fillStyle = 'rgba(255,255,255,0.55)'; g.beginPath(); g.arc(b.x - b.r * 0.2, b.y - b.r * 0.22, b.r * 0.5, 0, TAU); g.fill(); }
     if (b.blast && b.bdmg > b.dmg) { g.strokeStyle = '#ffb04d'; g.lineWidth = 2; g.globalAlpha = 0.5 + 0.5 * Math.sin(time * 18); g.beginPath(); g.arc(b.x, b.y, b.r * 1.4, 0, TAU); g.stroke(); g.globalAlpha = 1; }
     if (b.crit) { g.strokeStyle = '#ffe27a'; g.lineWidth = 2; g.beginPath(); g.arc(b.x, b.y, b.r * 1.5, 0, TAU); g.stroke(); }
     if (b.slow) { g.strokeStyle = '#9ee7ff'; g.lineWidth = 1.6; g.beginPath(); g.arc(b.x, b.y, b.r * 1.35, 0, TAU); g.stroke(); }
@@ -253,8 +274,14 @@ function drawPickup(g, pu) {
   const q = fxState.level, PP = PICKS[pu.type], bob = Math.sin(time * 3 + pu.ph) * 3, fade = pu.life < 6 ? (Math.sin(time * 14) > 0 ? 0.35 : 1) : 1, y = pu.y + bob;
   if (q >= 1) { glowAt(g, pu.x, y, pu.r * 3, PP.color, 0.5 * fade); shadowAt(g, pu.x, pu.y + 4, pu.r * 1.1, 0.4 * fade); }
   else { g.globalAlpha = 0.28 * fade; g.fillStyle = PP.color; g.beginPath(); g.arc(pu.x, y, pu.r * 1.9, 0, TAU); g.fill(); }
-  g.globalAlpha = fade; g.fillStyle = theme.arena; g.strokeStyle = PP.color; g.lineWidth = 3;
-  g.beginPath(); g.arc(pu.x, y, pu.r, 0, TAU); g.fill(); g.stroke();
-  if (q >= 1) { g.lineWidth = 1.5; g.setLineDash([5, 6]); g.lineDashOffset = -time * 14; g.beginPath(); g.arc(pu.x, y, pu.r * 1.45, 0, TAU); g.stroke(); g.setLineDash([]); }
+  g.globalAlpha = fade; g.fillStyle = theme.arena; g.strokeStyle = PP.color; g.lineWidth = 3; g.lineJoin = 'round';
+  if (q >= 1) {                                                          // odznak: šestiúhelník s přechodem, vnitřní prstenec a obíhající jiskry
+    const rot = time * 0.5 + pu.ph;
+    poly(g, pu.x, y, pu.r * 1.1, 6, rot);
+    const bg = g.createRadialGradient(pu.x - pu.r * 0.3, y - pu.r * 0.35, pu.r * 0.1, pu.x, y, pu.r * 1.15);
+    bg.addColorStop(0, tint(theme.arena, 0.2)); bg.addColorStop(1, deepen(theme.arena, 0.25)); g.fillStyle = bg; g.fill(); g.stroke();
+    g.lineWidth = 1.5; g.globalAlpha = fade * 0.55; poly(g, pu.x, y, pu.r * 0.82, 6, rot); g.stroke(); g.globalAlpha = fade;
+    for (let k = 0; k < 3; k++) { const a = time * 1.6 + pu.ph + k * TAU / 3; g.fillStyle = PP.color; g.beginPath(); g.arc(pu.x + Math.cos(a) * pu.r * 1.5, y + Math.sin(a) * pu.r * 1.5, 2.2, 0, TAU); g.fill(); }
+  } else { g.beginPath(); g.arc(pu.x, y, pu.r, 0, TAU); g.fill(); g.stroke(); }
   drawGlyph(g, PP.ic, pu.x, y, pu.r * 1.15, PP.color); g.globalAlpha = 1;
 }

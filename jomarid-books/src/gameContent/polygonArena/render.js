@@ -57,6 +57,10 @@ function drawZone(g, zn, px) {
   else if (zn.type === 'ice') { gr.addColorStop(0, 'rgba(220,245,255,0.2)'); gr.addColorStop(1, 'rgba(' + col + ',0.34)'); }
   else { gr.addColorStop(0, 'rgba(150,255,170,0.16)'); gr.addColorStop(1, 'rgba(' + col + ',0.34)'); }
   g.fillStyle = gr; g.beginPath(); g.arc(zn.x, zn.y, zn.r, 0, TAU); g.fill();
+  if (q >= 2) {                                                              // textura zóny (kůra a žhavé praskliny, led s trhlinami, leknínová hladina)
+    const tex = Art.zoneTex(zn.type), sp = zn.type === 'lava' ? time * 0.05 : zn.type === 'oasis' ? Math.sin(time * 0.4 + zn.ph) * 0.06 : 0;
+    g.save(); g.translate(zn.x, zn.y); g.rotate(zn.ph + sp); g.globalAlpha = zn.type === 'lava' ? 0.82 + 0.12 * pulse : 0.72; g.drawImage(tex, -zn.r, -zn.r, zn.r * 2, zn.r * 2); g.restore();
+  }
   if (q >= 1) {
     if (zn.type === 'lava') {
       glowAt(g, zn.x, zn.y, zn.r * 1.25, '#ff6a30', 0.16 + 0.07 * pulse, 2);
@@ -107,23 +111,39 @@ function renderScene() {
   const vx0 = cam.x - W / 2 * px - mg, vx1 = cam.x + W / 2 * px + mg, vy0 = cam.y - H / 2 * px - mg, vy1 = cam.y + H / 2 * px + mg;
 
   // aréna a mřížka
-  g.fillStyle = theme.arena; g.fillRect(0, 0, WORLD, WORLD);
   const GS = 60, gx0 = Math.max(0, Math.floor(vx0 / GS) * GS), gx1 = Math.min(WORLD, vx1);
   const gy0 = Math.max(0, Math.floor(vy0 / GS) * GS), gy1 = Math.min(WORLD, vy1);
-  g.beginPath();
-  for (let x = gx0; x <= gx1; x += GS) if (x % (GS * 5) || q < 1) { g.moveTo(x, Math.max(0, vy0)); g.lineTo(x, Math.min(WORLD, vy1)); }
-  for (let y = gy0; y <= gy1; y += GS) if (y % (GS * 5) || q < 1) { g.moveTo(Math.max(0, vx0), y); g.lineTo(Math.min(WORLD, vx1), y); }
-  g.lineWidth = 1.2 * px; g.strokeStyle = theme.grid; g.stroke();
-  if (q >= 1) {                                                              // výraznější čáry po pěti polích
+  const tex = q >= 2;                                                        // plná kvalita: dláždění z předrenderované textury, výstražná zeď, prach
+  if (tex) {
+    Art.ensure(g);
+    g.save(); g.scale(0.5, 0.5); g.fillStyle = Art.pat; g.fillRect(Math.max(0, vx0) * 2, Math.max(0, vy0) * 2, (Math.min(WORLD, vx1) - Math.max(0, vx0)) * 2, (Math.min(WORLD, vy1) - Math.max(0, vy0)) * 2); g.restore();
+  } else {
+    g.fillStyle = theme.arena; g.fillRect(0, 0, WORLD, WORLD);
+    g.beginPath();
+    for (let x = gx0; x <= gx1; x += GS) if (x % (GS * 5) || q < 1) { g.moveTo(x, Math.max(0, vy0)); g.lineTo(x, Math.min(WORLD, vy1)); }
+    for (let y = gy0; y <= gy1; y += GS) if (y % (GS * 5) || q < 1) { g.moveTo(Math.max(0, vx0), y); g.lineTo(Math.min(WORLD, vx1), y); }
+    g.lineWidth = 1.2 * px; g.strokeStyle = theme.grid; g.stroke();
+  }
+  if (q >= 1) {                                                              // výraznější čáry po pěti polích a záře u okraje
     g.beginPath();
     for (let x = gx0; x <= gx1; x += GS) if (!(x % (GS * 5))) { g.moveTo(x, Math.max(0, vy0)); g.lineTo(x, Math.min(WORLD, vy1)); }
     for (let y = gy0; y <= gy1; y += GS) if (!(y % (GS * 5))) { g.moveTo(Math.max(0, vx0), y); g.lineTo(Math.min(WORLD, vx1), y); }
     g.lineWidth = 2 * px; g.strokeStyle = theme.grid; g.globalAlpha = 0.9; g.stroke(); g.globalAlpha = 1;
-    const edge = (x0, y0, x1, y1, w, h) => { const gr = g.createLinearGradient(x0, y0, x1, y1); gr.addColorStop(0, rgbaStr(theme.accent, 0.2)); gr.addColorStop(1, rgbaStr(theme.accent, 0)); g.fillStyle = gr; g.fillRect(Math.min(x0, x1), Math.min(y0, y1), w, h); };
+    const edge = (x0, y0, x1, y1, w, h) => { const gr = g.createLinearGradient(x0, y0, x1, y1); gr.addColorStop(0, rgbaStr(theme.accent, tex ? 0.26 : 0.2)); gr.addColorStop(1, rgbaStr(theme.accent, 0)); g.fillStyle = gr; g.fillRect(Math.min(x0, x1), Math.min(y0, y1), w, h); };
     if (vx0 < 140) edge(0, 0, 140, 0, 140, WORLD); if (vx1 > WORLD - 140) edge(WORLD, 0, WORLD - 140, 0, 140, WORLD);
     if (vy0 < 140) edge(0, 0, 0, 140, WORLD, 140); if (vy1 > WORLD - 140) edge(0, WORLD, 0, WORLD - 140, WORLD, 140);
+    if (tex && (vx0 < 0 || vy0 < 0 || vx1 > WORLD || vy1 > WORLD)) {          // zeď kolem arény: výstražné pruhy
+      const B = 46;
+      g.save(); g.scale(0.5, 0.5); g.fillStyle = Art.hazardPat;
+      g.fillRect(-B * 2, -B * 2, (WORLD + 2 * B) * 2, B * 2); g.fillRect(-B * 2, WORLD * 2, (WORLD + 2 * B) * 2, B * 2);
+      g.fillRect(-B * 2, 0, B * 2, WORLD * 2); g.fillRect(WORLD * 2, 0, B * 2, WORLD * 2);
+      g.restore();
+      g.lineWidth = 4 * px; g.strokeStyle = rgbaStr(theme.accent, 0.9); g.strokeRect(0, 0, WORLD, WORLD);
+      g.globalAlpha = 0.5; g.lineWidth = 12 * px; g.strokeStyle = rgbaStr(theme.accent, 0.35); g.strokeRect(-4, -4, WORLD + 8, WORLD + 8); g.globalAlpha = 1;
+    }
   }
   g.lineWidth = 6 * px; g.strokeStyle = theme.barrelStroke; g.globalAlpha = 0.65; g.strokeRect(0, 0, WORLD, WORLD); g.globalAlpha = 1;
+  if (tex) Art.drawMotes(g, W, H, cam.x, cam.y, z, q);
 
   // zóny
   for (let i = 0; i < world.zones.length; i++) {
