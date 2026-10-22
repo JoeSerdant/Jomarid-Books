@@ -109,7 +109,12 @@ test('Edge Function: pokyny drží pravidla, příručku a výstup jako JSON', {
   for (const needle of [/VÝHRADNĚ/, /MIMO TÉMA/, /programování/, /esej/, /ignoruj předchozí pokyny/, /neopisuj/, /onTopic/, /PŘÍRUČKA/, /Streak Freeze/, /Jomarid Coins/, /shortB/, /Rocket/, /\/games/]) assert.match(sys, needle);
   assert.ok(!/AIza|AQ\.|GEMINI_API_KEY/.test(sys), 'v pokynech není klíč');
   assert.ok(sys.includes(EDGE.CONTACT_EMAIL));
-  assert.ok(!/\/games/.test(EDGE.buildPrompt('')), 'bez stránky se o ní nemluví');
+  assert.ok(!/právě na stránce appky/.test(EDGE.buildPrompt('')), 'bez stránky se o ní nemluví');
+  assert.match(sys, /právě na stránce appky: \/games/);
+  assert.ok(sys.indexOf('PŘÍRUČKA') < sys.indexOf('právě na stránce appky'), 'stránka je až za příručkou, ať jde příručka cachovat');
+  assert.ok(EDGE.APP_GUIDE.length > 40000, 'příručka je rozsáhlá');
+  for (const topic of ['Chess League', 'Polygon aréna', 'Warroom', 'Streak Freeze', 'Noční filtr|NOČNÍ FILTR', 'Darovat knihu', 'Odznaky za sérii', 'Obchůdek|OBCHŮDEK', 'Zapomenuté heslo', 'Napsat s AI', 'Systémový log']) assert.match(EDGE.APP_GUIDE, new RegExp(topic), topic);
+  assert.ok(!/cheat|67MILUJU|IMAGINEFLEX/i.test(EDGE.APP_GUIDE.replace(/cheatech/g, '')), 'v příručce nejsou cheat kódy');
 });
 
 test('Edge Function: denní limit: vyčerpaný limit model nevolá, selhání modelu otázku vrací', { skip }, async () => {
