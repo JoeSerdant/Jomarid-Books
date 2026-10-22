@@ -263,11 +263,7 @@
   function CapturedRow({ pieces, glyphColor, advantage }) {
     return div({ className: "captured-row" },
       pieces.map((t, k) => span({
-        key: k, className: "cap",
-        style: {
-          color: glyphColor === "w" ? "#FCFCFC" : "#2A2A2A",
-          textShadow: glyphColor === "w" ? "-1px -1px 0 #4B4B4B, 1px -1px 0 #4B4B4B, -1px 1px 0 #4B4B4B, 1px 1px 0 #4B4B4B" : "0 1px 1px rgba(0,0,0,0.3)"
-        }
+        key: k, className: "cap t-" + glyphColor + t
       }, PIECE_GLYPHS[glyphColor][t])),
       advantage > 0 && span({ className: "adv" }, "+", advantage));
   }
@@ -354,7 +350,7 @@
         squares.push(div({ key: r + "-" + c, className: cls.join(" "), "data-sq": r + "," + c },
           dc === 0 && span({ className: "coord-label coord-rank" }, 8 - r),
           dr === 7 && span({ className: "coord-label coord-file" }, String.fromCharCode(97 + c)),
-          piece && span({ key: animFor ? "a" + anim.key : "p", className: "piece " + (piece.color === "w" ? "white" : "black") + (animFor ? " slide" : "") + (lifted ? " lifted" : ""), style: pieceStyle }, PIECE_GLYPHS[piece.color][piece.type]),
+          piece && span({ key: animFor ? "a" + anim.key : "p", className: "piece t-" + piece.color + piece.type + " " + (piece.color === "w" ? "white" : "black") + (animFor ? " slide" : "") + (lifted ? " lifted" : ""), style: pieceStyle }, PIECE_GLYPHS[piece.color][piece.type]),
           targetMove && !isCapture && span({ className: "move-marker" }),
           isCapture && span({ className: "capture-marker" })));
       }
@@ -381,7 +377,7 @@
   }
 
   function DragGhost({ ghostRef, piece }) {
-    return div({ ref: ghostRef, className: "drag-ghost " + (piece.color === "w" ? "white" : "black"), style: { transform: "translate(-100px,-100px)" } }, PIECE_GLYPHS[piece.color][piece.type]);
+    return div({ ref: ghostRef, className: "drag-ghost t-" + piece.color + piece.type + " " + (piece.color === "w" ? "white" : "black"), style: { transform: "translate(-100px,-100px)" } }, PIECE_GLYPHS[piece.color][piece.type]);
   }
 
   function PromotionModal({ color, onChoose, onCancel }) {
@@ -392,7 +388,7 @@
         div({ className: "modal-text" }, "Vyber, čím se stane"),
         div({ className: "promo-choices" }, options.map((t) =>
           button({ key: t, className: "promo-choice", onClick: () => onChoose(t), "aria-label": t },
-            span({ className: "piece " + (color === "w" ? "white" : "black") }, PIECE_GLYPHS[color][t]))))));
+            span({ className: "piece t-" + color + t + " " + (color === "w" ? "white" : "black") }, PIECE_GLYPHS[color][t]))))));
   }
 
   // ---------- Seznam tahů s navigací a značkami kvality ----------

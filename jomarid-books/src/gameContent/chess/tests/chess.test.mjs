@@ -579,3 +579,38 @@ describe('cheat kód v rozhraní', () => {
     assert.doesNotMatch(css, /\.dash-shell \{[^}]*88px/, 'místo pod lištou řeší patička');
   });
 });
+
+describe('grafika: sada figur jako SVG', () => {
+  const css = fs.readFileSync(path.join(DIR, 'style.css'), 'utf8');
+  const ui = fs.readFileSync(path.join(DIR, 'ui.js'), 'utf8');
+  const TYPES = ['k', 'q', 'r', 'b', 'n', 'p'];
+
+  test('CSS má SVG pro všech 12 figur a každé je samostatný platný dokument s gradientem', () => {
+    for (const c of ['w', 'b']) for (const t of TYPES) {
+      const m = css.match(new RegExp(`\\.t-${c}${t} \\{ background-image: url\\("data:image/svg\\+xml;utf8,([^"]+)"\\); \\}`));
+      assert.ok(m, `chybí figura ${c}${t}`);
+      const svg = decodeURIComponent(m[1]);
+      assert.match(svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 100 100">/);
+      assert.match(svg, /<\/svg>$/);
+      assert.match(svg, new RegExp(`id="g${c}"`));
+      assert.ok((svg.match(/<(path|circle|ellipse)\b/g) || []).length >= 3, 'figura má tvar');
+      assert.equal((svg.match(/<svg/g) || []).length, 1);
+    }
+    assert.equal((css.match(/\.t-[wb][kqrbnp] \{ background-image/g) || []).length, 12);
+  });
+
+  test('rozhraní dává figurám třídu s typem (deska, tažená figura, výběr proměny i sebrané figury) a glyf zůstává v DOM', () => {
+    assert.match(ui, /className: "piece t-" \+ piece\.color \+ piece\.type/);
+    assert.match(ui, /className: "drag-ghost t-" \+ piece\.color \+ piece\.type/);
+    assert.match(ui, /className: "piece t-" \+ color \+ t \+ " "/);
+    assert.match(ui, /className: "cap t-" \+ glyphColor \+ t/);
+    // glyf (písmo) se kreslí dál jako text, jen je neviditelný: čtečky a testy ho vidí
+    assert.match(ui, /PIECE_GLYPHS\[piece\.color\]\[piece\.type\]|PIECE_GLYPHS\[glyphColor\]\[t\]/);
+    assert.match(css, /\.piece, \.drag-ghost, \.captured-row \.cap \{\s*font-size: 0; color: transparent/);
+  });
+
+  test('šachovnice: rám, přechody polí a označení tahů mají vlastní vrstvu a původní stavy polí zůstaly', () => {
+    for (const sel of ['.board-wrap {\n  border-width: 7px', '.square.light { background-image', '.square.dark { background-image', '.move-marker { background: radial-gradient', '.capture-marker { border-color']) assert.ok(css.includes(sel), sel);
+    for (const sel of ['.square.check', '.square.hint-from', '.square.drop-target', '.piece.slide', '@keyframes pieceSlide', '.piece.lifted']) assert.ok(css.includes(sel), sel);
+  });
+});
