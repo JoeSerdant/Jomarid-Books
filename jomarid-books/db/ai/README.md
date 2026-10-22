@@ -41,9 +41,15 @@ Do pole Text se vloží návrh (může to trvat až půl minuty).
 | „Funkce shortb-ai se nespustila“ | Funkce spadla hned při startu (třeba chyba při vložení kódu: vlož celý soubor `shortb-ai.ts` od první do poslední řádky) nebo má špatný název. Detail je v Edge Functions → `shortb-ai` → **Logs**. |
 | „Nepodařilo se spojit s funkcí“ | Spojení se nepovedlo: funkce není nasazená, je vypnutá, nebo selhala síť. Zkus to znovu a podívej se do **Logs**. |
 | „Funkce shortb-ai odmítla přihlášení“ | Je zapnuté „Verify JWT“. Vypni ho v nastavení funkce a ulož. |
-| „AI teď neodpovídá“ | Chybí nebo nesedí `GEMINI_API_KEY`, nebo model neexistuje (`GEMINI_MODEL`). Detail je v Edge Functions → `shortb-ai` → **Logs**. |
-| „AI má teď plno nebo vyčerpaný limit“ | Google vrátil 429: překročený limit klíče nebo zdarma dostupných dotazů. Zkus později, nebo v AI Studiu zkontroluj využití a nastavení účtu. |
-| „AI tohle zadání odmítla“ | Bezpečnostní filtr Googlu. Zadání přeformuluj. |
+
+Hlášky jsou pro uživatele lidské a technická příčina je pod nimi ve sbalené části **„Technické podrobnosti“** (rozklikni ji a pošli mi řádek, pokud si nevíš rady).
+
+| Hláška v appce | Co to znamená |
+| --- | --- |
+| „Promiň! AI teď zažívá závratě…“ | Google vrátil 5xx (nejčastěji 503: model je přetížený) nebo se funkce nespustila správně (chybí nebo nesedí `GEMINI_API_KEY`, model neexistuje v `GEMINI_MODEL`). Přetížení přejde samo, funkce to sama zkusí znovu. Detail je v Technických podrobnostech a v Edge Functions → `shortb-ai` → **Logs**. |
+| „Pomalu, pomalu! AI má teď plno…“ | Google vrátil 429: překročený limit klíče nebo zdarma dostupných dotazů (v podrobnostech je, jestli za minutu nebo za den). Zkus později, přepni `GEMINI_MODEL` na „lite“ model, nebo dej do `GEMINI_API_KEY` klíč z jiného projektu. |
+| „AI přemýšlí nějak dlouho“ | Model neodpověděl v časovém limitu. Zkus znovu; pomůže lehčí model v `GEMINI_MODEL`. |
+| „S tímhle zadáním AI nepomůže“ | Bezpečnostní filtr Googlu. Zadání přeformuluj. |
 | „ShortB smí psát jen nakladatel nebo správce“ | Účet nemá roli nakladatel ani správce. |
 
 ## Cena a limity

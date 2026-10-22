@@ -3,6 +3,7 @@ import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-route
 import { Smartphone, Share, ArrowLeft, User, ShieldCheck, Palette, Database, Check, Loader2, Download, BookOpen, RotateCcw, Bell, EyeOff, MessageCircle, UserCog, Gift, X, ClipboardCheck, AlertTriangle, Info, RefreshCw, Compass, Play, Mail, MailX } from 'lucide-react';
 import { useAuth, useTheme } from '../contexts/AuthContext';
 import { supabase, verifyPassword, validateNewPassword, mapAuthError } from '../lib/supabase';
+import { friendlyError } from '../lib/friendlyError';
 import { BOOK_BADGES } from '../constants/badges';
 import { ROLE_PUBLISHER, ROLE_ADMIN, ROLE_LABELS } from '../constants/roles';
 import { USERNAME_RE, USERNAME_MIN, USERNAME_MAX } from '../lib/username';
@@ -192,7 +193,7 @@ const PenNameSection = ({ profile, onSaved }) => {
     setBusy(true);
     const { data, error } = await supabase.rpc('set_pen_name', { new_pen_name: pen });
     setBusy(false);
-    if (error) return setMsg({ type: 'error', text: error.message || 'Uložení se nepovedlo.' });
+    if (error) return setMsg({ type: 'error', text: friendlyError(error, 'Uložení se nepovedlo. Zkus to znovu.') });
     onSaved(data?.pen_name || null);
     setValue(data?.pen_name || '');
     setMsg({ type: 'success', text: pen ? 'Krycí jméno je uložené a promítlo se do všech tvých knih.' : 'Krycí jméno je zrušené, u knih se ukazuje tvoje uživatelské jméno.' });
@@ -1030,7 +1031,7 @@ const DataTab = ({ user, role }) => {
         ? { type: 'info', text: `Export je stažený, ale nepodařilo se načíst ${errors.length} ${plural(errors.length, 'část', 'části', 'částí')} (podrobnosti najdeš v souboru pod "errors").` }
         : { type: 'success', text: 'Export je stažený.' });
     } catch (err) {
-      setExportMsg({ type: 'error', text: 'Export se nepovedl: ' + (err?.message || 'neznámá chyba') });
+      setExportMsg({ type: 'error', text: friendlyError(err, 'Export se nepovedl. Zkus to znovu.') });
     } finally { setExportBusy(false); }
   };
 
@@ -1043,7 +1044,7 @@ const DataTab = ({ user, role }) => {
     if (error) {
       setDeleteBusy(false);
       const code = Object.keys(DELETE_ERRORS).find(c => String(error.message).includes(c));
-      return setDeleteMsg({ type: 'error', text: code ? DELETE_ERRORS[code] : 'Smazání se nepovedlo: ' + error.message });
+      return setDeleteMsg({ type: 'error', text: code ? DELETE_ERRORS[code] : friendlyError(error, 'Smazání se nepovedlo. Zkus to znovu.') });
     }
     // Účet už na serveru neexistuje - stačí zahodit lokální session.
     await supabase.auth.signOut({ scope: 'local' }).catch(() => {});

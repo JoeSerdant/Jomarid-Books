@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { friendlyError } from './friendlyError.js';
 
 export const supabaseUrl = 'https://vcdnqllluagmaxtwrnmf.supabase.co'
 export const supabaseKey = 'sb_publishable_bUOqlH__G6I20FTiowth0w_-MIZrAiM'
@@ -41,5 +42,5 @@ export const mapAuthError = (err: any): string => {
   if (msg.includes('different from the old') || msg.includes('same as the old')) return 'Nové heslo musí být jiné než současné.'
   if (msg.includes('weak') || msg.includes('at least') || msg.includes('should contain')) return 'Heslo je příliš slabé - zvol delší a méně předvídatelné.'
   if (msg.includes('jwt') || msg.includes('session') || msg.includes('not authenticated')) return 'Přihlášení vypršelo, přihlas se prosím znovu.'
-  return 'Něco se nepovedlo: ' + (err?.message || 'neznámá chyba')
+  return friendlyError(err, 'Něco se nepovedlo. Zkus to prosím znovu.')
 }

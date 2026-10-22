@@ -19,7 +19,7 @@ export const OFF_TOPIC = 'S tímhle ti tady nepomůžu. Jsem pomocník k aplikac
 export const CONTACT_EMAIL = 'wwsigmamango@gmail.com';
 
 export type Msg = { role: 'user' | 'assistant'; text: string };
-export type GenResult = { onTopic: boolean; answer: string } | { error: 'quota' | 'blocked' | 'upstream' | 'empty'; detail?: string };
+export type GenResult = { onTopic: boolean; answer: string } | { error: 'quota' | 'blocked' | 'upstream' | 'empty' | 'timeout'; detail?: string };
 export interface BotDeps {
   /** Ověří přihlášení. */
   authorize: (token: string) => Promise<{ ok: true } | { ok: false; reason: 'not_authenticated' }>;
@@ -195,7 +195,7 @@ Jak se feed přizpůsobuje (bez AI, jen jednoduché skórování): víc se ti uk
 shortB - PSANÍ (jen nakladatel a správce)
 Nakladatel píše shortB ve Studiu v záložce shortB, správce v Adminu v záložce shortB (vidí všechny). Seznam „Moje shortB“ s tlačítkem „Nový shortB“; u položky je název, série, počet znaků, žánry, štítek „Skrytý“, statistiky (čtenáři, dočteno, lajky) a tlačítka Upravit, Skrýt nebo Zveřejnit, Smazat (smazání je nevratné a smaže i postup čtenářů). Autor maže a skrývá jen své shortB, správce všechny.
 Limity: text 1 až 6 000 znaků (emoji se počítá za 1 znak), název nejvýš 120 znaků, název série nejvýš 80 znaků, číslo dílu 1 až 1 000, žánry nejvýš 8 po 40 znacích. Pole: Název, Text (odstavce odděluj prázdným řádkem, z nich se skládají stránky), Žánry (oddělené čárkou), Série (nepovinná) a Díl (série a díl jen spolu; kdo dočte jeden díl, dostane ve feedu další), „Zveřejnit hned“ (výchozí zapnuto; odškrtnuté = uloží se jako skrytý). Počítadlo „N / 6 000 znaků · ve feedu N stránek“. Hlášky: „Doplň název.“, „Doplň text.“, „U série doplň číslo dílu (1 až 1000).“, „Text má N znaků, může jich mít nejvýš 6000.“
-Napsat s AI: rozbalovací panel „Napsat s AI“ nad polem Text. Napíšeš zadání (do 2 000 znaků) a vybereš délku (Kratší asi 2 000 znaků, Střední asi 4 000 - výchozí, Delší asi 5 500). Tlačítko „Napsat text“ (píše se až půl minuty) vloží do formuláře návrh textu a vyplní název a žánry, ale jen když jsou prázdné; sérii a díl vyplňuješ ty. Je-li pole Text už plné, appka se zeptá, jestli ho přepsat. Nic se samo neukládá, návrh si přečti a uprav, za zveřejněný text odpovídáš ty. Delší výstup než 6 000 znaků se zkrátí. Tlačítko „Napsat další díl“ se ukáže u nového shortB, když zadaná série už existuje mezi tvými shortB: naváže na nejvyšší díl, zadání může zůstat prázdné a číslo dílu se doplní. Hlášky: „AI má teď plno nebo vyčerpaný limit“ (Google omezil dotazy, zkus později), „AI tohle zadání odmítla“ (přeformuluj), „AI teď neodpovídá“ (zkus za chvíli). Denní limit AI v appce není, kvóty určuje Google.
+Napsat s AI: rozbalovací panel „Napsat s AI“ nad polem Text. Napíšeš zadání (do 2 000 znaků) a vybereš délku (Kratší asi 2 000 znaků, Střední asi 4 000 - výchozí, Delší asi 5 500). Tlačítko „Napsat text“ (píše se až půl minuty) vloží do formuláře návrh textu a vyplní název a žánry, ale jen když jsou prázdné; sérii a díl vyplňuješ ty. Je-li pole Text už plné, appka se zeptá, jestli ho přepsat. Nic se samo neukládá, návrh si přečti a uprav, za zveřejněný text odpovídáš ty. Delší výstup než 6 000 znaků se zkrátí. Tlačítko „Napsat další díl“ se ukáže u nového shortB, když zadaná série už existuje mezi tvými shortB: naváže na nejvyšší díl, zadání může zůstat prázdné a číslo dílu se doplní. Hlášky: „Pomalu, pomalu! AI má teď plno nebo je vyčerpaný dnešní limit“ (Google omezil dotazy, zkus později), „S tímhle zadáním AI nepomůže“ (napiš zadání jinak), „Promiň! AI teď zažívá závratě“ (AI je přetížená, počkej chvilku a zkus znovu), „AI přemýšlí nějak dlouho“ (časový limit, zkus znovu). Pod hláškou je sbalené „Technické podrobnosti“ pro správce. Denní limit AI v appce není, kvóty určuje Google.
 
 STUDIO (jen nakladatel; odkaz Studio v horní liště, adresa /publisher)
 Nadpis „Nakladatelský panel“ a štítek „Vydavatel: krycí jméno nebo uživatelské jméno“. Záložky: Přehled, Moje knihy, Vydat / upravit, shortB, Licence a profil.
@@ -330,10 +330,11 @@ export function parseReply(raw: string): { onTopic: boolean; answer: string } {
 }
 
 const ERRORS: Record<string, { status: number; message: string }> = {
-  quota: { status: 429, message: 'Pomocník má teď plno. Zkus to za chvíli.' },
-  blocked: { status: 422, message: 'S tímhle ti pomocník neporadí. Zkus otázku přeformulovat.' },
-  upstream: { status: 502, message: 'Pomocník teď neodpovídá. Zkus to za chvíli.' },
-  empty: { status: 502, message: 'Pomocník nevrátil žádnou odpověď. Zkus to znovu.' },
+  quota: { status: 429, message: 'Pomalu, pomalu! Pomocník má teď plno. Zkus to za chvíli.' },
+  blocked: { status: 422, message: 'S tímhle ti pomocník neporadí. Zkus otázku napsat jinak.' },
+  upstream: { status: 502, message: 'Promiň! Pomocník teď zažívá závratě. Počkej chvilku a zkus to znovu.' },
+  timeout: { status: 504, message: 'Pomocník přemýšlí nějak dlouho. Zkus to za chvilku znovu.' },
+  empty: { status: 502, message: 'Pomocník se zasekl a nic neodpověděl. Zkus to znovu.' },
   limit: { status: 429, message: 'Dnešní limit otázek pro pomocníka je vyčerpaný. Zítra se můžeš ptát znovu.' },
 };
 
@@ -357,9 +358,9 @@ export async function handle(req: Request, deps: BotDeps): Promise<Response> {
   if (left < 0) return json({ error: 'limit', message: ERRORS.limit.message }, ERRORS.limit.status);
 
   let result: GenResult;
-  try { result = await deps.generate(buildPrompt(parsed.page), parsed.messages); } catch (e) { console.error('help-bot: model selhal', e); result = { error: 'upstream', detail: `volání modelu selhalo (${(e as Error)?.name ?? 'chyba'})` }; }
+  try { result = await deps.generate(buildPrompt(parsed.page), parsed.messages); } catch (e) { console.error('help-bot: model selhal', e); { const n = (e as Error)?.name ?? 'chyba'; result = { error: n === 'TimeoutError' || n === 'AbortError' ? 'timeout' : 'upstream', detail: `volání modelu selhalo (${n})` }; } }
   if ('error' in result) {
-    if (result.error === 'upstream' || result.error === 'empty') { try { await deps.refund(token); } catch { /* limit se jen nevrátí */ } }
+    if (result.error === 'upstream' || result.error === 'empty' || result.error === 'timeout') { try { await deps.refund(token); } catch { /* limit se jen nevrátí */ } }
     const e = ERRORS[result.error] ?? ERRORS.upstream;
     return json({ error: result.error, message: e.message, ...(result.detail ? { detail: safeDetail(result.detail) } : {}) }, e.status);
   }
@@ -416,7 +417,14 @@ if (D && typeof D.serve === 'function') {
         await new Promise((r) => setTimeout(r, attempt * 1500));
         res = await call();
       }
-      if (res.status === 429) return { error: 'quota' };
+      if (res.status === 429) {
+        // Google říká, jaký limit se překročil (za minutu, za den) a za jak dlouho se uvolní; uživatel to uvidí v technických podrobnostech.
+        const rawErr = (await res.text()).slice(0, 600);
+        console.error('help-bot: Gemini vrátilo 429', rawErr.slice(0, 300));
+        let msg = rawErr;
+        try { msg = JSON.parse(rawErr)?.error?.message ?? rawErr; } catch { /* nebyl JSON */ }
+        return { error: 'quota', detail: `Gemini odpovědělo 429: ${msg}` };
+      }
       if (!res.ok) {
         const rawErr = (await res.text()).slice(0, 600);
         console.error('help-bot: Gemini vrátilo', res.status, rawErr.slice(0, 300));

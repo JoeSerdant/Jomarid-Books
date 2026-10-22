@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { friendlyError } from '../lib/friendlyError';
 import { fetchBookText, saveBookText } from '../bookText/bookText';
 import BookTextField from '../components/BookTextField';
 import ShortsStudio from '../components/ShortsStudio';
@@ -565,7 +566,8 @@ export const PublisherDashboard = () => {
       await loadDashboard();
       setTab('books');
     } catch (err) {
-      showNotice('error', `Chyba při ukládání: ${err.message}`);
+      console.error('Uložení knihy:', err);
+      showNotice('error', friendlyError(err, 'Knihu se nepodařilo uložit. Zkus to znovu.'));
     } finally {
       setIsSubmitting(false);
     }

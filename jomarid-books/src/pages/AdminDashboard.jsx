@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { friendlyErrorWithDetail } from '../lib/friendlyError';
 import { fetchBookText, saveBookText, removeBookText } from '../bookText/bookText';
 import BookTextField from '../components/BookTextField';
 import ShortsStudio from '../components/ShortsStudio';
@@ -1509,7 +1510,7 @@ export const AdminDashboard = () => {
       });
       refreshData();
     } catch (err) {
-      alert('Přiřazení účtu selhalo: ' + (err.message || 'neznámá chyba'));
+      alert(friendlyErrorWithDetail(err, 'Přiřazení účtu selhalo.'));
     } finally {
       setActionLoading(false);
     }
@@ -1553,25 +1554,25 @@ export const AdminDashboard = () => {
       const { error } = await supabase.from('books').update(payload).eq('id', editingBookId);
       if (!error) {
         const { error: contentErr } = await saveBookText(supabase, editingBookId, content);
-        if (contentErr) alert('Kniha uložena, ale text se nepodařilo uložit: ' + contentErr.message);
+        if (contentErr) alert(friendlyErrorWithDetail(contentErr, 'Kniha je uložená, ale text se nepodařilo uložit.'));
         await safeLog('SUCCESS', `Upravena kniha: ${title} (Auto-přiřazení: ${isAutoAssigned ? 'ANO' : 'NE'}, Cena: ${payload.price_coins} mincí)`);
         setEditingBookId(null);
         setTitle(''); setAuthor(''); setContent(''); setFakeLikes(0); setIsAutoAssigned(false); setPriceCoins(DEFAULT_BOOK_PRICE); setGenresInput(''); setDescriptionInput('');
         refreshData();
       } else {
-        alert('Chyba při úpravě: ' + error.message);
+        alert(friendlyErrorWithDetail(error, 'Chyba při úpravě.'));
       }
     } else {
       if (!content) { setActionLoading(false); return alert('Doplň text knihy.'); }
       const { data: newBook, error } = await supabase.from('books').insert([payload]).select('id').single();
       if (!error && newBook) {
         const { error: contentErr } = await saveBookText(supabase, newBook.id, content);
-        if (contentErr) alert('Kniha vytvořena, ale text se nepodařilo uložit: ' + contentErr.message);
+        if (contentErr) alert(friendlyErrorWithDetail(contentErr, 'Kniha je vytvořená, ale text se nepodařilo uložit.'));
         await safeLog('SUCCESS', `Uložená nová kniha: ${title} (Auto-přiřazení: ${isAutoAssigned ? 'ANO' : 'NE'}, Cena: ${payload.price_coins} mincí)`);
         setTitle(''); setAuthor(''); setContent(''); setFakeLikes(0); setIsAutoAssigned(false); setPriceCoins(DEFAULT_BOOK_PRICE); setGenresInput(''); setDescriptionInput('');
         refreshData();
       } else {
-        alert('Chyba při ukládání: ' + (error?.message || 'neznámá chyba'));
+        alert(friendlyErrorWithDetail(error, 'Chyba při ukládání.'));
       }
     }
     setActionLoading(false);
@@ -1611,7 +1612,7 @@ export const AdminDashboard = () => {
       setUserFakeXpInput(xpNum);
       refreshData();
     } else {
-      alert('Chyba při ukládání XP: ' + error.message);
+      alert(friendlyErrorWithDetail(error, 'Chyba při ukládání XP.'));
     }
     setActionLoading(false);
   };
@@ -1635,7 +1636,7 @@ export const AdminDashboard = () => {
       setCoinGrantReason('');
       refreshData();
     } catch (err) {
-      alert('Připsání mincí selhalo: ' + (err.message || 'neznámá chyba'));
+      alert(friendlyErrorWithDetail(err, 'Připsání mincí selhalo.'));
     } finally {
       setActionLoading(false);
     }
@@ -1652,7 +1653,7 @@ export const AdminDashboard = () => {
       setActiveUser(prev => prev ? { ...prev, streak_freezes: newCount } : null);
       refreshData();
     } catch (err) {
-      alert('Přidání Streak Freeze selhalo: ' + (err.message || 'neznámá chyba'));
+      alert(friendlyErrorWithDetail(err, 'Přidání Streak Freeze selhalo.'));
     } finally {
       setActionLoading(false);
     }
@@ -1682,7 +1683,7 @@ export const AdminDashboard = () => {
       await safeLog('SUCCESS', 'Aktualizován obsah domovské stránky.');
       alert('Domovská stránka uložena.');
     } catch (err) {
-      alert('Uložení domovské stránky selhalo: ' + (err.message || 'neznámá chyba'));
+      alert(friendlyErrorWithDetail(err, 'Uložení domovské stránky selhalo.'));
     } finally {
       setSavingHomepage(false);
     }
@@ -1696,7 +1697,7 @@ export const AdminDashboard = () => {
       setComments(prev => prev.filter(cm => cm.id !== commentId));
       await safeLog('SUCCESS', `Smazán komentář (moderace): "${preview}"`);
     } catch (err) {
-      alert('Smazání komentáře selhalo: ' + (err.message || 'neznámá chyba'));
+      alert(friendlyErrorWithDetail(err, 'Smazání komentáře selhalo.'));
     }
   };
 
@@ -1723,7 +1724,7 @@ export const AdminDashboard = () => {
       await safeLog('WARN', `${book.isHidden ? 'Znovu zveřejněna' : 'Skryta'} kniha: ${book.title}`);
       refreshData();
     } else {
-      alert('Chyba při změně viditelnosti knihy: ' + error.message);
+      alert(friendlyErrorWithDetail(error, 'Chyba při změně viditelnosti knihy.'));
     }
     setActionLoading(false);
   };
@@ -1739,7 +1740,7 @@ export const AdminDashboard = () => {
       await safeLog('SUCCESS', `Změněn status automatického přidělení pro Knihu ID: ${bookId}`);
       refreshData();
     } else {
-      alert('Chyba při změně auto-assign stavu: ' + error.message);
+      alert(friendlyErrorWithDetail(error, 'Chyba při změně auto-assign stavu.'));
     }
     setActionLoading(false);
   };
@@ -1753,7 +1754,7 @@ export const AdminDashboard = () => {
       alert('Všechny přístupy byly smazány.');
       refreshData();
     } else {
-      alert('Chyba při odebírání: ' + error.message);
+      alert(friendlyErrorWithDetail(error, 'Chyba při odebírání.'));
     }
     setActionLoading(false);
   };
@@ -1779,7 +1780,7 @@ export const AdminDashboard = () => {
     }
     
     if (error) {
-      alert('Chyba při přiřazování licence: ' + error.message);
+      alert(friendlyErrorWithDetail(error, 'Chyba při přiřazování licence.'));
     } else {
       await safeLog('SUCCESS', `Přiřazena aktivní kniha uživateli ${activeUser.email}`);
       setSelectedBookId('');
@@ -1817,7 +1818,7 @@ export const AdminDashboard = () => {
       await safeLog('SUCCESS', `Hromadně aktivovány VŠECHNY knihy pro: ${activeUser.email}`);
       refreshData();
     } catch (err) {
-      alert('Chyba: ' + err.message);
+      alert(friendlyErrorWithDetail(err, 'Něco se nepovedlo.'));
     } finally {
       setActionLoading(false);
     }
@@ -1861,7 +1862,7 @@ export const AdminDashboard = () => {
       setSelectedBookId('');
       refreshData();
     } catch (err) {
-      alert('Chyba při hromadném sdílení: ' + err.message);
+      alert(friendlyErrorWithDetail(err, 'Chyba při hromadném sdílení.'));
     } finally {
       setActionLoading(false);
     }
@@ -2209,7 +2210,7 @@ export const AdminDashboard = () => {
                           onClick={async () => { 
                             if(confirm(`Smazat knihu "${b.title}" natvrdo z DB? Tato akce smaže i existující uživatelské licence!`)) { 
                               const { error: delErr } = await supabase.from('books').delete().eq('id', b.id);
-                              if (delErr) { alert('Smazání se nepovedlo: ' + delErr.message); return; }
+                              if (delErr) { alert(friendlyErrorWithDetail(delErr, 'Smazání se nepovedlo.')); return; }
                               await removeBookText(supabase, b.id);
                               await safeLog('DANGER', `Smazána kniha z databáze: ${b.title}`);
                               refreshData(); 

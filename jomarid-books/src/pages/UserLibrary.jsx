@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { friendlyError } from '../lib/friendlyError';
 import { BookDetailModal } from '../components/BookDetailModal';
 import { LibraryBrowser } from '../browse/LibraryBrowser';
 import { BookCover, LoadMore } from '../browse/BrowseParts';
@@ -150,7 +151,8 @@ export const UserLibrary = () => {
           setBooks(prev => prev.map(sb => sb.id === book.id ? { ...sb, hasAccess: true } : sb));
         }
       } else {
-        alert('Nákup se nezdařil: ' + msg);
+        console.error('Nákup knihy:', err);
+        alert(friendlyError(err, 'Nákup se nezdařil. Zkus to znovu.'));
       }
     } finally {
       setSubmittingId(null);

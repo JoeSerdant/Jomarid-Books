@@ -16,7 +16,7 @@ export const TITLE_MAX = 120;       // stejný strop jako db/shorts.sql
 export const GENRES_MAX = 5;
 export const GENRE_LEN = 40;
 
-export type GenResult = { text: string } | { error: 'quota' | 'blocked' | 'upstream' | 'empty'; detail?: string };
+export type GenResult = { text: string } | { error: 'quota' | 'blocked' | 'upstream' | 'empty' | 'timeout'; detail?: string };
 export interface AiDeps {
   /** Ověří přihlášení a roli (nakladatel nebo správce). */
   authorize: (token: string) => Promise<{ ok: true } | { ok: false; reason: 'not_authenticated' | 'forbidden' }>;
@@ -140,10 +140,11 @@ export function cleanText(raw: string): { text: string; trimmed: boolean } {
 }
 
 const ERRORS: Record<string, { status: number; message: string }> = {
-  quota: { status: 429, message: 'AI má teď plno nebo vyčerpaný limit. Zkus to za chvíli.' },
-  blocked: { status: 422, message: 'AI tohle zadání odmítla. Zkus ho přeformulovat.' },
-  upstream: { status: 502, message: 'AI teď neodpovídá. Zkus to za chvíli.' },
-  empty: { status: 502, message: 'AI nevrátila žádný text. Zkus to znovu.' },
+  quota: { status: 429, message: 'Pomalu, pomalu! AI má teď plno nebo je vyčerpaný dnešní limit. Zkus to za chvíli.' },
+  blocked: { status: 422, message: 'S tímhle zadáním AI nepomůže. Zkus ho napsat jinak.' },
+  upstream: { status: 502, message: 'Promiň! AI teď zažívá závratě. Počkej chvilku a zkus to znovu.' },
+  timeout: { status: 504, message: 'AI přemýšlí nějak dlouho. Zkus to za chvilku znovu.' },
+  empty: { status: 502, message: 'AI se zasekla a nic nenapsala. Zkus to znovu.' },
 };
 
 export async function handle(req: Request, deps: AiDeps): Promise<Response> {
@@ -167,7 +168,7 @@ export async function handle(req: Request, deps: AiDeps): Promise<Response> {
 
   const { system, user } = buildPrompt(parsed.input);
   let result: GenResult;
-  try { result = await deps.generate(system, user); } catch (e) { console.error('shortb-ai: model selhal', e); result = { error: 'upstream', detail: `volání modelu selhalo (${(e as Error)?.name ?? 'chyba'})` }; }
+  try { result = await deps.generate(system, user); } catch (e) { console.error('shortb-ai: model selhal', e); { const n = (e as Error)?.name ?? 'chyba'; result = { error: n === 'TimeoutError' || n === 'AbortError' ? 'timeout' : 'upstream', detail: `volání modelu selhalo (${n})` }; } }
   if ('error' in result) {
     const e = ERRORS[result.error] ?? ERRORS.upstream;
     return json({ error: result.error, message: e.message, ...(result.detail ? { detail: safeDetail(result.detail) } : {}) }, e.status);
@@ -229,7 +230,14 @@ if (D && typeof D.serve === 'function') {
         await new Promise((r) => setTimeout(r, attempt * 2500));
         res = await call(structured);
       }
-      if (res.status === 429) return { error: 'quota' };
+      if (res.status === 429) {
+        // Google říká, jaký limit se překročil (za minutu, za den) a za jak dlouho se uvolní; uživatel to uvidí v technických podrobnostech.
+        const rawErr = (await res.text()).slice(0, 600);
+        console.error('shortb-ai: Gemini vrátilo 429', rawErr.slice(0, 300));
+        let msg = rawErr;
+        try { msg = JSON.parse(rawErr)?.error?.message ?? rawErr; } catch { /* nebyl JSON */ }
+        return { error: 'quota', detail: `Gemini odpovědělo 429: ${msg}` };
+      }
       if (!res.ok) {
         const raw = (await res.text()).slice(0, 600);
         console.error('shortb-ai: Gemini vrátilo', res.status, raw.slice(0, 300));
