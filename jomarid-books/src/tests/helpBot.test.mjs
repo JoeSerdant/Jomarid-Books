@@ -228,3 +228,10 @@ test('Edge Function: překročený čas modelu vrátí otázku a ukáže lidskou
     assert.equal(m.calls.refund, 1, 'otázka se vrátí');
   } finally { console.error = quiet; }
 });
+
+test('Edge Function: pomocník je flexibilní: neví-li, řekne to a nabídne, co ví; zvládá pozdravy a překlepy', { skip }, () => {
+  const sys = EDGE.buildPrompt('');
+  for (const needle of [/NEODMÍTEJ/, /bohužel nevíš/, /2 až 3 nejbližší věci/, /překlepům/, /Pozdravy, poděkování/, /nejpravděpodobnější řešení/]) assert.match(sys, needle);
+  assert.match(EDGE.OFF_TOPIC, /bohužel nepomůžu/);
+  assert.match(EDGE.OFF_TOPIC, /mince.*odznaky.*čtečku.*vydat knihu/s, 'pevná věta nabízí, s čím pomůže');
+});
