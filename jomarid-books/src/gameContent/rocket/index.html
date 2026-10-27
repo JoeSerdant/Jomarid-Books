@@ -656,6 +656,11 @@ h2 {
     box-shadow: none;
 }
 
+/* Dialog „Opustit hru“ */
+.quit-sub { font-size: 12px; color: var(--ui-dim); max-width: 300px; text-align: center; margin: -2px 0 10px; line-height: 1.35; }
+#btn-continue { margin-bottom: 14px; }
+#btn-continue small { display: block; font-size: 12px; font-weight: 600; opacity: 0.85; margin-top: 2px; }
+
 .mode-grid {
     width: 100%;
     max-width: 350px;
@@ -986,6 +991,8 @@ h2 {
             <span id="menu-ascend" class="hidden" style="color: var(--gold);">Vzestup 0</span>
         </div>
 
+        <button class="btn hidden" id="btn-continue">Pokračovat<small id="continue-desc"></small></button>
+
         <div class="mode-grid">
             <button class="mode-card" id="btn-start-normal">
                 <span class="mode-icon">🚀</span>
@@ -1116,6 +1123,18 @@ h2 {
         <button class="btn btn-danger" id="btn-quit-pause">Opustit hru</button>
     </div>
 
+    <div id="quit-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="quit-title">
+        <h1 id="quit-title" style="font-size: 26px;">OPUSTIT HRU?</h1>
+        <div class="stats-bar">
+            <span id="quit-score" style="color: var(--ui);">Skóre 0</span>
+        </div>
+        <button class="btn" id="btn-quit-save">Uložit a odejít</button>
+        <div class="quit-sub">Rozehraná hra se uloží a v menu ji dohraješ tlačítkem Pokračovat. Rekord se zapisuje průběžně.</div>
+        <button class="btn btn-danger" id="btn-quit-end">Ukončit hru</button>
+        <div class="quit-sub">Hra skončí a výsledek se zapíše do rekordů a statistik.</div>
+        <button class="btn btn-ghost" id="btn-quit-cancel">Zpět do hry</button>
+    </div>
+
     <div id="gameover-overlay" class="overlay hidden">
         <h2 id="go-heading">LOĎ ZNIČENA</h2>
         <div id="go-record" class="record-badge hidden">Nový rekord</div>
@@ -1135,6 +1154,27 @@ h2 {
 
 const MAX_LVL = 20;
 
+// Rozehraná hra (Uložit a odejít, pauza, zavření stránky). Ukládá jen to, co jde obnovit: průběh běhu a stav lodi; nepřátelé a střely se po návratu
+// začnou znovu, boss v souboji se po návratu vrací od začátku souboje.
+const RUN_MODES = ['normal', 'hard', 'inferno', 'insane', 'blitz', 'rush', 'zen', 'daily'];
+function sanitizeRun(r) {
+    if (!r || typeof r !== 'object' || !RUN_MODES.includes(r.mode)) return null;
+    const n = (v, lo, hi) => { v = Number(v); return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : lo; };
+    const out = {
+        mode: r.mode,
+        score: Math.floor(n(r.score, 0, 1e12)), kills: Math.floor(n(r.kills, 0, 1e9)), coinsEarned: Math.floor(n(r.coinsEarned, 0, 1e12)),
+        runTime: n(r.runTime, 0, 1e10), bestCombo: Math.floor(n(r.bestCombo, 1, 1e6)),
+        bossCount: Math.floor(n(r.bossCount, 0, 1e4)), bossActive: !!r.bossActive, rushStreak: Math.floor(n(r.rushStreak, 0, 1e6)),
+        modeTimeLeft: n(r.modeTimeLeft, 0, 180000), phoenixUsed: !!r.phoenixUsed,
+        hp: n(r.hp, 1, 1e9), bombs: Math.floor(n(r.bombs, 0, 99)),
+        triple: n(r.triple, 0, 6e4), shield: n(r.shield, 0, 6e4), rapid: n(r.rapid, 0, 6e4),
+        base: Math.floor(n(r.base, 0, 1e12)), date: String(r.date || '')
+    };
+    if (out.mode === 'daily' && out.date !== todayKey()) return null;        // Denní výzva platí jen pro dnešek
+    if (out.score <= 0 && out.rushStreak <= 0 && out.runTime < 3000) return null;   // prázdný běh nemá cenu ukládat
+    return out;
+}
+
 const Storage = {
     key: 'space_shooter_v2_9',
 
@@ -1146,6 +1186,7 @@ const Storage = {
         },
         best: { normal: 0, hard: 0, inferno: 0, insane: 0, blitz: 0, rush: 0, zen: 0 },
         daily: { date: '', score: 0 },
+        run: null,
         muted: false,
         tutorialDone: false,
         ascension: 0,
@@ -1221,6 +1262,8 @@ const Storage = {
         }
 
         if (!Number.isFinite(this.data.daily.score) || this.data.daily.score < 0) this.data.daily.score = 0;
+
+        this.data.run = sanitizeRun(this.data.run);
     },
 
     save() {
@@ -3879,6 +3922,7 @@ class GameManager {
         document.getElementById('hud-timer').classList.toggle('hidden', this.mode !== 'blitz');
         document.getElementById('hud-streak').classList.toggle('hidden', this.mode !== 'rush');
 
+        this.startBest = this.storedRecord();
         this.lastTime = performance.now();
         if (this.inferno && Storage.data.tutorialDone) this.showEvent(this.insane ? 'INSANE PEKLO' : 'PEKLO', this.insane ? '#ff0055' : '#ff3333');
 
@@ -3889,11 +3933,84 @@ class GameManager {
         }
     }
 
+    // Uložený rekord aktuálního režimu (Denní výzva platí jen pro dnešek)
+    storedRecord() {
+        if (this.mode === 'daily') return (Storage.data.daily.date === todayKey()) ? (Storage.data.daily.score || 0) : 0;
+        return Storage.data.best[this.mode] || 0;
+    }
+
+    // Rekord se zapisuje průběžně, ne až na konci hry: zavřená stránka ani „Uložit a odejít“ o něj nepřijdou
+    trackRecord() {
+        if (this.tutActive) return;
+        const primary = this.mode === 'rush' ? this.rushStreak : this.score;
+        if (primary <= this.storedRecord()) return;
+        if (this.mode === 'daily') Storage.data.daily = { date: todayKey(), score: primary };
+        else Storage.data.best[this.mode] = primary;
+        Storage.queueSave();
+    }
+
+    snapshotRun() {
+        const p = this.player;
+        return {
+            mode: this.mode, score: this.score, kills: this.kills, coinsEarned: this.coinsEarned, runTime: this.runTime, bestCombo: this.bestCombo,
+            bossCount: this.bossCount, bossActive: this.bossActive, rushStreak: this.rushStreak, modeTimeLeft: this.modeTimeLeft, phoenixUsed: this.phoenixUsed,
+            hp: p.hp, bombs: p.bombs, triple: p.tripleShotTimer, shield: p.shieldTimer, rapid: p.rapidTimer,
+            base: this.startBest, date: todayKey()
+        };
+    }
+
+    // Uloží rozehranou hru; v tutoriálu a mimo běh se nic neukládá
+    saveRun() {
+        if ((this.state !== 'PLAY' && this.state !== 'PAUSE') || this.tutActive) return false;
+        Storage.data.run = sanitizeRun(this.snapshotRun());
+        this.trackRecord();
+        Storage.save();
+        return !!Storage.data.run;
+    }
+
+    continueRun() {
+        const r = sanitizeRun(Storage.data.run);
+        if (!r || !Storage.data.tutorialDone) return;
+
+        this.start(r.mode);
+        Object.assign(this, {
+            score: r.score, kills: r.kills, coinsEarned: r.coinsEarned, runTime: r.runTime, bestCombo: r.bestCombo,
+            modeTimeLeft: r.mode === 'blitz' ? Math.max(1000, r.modeTimeLeft) : this.modeTimeLeft,
+            rushStreak: r.rushStreak, phoenixUsed: r.phoenixUsed, startBest: r.base
+        });
+        // Souboj s bossem se po návratu rozběhne znovu; boss v Boss Rush se vytvoří až podle obnovené série
+        this.bossCount = r.bossActive ? Math.max(0, r.bossCount - 1) : r.bossCount;
+        this.enemies.length = 0;
+        this.boss = null;
+        this.bossActive = false;
+        document.getElementById('boss-bar').classList.add('hidden');
+        if (r.mode === 'rush') this.spawnRushBoss();
+
+        const p = this.player;
+        p.hp = Math.min(p.maxHp, Math.max(1, r.hp));
+        p.bombs = Math.min(p.maxBombs, r.bombs);
+        p.tripleShotTimer = r.triple; p.shieldTimer = r.shield; p.rapidTimer = r.rapid;
+        p.invulnTimer = Math.max(p.invulnTimer, 2000);                    // chvilka na rozkoukání
+        this.lastPlayerHp = p.hp;
+        this.hudCache = {};
+        this.showEvent('POKRAČUJEŠ', '#00f0ff');
+    }
+
+    // Ukončit hru z pauzy: běh se uzavře jako každý jiný (statistiky, rekordy), jen bez výbuchu lodi
+    endRun() {
+        if (this.state !== 'PAUSE' && this.state !== 'PLAY') return;
+        document.getElementById('quit-overlay').classList.add('hidden');
+        document.getElementById('pause-overlay').classList.add('hidden');
+        if (this.tutActive) { this.quitToMenu(); return; }
+        this.gameOver('quit');
+    }
+
     pause() {
         if (this.state !== 'PLAY') return;
         if (this.tutActive && this.tutStep !== 11) return;
 
         this.state = 'PAUSE';
+        this.saveRun();                          // zavřená stránka nebo odchod z pauzy nesmí o rozehranou hru připravit
         Storage.flush();
         UI.refresh();
         document.getElementById('pause-score').innerText = 'Skóre ' + U.num(this.score);
@@ -3918,7 +4035,7 @@ class GameManager {
         this.holdFire = false;
         this.clearTutorialGlows();
 
-        ['pause-overlay', 'gameover-overlay', 'hud', 'tut-layer', 'btn-bomb'].forEach(id => {
+        ['pause-overlay', 'quit-overlay', 'gameover-overlay', 'hud', 'tut-layer', 'btn-bomb'].forEach(id => {
             document.getElementById(id).classList.add('hidden');
         });
         document.getElementById('game-container').classList.remove('playing');
@@ -3932,7 +4049,8 @@ class GameManager {
 
         // Boss Rush má vlastní jméno pro smrt, i když mechanicky jde o stejnou událost
         const effectiveReason = (reason === 'death' && this.mode === 'rush') ? 'rush_death' : (reason || 'death');
-        if (effectiveReason !== 'timeup') Sounds.bigExplosion();
+        if (effectiveReason !== 'timeup' && effectiveReason !== 'quit') Sounds.bigExplosion();
+        Storage.data.run = null;                 // běh skončil, není co dohrávat
 
         Storage.data.stats.runsPlayed = (Storage.data.stats.runsPlayed || 0) + 1;
         Storage.data.stats.totalPlaytime = (Storage.data.stats.totalPlaytime || 0) + this.runTime;
@@ -3947,17 +4065,16 @@ class GameManager {
         const isDaily = this.mode === 'daily';
         const primary = isRush ? this.rushStreak : this.score;
 
-        let prevBest, isRecord;
+        // Rekord se během hry zapisuje průběžně (trackRecord), takže „předchozí rekord“ je ten z doby před začátkem tohoto běhu
+        const prevBest = this.startBest || 0;
+        const isRecord = primary > prevBest;
         if (isDaily) {
             // Denní rekord platí jen pro dnešek - jiný den, jiná výzva, jiná nula
             const today = todayKey();
-            prevBest = (Storage.data.daily.date === today) ? (Storage.data.daily.score || 0) : 0;
-            isRecord = primary > prevBest;
-            if (isRecord) Storage.data.daily = { date: today, score: primary };
-        } else {
-            prevBest = Storage.data.best[this.mode] || 0;
-            isRecord = primary > prevBest;
-            if (isRecord) Storage.data.best[this.mode] = primary;
+            const cur = (Storage.data.daily.date === today) ? (Storage.data.daily.score || 0) : 0;
+            if (primary > cur) Storage.data.daily = { date: today, score: primary };
+        } else if (primary > (Storage.data.best[this.mode] || 0)) {
+            Storage.data.best[this.mode] = primary;
         }
 
         Relics.check();
@@ -3971,7 +4088,7 @@ class GameManager {
         document.getElementById('game-container').classList.remove('playing');
         document.getElementById('go-record').classList.toggle('hidden', !isRecord);
 
-        const headings = { death: 'LOĎ ZNIČENA', timeup: 'ČAS VYPRŠEL', rush_death: 'SÉRIE PŘERUŠENA' };
+        const headings = { death: 'LOĎ ZNIČENA', timeup: 'ČAS VYPRŠEL', rush_death: 'SÉRIE PŘERUŠENA', quit: 'HRA UKONČENA' };
         document.getElementById('go-heading').innerText = headings[effectiveReason] || headings.death;
 
         document.getElementById('go-metric-label').innerText = isRush ? 'PORAŽENÍ BOSSOVÉ V ŘADĚ' : 'SKÓRE';
@@ -4319,6 +4436,7 @@ class GameManager {
     updateLogic(dt) {
         const f = dt / 16;
         this.runTime += dt;
+        this.trackRecord();
 
         if (this.mode === 'blitz' && !this.tutActive) {
             this.modeTimeLeft -= dt;
@@ -5294,6 +5412,16 @@ const UI = {
 
         document.getElementById('menu-coins').innerText = coins + ' mincí';
         document.getElementById('pause-coins').innerText = coins + ' mincí';
+
+        // Rozehraná hra: Denní výzva z minulého dne už neplatí
+        const run = sanitizeRun(Storage.data.run);
+        if (!run && Storage.data.run) { Storage.data.run = null; Storage.queueSave(); }
+        const contBtn = document.getElementById('btn-continue');
+        contBtn.classList.toggle('hidden', !run || !Storage.data.tutorialDone);
+        if (run) {
+            const names = { normal: 'Normální', hard: 'Těžká', inferno: 'Peklo', insane: 'Insane Peklo', blitz: 'Blesková vlna', rush: 'Boss Rush', daily: 'Denní výzva', zen: 'Zen' };
+            document.getElementById('continue-desc').innerText = (names[run.mode] || '') + ' · ' + (run.mode === 'rush' ? 'série ' + U.num(run.rushStreak) : 'skóre ' + U.num(run.score));
+        }
         document.getElementById('menu-best').innerText = 'Rekord ' + U.num(best);
 
         const asc = Storage.data.ascension || 0;
@@ -5539,7 +5667,26 @@ document.getElementById('btn-start-zen').onclick = () => Game.start('zen');
 document.getElementById('btn-start-daily').onclick = () => Game.start('daily');
 document.getElementById('btn-pause').onclick = () => Game.pause();
 document.getElementById('btn-resume').onclick = () => Game.resume();
-document.getElementById('btn-quit-pause').onclick = () => Game.quitToMenu();
+document.getElementById('btn-quit-pause').onclick = () => {
+    // V tutoriálu není co ukládat, tam se rovnou odchází
+    if (Game.tutActive) { Game.quitToMenu(); return; }
+    document.getElementById('quit-score').innerText = (Game.mode === 'rush' ? 'Série ' + U.num(Game.rushStreak) : 'Skóre ' + U.num(Game.score));
+    document.getElementById('pause-overlay').classList.add('hidden');
+    document.getElementById('quit-overlay').classList.remove('hidden');
+    document.getElementById('btn-quit-save').focus();
+};
+const closeQuitDialog = () => {
+    document.getElementById('quit-overlay').classList.add('hidden');
+    if (Game.state === 'PAUSE') document.getElementById('pause-overlay').classList.remove('hidden');
+};
+document.getElementById('btn-quit-save').onclick = () => { Game.saveRun(); Game.quitToMenu(); };
+document.getElementById('btn-quit-end').onclick = () => Game.endRun();
+document.getElementById('btn-quit-cancel').onclick = closeQuitDialog;
+document.getElementById('btn-continue').onclick = () => Game.continueRun();
+document.addEventListener('keydown', e => {
+    if (e.code === 'Escape' && !document.getElementById('quit-overlay').classList.contains('hidden')) { e.stopPropagation(); closeQuitDialog(); }
+}, true);
+window.addEventListener('pagehide', () => { if (Game.state === 'PLAY' || Game.state === 'PAUSE') Game.saveRun(); else Storage.flush(); });
 document.getElementById('btn-restart').onclick = () => Game.start(Game.mode);
 document.getElementById('btn-quit-go').onclick = () => Game.quitToMenu();
 document.getElementById('btn-sound').onclick = () => UI.toggleSound();

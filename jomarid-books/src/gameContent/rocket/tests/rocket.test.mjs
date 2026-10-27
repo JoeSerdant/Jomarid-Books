@@ -283,3 +283,51 @@ test('grafika: lodě, nepřátelé, bossové, střely i pozadí používají př
   assert.ok(scripts.length > 0);
   for (const code of scripts) assert.doesNotThrow(() => new vm.Script(code));
 });
+
+test('Opustit hru: dialog nabízí uložení (výchozí), ukončení a návrat; rozehranou hru jde dokončit tlačítkem Pokračovat', () => {
+  // dialog a tlačítka
+  for (const id of ['quit-overlay', 'btn-quit-save', 'btn-quit-end', 'btn-quit-cancel', 'btn-continue']) assert.match(html, new RegExp(`id="${id}"`), id);
+  assert.match(html, /id="btn-quit-save">Uložit a odejít</);
+  assert.match(html, /id="btn-quit-end">Ukončit hru</);
+  // Opustit hru v pauze už neodchází rovnou, ale otevírá dialog
+  assert.doesNotMatch(html, /btn-quit-pause'\)\.onclick = \(\) => Game\.quitToMenu\(\);/);
+  assert.match(html, /btn-quit-save'\)\.onclick = \(\) => \{ Game\.saveRun\(\); Game\.quitToMenu\(\); \}/);
+  assert.match(html, /btn-quit-end'\)\.onclick = \(\) => Game\.endRun\(\)/);
+  assert.match(html, /btn-continue'\)\.onclick = \(\) => Game\.continueRun\(\)/);
+  // uložení se děje i při pauze a zavření stránky
+  assert.match(html, /this\.state = 'PAUSE';\s*this\.saveRun\(\)/);
+  assert.match(html, /addEventListener\('pagehide'[\s\S]*?saveRun\(\)/);
+  // ukončení běhu jde přes gameOver('quit') a rozehraná hra se po konci smaže
+  assert.match(html, /this\.gameOver\('quit'\)/);
+  assert.match(html, /Storage\.data\.run = null;\s*\/\/ běh skončil/);
+});
+
+test('Opustit hru: rekord se zapisuje průběžně během hry, ne až na konci', () => {
+  assert.match(html, /updateLogic\(dt\) \{[\s\S]{0,120}this\.trackRecord\(\);/);
+  const fn = html.match(/trackRecord\(\) \{[\s\S]*?\n    \}/)[0];
+  assert.match(fn, /tutActive\) return/);                       // tutoriál rekord nepíše
+  assert.match(fn, /Storage\.data\.best\[this\.mode\] = primary/);
+  assert.match(fn, /Storage\.data\.daily = \{ date: todayKey\(\), score: primary \}/);
+  assert.match(fn, /queueSave\(\)/);
+  // gameOver porovnává se stavem před během, jinak by průběžný zápis zrušil nápis NOVÝ REKORD
+  assert.match(html, /const prevBest = this\.startBest \|\| 0;/);
+});
+
+test('Opustit hru: sanitizeRun zahodí nesmysly a staré Denní výzvy, hodnoty ořízne', () => {
+  const body = html.match(/const RUN_MODES = [\s\S]*?\nconst Storage = \{/)[0].replace(/const Storage = \{$/, '');
+  const run = new vm.Script(`${body}; (function(){ return { sanitizeRun }; })()`);
+  const ctx = vm.createContext({ todayKey: () => '2026-10-27' });
+  const { sanitizeRun } = run.runInContext(ctx);
+  assert.equal(sanitizeRun(null), null);
+  assert.equal(sanitizeRun({ mode: 'cheat', score: 99 }), null);
+  assert.equal(sanitizeRun({ mode: 'normal', score: 0, runTime: 100 }), null);                       // prázdný běh
+  assert.equal(sanitizeRun({ mode: 'daily', score: 500, date: '2026-10-26' }), null);               // včerejší výzva
+  assert.equal(sanitizeRun({ mode: 'daily', score: 500, date: '2026-10-27' }).score, 500);
+  const r = sanitizeRun({ mode: 'blitz', score: 'x1', hp: -5, bombs: 1e9, modeTimeLeft: 1e9, rushStreak: 3, triple: NaN });
+  assert.equal(r.score, 0);
+  assert.equal(r.hp, 1);
+  assert.equal(r.bombs, 99);
+  assert.equal(r.modeTimeLeft, 180000);
+  assert.equal(r.triple, 0);
+  assert.equal(sanitizeRun({ mode: 'rush', rushStreak: 4 }).rushStreak, 4);
+});
