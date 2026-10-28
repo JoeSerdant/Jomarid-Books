@@ -16,6 +16,7 @@ export const EMPTY_STATS = {
   weeklyActivity: [],
   readingTrend: [],
   xp: 0,
+  totalXp: 0,
   level: 1,
   levelName: "Začínající čtenář 🌱",
   levelBadgeClass: "",
@@ -232,7 +233,7 @@ export async function loadMyStats(client, user) {
   return {
     stats: {
       streak, monthlyRead, monthlyGoal: currentGoal, totalRead, weeklyActivity: weeklyActivityGenerated, readingTrend,
-      xp: xpInCurrentLevel, level, levelName: visuals.name, levelBadgeClass: visuals.badge, levelBoxClass: visuals.box,
+      xp: xpInCurrentLevel, totalXp, level, levelName: visuals.name, levelBadgeClass: visuals.badge, levelBoxClass: visuals.box,
       xpNeededForNext, daysRemainingInMonth, currentMonthName, showInLeaderboard: profileData.show_in_leaderboard ?? true,
       gameProgress,
       unlockedBadges: savedUnlockedBadges, jomaridCoins: calculatedCoins, goalLocked: isGoalLocked, goalLockedCompletely: isLockedByProgress, goalProgress: monthlyRead,
@@ -242,8 +243,44 @@ export async function loadMyStats(client, user) {
   };
 }
 
+// Server vrací najednou nejvýš 1000 řádků, žebříček ale potřebuje všechny knihy a všechny dny aktivity všech čtenářů: čte se po stránkách.
+const PAGE_SIZE = 1000;
+async function fetchAllRows(makeQuery) {
+  const rows = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await makeQuery().range(from, from + PAGE_SIZE - 1);
+    if (error) { console.error('Nepodařilo se načíst data do žebříčku:', error); break; }
+    const page = data || [];
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
+  return rows;
+}
+
+const groupBy = (rows, key) => {
+  const map = new Map();
+  for (const row of rows) {
+    const list = map.get(row[key]);
+    if (list) list.push(row); else map.set(row[key], [row]);
+  }
+  return map;
+};
+
+// Pořadí v kategorii: vyšší hodnota výš, při shodě víc XP, pak jméno (aby pořadí nezáleželo na tom, v jakém pořadí přišla data).
+const rankBy = (users, key) => [...users].sort((a, b) => b[key] - a[key] || b.xp - a.xp || a.email.localeCompare(b.email, 'cs'));
+
+// Deset nejlepších; kdo mezi nimi není, přibude pod nimi se svým skutečným pořadím (rank), ať vidí, kde stojí.
+const topWithMe = (users, key) => {
+  const ranked = rankBy(users, key).map((u, i) => ({ ...u, rank: i + 1 }));
+  const top = ranked.slice(0, 10);
+  const me = ranked.find((u) => u.isMe);
+  return me && !top.includes(me) ? [...top, me] : top;
+};
+
 // Žebříčky (deset nejlepších v pěti kategoriích) a nasazené tituly; null, když žebříček nejde načíst nebo je prázdný.
-export async function loadLeaderboards(client, user) {
+// mine = vlastní statistiky z loadMyStats: řádek přihlášeného se bere z nich, ať souhlasí s tím, co čtenář vidí nahoře
+// (série s pojistkami, XP z odznaků, které se právě odemkly), a ne z výpočtu z cizích dat.
+export async function loadLeaderboards(client, user, mine = null) {
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth();
@@ -254,31 +291,28 @@ export async function loadLeaderboards(client, user) {
   if (lbRes.error) console.error('Nepodařilo se načíst žebříček:', lbRes.error);
   else if (Array.isArray(lbRes.data)) allProfiles = lbRes.data;
   if (allProfiles && allProfiles.length > 0) {
-    const [allBooksRes, allActsRes, boardTitles] = await Promise.all([
-      client.from('user_books').select('user_id, updated_at, first_completed_at').eq('is_read', true),
-      client.from('user_daily_activity').select('user_id, activity_date'),
+    const [allBooks, allActs, boardTitles] = await Promise.all([
+      fetchAllRows(() => client.from('user_books').select('user_id, updated_at, first_completed_at').eq('is_read', true).order('user_id').order('book_id')),
+      fetchAllRows(() => client.from('user_daily_activity').select('user_id, activity_date').order('user_id').order('activity_date')),
       loadEquippedTitles(client, allProfiles.map(p => p.id))
     ]);
-    
-    const allBooks = allBooksRes.data || [];
-    const allActs = allActsRes.data || [];
+
+    const booksByUser = groupBy(allBooks, 'user_id');
+    const actsByUser = groupBy(allActs, 'user_id');
+    const todayStr = new Date().toLocaleDateString('sv');
+    const yest = new Date(); yest.setDate(yest.getDate() - 1);
+    const yestStr = yest.toLocaleDateString('sv');
 
     const mappedUsers = allProfiles.map(p => {
-      const uBooks = allBooks.filter(b => b.user_id === p.id);
-      const uActs = allActs.filter(a => a.user_id === p.id).map(a => a.activity_date);
-      
+      const uBooks = booksByUser.get(p.id) || [];
+      const uActs = new Set((actsByUser.get(p.id) || []).map(a => a.activity_date));
+
       let uStreak = 0;
-      if (uActs.length > 0) {
-        const todayStr = new Date().toLocaleDateString('sv');
-        const yest = new Date(); yest.setDate(yest.getDate() - 1);
-        const yestStr = yest.toLocaleDateString('sv');
-        
-        if (uActs.includes(todayStr) || uActs.includes(yestStr)) {
-          let chk = uActs.includes(todayStr) ? new Date() : yest;
-          while (uActs.includes(chk.toLocaleDateString('sv'))) {
-            uStreak++;
-            chk.setDate(chk.getDate() - 1);
-          }
+      if (uActs.has(todayStr) || uActs.has(yestStr)) {
+        const chk = uActs.has(todayStr) ? new Date() : new Date(yest);
+        while (uActs.has(chk.toLocaleDateString('sv'))) {
+          uStreak++;
+          chk.setDate(chk.getDate() - 1);
         }
       }
 
@@ -302,25 +336,27 @@ export async function loadLeaderboards(client, user) {
       });
       const { level: uLvl } = calculateLevelAndProgress(uXpTotal);
 
+      const isMe = p.id === user.id;
+      const own = isMe && mine ? mine : null;
       return {
         email: p.username || 'Anonym',
-        streak: uStreak,
-        level: uLvl,
-        totalRead: uBooks.length,
-        monthlyRead: uMRead,
-        xp: uXpTotal,
+        streak: own ? own.streak : uStreak,
+        level: own ? own.level : uLvl,
+        totalRead: own ? own.totalRead : uBooks.length,
+        monthlyRead: own ? own.monthlyRead : uMRead,
+        xp: own ? own.totalXp : uXpTotal,
         featuredBadge: p.featured_badge || null,
         title: boardTitles.get(p.id) || null,
-        isMe: p.id === user.id
+        isMe
       };
     });
 
     return {
-      streak: [...mappedUsers].sort((a, b) => b.streak - a.streak).slice(0, 10),
-      level: [...mappedUsers].sort((a, b) => b.level - a.level).slice(0, 10),
-      totalRead: [...mappedUsers].sort((a, b) => b.totalRead - a.totalRead).slice(0, 10),
-      monthlyRead: [...mappedUsers].sort((a, b) => b.monthlyRead - a.monthlyRead).slice(0, 10),
-      xp: [...mappedUsers].sort((a, b) => b.xp - a.xp).slice(0, 10)
+      streak: topWithMe(mappedUsers, 'streak'),
+      level: topWithMe(mappedUsers, 'level'),
+      totalRead: topWithMe(mappedUsers, 'totalRead'),
+      monthlyRead: topWithMe(mappedUsers, 'monthlyRead'),
+      xp: topWithMe(mappedUsers, 'xp')
     };
   }
   return null;
