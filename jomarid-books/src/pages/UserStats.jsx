@@ -39,7 +39,7 @@ export const UserStats = () => {
       setCosmetics(mine.cosmetics);
       setStats(mine.stats);
 
-      const boards = await loadLeaderboards(supabase, user);
+      const boards = await loadLeaderboards(supabase, user, mine.stats);
       if (boards) setLeaderboards(boards);
     } catch (error) {
       console.error("Kritická chyba při výpočtu statistik:", error);
@@ -389,14 +389,15 @@ export const UserStats = () => {
           ) : (
             leaderboards[activeTab].map((row, index) => {
               const cat = categories.find(c => c.id === activeTab);
-              let medalStyle = index === 0 ? "text-xl w-6 text-center animate-bounce" : index === 1 ? "text-lg w-6 text-center" : index === 2 ? "text-md w-6 text-center" : "text-xs font-black opacity-40 w-6 text-center";
+              const rank = row.rank || index + 1;
+              let medalStyle = rank === 1 ? "text-xl w-6 text-center animate-bounce" : rank === 2 ? "text-lg w-6 text-center" : rank === 3 ? "text-md w-6 text-center" : "text-xs font-black opacity-40 w-6 text-center";
               const featuredBadgeDef = row.featuredBadge ? BOOK_BADGES.find(b => b.id === row.featuredBadge) : null;
               const FeaturedIcon = featuredBadgeDef?.icon;
               const rowTitle = row.isMe ? myTitle : row.title;
               return (
-                <div key={index} style={{ backgroundColor: row.isMe ? 'var(--bg-badge)' : 'rgba(0,0,0,0.02)', borderColor: row.isMe ? 'var(--bg-primary)' : 'transparent' }} className={`flex items-center justify-between p-3 rounded-xl border transition-all ${row.isMe && 'font-bold shadow-sm'}`}>
+                <div key={index} data-testid={row.isMe ? 'lb-me' : undefined} style={{ marginTop: index === 10 ? '1rem' : undefined, backgroundColor: row.isMe ? 'var(--bg-badge)' : 'rgba(0,0,0,0.02)', borderColor: row.isMe ? 'var(--bg-primary)' : 'transparent' }} className={`flex items-center justify-between p-3 rounded-xl border transition-all ${row.isMe && 'font-bold shadow-sm'}`}>
                   <div className="flex items-center gap-4 text-left">
-                    <span className={medalStyle}>{index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`}</span>
+                    <span className={medalStyle}>{rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}.`}</span>
                     {FeaturedIcon && (
                       <span title={featuredBadgeDef.title} className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
                         <FeaturedIcon size={12} />

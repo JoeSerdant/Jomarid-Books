@@ -47,7 +47,7 @@ test('Statistiky už odznaky ani obchůdek nenesou, jen odkaz na stránku Odznak
   assert.match(stats, /<Link\s+to="\/badges"\s+data-testid="badges-link"/);
   assert.match(stats, /Odznaky knih: \{stats\.unlockedBadges\.length\} z \{BOOK_BADGES\.length\}\. Odznaky her: \{stats\.gameProgress\?\.unlocked\?\.length \|\| 0\} z \{GAME_BADGES\.length\}\./);
   assert.match(stats, /loadMyStats\(supabase, user\)/);
-  assert.match(stats, /loadLeaderboards\(supabase, user\)/);
+  assert.match(stats, /loadLeaderboards\(supabase, user, mine\.stats\)/);
 });
 
 test('stránka Odznaky načítá jen vlastní statistiky (žebříčky ne), stejným výpočtem jako Statistiky', () => {
@@ -67,7 +67,7 @@ test('npm test pouští i testy stránky Odznaky', () => {
 function fakeClient({ profile = {}, books = [], activity = [], rpc = {} } = {}) {
   const calls = [];
   const table = (rows, single) => {
-    const q = { select: () => q, eq: () => q, order: () => q, maybeSingle: async () => ({ data: single, error: null }), then: (resolve) => resolve({ data: rows, error: null }) };
+    const q = { select: () => q, eq: () => q, order: () => q, range: () => q, maybeSingle: async () => ({ data: single, error: null }), then: (resolve) => resolve({ data: rows, error: null }) };
     return q;
   };
   return {
@@ -157,4 +157,50 @@ test('loadLeaderboards: bez žebříčku nebo při chybě vrací null; jinak des
   assert.equal(me.email, 'jana'); assert.equal(me.title, 'Noční sova'); assert.equal(me.totalRead, 1);
   assert.equal(board.level.length, 2);
   assert.equal(board.xp.find((r) => r.email === 'petr').xp > 0, true, 'XP z her se do žebříčku počítá');
+});
+
+// Atrapa, která drží rozsah dotazu (range) jako opravdový server: vrací nejvýš 1000 řádků na stránku.
+function pagingClient({ books, activity, profiles, rpc = {} }) {
+  const seen = { books: 0, activity: 0 };
+  const table = (rows, key) => {
+    let from = 0; let to = 999;
+    const q = { select: () => q, eq: () => q, order: () => q, range: (a, b) => { from = a; to = Math.min(b, a + 999); return q; }, then: (resolve) => { seen[key] += 1; resolve({ data: rows.slice(from, to + 1), error: null }); } };
+    return q;
+  };
+  return {
+    seen,
+    from: (name) => (name === 'user_books' ? table(books, 'books') : table(activity, 'activity')),
+    rpc: async (fn) => (fn === 'leaderboard_profiles' ? { data: profiles, error: null } : rpc[fn] ? rpc[fn]() : { data: null, error: { message: 'chybí' } }),
+  };
+}
+const dayStr = (daysAgo) => { const d = new Date(); d.setDate(d.getDate() - daysAgo); return d.toLocaleDateString('sv'); };
+
+test('loadLeaderboards: čte všechny stránky dat (server vrací najednou nejvýš 1000 řádků), ať žebříček nepodhodnotí nikoho', async () => {
+  // 1500 dnů aktivity u jednoho čtenáře a 1200 knih u druhého: bez stránkování by se po 1000. řádku ostatní data ztratila
+  const activity = Array.from({ length: 1500 }, (_, i) => ({ user_id: 'u1', activity_date: dayStr(i) }));
+  const books = Array.from({ length: 1200 }, () => ({ user_id: 'u2', first_completed_at: '2020-01-01T10:00:00Z', updated_at: '2020-01-01T10:00:00Z' }));
+  const client = pagingClient({ books, activity, profiles: [{ id: 'u1', username: 'jana' }, { id: 'u2', username: 'petr' }] });
+  const board = await quiet(() => loadLeaderboards(client, USER));
+  assert.equal(board.streak.find((r) => r.email === 'jana').streak, 1500, 'celá série se dočetla i za hranici 1000 řádků');
+  assert.equal(board.totalRead.find((r) => r.email === 'petr').totalRead, 1200);
+  assert.equal(client.seen.activity, 2, '1500 řádků = dvě stránky');
+  assert.equal(client.seen.books, 2);
+});
+
+test('loadLeaderboards: řádek přihlášeného se bere z jeho vlastních statistik; při shodě rozhoduje XP; kdo není v desítce, přibude pod ní s pořadím', async () => {
+  const profiles = Array.from({ length: 12 }, (_, i) => ({ id: `p${i}`, username: `hrac${String(i).padStart(2, '0')}`, highest_goal_completed: 25 }));
+  profiles.push({ id: 'u1', username: 'jana', highest_goal_completed: 25 });
+  const books = profiles.slice(0, 12).flatMap((p, i) => Array.from({ length: 12 - i }, () => ({ user_id: p.id, first_completed_at: '2020-01-01T10:00:00Z', updated_at: '2020-01-01T10:00:00Z' })));
+  const mine = { streak: 4, level: 2, totalRead: 0, monthlyRead: 0, totalXp: 250 };
+  const board = await quiet(() => loadLeaderboards(pagingClient({ books, activity: [], profiles }), USER, mine));
+  const me = board.xp.at(-1);
+  assert.equal(me.isMe, true); assert.equal(me.xp, 250, 'XP je to, co vidí sám nahoře');
+  assert.equal(board.xp.length, 11, 'deset nejlepších a pod nimi přihlášený');
+  assert.ok(me.rank > 10 && me.rank <= 13, `skutečné pořadí (${me.rank}), ne pozice v seznamu`);
+  assert.equal(board.xp.filter((r) => r.rank < me.rank).length, 10, 'před ním je přesně těch deset zobrazených');
+  assert.equal(board.streak[0].isMe, true, 'série 4 dny z vlastních statistik je první');
+  assert.equal(board.streak[0].rank, 1);
+  // stejný počet knih: výš je ten s víc XP, při úplné shodě podle jména
+  const tie = await quiet(() => loadLeaderboards(pagingClient({ books: [], activity: [], profiles: [{ id: 'b', username: 'bara', fake_xp: 0 }, { id: 'a', username: 'adam', fake_xp: 500 }, { id: 'c', username: 'cyril', fake_xp: 500 }] }), { id: 'x' }));
+  assert.deepEqual(tie.totalRead.map((r) => r.email), ['adam', 'cyril', 'bara']);
 });
