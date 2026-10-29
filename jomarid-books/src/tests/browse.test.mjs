@@ -8,6 +8,7 @@ import * as B from '../browse/browseModel.js';
 import * as L from '../browse/libraryModel.js';
 import * as D from '../browse/libraryData.js';
 import * as S from '../browse/browseStore.js';
+import fs from 'node:fs';
 
 const rng = (seed) => () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32;
 const NOW = Date.parse('2026-10-07T12:00:00Z');
@@ -1170,5 +1171,18 @@ describe('zapamatování v úložišti', () => {
     const s = fakeStorage();
     S.writeLibraryState(undefined, st, { storage: s, now: NOW });
     assert.equal(s.m.size, 0, 'bez uživatele se nic neukládá');
+  });
+});
+
+describe('tlačítko Zpět nahoru', () => {
+  const src = (f) => fs.readFileSync(new URL(f, import.meta.url), 'utf8');
+  const bottomOf = (text, marker) => Number((new RegExp(`${marker}[^"']*?\\bbottom-(\\d+)`).exec(text) || [])[1]);
+
+  test('neleží na bublině Pomocníka (obě jsou vpravo dole, pod bublinou by nešlo klepnout)', () => {
+    const top = bottomOf(src('../browse/BrowseParts.jsx'), 'data-testid="back-to-top"[\\s\\S]*?className="fixed');
+    const help = bottomOf(src('../components/HelpBot.jsx'), 'className="fixed z-40 right-4');
+    assert.ok(Number.isFinite(top) && Number.isFinite(help), `top=${top} help=${help}`);
+    // bublina má 3rem a odsazení 1rem (bottom-4 = 1rem), tlačítko musí začínat nad ní
+    assert.ok(top * 0.25 >= help * 0.25 + 3, `Zpět nahoru (bottom-${top}) musí být nad bublinou Pomocníka (bottom-${help} + 3rem)`);
   });
 });
