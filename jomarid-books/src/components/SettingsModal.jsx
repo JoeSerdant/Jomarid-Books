@@ -30,6 +30,7 @@ import PushSettings from '../push/PushSettings';
 import { cleanupOnLogout } from '../push/pushClient';
 import { createLoginCode, getLoginCodeInfo, revokeLoginCode } from '../offline/loginCode';
 import { OfflineBooksSection } from '../offline/OfflineBooksSection';
+import { OfflineGamesSection } from '../offline/OfflineGamesSection';
 import { useInstallState, promptInstall } from '../pwa/install';
 import { whenOfflineReady, resetApp } from '../pwa/register';
 
@@ -962,6 +963,7 @@ const AppTab = () => {
       </Section>
 
       <OfflineBooksSection Section={Section} Notice={Notice} ActionButton={ActionButton} />
+      <OfflineGamesSection Section={Section} Notice={Notice} ActionButton={ActionButton} />
 
       <Section title="O aplikaci">
         <p className="text-sm font-bold m-0">Jomarid Books · {APP_VERSION_LABEL}</p>

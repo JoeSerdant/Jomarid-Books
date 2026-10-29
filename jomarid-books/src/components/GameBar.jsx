@@ -6,7 +6,8 @@ import { SAVE_CHIPS } from '../gameSave/messages';
 // odměny (hry samy nic nezobrazují). Na nízké obrazovce na šířku (telefon) je lišta svislá vpravo.
 // Třídy jsou napsané celé (ne skládané): Tailwind je při sestavení hledá v textu a sestavené by nepoznal.
 //   flash: { id, text, label, warn } - krátké potvrzení (odměna nebo poznámka o limitu), nebo null
-//   saveStatus: 'failing' | 'conflict' | 'rejected' - postup se právě neukládá (štítek v liště, dokud to trvá), jinak null
+//   saveStatus: 'failing' | 'offline' | 'conflict' | 'rejected' - postup se právě neukládá na server (štítek v liště, dokud to trvá), jinak null.
+//   „offline“ není chyba (postup je v zařízení a odešle se po připojení), proto má klidnější barvu.
 export const GameBar = ({ title, onClose, coins, coinsLoaded, level, levelName, flash, saveStatus }) => (
   <div
     data-testid="game-bar"
@@ -24,7 +25,7 @@ export const GameBar = ({ title, onClose, coins, coinsLoaded, level, levelName, 
           data-testid="game-bar-save"
           role="status"
           title={SAVE_CHIPS[saveStatus]}
-          style={{ backgroundColor: '#fee2e2', borderColor: '#ef4444', color: '#991b1b' }}
+          style={saveStatus === 'offline' ? { backgroundColor: 'var(--bg-badge)', borderColor: 'var(--border-color)', color: 'var(--text-badge)' } : { backgroundColor: '#fee2e2', borderColor: '#ef4444', color: '#991b1b' }}
           className="flex items-center gap-1 px-2 py-1.5 rounded-xl border text-xs font-black leading-none whitespace-nowrap [@media(orientation:landscape)_and_(max-height:500px)]:order-4 [@media(orientation:landscape)_and_(max-height:500px)]:flex-col [@media(orientation:landscape)_and_(max-height:500px)]:text-[0.625rem] [@media(orientation:landscape)_and_(max-height:500px)]:px-1 [@media(orientation:landscape)_and_(max-height:500px)]:gap-0.5"
         >
           <CloudOff size={13} aria-hidden="true" />

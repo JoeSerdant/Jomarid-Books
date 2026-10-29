@@ -8,10 +8,21 @@
 // - flushOnHide(): uložení při odchodu ze stránky (fetch s keepalive).
 // - Chyba spojení: opakuje se s rostoucími prodlevami (retryDelaysMs). Konflikt revize (hraje se i jinde) a odmítnutí serverem (příliš velký
 //   nebo nesmyslný postup) ukládání zastaví: stav 'conflict' / 'rejected'.
-// onStatus({state, ...}) se volá při změně stavu: 'failing' (neuloženo, zkouším znovu), 'ok' s recovered: true (zase uloženo),
-// 'conflict', 'rejected'.
+// onStatus({state, ...}) se volá při změně stavu: 'failing' (neuloženo, zkouším znovu), 'offline' (bez spojení, postup je v zařízení),
+// 'ok' s recovered: true (zase uloženo), 'conflict', 'rejected'.
+//
+// Offline (volitelné, parametr offline = { read, write, reconcile }, viz offline/gameSaves.js a gameMerge.js):
+// - Každá změna se (s krátkým odkladem) zrcadlí do šifrované kopie v zařízení.
+// - Nejde-li server načíst kvůli spojení, hra se otevře z té kopie. Není-li žádná a zařízení je offline, load vyhodí NoLocalSaveError;
+//   hráč pak může zvolit load({ allowEmpty: true }): hra začne od nuly a po připojení se postup sloučí s účtem (pokročilejší vyhraje, druhý je záloha).
+// - Bez spojení se na server nic neposílá; po návratu spojení (retryNow) se změny uloží. Mezitím-li se postup změnil i na serveru
+//   (hrálo se jinde), rozhodne se podle toho, který je pokročilejší (gameMerge.js).
 import { saveProblem } from './catalog.js';
 import { loadGameState, importLegacyGameState, saveGameState } from './api.js';
+import { isTransientError } from '../offline/model.js';
+
+// Hra nejde načíst ze serveru a v zařízení pro ni není uložený postup (nehrála se na tomhle zařízení s internetem).
+export class NoLocalSaveError extends Error { constructor() { super('no_local_save'); this.name = 'NoLocalSaveError'; } }
 
 const SERVER_REJECTS = ['invalid_data', 'too_large'];
 const rejectReason = (err) => SERVER_REJECTS.find((code) => new RegExp(`(^|[^a-z_])${code}($|[^a-z_])`).test(String(err?.message || err || ''))) || null;
@@ -21,7 +32,8 @@ export function createGameSync({
   readLegacy = () => ({}), clearLegacy = () => {}, keepalive = null,
   setTimer = setTimeout, clearTimer = clearTimeout, now = () => Date.now(),
   onStatus = () => {},
-  debounceMs = 2500, maxWaitMs = 15000, retryDelaysMs = [3000, 8000, 20000, 60000],
+  offline = null, isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false,
+  debounceMs = 2500, maxWaitMs = 15000, retryDelaysMs = [3000, 8000, 20000, 60000], mirrorDelayMs = 600,
 }) {
   let map = {};
   let rev = 0;
@@ -35,6 +47,8 @@ export function createGameSync({
   let status = 'ok';
   let stopped = false; // po konfliktu nebo odmítnutí se neukládá
   let disposed = false;
+  let touchedOffline = false; // od posledního uložení na server se hrálo bez spojení (při konfliktu se pak rozhoduje podle pokroku)
+  let mirrorTimer = null;
 
   const setStatus = (state, info = {}) => {
     const changed = state !== status;
@@ -43,6 +57,22 @@ export function createGameSync({
   };
   const stop = (state, info) => { stopped = true; clearTimer(timer); timer = null; setStatus(state, info); };
 
+  // Kopie v zařízení: aktuální postup a to, jestli v něm jsou změny, které server nezná. Chyba úložiště (plné, zakázané) hru nezastaví.
+  const mirror = () => {
+    if (!offline || !loaded) return Promise.resolve();
+    return Promise.resolve(offline.write({ map: { ...map }, rev, dirty: version !== savedVersion })).catch(() => {});
+  };
+  const scheduleMirror = () => {
+    if (!offline || disposed) return;
+    clearTimer(mirrorTimer);
+    mirrorTimer = setTimer(() => { mirrorTimer = null; mirror(); }, mirrorDelayMs);
+  };
+  const mirrorNow = async () => {
+    if (!mirrorTimer) return;
+    clearTimer(mirrorTimer); mirrorTimer = null;
+    await mirror();
+  };
+
   const schedule = (delay) => {
     if (stopped || disposed || !loaded) return;
     clearTimer(timer);
@@ -50,8 +80,31 @@ export function createGameSync({
     timer = setTimer(() => { timer = null; flush(); }, wait);
   };
 
-  async function load() {
-    const server = await loadGameState(client, gameId);
+  async function load({ allowEmpty = false } = {}) {
+    stopped = false;
+    // Změny z dřívějšího hraní bez spojení se nejdřív sloučí se serverem (nechtěně by se přepsaly). Chyba spojení nevadí: níž se hra otevře z kopie.
+    if (offline && !isOffline()) { try { await offline.reconcile(); } catch { /* spojení nebo opakovaný konflikt: řeší se níž */ } }
+    let server;
+    try {
+      server = await loadGameState(client, gameId);
+    } catch (err) {
+      if (!offline || !isTransientError(err)) throw err;
+      const copy = await Promise.resolve(offline.read()).catch(() => null);
+      // Bez kopie a bez spojení: NoLocalSaveError (nebo od nuly, když to hráč výslovně chce). Server, který jen vypadl, zatímco zařízení je online,
+      // se hlásí jako obyčejná chyba načtení (jako dřív).
+      if (!copy && !allowEmpty) throw (isOffline() ? new NoLocalSaveError() : err);
+      map = copy ? { ...copy.map } : {};
+      rev = copy ? copy.rev : 0;
+      version = copy?.dirty ? 1 : 0; savedVersion = 0; firstDirtyAt = copy?.dirty ? now() : 0; failures = 0;
+      stopped = false; loaded = true; touchedOffline = true;
+      status = 'ok'; setStatus(isOffline() ? 'offline' : 'failing', { failures: 0 });
+      return;
+    }
+    if (offline) {
+      // Neodeslané změny, které se sloučit nepovedlo, by se přepsaly: hra se radši nespustí a zkusí se to znovu.
+      const copy = await Promise.resolve(offline.read()).catch(() => null);
+      if (copy?.dirty) throw new Error('offline_reconcile_pending');
+    }
     let state = server;
     const legacy = readLegacy(gameId) || {};
     const keys = Object.keys(legacy);
@@ -70,7 +123,8 @@ export function createGameSync({
     map = { ...state.data };
     rev = state.rev;
     version = 0; savedVersion = 0; firstDirtyAt = 0; failures = 0;
-    stopped = false; status = 'ok'; loaded = true;
+    stopped = false; status = 'ok'; loaded = true; touchedOffline = false;
+    await mirror();
   }
 
   function apply(msg) {
@@ -91,12 +145,22 @@ export function createGameSync({
     }
     version += 1;
     if (!firstDirtyAt) firstDirtyAt = now();
+    if (offline && isOffline()) touchedOffline = true;
+    scheduleMirror();
     if (failures === 0) schedule();
     return true;
   }
 
   async function flush() {
     if (!loaded || stopped) return;
+    await mirrorNow();
+    if (offline && version !== savedVersion && isOffline()) {
+      // Bez spojení se nic neposílá: postup je v zařízení (mirror) a odešle se, až spojení bude.
+      clearTimer(timer); timer = null;
+      touchedOffline = true;
+      setStatus('offline');
+      return;
+    }
     if (inflight) {
       await inflight;
       if (version !== savedVersion && !stopped && failures === 0) await flush();
@@ -116,7 +180,21 @@ export function createGameSync({
           savedVersion = sentVersion;
           firstDirtyAt = version === sentVersion ? 0 : now();
           failures = 0;
-          if (status === 'failing') setStatus('ok', { recovered: true });
+          touchedOffline = false;
+          if (status === 'failing' || status === 'offline') setStatus('ok', { recovered: true });
+          await mirror();
+        } else if (offline && touchedOffline) {
+          // Hrálo se bez spojení a mezitím se postup změnil i na serveru: vyhraje pokročilejší, druhý je záloha.
+          await offline.write({ map: sentMap, rev, dirty: true });
+          const out = await offline.reconcile();
+          if (out.action === 'server_won') { stop('conflict', { reason: 'server_won', rev: out.rev }); return; }
+          rev = out.rev;
+          savedVersion = sentVersion;
+          firstDirtyAt = version === sentVersion ? 0 : now();
+          failures = 0;
+          touchedOffline = false;
+          if (status === 'failing' || status === 'offline') setStatus('ok', { recovered: true });
+          await mirror();
         } else {
           stop('conflict', { rev: res.rev });
         }
@@ -124,7 +202,8 @@ export function createGameSync({
         const reason = rejectReason(err);
         if (reason) { stop('rejected', { reason }); return; }
         failures += 1;
-        setStatus('failing', { failures });
+        if (offline && isTransientError(err)) touchedOffline = true;
+        setStatus(offline && isOffline() ? 'offline' : 'failing', { failures });
       }
     })();
     try { await inflight; } finally { inflight = null; }
@@ -134,19 +213,31 @@ export function createGameSync({
   }
 
   function flushOnHide() {
-    if (!loaded || stopped || inflight || version === savedVersion || !keepalive) return;
+    if (!loaded || stopped) return;
+    if (offline) { clearTimer(mirrorTimer); mirrorTimer = null; mirror(); }   // odchod ze stránky: kopie v zařízení se uloží hned
+    if (inflight || version === savedVersion || !keepalive || (offline && (isOffline() || touchedOffline))) return;
     clearTimer(timer); timer = null;
     keepalive({ gameId, map: { ...map }, baseRev: rev });
+  }
+
+  // Spojení je zpět: uloží se, co čeká (a zruší se čekání mezi pokusy).
+  async function retryNow() {
+    if (!loaded || stopped || disposed) return;
+    failures = 0;
+    clearTimer(timer); timer = null;
+    await flush();
   }
 
   function dispose() {
     disposed = true;
     clearTimer(timer);
+    clearTimer(mirrorTimer);
     timer = null;
+    mirrorTimer = null;
   }
 
   return {
-    load, apply, flush, flushOnHide, dispose,
+    load, apply, flush, flushOnHide, retryNow, dispose,
     isLoaded: () => loaded,
     snapshot: () => ({ map: { ...map }, rev }),
     state: () => ({ status, dirty: version !== savedVersion, rev, stopped }),
