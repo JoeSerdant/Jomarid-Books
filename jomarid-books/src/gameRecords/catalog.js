@@ -1,7 +1,7 @@
 // Herní rekordy a odznaky: které výsledky hry hlásí, jak se jmenují, jaké jsou nejvyšší věrohodné hodnoty a jaké odznaky z nich vznikají.
 // Stejný seznam je v db/game-records.sql (tam rozhoduje server); test src/tests/gameRecords.test.mjs hlídá, že si odpovídají.
 // Hry samy nic nepočítají ani neudělují: hlásí jen aktuální hodnotu (jomaridRecord), server si pamatuje nejvyšší a odemyká odznaky.
-import { Rocket, Swords, Building2, Target, Crown, Smile } from 'lucide-react';
+import { Rocket, Swords, Building2, Target, Crown, Smile, Castle } from 'lucide-react';
 
 // id her jsou stejná jako v Games.jsx a v mostu pro odměny; headline je statistika, podle které se řadí žebříček hry
 export const GAME_CATALOG = [
@@ -77,10 +77,19 @@ export const GAME_CATALOG = [
       { key: 'balls_discovered', label: 'Objevené koule', max: 12 },
     ],
   },
+  {
+    id: 'hannibal', title: 'Hannibal: Barca', icon: Castle, headline: 'endless_wave',
+    stats: [
+      { key: 'endless_wave', label: 'Nejvyšší vlna v Nekonečném tažení', max: 1000 },
+      { key: 'chapters_completed', label: 'Dokončené kapitoly kampaně (z 11)', max: 11 },
+      { key: 'doctrines_unlocked', label: 'Odemčené doktríny (z 6)', max: 6 },
+      { key: 'top_unit_level', label: 'Nejvyšší úroveň jednotky', max: 1000 },
+    ],
+  },
 ];
 
-// Odznaky za hry dávají jen XP (ne mince). Ve stejné statistice platí, že čím těžší odznak, tím víc XP; dohromady je to 12 080 XP, takže hry samy
-// dovedou čtenáře zhruba na úroveň 12 a dál už jen čtení. XP z her se do úrovně přičítá, ale odznaky za úroveň (a s nimi mince) se z něj nevyhodnocují.
+// Odznaky za hry dávají jen XP (ne mince). Ve stejné statistice platí, že čím těžší odznak, tím víc XP; dohromady je to 14 040 XP, takže hry samy
+// dovedou čtenáře zhruba na úroveň 13 a dál už jen čtení. XP z her se do úrovně přičítá, ale odznaky za úroveň (a s nimi mince) se z něj nevyhodnocují.
 export const GAME_BADGES = [
   { id: 'rocket_ace', game: 'rocket', stat: 'score_normal', threshold: 2500, xp: 100, title: 'Eso hvězd', description: 'Získej v Normální obtížnosti 2 500 bodů.' },
   { id: 'rocket_hell', game: 'rocket', stat: 'score_inferno', threshold: 1500, xp: 150, title: 'Pekelný pilot', description: 'Získej v Pekle 1 500 bodů.' },
@@ -152,6 +161,18 @@ export const GAME_BADGES = [
   { id: 'war_scen12', game: 'warroom', stat: 'scenarios_unlocked', threshold: 12, xp: 500, title: 'Půl světa', description: 'Odemkni 12 scénářů.' },
   { id: 'war_scen24', game: 'warroom', stat: 'scenarios_unlocked', threshold: 24, xp: 800, title: 'Všechny fronty', description: 'Odemkni všech 24 scénářů.' },
   { id: 'war_sector15', game: 'warroom', stat: 'best_sector', threshold: 15, xp: 200, title: 'Hluboký průlom', description: 'Dostaň se v kampani do 15. sektoru.' },
+  { id: 'han_ch1', game: 'hannibal', stat: 'chapters_completed', threshold: 1, xp: 50, title: 'Pád Sagunta', description: 'Dokonči první kapitolu kampaně.' },
+  { id: 'han_ch4', game: 'hannibal', stat: 'chapters_completed', threshold: 4, xp: 100, title: 'Přes Alpy', description: 'Dokonči 4 kapitoly kampaně.' },
+  { id: 'han_ch8', game: 'hannibal', stat: 'chapters_completed', threshold: 8, xp: 200, title: 'Hrozba pro Řím', description: 'Dokonči 8 kapitol kampaně.' },
+  { id: 'han_ch11', game: 'hannibal', stat: 'chapters_completed', threshold: 11, xp: 400, title: 'Celé tažení', description: 'Dokonči všech 11 kapitol kampaně.' },
+  { id: 'han_doc1', game: 'hannibal', stat: 'doctrines_unlocked', threshold: 1, xp: 50, title: 'První doktrína', description: 'Odemkni první taktickou doktrínu.' },
+  { id: 'han_doc3', game: 'hannibal', stat: 'doctrines_unlocked', threshold: 3, xp: 100, title: 'Zkušený taktik', description: 'Odemkni 3 taktické doktríny.' },
+  { id: 'han_doc6', game: 'hannibal', stat: 'doctrines_unlocked', threshold: 6, xp: 250, title: 'Mistr taktiky', description: 'Odemkni všech 6 taktických doktrín.' },
+  { id: 'han_wave5', game: 'hannibal', stat: 'endless_wave', threshold: 5, xp: 80, title: 'Neúnavné tažení', description: 'Poraž 5 vln v Nekonečném tažení.' },
+  { id: 'han_wave10', game: 'hannibal', stat: 'endless_wave', threshold: 10, xp: 150, title: 'Neústupný', description: 'Poraž 10 vln v Nekonečném tažení.' },
+  { id: 'han_wave20', game: 'hannibal', stat: 'endless_wave', threshold: 20, xp: 300, title: 'Nekonečná armáda', description: 'Poraž 20 vln v Nekonečném tažení.' },
+  { id: 'han_lvl5', game: 'hannibal', stat: 'top_unit_level', threshold: 5, xp: 80, title: 'Ostřílený voják', description: 'Vypěstuj jednotku na úroveň 5.' },
+  { id: 'han_lvl10', game: 'hannibal', stat: 'top_unit_level', threshold: 10, xp: 200, title: 'Legenda armády', description: 'Vypěstuj jednotku na úroveň 10.' },
 ];
 
 export const GAME_BADGES_TOTAL_XP = GAME_BADGES.reduce((sum, b) => sum + b.xp, 0);

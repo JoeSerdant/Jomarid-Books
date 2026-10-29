@@ -1193,7 +1193,22 @@
 
       saveGame() {
         if (!this.started) return;
-        try { localStorage.setItem(this.SAVE_KEY, JSON.stringify(this.serialize())); } catch (e) { /* bez uložení se dá hrát dál */ }
+        const data = this.serialize();
+        try { localStorage.setItem(this.SAVE_KEY, JSON.stringify(data)); } catch (e) { /* bez uložení se dá hrát dál */ }
+        this.reportRecords(data);
+      },
+
+      // Rekordy hry (jomaridRecord v mostu): hra jen hlásí aktuální hodnoty z postupu, o zápisu a herních odznacích rozhoduje server.
+      reportRecords(d) {
+        if (typeof jomaridRecord !== 'function' || !d) return;
+        try {
+          const nodes = d.nodes || {};
+          const doctrines = d.doctrines || {};
+          jomaridRecord('chapters_completed', Object.keys(nodes).filter(k => nodes[k] && nodes[k].completed).length);
+          jomaridRecord('doctrines_unlocked', Object.keys(doctrines).filter(k => doctrines[k]).length);
+          jomaridRecord('top_unit_level', Math.max(0, ...(d.roster || []).map(u => Number(u.level) || 0)));
+          jomaridRecord('endless_wave', this.getEndlessBest());
+        } catch (e) { /* hra jde dál bez hlášení */ }
       },
 
       readSave() {
@@ -3607,6 +3622,7 @@
     window.addEventListener('load', () => {
       window.gameEngine = new TacticalEngine('gameCanvas');
       Game.refreshMenu();
+      GameCampaign.reportRecords(GameCampaign.readSave() || { nodes: {}, doctrines: {}, roster: [] });   // postup z dřívějška se ohlásí hned, ne až po dalším uložení
     });
   </script>
 </body>

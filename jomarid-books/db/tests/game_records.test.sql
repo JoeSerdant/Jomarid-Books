@@ -50,10 +50,10 @@ select tt.gmk(6, '   ');
 select tt.gmk(7, 'nový');
 
 -- ===== seznam statistik a odznaků =====
-select tt.ok((select count(*) from public.game_stat_limits) = 42, 'v seznamu je 42 statistik u šesti her');
-select tt.ok((select count(distinct game_id) from public.game_stat_limits) = 6, 'statistiky patří šesti hrám');
-select tt.ok((select count(*) from public.game_badge_defs) = 70, 'v seznamu je 70 herních odznaků');
-select tt.ok((select sum(xp) from public.game_badge_defs) = 12080, 'herní odznaky dohromady dávají 12 080 XP');
+select tt.ok((select count(*) from public.game_stat_limits) = 46, 'v seznamu je 46 statistik u sedmi her');
+select tt.ok((select count(distinct game_id) from public.game_stat_limits) = 7, 'statistiky patří sedmi hrám');
+select tt.ok((select count(*) from public.game_badge_defs) = 82, 'v seznamu je 82 herních odznaků');
+select tt.ok((select sum(xp) from public.game_badge_defs) = 14040, 'herní odznaky dohromady dávají 14 040 XP');
 select tt.ok((select count(*) from public.game_badge_defs d where not exists (select 1 from public.game_stat_limits l where l.game_id = d.game_id and l.stat_key = d.stat_key)) = 0, 'každý odznak sedí na existující statistiku');
 select tt.ok((select count(*) from public.game_badge_defs d join public.game_stat_limits l using (game_id, stat_key) where d.threshold > l.max_value) = 0, 'práh žádného odznaku není nad věrohodnou mezí statistiky');
 
@@ -168,7 +168,7 @@ update public.game_badge_defs set xp = 1 where badge_id = 'rocket_ace';
 \ir ../game-records.sql
 select tt.ok(not exists (select 1 from public.game_badge_defs where badge_id = 'zz_zrusen') and not exists (select 1 from public.game_badge_unlocks where badge_id = 'zz_zrusen'), 'odznak mimo seznam zmizel i s odemčením');
 select tt.ok((select xp from public.game_badge_defs where badge_id = 'rocket_ace') = 100, 'změněná hodnota XP se vrátila podle souboru');
-select tt.ok((select count(*) from public.game_badge_defs) = 70 and (select count(*) from public.game_stat_limits) = 42, 'seznamy mají zase 70 a 42 položek');
+select tt.ok((select count(*) from public.game_badge_defs) = 82 and (select count(*) from public.game_stat_limits) = 46, 'seznamy mají zase 82 a 46 položek');
 select tt.ok(tt.gsnap() = :'before_rerun', 'rekordy a odemčené odznaky všech ostatních zůstaly beze změny');
 select tt.as_gu(1);
 select tt.ok(((public.my_game_progress())->>'xp')::int = 900, 'XP účtu 1 je po novém spuštění stejné (900)');

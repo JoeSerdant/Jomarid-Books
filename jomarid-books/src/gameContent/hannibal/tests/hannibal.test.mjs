@@ -66,3 +66,22 @@ test('SQL: server pozná hru hannibal pro uložený postup i Coiny', () => {
   const noComments = (f) => fs.readFileSync(path.join(SRC, '..', 'db', f), 'utf8').replace(/--[^\n]*/g, '');
   for (const f of ['game-saves.sql', 'game-coins.sql']) assert.match(noComments(f), /p_game_id not in \([^)]*'hannibal'[^)]*\)/, f);
 });
+
+test('rekordy: hra hlásí všechny čtyři statistiky z katalogu při každém uložení i při spuštění a prahy odznaků sedí na obsah hry', async () => {
+  const { GAME_CATALOG, GAME_BADGES, getStat } = await import('../../../gameRecords/catalog.js');
+  const reported = [...html.matchAll(/jomaridRecord\('([a-z_]+)',/g)].map((m) => m[1]).sort();
+  assert.deepEqual(reported, GAME_CATALOG.find((g) => g.id === 'hannibal').stats.map((s) => s.key).sort());
+  assert.match(html, /saveGame\(\) \{[\s\S]*?this\.reportRecords\(data\);\s*\},/, 'po každém uložení');
+  assert.match(html, /GameCampaign\.reportRecords\(GameCampaign\.readSave\(\) \|\| \{ nodes: \{\}, doctrines: \{\}, roster: \[\] \}\);/, 'při spuštění (postup z dřívějška)');
+  const map = html.slice(html.indexOf('const CAMPAIGN_MAP'));
+  const chapters = [...map.slice(0, map.indexOf('\n    };')).matchAll(/^\s{10}id: '(\w+)',$/gm)].length;
+  assert.equal(chapters, 11, 'kapitol v kampani');
+  const doctrines = [...html.matchAll(/^\s+([A-Z_]+):\s+\{ name: '[^']+', unlocked: false, cost: \d+/gm)].length;
+  const badge = (id) => GAME_BADGES.find((b) => b.id === id);
+  assert.equal(badge('han_ch11').threshold, chapters);
+  assert.equal(getStat('hannibal', 'chapters_completed').max, chapters);
+  assert.equal(getStat('hannibal', 'doctrines_unlocked').max, doctrines, 'všechny doktríny ve hře');
+  assert.equal(badge('han_doc6').threshold, doctrines);
+  assert.ok(badge('han_ch11').description.includes('všech 11 '));
+  assert.equal(GAME_BADGES.filter((b) => b.game === 'hannibal').length, 12);
+});

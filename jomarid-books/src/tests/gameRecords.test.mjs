@@ -40,7 +40,7 @@ test('id her v katalogu jsou stejná jako v Games.jsx a v mostech her', () => {
   assert.deepEqual(GAME_CATALOG.map((g) => g.title).sort(), [...games.matchAll(/^\s+title: '([^']+)',$/gm)].map((m) => m[1]).sort(), 'názvy her sedí s hubem');
 });
 
-test('XP herních odznaků: ve stejné statistice těžší odznak vždy dává víc, každý dává aspoň 30 XP, hry samy dovedou čtenáře zhruba na úroveň 12', () => {
+test('XP herních odznaků: ve stejné statistice těžší odznak vždy dává víc, každý dává aspoň 30 XP, hry samy dovedou čtenáře zhruba na úroveň 13', () => {
   const chains = new Map();
   for (const b of GAME_BADGES) { const k = `${b.game}.${b.stat}`; chains.set(k, [...(chains.get(k) || []), b]); }
   for (const [key, list] of chains) {
@@ -48,8 +48,8 @@ test('XP herních odznaků: ve stejné statistice těžší odznak vždy dává 
     for (let i = 1; i < sorted.length; i += 1) assert.ok(sorted[i].xp > sorted[i - 1].xp, `${key}: ${sorted[i].id} (${sorted[i].xp} XP) musí dávat víc než lehčí ${sorted[i - 1].id} (${sorted[i - 1].xp} XP)`);
   }
   for (const b of GAME_BADGES) assert.ok(b.xp >= 30 && b.xp % 10 === 0, `${b.id}: ${b.xp} XP`);
-  assert.equal(GAME_BADGES_TOTAL_XP, 12080);
-  assert.equal(calculateLevelAndProgress(GAME_BADGES_TOTAL_XP).level, 12);
+  assert.equal(GAME_BADGES_TOTAL_XP, 14040);
+  assert.equal(calculateLevelAndProgress(GAME_BADGES_TOTAL_XP).level, 13);
 });
 
 test('sumGameBadgeXp a pomocné funkce katalogu', () => {
@@ -237,6 +237,7 @@ test('každá hra hlásí všechny statistiky ze svého katalogu a ostatní hry 
     polygonarena: [read('gameContent', 'polygonArena', 'core.js')],
     cityclicker: [decode(['gameContent', 'cityClicker.js'])],
     warroom: [decode(['gameContent', 'warroom.js'])],
+    hannibal: [read('gameContent', 'hannibal', 'index.html')],
   };
   for (const g of GAME_CATALOG) {
     const text = sources[g.id].join('\n');
