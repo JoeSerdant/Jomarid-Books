@@ -14,6 +14,7 @@ Jak soubor spustit: na GitHubu ho otevři → **Copy raw file** → v Supabase o
 | `game-coins.sql` | Jomarid Coins z her: denní strop 100 na jednu hru (dřív 75) a žádný strop za všechny hry dohromady (dřív 150), Kouloví Kámoši mezi hrami, které smějí o Coiny žádat, a zůstatek připsaný jednou (dřív dvakrát). Nahrazuje funkci `award_game_coins`. |
 | `shorts.sql` | shortB: krátké knihy (do 6 000 znaků) ve feedu přizpůsobeném čtenáři. Nakladatel nebo správce shortB píše, čtenář je prochází a server si pamatuje, co dočetl, olajkoval nebo přeskočil (podle toho appka skládá feed). Žádný denní limit. |
 | `help-bot.sql` | Pomocník v appce (chat): tabulka s počtem dnešních otázek na uživatele a funkce `help_bot_take` / `help_bot_refund`, kterými Edge Function `help-bot` hlídá denní limit. Nasazení funkce: [`ai/README.md`](ai/README.md). |
+| `leaderboard-streaks.sql` | Série čtení ostatních v žebříčku (Statistiky → Síň slávy): funkce `leaderboard_streaks` vrací vyhodnocenou sérii a dny zachráněné pojistkou (Streak Freeze), podle toho se série počítá stejně jako ta tvoje. Bez ní se série ostatních počítá jen ze dnů čtení a čtenáři s pojistkou vychází 0. |
 
 Pomocník v appce (chat) má denní limit otázek v `help-bot.sql`. AI pomocníci (shortB a chat) jsou Edge Functions, ne SQL: nastavení a nasazení je v [`ai/README.md`](ai/README.md).
 
@@ -29,6 +30,8 @@ Pomocník v appce (chat) má denní limit otázek v `help-bot.sql`. AI pomocníc
 7. `shorts.sql`. Potřebuje jen tabulku `profiles` (sloupce `id`, `role`, `username`, `pen_name`), na ostatních souborech nezávisí. Zakládá tabulky `shorts` (text je přímo v tabulce, ne ve Storage) a `short_progress` (co čtenář s kterým shortB udělal) a funkce pro psaní (`short_save`, `short_set_hidden`, `short_delete`, `my_shorts`), nabídku do feedu (`shorts_candidates`, `shorts_get`) a hlášení čtení (`short_report`, `my_short_signals`). Psát smí role `nakladatel` a `správce`; čtou všichni přihlášení (skrytý shortB jen autor a správce). Klienti k tabulkám nesahají přímo. Dokud neběží, appka funguje jako dřív: shortB se jen neukážou. Znovu ho spusť jen po změně souboru (meze 6 000 znaků textu, 120 názvu a 80 série jsou i v `src/shorts/shortsModel.js`, test `npm run test:shorts` hlídá, že si odpovídají).
 
 8. `help-bot.sql`. Potřebuje jen tabulku `profiles` (sloupec `id`), na ostatních souborech nezávisí. Zakládá tabulku `help_bot_usage` (zavřená klientům) a funkce `help_bot_take` a `help_bot_refund` (smí je volat jen přihlášený). Spusť ho **před** nasazením Edge Function `help-bot`, jinak funkce pomocníkovi odpoví, že nejde ověřit denní limit.
+
+9. `leaderboard-streaks.sql`. Potřebuje jen tabulku `profiles` (sloupce `id`, `current_streak`, `frozen_dates`, `show_in_leaderboard`), na ostatních souborech nezávisí. Zakládá jedinou funkci `leaderboard_streaks()` (smí ji volat jen přihlášený, vrací jen čtenáře, kteří smějí být v žebříčku, bez e-mailů a dalších údajů), žádná tabulka ani data se nemění. Jde ho spustit před nasazením nové verze appky i po něm; dokud neběží, appka funguje jako dřív: série ostatních v žebříčku se počítá jen ze dnů čtení. Znovu ho spusť jen po změně souboru.
 
 Po `email-change.sql` se v appce nic dalšího nenastavuje. Znovu ho spusť jen po změně souboru. Jde ho spustit před nasazením nové verze appky i po něm; dokud neběží, Nastavení u změny e-mailu ukáže, že je dočasně nedostupná.
 
