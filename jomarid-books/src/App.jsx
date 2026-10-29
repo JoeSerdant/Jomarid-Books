@@ -5,6 +5,7 @@ import { SettingsSyncRunner } from './settings/SettingsSyncRunner';
 import { SETTINGS_APPLIED, notifySettingsChanged } from './settings/settingsEvents';
 import { ThemeContext, AuthProvider, ProtectedAdminRoute, ProtectedUserRoute, useAuth } from './contexts/AuthContext';
 import { Navbar } from './components/Navbar';
+import { OfflineBar } from './offline/OfflineBar';
 import { SettingsPage } from './components/SettingsModal';
 import { TourProvider } from './tour/TourProvider';
 import { SearchModal } from './components/SearchModal';
@@ -123,6 +124,7 @@ export default function App() {
           <div style={{ background: 'var(--bg-body)', color: 'var(--text-body)' }} className="min-h-screen flex flex-col font-sans antialiased transition-all duration-200">
             <RecoveryRedirect />
             <Navbar onOpenSearch={() => setIsSearchOpen(true)} />
+            <OfflineBar />
 
             <main className="flex-1">
               <PageErrorBoundary>

@@ -1,7 +1,9 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseUrl, supabaseKey } from '../lib/supabase';
+import { loginWithCode as loginWithCodeApi } from '../offline/loginCode';
+import { clearCachedProfiles, clearStoredSession, isNetworkProblem, readCachedProfile, readStoredSession, runLogoutCleanups, writeCachedProfile } from '../offline/session';
 import { clearPersonalBrowseState } from '../browse/browseStore';
 import { cleanupOnLogout } from '../push/pushClient';
 import { ROLE_READER, ROLE_ADMIN } from '../constants/roles';
@@ -35,6 +37,10 @@ export function AuthProvider({ children }) {
  const [mustChange, setMustChange] = useState(false);
  // dvojice "e-mail v relaci | e-mail v profilu", pro kterou už se obnovení relace zkusilo (aby se to nikdy nezacyklilo)
  const emailRefreshTried = useRef('');
+ // true, když je čtenář přihlášený jen podle relace uložené v zařízení, protože se ji bez internetu nepodařilo obnovit (viz offline/session.js)
+ const [offline, setOffline] = useState(false);
+ const offlineRef = useRef(false);
+ offlineRef.current = offline;
 
  async function syncProfile(sessionUser) {
    if (!sessionUser) {
@@ -77,6 +83,7 @@ export function AuthProvider({ children }) {
        setRole(data?.role || ROLE_READER);
        setUsername(data?.username || (sessionUser.email ? sessionUser.email.split('@')[0] : ''));
        setMustChange(!!data?.must_change_password);
+       writeCachedProfile(sessionUser.id, { role: data?.role || ROLE_READER, username: data?.username || (sessionUser.email ? sessionUser.email.split('@')[0] : '') });
        if (data?.email && !sameEmail(data.email, sessionUser.email)) refreshStaleSessionEmail(emailRefreshTried, data.email, sessionUser.email);
      }
    } catch (catchedError) {
@@ -87,17 +94,43 @@ export function AuthProvider({ children }) {
  }
 
  useEffect(() => {
-   supabase.auth.getSession().then(({ data: { session } }) => {
-     syncProfile(session?.user ?? null);
-   });
+   let alive = true;
+
+   // Bez internetu se uložená relace nedá obnovit a getSession() vrátí prázdno: čtenář pak zůstane přihlášený podle uložené relace
+   // (bez ní by ho appka odhlásila jen proto, že je offline). Po připojení Supabase relaci obnoví sám a přijde událost s plnou relací.
+   const boot = async () => {
+     let session = null;
+     let err = null;
+     try { const res = await supabase.auth.getSession(); session = res.data?.session ?? null; err = res.error ?? null; } catch (e) { err = e; }
+     if (!alive) return;
+     if (session?.user) { setOffline(false); syncProfile(session.user); return; }
+     const stored = readStoredSession(supabaseUrl);
+     if (stored && ((typeof navigator !== 'undefined' && navigator.onLine === false) || isNetworkProblem(err))) {
+       const cached = readCachedProfile(stored.user.id);
+       setUser(stored.user);
+       setRole(cached?.role ?? null);
+       setUsername(cached?.username || (stored.user.email ? stored.user.email.split('@')[0] : ''));
+       setMustChange(false);
+       setOffline(true);
+       setLoading(false);
+       return;
+     }
+     setOffline(false);
+     syncProfile(null);
+   };
+   boot();
 
    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
      if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
      if (event === 'SIGNED_OUT') { setRecoveryMode(false); clearPersonalBrowseState(); }
+     if (session?.user || event === 'SIGNED_OUT') setOffline(false);
      syncProfile(session?.user ?? null);
    });
 
-   return () => subscription.unsubscribe();
+   const onOnline = () => { if (offlineRef.current) boot(); };
+   window.addEventListener('online', onOnline);
+
+   return () => { alive = false; subscription.unsubscribe(); window.removeEventListener('online', onOnline); };
  }, []);
 
  const login = async (email, password) => {
@@ -106,10 +139,21 @@ export function AuthProvider({ children }) {
    return data;
  };
 
+ // Přihlášení přihlašovacím kódem místo hesla (Nastavení -> Zabezpečení, db/login-code.sql); dokončí ho událost SIGNED_IN
+ const loginWithCode = (code) => loginWithCodeApi(supabase, { url: supabaseUrl, key: supabaseKey }, code);
+
  const logout = async () => {
    clearPersonalBrowseState(); // hledání a filtry z knihovny nemají po odhlášení zůstat v kartě
-   await cleanupOnLogout({ client: supabase, nav: navigator, win: window }); // zařízení nemá dál dostávat oznámení odhlášeného účtu
-   await supabase.auth.signOut();
+   await runLogoutCleanups(); // stažené knihy a fronta změn nesmí po odhlášení zůstat na zařízení
+   try { await cleanupOnLogout({ client: supabase, nav: navigator, win: window }); } catch (e) { console.error('Úklid oznámení při odhlášení selhal:', e); } // zařízení nemá dál dostávat oznámení odhlášeného účtu
+   let failed = null;
+   try { const res = await supabase.auth.signOut(); failed = res?.error ?? null; } catch (e) { failed = e; }
+   if (failed) {
+     // Bez internetu signOut() relaci nesmaže: odhlášení se dokončí ručně (jinak by čtenář zůstal přihlášený podle uložené relace).
+     clearStoredSession(supabaseUrl);
+   }
+   clearCachedProfiles();
+   if (failed || offlineRef.current) { setUser(null); setRole(null); setUsername(''); setMustChange(false); setOffline(false); }
  };
 
  // Knihovna si při odpojení ještě dopíše rozdělaný stav (poslední posun stránky), a to by přepsalo předchozí mazání.
@@ -119,7 +163,7 @@ export function AuthProvider({ children }) {
  }, [user, loading]);
 
  return (
-   <AuthContext.Provider value={{ user, role, loading, login, logout, username, mustChangePassword: mustChange, recoveryMode: recoveryMode || mustChange, clearRecovery: () => { setRecoveryMode(false); setMustChange(false); }, refreshProfile: () => syncProfile(user) }}>
+   <AuthContext.Provider value={{ user, role, loading, offline, login, loginWithCode, logout, username, mustChangePassword: mustChange, recoveryMode: recoveryMode || mustChange, clearRecovery: () => { setRecoveryMode(false); setMustChange(false); }, refreshProfile: () => syncProfile(user) }}>
      {children}
    </AuthContext.Provider>
  );

@@ -5,6 +5,7 @@ drop schema if exists auth cascade; drop schema if exists net cascade; drop sche
 do $$ begin
   if not exists (select 1 from pg_roles where rolname = 'anon') then create role anon nologin; end if;
   if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated nologin; end if;
+  if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role nologin; end if;
 end $$;
 grant usage on schema public to anon, authenticated;
 -- Jako v Supabase: nové funkce v public smí zavolat anon i authenticated, dokud jim to 'revoke' nevezme (test pak pozná, když revoke anon chybí).

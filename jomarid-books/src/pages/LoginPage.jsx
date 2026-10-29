@@ -5,6 +5,7 @@ import { supabase, validateNewPassword, mapAuthError } from '../lib/supabase';
 import { Button, Card } from '../components/ui';
 import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import { USERNAME_RE, USERNAME_MIN, USERNAME_MAX } from '../lib/username';
+import { CodeLoginError } from '../offline/loginCode';
 
 const INPUT_STYLE = { backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' };
 const INPUT_CLASS = 'w-full p-3 border rounded-lg text-sm font-bold outline-none transition-colors placeholder:opacity-50';
@@ -22,8 +23,8 @@ const NAME_HINTS = {
 const ACCOUNT_EXISTS_TEXT = 'Účet s tímto e-mailem už existuje. Přihlas se, nebo si na přihlášení vyber „Zapomenuté heslo“.';
 const NO_MAIL_HINT = 'Nic nepřišlo? Mrkni do spamu a hromadné pošty, e-mail může dorazit i za pár minut.';
 
-const TITLES = { login: 'Vstup do čítárny', signup: 'Vytvořit nový účet', forgot: 'Zapomenuté heslo' };
-const SUBMIT_LABELS = { login: 'Odemknout čítárnu', signup: 'Zaregistrovat se', forgot: 'Poslat žádost správci' };
+const TITLES = { login: 'Vstup do čítárny', code: 'Přihlášení kódem', signup: 'Vytvořit nový účet', forgot: 'Zapomenuté heslo' };
+const SUBMIT_LABELS = { login: 'Odemknout čítárnu', code: 'Odemknout kódem', signup: 'Zaregistrovat se', forgot: 'Poslat žádost správci' };
 
 // Hláška podle toho, CO se doopravdy stalo: nepotvrzený e-mail se uživateli
 // nesmí zobrazit stejně jako překlep v hesle.
@@ -35,15 +36,16 @@ const loginErrorText = (err) => {
 };
 
 export const LoginPage = () => {
-  const [mode, setMode] = useState('login'); // 'login' | 'signup' | 'forgot'
+  const [mode, setMode] = useState('login'); // 'login' | 'code' | 'signup' | 'forgot'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
   const [username, setUsername] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login, user } = useAuth();
+  const { login, loginWithCode, user } = useAuth();
   const navigate = useNavigate();
   const [nameCheck, setNameCheck] = useState('idle'); // idle | checking | available | taken | reserved | invalid | error
 
@@ -65,7 +67,7 @@ export const LoginPage = () => {
 
   if (user) return <Navigate to="/app" replace />;
 
-  const switchMode = (next) => { setMode(next); setError(''); setNotice(''); setUsername(''); setNote(''); };
+  const switchMode = (next) => { setMode(next); setError(''); setNotice(''); setUsername(''); setNote(''); setCode(''); };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -103,13 +105,18 @@ export const LoginPage = () => {
         setNotice('Žádost je odeslaná správci. Pokud e-mail i uživatelské jméno sedí, správce ti vydá dočasné heslo a předá ti ho mimo aplikaci. Po přihlášení si nastavíš vlastní. Odpověď může chvíli trvat, žádost neposílej víckrát.');
         setUsername('');
         setNote('');
+      } else if (mode === 'code') {
+        await loginWithCode(code);
+        navigate('/app');
       } else {
         await login(email, password);
         navigate('/app');
       }
     } catch (err) {
       const msg = String(err?.message || '').toLowerCase();
-      if (mode === 'signup') {
+      if (mode === 'code') {
+        setError(err instanceof CodeLoginError ? err.message : 'Přihlášení kódem se nepovedlo. Zkus to znovu, nebo se přihlas heslem.');
+      } else if (mode === 'signup') {
         setError(msg.includes('already registered') || msg.includes('already been registered')
           ? ACCOUNT_EXISTS_TEXT
           : mapAuthError(err));
@@ -133,14 +140,32 @@ export const LoginPage = () => {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <input type="email" placeholder="E-mailová adresa" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" style={INPUT_STYLE} className={INPUT_CLASS} required />
+          {mode === 'code' && (
+            <input
+              type="text"
+              placeholder="Přihlašovací kód"
+              aria-label="Přihlašovací kód"
+              value={code}
+              onChange={e => setCode(e.target.value)}
+              autoComplete="off"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+              inputMode="text"
+              data-testid="login-code-input"
+              style={{ ...INPUT_STYLE, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', letterSpacing: '0.05em' }}
+              className={INPUT_CLASS}
+              required
+            />
+          )}
+          {mode !== 'code' && <input type="email" placeholder="E-mailová adresa" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" style={INPUT_STYLE} className={INPUT_CLASS} required />}
           {mode === 'forgot' && (
             <>
               <input type="text" placeholder="Uživatelské jméno" value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} maxLength={USERNAME_MAX} style={INPUT_STYLE} className={INPUT_CLASS} required />
               <textarea placeholder="Vzkaz pro správce (nepovinné): jak tě pozná, kde ti může odpovědět..." value={note} onChange={e => setNote(e.target.value)} rows={3} maxLength={500} style={INPUT_STYLE} className={`${INPUT_CLASS} resize-none font-medium`} />
             </>
           )}
-          {mode !== 'forgot' && (
+          {mode !== 'forgot' && mode !== 'code' && (
             <input
               type="password"
               placeholder={mode === 'signup' ? 'Zvol si heslo' : 'Přístupové heslo'}
@@ -173,17 +198,30 @@ export const LoginPage = () => {
 
         <div style={{ borderColor: 'var(--border-color)' }} className="mt-4 pt-4 border-t text-center space-y-2">
           {mode === 'login' && (
+            <button type="button" onClick={() => switchMode('code')} data-testid="login-with-code" style={{ color: 'var(--text-body)' }} className="block w-full text-xs font-bold hover:underline bg-transparent border-none cursor-pointer">
+              Přihlásit se kódem místo hesla
+            </button>
+          )}
+          {mode === 'code' && (
+            <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] m-0 opacity-80">Kód si vygeneruješ v Nastavení po přihlášení heslem. Na tomhle zařízení pak zůstaneš přihlášený i bez internetu, dokud se sám neodhlásíš.</p>
+          )}
+          {mode === 'login' && (
             <button type="button" onClick={() => switchMode('forgot')} style={{ color: 'var(--text-muted)' }} className="block w-full text-xs font-bold hover:underline bg-transparent border-none cursor-pointer">
               Zapomenuté heslo?
             </button>
           )}
+          {mode === 'code' && (
+            <button type="button" onClick={() => switchMode('login')} style={{ color: 'var(--text-muted)' }} className="block w-full text-xs font-bold hover:underline bg-transparent border-none cursor-pointer">
+              Přihlásit se e-mailem a heslem
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => switchMode(mode === 'signup' ? 'login' : mode === 'forgot' ? 'login' : 'signup')}
+            onClick={() => switchMode(mode === 'signup' ? 'login' : mode === 'forgot' ? 'login' : mode === 'code' ? 'signup' : 'signup')}
             style={{ color: 'var(--bg-primary)' }}
             className="block w-full text-xs font-bold hover:underline bg-transparent border-none cursor-pointer tracking-wide uppercase"
           >
-            {mode === 'login' ? 'Nemáš účet? Zaregistruj se zde' : mode === 'signup' ? 'Už máš účet? Přihlas se' : 'Zpět na přihlášení'}
+            {mode === 'login' || mode === 'code' ? 'Nemáš účet? Zaregistruj se zde' : mode === 'signup' ? 'Už máš účet? Přihlas se' : 'Zpět na přihlášení'}
           </button>
         </div>
       </Card>
