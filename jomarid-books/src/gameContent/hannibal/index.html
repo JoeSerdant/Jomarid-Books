@@ -350,65 +350,65 @@
 <body>
 
   <script>/* JOMARID-BRIDGE */
-  (function () {
-    var GAME_ID = 'hannibal';
-    var inFrame = false;
-    try { inFrame = !!window.parent && window.parent !== window; } catch (e) { inFrame = false; }
-    var pending = 0, reasons = {}, timer = null;
-  
-    function flush() {
-      timer = null;
-      if (!pending || !inFrame) { pending = 0; reasons = {}; return; }
-      var top = 'event', topAmt = 0;
-      for (var k in reasons) { if (reasons[k] > topAmt) { top = k; topAmt = reasons[k]; } }
-      var amount = pending; pending = 0; reasons = {};
-      try { window.parent.postMessage({ source: 'jomarid-game', type: 'coin', game: GAME_ID, amount: amount, reason: top }, '*'); } catch (e) {}
+(function () {
+  var GAME_ID = 'hannibal';
+  var inFrame = false;
+  try { inFrame = !!window.parent && window.parent !== window; } catch (e) { inFrame = false; }
+  var pending = 0, reasons = {}, timer = null;
+
+  function flush() {
+    timer = null;
+    if (!pending || !inFrame) { pending = 0; reasons = {}; return; }
+    var top = 'event', topAmt = 0;
+    for (var k in reasons) { if (reasons[k] > topAmt) { top = k; topAmt = reasons[k]; } }
+    var amount = pending; pending = 0; reasons = {};
+    try { window.parent.postMessage({ source: 'jomarid-game', type: 'coin', game: GAME_ID, amount: amount, reason: top }, '*'); } catch (e) {}
+  }
+
+  // Hra jen POSILA ZADOST o odmenu - o tom, kolik Jomarid Coins se skutecne udeli,
+  // rozhoduje server (denni stropy). Vice udalosti v rychlem sledu se sloucí do jedne zpravy.
+  // Potvrzení odměny (kolik se skutečně připsalo) ukazuje lišta appky nad hrou, hra samotná nic nezobrazuje.
+  window.jomaridReward = function (reason, amount, immediate) {
+    if (!inFrame) return;
+    amount = Math.floor(Number(amount));
+    if (!isFinite(amount) || amount < 1) return;
+    var r = reason || 'event';
+    pending += amount;
+    reasons[r] = (reasons[r] || 0) + amount;
+    if (immediate) { if (timer) clearTimeout(timer); flush(); }
+    else if (!timer) { timer = setTimeout(flush, 1200); }
+  };
+
+  // Rekordy hry (nejlepší skóre, nejvyšší úroveň...): hra jen hlásí aktuální hodnotu, o zápisu a odznacích rozhoduje server.
+  // Hlásí se jen zvýšení oproti naposledy odeslanému (stejná nebo nižší hodnota se neposílá znovu) a víc hlášení v rychlém sledu se sloučí.
+  var recSent = {}, recPending = {}, recTimer = null;
+  function recFlush() {
+    recTimer = null;
+    var pend = recPending; recPending = {};
+    if (!inFrame) return;
+    for (var k in pend) {
+      if (pend[k] <= (recSent[k] || 0)) continue;
+      recSent[k] = pend[k];
+      try { window.parent.postMessage({ source: 'jomarid-game', type: 'record', game: GAME_ID, stat: k, value: pend[k] }, '*'); } catch (e) {}
     }
-  
-    // Hra jen POSILA ZADOST o odmenu - o tom, kolik Jomarid Coins se skutecne udeli,
-    // rozhoduje server (denni stropy). Vice udalosti v rychlem sledu se sloucí do jedne zpravy.
-    // Potvrzení odměny (kolik se skutečně připsalo) ukazuje lišta appky nad hrou, hra samotná nic nezobrazuje.
-    window.jomaridReward = function (reason, amount, immediate) {
-      if (!inFrame) return;
-      amount = Math.floor(Number(amount));
-      if (!isFinite(amount) || amount < 1) return;
-      var r = reason || 'event';
-      pending += amount;
-      reasons[r] = (reasons[r] || 0) + amount;
-      if (immediate) { if (timer) clearTimeout(timer); flush(); }
-      else if (!timer) { timer = setTimeout(flush, 1200); }
-    };
-  
-    // Rekordy hry (nejlepší skóre, nejvyšší úroveň...): hra jen hlásí aktuální hodnotu, o zápisu a odznacích rozhoduje server.
-    // Hlásí se jen zvýšení oproti naposledy odeslanému (stejná nebo nižší hodnota se neposílá znovu) a víc hlášení v rychlém sledu se sloučí.
-    var recSent = {}, recPending = {}, recTimer = null;
-    function recFlush() {
-      recTimer = null;
-      var pend = recPending; recPending = {};
-      if (!inFrame) return;
-      for (var k in pend) {
-        if (pend[k] <= (recSent[k] || 0)) continue;
-        recSent[k] = pend[k];
-        try { window.parent.postMessage({ source: 'jomarid-game', type: 'record', game: GAME_ID, stat: k, value: pend[k] }, '*'); } catch (e) {}
-      }
-    }
-    window.jomaridRecord = function (stat, value, immediate) {
-      if (!inFrame || typeof stat !== 'string') return;
-      value = Math.floor(Number(value));
-      if (!isFinite(value) || value < 1) return;
-      if (value <= (recSent[stat] || 0) || value <= (recPending[stat] || 0)) return;
-      recPending[stat] = value;
-      if (immediate) { if (recTimer) clearTimeout(recTimer); recFlush(); }
-      else if (!recTimer) { recTimer = setTimeout(recFlush, 1500); }
-    };
-  
-    window.addEventListener('pagehide', function () { if (timer) clearTimeout(timer); flush(); if (recTimer) clearTimeout(recTimer); recFlush(); });
-    document.addEventListener('click', function (e) {
-      var t = e.target && e.target.closest ? e.target.closest('#btn-back-to-jomarid') : null;
-      if (t) { if (timer) clearTimeout(timer); flush(); if (recTimer) clearTimeout(recTimer); recFlush(); }
-    }, true);
-  })();
-  </script>
+  }
+  window.jomaridRecord = function (stat, value, immediate) {
+    if (!inFrame || typeof stat !== 'string') return;
+    value = Math.floor(Number(value));
+    if (!isFinite(value) || value < 1) return;
+    if (value <= (recSent[stat] || 0) || value <= (recPending[stat] || 0)) return;
+    recPending[stat] = value;
+    if (immediate) { if (recTimer) clearTimeout(recTimer); recFlush(); }
+    else if (!recTimer) { recTimer = setTimeout(recFlush, 1500); }
+  };
+
+  window.addEventListener('pagehide', function () { if (timer) clearTimeout(timer); flush(); if (recTimer) clearTimeout(recTimer); recFlush(); });
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target.closest('#btn-back-to-jomarid') : null;
+    if (t) { if (timer) clearTimeout(timer); flush(); if (recTimer) clearTimeout(recTimer); recFlush(); }
+  }, true);
+})();
+</script>
 
 
   <!-- AUDIO SYNTHESIS ENGINE (NO EXTERNAL FILES NEEDED) -->
