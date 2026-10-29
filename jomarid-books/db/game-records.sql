@@ -6,7 +6,7 @@
 --
 -- Důvěra: hry běží v prohlížeči, takže hlášená hodnota jde podvrhnout (stejně jako uložený postup ve hře). Server proto přijme jen
 -- známé statistiky, celá nezáporná čísla do věrohodné meze a nikdy hodnotu nesníží. Odznaky za hry dávají jen XP (ne mince), dohromady
--- 12080 XP: čím těžší odznak ve stejné statistice, tím víc XP. XP se přičítá k úrovni čtenáře, ale odznaky za úroveň (a s nimi mince)
+-- 14040 XP: čím těžší odznak ve stejné statistice, tím víc XP. XP se přičítá k úrovni čtenáře, ale odznaky za úroveň (a s nimi mince)
 -- se z něj nevyhodnocují. Seznam statistik a odznaků je i v appce (src/gameRecords/catalog.js);
 -- test src/tests/gameRecords.test.mjs hlídá, že si odpovídají.
 
@@ -99,7 +99,11 @@ insert into public.game_stat_limits (game_id, stat_key, max_value) values
   ('koulovikamosi', 'score_time', 50000000),
   ('koulovikamosi', 'score_drops', 50000000),
   ('koulovikamosi', 'score_chaos', 50000000),
-  ('koulovikamosi', 'balls_discovered', 12)
+  ('koulovikamosi', 'balls_discovered', 12),
+  ('hannibal', 'endless_wave', 1000),
+  ('hannibal', 'chapters_completed', 11),
+  ('hannibal', 'doctrines_unlocked', 6),
+  ('hannibal', 'top_unit_level', 1000)
 on conflict (game_id, stat_key) do update set max_value = excluded.max_value;
 
 with seed (badge_id, game_id, stat_key, threshold, xp) as (values
@@ -172,7 +176,19 @@ with seed (badge_id, game_id, stat_key, threshold, xp) as (values
   ('war_scen4', 'warroom', 'scenarios_unlocked', 4, 250),
   ('war_scen12', 'warroom', 'scenarios_unlocked', 12, 500),
   ('war_scen24', 'warroom', 'scenarios_unlocked', 24, 800),
-  ('war_sector15', 'warroom', 'best_sector', 15, 200)
+  ('war_sector15', 'warroom', 'best_sector', 15, 200),
+  ('han_ch1', 'hannibal', 'chapters_completed', 1, 50),
+  ('han_ch4', 'hannibal', 'chapters_completed', 4, 100),
+  ('han_ch8', 'hannibal', 'chapters_completed', 8, 200),
+  ('han_ch11', 'hannibal', 'chapters_completed', 11, 400),
+  ('han_doc1', 'hannibal', 'doctrines_unlocked', 1, 50),
+  ('han_doc3', 'hannibal', 'doctrines_unlocked', 3, 100),
+  ('han_doc6', 'hannibal', 'doctrines_unlocked', 6, 250),
+  ('han_wave5', 'hannibal', 'endless_wave', 5, 80),
+  ('han_wave10', 'hannibal', 'endless_wave', 10, 150),
+  ('han_wave20', 'hannibal', 'endless_wave', 20, 300),
+  ('han_lvl5', 'hannibal', 'top_unit_level', 5, 80),
+  ('han_lvl10', 'hannibal', 'top_unit_level', 10, 200)
 ), upserted as (
   insert into public.game_badge_defs (badge_id, game_id, stat_key, threshold, xp)
   select badge_id, game_id, stat_key, threshold, xp from seed

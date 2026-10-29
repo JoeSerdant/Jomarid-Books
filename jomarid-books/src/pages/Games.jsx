@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, supabaseUrl, supabaseKey } from '../lib/supabase';
 import { friendlyError } from '../lib/friendlyError';
-import { Coins, Loader2, Rocket, Swords, Building2, Target, Crown, Smile, Lock } from 'lucide-react';
+import { plural } from '../lib/plural';
+import { Coins, Loader2, Rocket, Swords, Building2, Target, Crown, Smile, Lock, Castle, Folder, FolderOpen } from 'lucide-react';
 import { GameBar } from '../components/GameBar';
 import { useReaderSnapshot } from '../gameBar/useReaderSnapshot';
 import { rewardLabel, REWARD_LIMIT_NOTE } from '../gameBar/rewardLabels';
@@ -31,7 +32,16 @@ const GAMES = [
     title: 'Warroom: Frontlines',
     tagline: 'Velitelská taktická hra - řiď frontu, jednotky a zdroje ve velitelském stanu.',
     icon: Swords,
+    folder: 'strategy',
     load: () => import('../gameContent/warroom').then(m => m.WARROOM_HTML),
+  },
+  {
+    id: 'hannibal',
+    title: 'Hannibal: Barca',
+    tagline: 'Taktická kampaň druhé punské války - vedeš Hannibala od Sagunta až k Zamě, v bitvách na čtvercové síti, minihrách i nekonečném tažení.',
+    icon: Castle,
+    folder: 'strategy',
+    load: () => import('../gameContent/hannibalGame').then(m => m.HANNIBAL_HTML),
   },
   {
     id: 'cityclicker',
@@ -62,6 +72,11 @@ const GAMES = [
     load: () => import('../gameContent/koulovi').then(m => m.KOULOVI_HTML),
   },
   // Další hra se přidá jako další objekt v tomhle poli.
+];
+
+// Složky v seznamu her: hra s `folder: 'klíč'` se v seznamu neukazuje sama, ale uvnitř složky (karta složky otevře seznam her pod mřížkou).
+const FOLDERS = [
+  { key: 'strategy', title: 'Strategie', tagline: 'Taktické hry: veď armády, frontu a zdroje.' },
 ];
 
 // Kolik milisekund musí být hra otevřená, než se hráči vůbec odemkne
@@ -366,8 +381,8 @@ export const GameLauncher = ({ game }) => {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-16 text-center animate-in fade-in duration-300">
-      <Link to="/games" className="text-[0.625rem] font-black uppercase tracking-wider no-underline opacity-50 hover:opacity-100 transition-all inline-flex items-center gap-1 mb-6" style={{ color: 'var(--text-body)' }}>
-        ← Všechny hry
+      <Link to={game.folder ? `/games?slozka=${game.folder}` : '/games'} className="text-[0.625rem] font-black uppercase tracking-wider no-underline opacity-50 hover:opacity-100 transition-all inline-flex items-center gap-1 mb-6" style={{ color: 'var(--text-body)' }}>
+        ← {game.folder ? `Složka ${FOLDERS.find(f => f.key === game.folder)?.title || 'her'}` : 'Všechny hry'}
       </Link>
       <div 
         style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} 
@@ -468,7 +483,33 @@ export const GameLauncher = ({ game }) => {
 };
 
 
+// Karta hry v seznamu (samostatná i uvnitř složky).
+const GameCard = ({ game }) => {
+  const GameIcon = game.icon;
+  return (
+    <Link
+      to={`/games/${game.id}`}
+      data-testid={`game-link-${game.id}`}
+      style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}
+      className="border rounded-2xl p-3 sm:p-6 flex flex-col items-center text-center gap-2 sm:gap-3 no-underline hover:shadow-lg transition-all"
+    >
+      <div className="w-12 h-12 sm:w-16 sm:h-16 bg-purple-500/10 text-purple-500 rounded-full flex items-center justify-center">
+        <GameIcon className="w-6 h-6 sm:w-[30px] sm:h-[30px]" />
+      </div>
+      <h3 className="font-black uppercase text-xs sm:text-sm tracking-tight m-0" style={{ color: 'var(--text-body)' }}>{game.title}</h3>
+      <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] sm:text-xs m-0 line-clamp-3 sm:line-clamp-none">{game.tagline}</p>
+    </Link>
+  );
+};
+
 export const GamesHub = () => {
+  // Otevřená složka je v adrese (?slozka=strategy), ať se po návratu ze hry zase ukáže otevřená.
+  const [params, setParams] = useSearchParams();
+  const openKey = FOLDERS.some(f => f.key === params.get('slozka')) ? params.get('slozka') : null;
+  const toggleFolder = (key) => setParams(openKey === key ? {} : { slozka: key }, { replace: true });
+  const loose = GAMES.filter(g => !g.folder);
+  const openFolder = FOLDERS.find(f => f.key === openKey);
+  const openGames = openFolder ? GAMES.filter(g => g.folder === openFolder.key) : [];
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 sm:py-16 animate-in fade-in duration-300">
       <div className="text-center mb-6 sm:mb-10">
@@ -477,24 +518,46 @@ export const GamesHub = () => {
       </div>
       {/* Na telefonu dva sloupce s kompaktními kartami (pět her pod sebou zabíralo přes 1000 px). */}
       <div className="grid grid-cols-2 gap-3 sm:gap-6">
-        {GAMES.map(game => {
-          const GameIcon = game.icon;
+        {loose.map(game => <GameCard key={game.id} game={game} />)}
+        {FOLDERS.map(folder => {
+          const inside = GAMES.filter(g => g.folder === folder.key);
+          if (inside.length === 0) return null;
+          const open = folder.key === openKey;
+          const FolderIcon = open ? FolderOpen : Folder;
           return (
-            <Link
-              key={game.id}
-              to={`/games/${game.id}`}
-              style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}
-              className="border rounded-2xl p-3 sm:p-6 flex flex-col items-center text-center gap-2 sm:gap-3 no-underline hover:shadow-lg transition-all"
+            <button
+              key={folder.key}
+              type="button"
+              onClick={() => toggleFolder(folder.key)}
+              aria-expanded={open}
+              aria-controls={`folder-${folder.key}`}
+              data-testid={`folder-${folder.key}`}
+              style={{ backgroundColor: open ? 'var(--bg-badge)' : 'var(--bg-card)', borderColor: open ? 'var(--bg-primary)' : 'var(--border-color)' }}
+              className="border rounded-2xl p-3 sm:p-6 flex flex-col items-center text-center gap-2 sm:gap-3 cursor-pointer hover:shadow-lg transition-all"
             >
-              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-purple-500/10 text-purple-500 rounded-full flex items-center justify-center">
-                <GameIcon className="w-6 h-6 sm:w-[30px] sm:h-[30px]" />
+              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center">
+                <FolderIcon className="w-6 h-6 sm:w-[30px] sm:h-[30px]" />
               </div>
-              <h3 className="font-black uppercase text-xs sm:text-sm tracking-tight m-0" style={{ color: 'var(--text-body)' }}>{game.title}</h3>
-              <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] sm:text-xs m-0 line-clamp-3 sm:line-clamp-none">{game.tagline}</p>
-            </Link>
+              <h3 className="font-black uppercase text-xs sm:text-sm tracking-tight m-0" style={{ color: 'var(--text-body)' }}>{folder.title}</h3>
+              <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] sm:text-xs m-0">{folder.tagline}</p>
+              <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider flex items-center gap-1.5">
+                {inside.map(g => { const I = g.icon; return <I key={g.id} size={12} aria-hidden="true" />; })}
+                {inside.length} {plural(inside.length, 'hra', 'hry', 'her')}
+              </span>
+            </button>
           );
         })}
       </div>
+      {openFolder && (
+        <div id={`folder-${openFolder.key}`} data-testid={`folder-games-${openFolder.key}`} role="region" aria-label={`Složka ${openFolder.title}`} className="mt-6 sm:mt-10">
+          <h2 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider text-center mb-3 sm:mb-4 flex items-center justify-center gap-1.5">
+            <FolderOpen size={14} aria-hidden="true" /> {openFolder.title}
+          </h2>
+          <div className="grid grid-cols-2 gap-3 sm:gap-6">
+            {openGames.map(game => <GameCard key={game.id} game={game} />)}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

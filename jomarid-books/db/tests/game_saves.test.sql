@@ -61,6 +61,7 @@ select tt.ok(tt.save(1, 'rocket', '{}', 3)->>'ok' = 'true' and tt.load(1, 'rocke
 select tt.ok(tt.save(1, 'chess', '{"chessLeague.save.v1": "{}"}', 0)->>'rev' = '1' and tt.load(1, 'rocket')->>'rev' = '4', 'každá hra má vlastní postup i vlastní revizi');
 select tt.ok(tt.save(1, 'koulovikamosi', '{"a": "{\"x\": [1,2,3]}", "b": "ěščřžýáíé 🙂 x"}', 0)->>'ok' = 'true', 'text s diakritikou, emotikonem a vnořeným JSON se uloží');
 select tt.ok(tt.load(1, 'koulovikamosi')->'data'->>'a' = '{"x": [1,2,3]}', 'vnořený JSON zůstane jen textem, server ho nepřepisuje (včetně mezer)');
+select tt.ok(tt.save(1, 'hannibal', '{"hannibal_save_v1": "{\"meta\": {}}", "hannibal_endless_best": "7"}', 0)->>'ok' = 'true' and tt.load(1, 'hannibal')->'data'->>'hannibal_endless_best' = '7', 'Hannibal: Barca uloží postup jako ostatní hry');
 
 -- ===== ochrana proti přepsání z druhého zařízení =====
 select tt.save(2, 'chess', '{"a": "1"}', 0);

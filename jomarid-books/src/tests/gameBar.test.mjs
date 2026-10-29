@@ -81,6 +81,7 @@ test('více přečtených knih a delší série dávají vyšší nebo stejnou �
 const GAMES = {
   rocket: ['gameContent', 'rocket', 'index.html'], polygonarena: ['gameContent', 'polygonArena', 'index.html'], chess: ['gameContent', 'chess', 'index.html'],
   koulovikamosi: ['gameContent', 'koulovi', 'index.html'], cityclicker: ['gameContent', 'cityClicker.js'], warroom: ['gameContent', 'warroom.js'],
+  hannibal: ['gameContent', 'hannibal', 'index.html'],
 };
 const bridgeOf = (rel) => {
   let text = read(...rel);
@@ -103,10 +104,10 @@ test('každá hra má most, který jen žádá o odměnu a sám nic nezobrazuje 
   }
 });
 
-test('mosty ve všech šesti hrách jsou až na id hry stejné (zůstatek ukazuje jen lišta appky, žádná hra ho nepřijímá)', () => {
+test('mosty ve všech hrách jsou až na id hry stejné (zůstatek ukazuje jen lišta appky, žádná hra ho nepřijímá)', () => {
   const norm = (b) => b.replace(/var GAME_ID = '\w+';/, '');
   const base = norm(bridgeOf(GAMES.rocket));
-  for (const id of ['polygonarena', 'chess', 'cityclicker', 'warroom', 'koulovikamosi']) assert.equal(norm(bridgeOf(GAMES[id])), base, id);
+  for (const id of ['polygonarena', 'chess', 'cityclicker', 'warroom', 'koulovikamosi', 'hannibal']) assert.equal(norm(bridgeOf(GAMES[id])), base, id);
   for (const id of Object.keys(GAMES)) assert.doesNotMatch(bridgeOf(GAMES[id]), /balance/i, id);
 });
 

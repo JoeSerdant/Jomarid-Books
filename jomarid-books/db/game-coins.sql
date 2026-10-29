@@ -9,6 +9,7 @@
 --   2. Strop ze všech her dohromady za den (dřív 150 Coinů) se ruší: kdo hraje víc her, vydělá víc. Zůstává jen strop na jednu hru, takže víc než 100 Coinů denně z jedné hry
 --      nejde (šest her tedy nejvýš 600 Coinů za den).
 --   3. Seznam her doplněn o 'koulovikamosi'. Dosud ho funkce neznala a každou žádost Kouloví Kámošů (zlatá koule) odmítla výjimkou invalid_game_id, takže ze hry nešly žádné Coiny.
+--   3b. Seznam her doplněn o 'hannibal' (Hannibal: Barca, složka Strategie): bez toho by každou jeho žádost o Coiny funkce odmítla chybou invalid_game_id.
 --   4. Zůstatek se připíše jednou. Původní funkce zvýšila profiles.coins sama a potom zapsala řádek do coin_transactions, kde ho spoušť trg_update_coins zvýšila
 --      ještě jednou, takže hráč dostal dvojnásobek toho, co hra ukázala, a zůstatek vrácený hře byl o udělenou částku nižší než skutečný. Teď zůstatek zvyšuje jen spoušť
 --      (jako u obchůdku) a funkce přímo upravuje jen lifetime_coins_earned. Odpověď funkce obsahuje skutečný zůstatek po připsání.
@@ -70,7 +71,7 @@ begin
   if v_user_id is null then
     raise exception 'not_authenticated';
   end if;
-  if p_game_id is null or p_game_id not in ('rocket', 'warroom', 'cityclicker', 'polygonarena', 'chess', 'koulovikamosi') then
+  if p_game_id is null or p_game_id not in ('rocket', 'warroom', 'cityclicker', 'polygonarena', 'chess', 'koulovikamosi', 'hannibal') then
     raise exception 'invalid_game_id';
   end if;
   if p_amount is null or p_amount < 1 then

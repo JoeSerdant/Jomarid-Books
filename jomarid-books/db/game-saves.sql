@@ -34,7 +34,7 @@ revoke all on public.game_saves from public, anon, authenticated;
 create or replace function public.game_save_check(p_game_id text, p_data jsonb)
 returns void language plpgsql immutable set search_path to 'public' as $$
 begin
-  if p_game_id is null or p_game_id not in ('rocket', 'warroom', 'cityclicker', 'polygonarena', 'chess', 'koulovikamosi') then raise exception 'unknown_game'; end if;
+  if p_game_id is null or p_game_id not in ('rocket', 'warroom', 'cityclicker', 'polygonarena', 'chess', 'koulovikamosi', 'hannibal') then raise exception 'unknown_game'; end if;
   if p_data is null or jsonb_typeof(p_data) <> 'object' then raise exception 'invalid_data'; end if;
   if (select count(*) from jsonb_object_keys(p_data)) > 40 then raise exception 'invalid_data'; end if;
   if exists (select 1 from jsonb_each(p_data) e where jsonb_typeof(e.value) <> 'string' or length(e.key) < 1 or length(e.key) > 100) then raise exception 'invalid_data'; end if;

@@ -1,0 +1,3629 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Hannibal: Barca</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gold: #ffd700;
+      --gold-dark: #b8860b;
+      --bronze: #8c6d3b;
+      --bg-dark: #090807;
+      --panel-bg: rgba(18, 15, 12, 0.96);
+      --border-color: #3d3222;
+      --accent-red: #8b1e1e;
+      --accent-blue: #23496d;
+      --accent-green: #2e6d38;
+      --text-main: #e6dfd3;
+      --text-muted: #9e9484;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+    body { background-color: var(--bg-dark); color: var(--text-main); font-family: 'Montserrat', sans-serif; overflow: hidden; height: 100vh; height: 100dvh; width: 100vw; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+
+    .screen { display: none; width: 100vw; height: 100vh; height: 100dvh; position: absolute; top: 0; left: 0; }
+    .screen.active { display: flex; flex-direction: column; }
+
+    h1, h2, h3, h4, .cinzel { font-family: 'Cinzel', serif; letter-spacing: 1px; }
+
+    /* BUTTONS & UI COMPONENTS */
+    .btn {
+      background: linear-gradient(180deg, #4a3b26 0%, #1f180f 100%);
+      border: 1px solid var(--bronze);
+      color: var(--gold);
+      padding: 10px 20px;
+      font-family: 'Cinzel', serif;
+      font-weight: 700;
+      font-size: 0.9rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+      text-shadow: 1px 1px 2px #000;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.6);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn:hover:not(:disabled) {
+      background: linear-gradient(180deg, #6e5839 0%, #382c1b 100%);
+      border-color: var(--gold);
+      color: #fff;
+      transform: translateY(-2px);
+      box-shadow: 0 5px 12px rgba(212,175,55,0.25);
+    }
+    .btn:active:not(:disabled) { transform: translateY(0); box-shadow: 0 2px 4px rgba(0,0,0,0.8); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; border-color: #333; filter: grayscale(1); }
+    .btn-danger { background: linear-gradient(180deg, #6e1b1b 0%, #380d0d 100%); border-color: #a32a2a; color: #ff9999; }
+    .btn-danger:hover:not(:disabled) { background: linear-gradient(180deg, #962828 0%, #521414 100%); border-color: #ff4d4d; color: #fff; }
+    .btn-success { background: linear-gradient(180deg, #1e5225 0%, #0d2911 100%); border-color: #2e7d32; color: #99ff99; }
+
+    /* MAIN MENU */
+    #main-menu {
+      background: radial-gradient(circle, #2a2015 0%, #090807 100%);
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      gap: 25px;
+      position: relative;
+    }
+    #main-menu::before {
+      content: ''; position: absolute; width: 100%; height: 100%;
+      background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" opacity="0.03"><rect width="100" height="100" fill="none" stroke="%23ffffff" stroke-width="1"/></svg>');
+      pointer-events: none;
+    }
+    .title-box { border-top: 2px solid var(--gold); border-bottom: 2px solid var(--gold); padding: 20px 40px; background: rgba(0,0,0,0.4); }
+    .title-box h1 { font-size: 4rem; color: var(--gold); text-shadow: 0 0 20px rgba(255,215,0,0.3); margin-bottom: 5px; }
+    .title-box p { color: var(--text-muted); font-style: italic; font-size: 1.1rem; letter-spacing: 2px; }
+
+    /* CAMPAIGN HUB */
+    .topbar {
+      width: 100%;
+      height: 60px;
+      background: #0d0a07;
+      border-bottom: 2px solid var(--border-color);
+      padding: 0 25px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-sizing: border-box;
+      z-index: 10;
+    }
+    .res-group { display: flex; gap: 25px; font-family: 'Cinzel', serif; font-size: 0.95rem; }
+    .res-item { display: flex; align-items: center; gap: 8px; color: var(--gold); background: rgba(255,215,0,0.05); padding: 6px 14px; border-radius: 4px; border: 1px solid rgba(255,215,0,0.15); }
+
+    .campaign-layout { display: flex; width: 100%; flex: 1; min-height: 0; padding: 15px; gap: 15px; box-sizing: border-box; }
+    .panel { background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 18px; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 8px 24px rgba(0,0,0,0.7); }
+    
+    /* MAP & NODES TREE */
+    .map-tree-container { flex: 2; overflow-y: auto; padding-right: 5px; }
+    .nodes-grid { display: flex; flex-direction: column; gap: 14px; position: relative; }
+    .node-card {
+      background: #14100c;
+      border: 2px solid var(--border-color);
+      border-radius: 6px;
+      padding: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      position: relative;
+    }
+    .node-card:hover:not(.locked) { border-color: var(--gold); transform: translateX(6px); background: #1f1811; }
+    .node-card.active { border-color: var(--gold); background: linear-gradient(90deg, #241c13 0%, #14100c 100%); box-shadow: 0 0 15px rgba(255,215,0,0.15); }
+    .node-card.completed { border-color: var(--accent-green); background: #0f1c11; }
+    .node-card.locked { opacity: 0.4; cursor: not-allowed; filter: grayscale(0.8); }
+    .node-info h4 { color: var(--gold); font-size: 1.1rem; margin-bottom: 4px; }
+    .node-info p { font-size: 0.85rem; color: var(--text-muted); max-width: 450px; line-height: 1.3; }
+    .node-tag { font-size: 0.75rem; padding: 3px 8px; border-radius: 3px; font-weight: 600; text-transform: uppercase; }
+    .tag-region { background: #2a2015; color: #d4af37; border: 1px solid #52402a; }
+    .tag-minigame { background: #1b2a3a; color: #7ec8e3; border: 1px solid #2e5a7a; }
+
+    /* ROSTER PANEL */
+    .roster-panel { flex: 1.2; min-width: 320px; }
+    .roster-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; }
+    .roster-card {
+      background: #120e0a;
+      border: 1px solid var(--border-color);
+      padding: 12px;
+      border-radius: 5px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .roster-header { display: flex; justify-content: space-between; align-items: center; }
+    .roster-title { font-weight: 700; color: var(--text-main); font-size: 0.95rem; }
+    .roster-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; font-size: 0.75rem; color: var(--text-muted); background: #0a0806; padding: 6px; border-radius: 4px; }
+    .bar-bg { width: 100%; height: 6px; background: #221c15; border-radius: 3px; overflow: hidden; }
+    .bar-fill-hp { height: 100%; background: linear-gradient(90deg, #a32a2a, #4caf50); transition: width 0.3s; }
+    .bar-fill-xp { height: 100%; background: var(--gold); transition: width 0.3s; }
+
+    /* BATTLE SCREEN */
+    #battle-screen { background: #050403; }
+    .battle-hud {
+      height: 65px;
+      background: #0d0a07;
+      border-bottom: 2px solid var(--border-color);
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: #fff;
+      z-index: 5;
+    }
+    .battle-container { flex: 1; display: flex; position: relative; overflow: hidden; }
+    .canvas-wrapper { flex: 1; min-width: 0; min-height: 0; display: flex; justify-content: center; align-items: center; background: #080706; position: relative; padding: 10px; overflow: hidden; }
+    canvas { border: 2px solid var(--border-color); box-shadow: 0 0 30px rgba(0,0,0,0.9); background: #0e0c0a; cursor: pointer; touch-action: none; flex: none; }
+    
+    .battle-sidebar { width: 280px; background: var(--panel-bg); border-left: 1px solid var(--border-color); padding: 15px; display: flex; flex-direction: column; gap: 15px; }
+    .log-box { flex: 1; background: #0a0806; border: 1px solid var(--border-color); border-radius: 4px; padding: 10px; font-family: monospace; font-size: 0.75rem; overflow-y: auto; color: #b5ad9e; display: flex; flex-direction: column; gap: 4px; }
+    .log-entry { border-bottom: 1px solid #1a1510; padding-bottom: 2px; }
+    .log-player { color: #81d4fa; }
+    .log-enemy { color: #ef9a9a; }
+
+    /* MODALS */
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 100; }
+    .modal-overlay.hidden { display: none; }
+    .modal-box { background: #17120e; border: 2px solid var(--gold-dark); border-radius: 8px; width: 550px; max-width: 92%; padding: 25px; color: var(--text-main); display: flex; flex-direction: column; gap: 18px; box-shadow: 0 10px 30px rgba(0,0,0,0.9); }
+    .modal-list { display: flex; flex-direction: column; gap: 10px; max-height: 380px; overflow-y: auto; padding-right: 5px; }
+    .modal-item { background: #0d0a07; border: 1px solid var(--border-color); padding: 12px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; }
+
+    /* MINIGAME SCREEN */
+    #minigame-screen { background: #050403; }
+    .minigame-hud {
+      height: 65px; background: #0d0a07; border-bottom: 2px solid var(--border-color);
+      padding: 0 20px; display: flex; align-items: center; justify-content: space-between; color: #fff; z-index: 5;
+    }
+    .minigame-body { flex: 1; display: flex; overflow: hidden; }
+    .minigame-main { flex: 1; display: flex; flex-direction: column; gap: 18px; padding: 24px; overflow-y: auto; align-items: center; }
+    .minigame-sidebar { width: 280px; background: var(--panel-bg); border-left: 1px solid var(--border-color); padding: 15px; display: flex; flex-direction: column; gap: 15px; }
+    .minigame-stat-row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    .minigame-stat {
+      background: #120e0a; border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 18px;
+      text-align: center; min-width: 110px;
+    }
+    .minigame-stat .label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+    .minigame-stat .value { font-size: 1.3rem; color: var(--gold); font-family: 'Cinzel', serif; font-weight: 700; }
+    .minigame-narrative {
+      background: #14100c; border: 1px solid var(--border-color); border-left: 3px solid var(--gold-dark);
+      border-radius: 6px; padding: 16px 20px; max-width: 640px; font-size: 0.95rem; line-height: 1.5; color: var(--text-main);
+    }
+    .minigame-choices { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; max-width: 720px; }
+    .choice-card {
+      background: #14100c; border: 2px solid var(--border-color); border-radius: 6px; padding: 16px; width: 200px;
+      cursor: pointer; transition: all 0.2s ease; text-align: left; display: flex; flex-direction: column; gap: 6px;
+    }
+    .choice-card:hover:not(.disabled) { border-color: var(--gold); background: #1f1811; transform: translateY(-3px); }
+    .choice-card.disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(0.7); }
+    .choice-card h4 { color: var(--gold); font-size: 0.95rem; }
+    .choice-card p { font-size: 0.78rem; color: var(--text-muted); line-height: 1.3; }
+    .wagon-row { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+    .wagon-card {
+      background: #14100c; border: 2px solid var(--border-color); border-radius: 6px; padding: 14px; width: 170px;
+      text-align: center; display: flex; flex-direction: column; gap: 8px;
+    }
+    .wagon-card h4 { color: var(--gold); font-size: 0.9rem; }
+    .wagon-card .guard-hint { font-size: 0.75rem; color: #80cbc4; }
+    .wagon-token-row { display: flex; align-items: center; justify-content: center; gap: 10px; }
+    .token-btn {
+      width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--bronze); background: #1f180f;
+      color: var(--gold); font-weight: 700; cursor: pointer; font-size: 1rem; line-height: 1;
+    }
+    .token-btn:hover:not(:disabled) { border-color: var(--gold); color: #fff; }
+    .token-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .token-count { font-family: 'Cinzel', serif; color: var(--gold); font-size: 1.1rem; min-width: 20px; }
+
+    /* BATTLE UX */
+    .btn-small { padding: 7px 11px; font-size: 0.75rem; }
+    .btn-active { border-color: var(--gold) !important; background: linear-gradient(180deg, #7a2a2a 0%, #3d1111 100%) !important; color: #fff !important; }
+    .btn-warn { border-color: #ff9800 !important; color: #ffcc80 !important; animation: warnPulse 0.9s infinite; }
+    @keyframes warnPulse { 0%,100% { box-shadow: 0 0 0 rgba(255,152,0,0); } 50% { box-shadow: 0 0 14px rgba(255,152,0,0.7); } }
+    .battle-tooltip {
+      position: fixed; z-index: 120; pointer-events: none; background: rgba(12,9,6,0.96); border: 1px solid var(--gold-dark);
+      border-radius: 6px; padding: 9px 12px; font-size: 0.78rem; line-height: 1.4; color: var(--text-main);
+      max-width: 270px; box-shadow: 0 6px 18px rgba(0,0,0,0.8);
+    }
+    .turn-banner {
+      position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; opacity: 0;
+      font-family: 'Cinzel', serif; font-size: 2rem; font-weight: 700; color: var(--gold); letter-spacing: 3px;
+      text-shadow: 0 0 18px rgba(0,0,0,0.95), 0 2px 4px #000; background: rgba(0,0,0,0.55); padding: 10px 40px; border-radius: 6px;
+      border-top: 2px solid var(--gold-dark); border-bottom: 2px solid var(--gold-dark);
+    }
+    .turn-banner.show { animation: bannerFade 1.4s ease forwards; }
+    @keyframes bannerFade { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); } 15% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 75% { opacity: 1; } 100% { opacity: 0; } }
+    .toast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 300; background: #17120e; border: 1px solid var(--gold-dark);
+      color: var(--text-main); padding: 12px 18px; border-radius: 6px; font-size: 0.85rem; max-width: 340px;
+      box-shadow: 0 8px 22px rgba(0,0,0,0.85); opacity: 0; transform: translateY(12px); transition: all 0.25s ease; pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .help-section { background: #0d0a07; border: 1px solid var(--border-color); border-radius: 5px; padding: 12px 14px; font-size: 0.85rem; line-height: 1.5; }
+    .help-section h4 { color: var(--gold); margin-bottom: 6px; font-size: 0.95rem; }
+    .help-section kbd { background: #2a2015; border: 1px solid var(--bronze); border-radius: 3px; padding: 1px 6px; font-size: 0.75rem; color: var(--gold); }
+    .help-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .help-table td, .help-table th { padding: 3px 6px; border-bottom: 1px solid #221c15; text-align: left; }
+    .next-badge { background: #4a3b00; color: #ffd700; border: 1px solid #b8860b; animation: warnPulse 1.4s infinite; }
+    .node-card.next-target { border-color: var(--gold); box-shadow: 0 0 18px rgba(255,215,0,0.25); }
+    .meter { width: 100%; height: 14px; background: #221c15; border-radius: 7px; overflow: hidden; border: 1px solid var(--border-color); }
+    .meter > div { height: 100%; transition: width 0.4s ease; }
+
+    /* TUTORIAL OVERLAY */
+    .tutorial-highlight {
+      position: fixed; box-shadow: 0 0 0 9999px rgba(0,0,0,0.65); border-radius: 8px;
+      border: 2px solid var(--gold); pointer-events: none; z-index: 150; transition: all 0.35s ease;
+    }
+    .tutorial-box {
+      position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 160;
+      background: #17120e; border: 2px solid var(--gold-dark); border-radius: 8px; padding: 18px 24px;
+      max-width: 480px; box-shadow: 0 10px 30px rgba(0,0,0,0.9); display: flex; flex-direction: column; gap: 10px;
+    }
+    .tutorial-box h4 { color: var(--gold); font-size: 1rem; }
+    .tutorial-box p { color: var(--text-main); font-size: 0.88rem; line-height: 1.4; }
+    .tutorial-box .tutorial-actions { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 4px; }
+    .tutorial-skip { color: var(--text-muted); font-size: 0.75rem; text-decoration: underline; cursor: pointer; background: none; border: none; }
+
+    /* SCROLLBAR CUSTOMIZATION */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #0a0806; }
+    ::-webkit-scrollbar-thumb { background: #3d3222; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--bronze); }
+
+    /* ===== MOBILNÍ REŽIM: kompaktní rozložení pro telefony a tablety (na výšku i na šířku) ===== */
+    .topbar, .battle-hud, .minigame-hud { padding-left: max(15px, env(safe-area-inset-left)); padding-right: max(15px, env(safe-area-inset-right)); }
+
+    @media (max-width: 900px), (max-height: 520px) {
+      .btn { min-height: 38px; padding: 8px 12px; font-size: 0.78rem; }
+      .btn-small { padding: 7px 9px; font-size: 0.72rem; }
+      .token-btn { width: 38px; height: 38px; }
+      .topbar { height: auto; min-height: 48px; flex-wrap: wrap; gap: 6px; padding-top: 6px; padding-bottom: 6px; }
+      .res-group { gap: 6px; flex-wrap: wrap; font-size: 0.75rem; }
+      .res-item { padding: 4px 8px; }
+      .battle-hud, .minigame-hud { height: auto; min-height: 48px; flex-wrap: wrap; gap: 6px; padding-top: 6px; padding-bottom: 6px; }
+      .battle-hud h3, .minigame-hud h3 { font-size: 0.95rem; }
+      #selected-unit-info { display: none; }
+      .battle-hud > div:last-child { flex-wrap: wrap; justify-content: flex-end; }
+      .modal-box { padding: 16px; gap: 12px; width: 94vw; }
+      .modal-list { max-height: 58vh; }
+      .modal-item { flex-wrap: wrap; gap: 8px; }
+      .title-box { padding: 14px 20px; }
+      .title-box h1 { font-size: 2.2rem; }
+      .title-box p { font-size: 0.8rem; }
+      #main-menu { gap: 14px; }
+      .node-card { flex-wrap: wrap; gap: 10px; padding: 12px; }
+      .node-info p { max-width: none; }
+      .roster-panel { min-width: 0; }
+      .tutorial-box { bottom: 8px; max-width: 94vw; padding: 12px 14px; max-height: 42vh; overflow-y: auto; }
+      .tutorial-box p { font-size: 0.8rem; }
+      .turn-banner { font-size: 1.2rem; padding: 8px 20px; }
+      .toast { left: 12px; right: 12px; bottom: 12px; max-width: none; }
+    }
+
+    /* Na výšku: vše pod sebou, bojiště nahoře, deník a detail jednotky dole */
+    @media (max-width: 900px) and (orientation: portrait) {
+      .campaign-layout { flex-direction: column; overflow-y: auto; padding: 10px; gap: 10px; }
+      .campaign-layout .panel { flex: none; padding: 12px; }
+      .map-tree-container { overflow: visible; }
+      .roster-list { overflow: visible; }
+      .battle-container { flex-direction: column; }
+      .battle-hud { padding-top: 4px; padding-bottom: 4px; gap: 4px; }
+      .battle-hud > div:first-child { width: 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+      .battle-hud > div:first-child h3 { width: 100%; font-size: 0.85rem; }
+      #battle-objective { width: 100%; font-size: 0.68rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .battle-hud > div:last-child { width: 100%; justify-content: space-between; gap: 4px; flex-wrap: nowrap; }
+      .battle-hud > div:last-child .btn { padding: 6px 7px; font-size: 0.68rem; min-height: 36px; flex: 1 1 auto; min-width: 0; }
+      .battle-hud > div:last-child #btn-help, .battle-hud > div:last-child #btn-fullscreen { flex: 0 0 auto; padding: 6px 9px; }
+      .battle-hud > div:last-child #btn-endturn { flex: 2 1 auto; }
+      .canvas-wrapper { flex: none; }
+      .battle-sidebar { width: 100%; flex: 1; min-height: 0; flex-direction: row; border-left: 0; border-top: 1px solid var(--border-color); padding: 8px; gap: 8px; }
+      .battle-sidebar > h4 { display: none; }
+      .battle-sidebar .log-box { flex: 1; min-width: 0; }
+      #unit-detail-card { flex: 1; min-width: 0; overflow-y: auto; }
+      .canvas-wrapper { padding: 4px; }
+      .minigame-body { flex-direction: column; overflow-y: auto; }
+      .minigame-main { flex: none; padding: 14px; overflow: visible; }
+      .minigame-sidebar { width: 100%; height: 26vh; flex: none; border-left: 0; border-top: 1px solid var(--border-color); }
+      .choice-card, .wagon-card { width: 100%; }
+      .wagon-card { width: calc(50% - 8px); }
+      .minigame-stat { min-width: 90px; padding: 8px 10px; }
+    }
+
+    /* Na šířku na telefonu: nízká obrazovka, bojiště vlevo, úzký postranní panel */
+    @media (max-height: 520px) and (orientation: landscape) {
+      .battle-sidebar { width: 200px; padding: 8px; gap: 8px; }
+      .battle-sidebar > h4 { display: none; }
+      #unit-detail-card { max-height: 45%; overflow-y: auto; font-size: 0.72rem; }
+      .log-box { font-size: 0.68rem; }
+      #battle-objective { display: none; }
+      .canvas-wrapper { padding: 4px; }
+      .minigame-sidebar { width: 200px; }
+      .minigame-main { padding: 12px; gap: 10px; }
+      .campaign-layout { padding: 8px; gap: 8px; }
+      .panel { padding: 10px; gap: 8px; }
+      .title-box h1 { font-size: 1.8rem; }
+      #main-menu { gap: 8px; }
+    }
+  </style>
+</head>
+<body>
+
+  <script>/* JOMARID-BRIDGE */
+(function () {
+  var GAME_ID = 'hannibal';
+  var inFrame = false;
+  try { inFrame = !!window.parent && window.parent !== window; } catch (e) { inFrame = false; }
+  var pending = 0, reasons = {}, timer = null;
+
+  function flush() {
+    timer = null;
+    if (!pending || !inFrame) { pending = 0; reasons = {}; return; }
+    var top = 'event', topAmt = 0;
+    for (var k in reasons) { if (reasons[k] > topAmt) { top = k; topAmt = reasons[k]; } }
+    var amount = pending; pending = 0; reasons = {};
+    try { window.parent.postMessage({ source: 'jomarid-game', type: 'coin', game: GAME_ID, amount: amount, reason: top }, '*'); } catch (e) {}
+  }
+
+  // Hra jen POSILA ZADOST o odmenu - o tom, kolik Jomarid Coins se skutecne udeli,
+  // rozhoduje server (denni stropy). Vice udalosti v rychlem sledu se sloucí do jedne zpravy.
+  // Potvrzení odměny (kolik se skutečně připsalo) ukazuje lišta appky nad hrou, hra samotná nic nezobrazuje.
+  window.jomaridReward = function (reason, amount, immediate) {
+    if (!inFrame) return;
+    amount = Math.floor(Number(amount));
+    if (!isFinite(amount) || amount < 1) return;
+    var r = reason || 'event';
+    pending += amount;
+    reasons[r] = (reasons[r] || 0) + amount;
+    if (immediate) { if (timer) clearTimeout(timer); flush(); }
+    else if (!timer) { timer = setTimeout(flush, 1200); }
+  };
+
+  // Rekordy hry (nejlepší skóre, nejvyšší úroveň...): hra jen hlásí aktuální hodnotu, o zápisu a odznacích rozhoduje server.
+  // Hlásí se jen zvýšení oproti naposledy odeslanému (stejná nebo nižší hodnota se neposílá znovu) a víc hlášení v rychlém sledu se sloučí.
+  var recSent = {}, recPending = {}, recTimer = null;
+  function recFlush() {
+    recTimer = null;
+    var pend = recPending; recPending = {};
+    if (!inFrame) return;
+    for (var k in pend) {
+      if (pend[k] <= (recSent[k] || 0)) continue;
+      recSent[k] = pend[k];
+      try { window.parent.postMessage({ source: 'jomarid-game', type: 'record', game: GAME_ID, stat: k, value: pend[k] }, '*'); } catch (e) {}
+    }
+  }
+  window.jomaridRecord = function (stat, value, immediate) {
+    if (!inFrame || typeof stat !== 'string') return;
+    value = Math.floor(Number(value));
+    if (!isFinite(value) || value < 1) return;
+    if (value <= (recSent[stat] || 0) || value <= (recPending[stat] || 0)) return;
+    recPending[stat] = value;
+    if (immediate) { if (recTimer) clearTimeout(recTimer); recFlush(); }
+    else if (!recTimer) { recTimer = setTimeout(recFlush, 1500); }
+  };
+
+  window.addEventListener('pagehide', function () { if (timer) clearTimeout(timer); flush(); if (recTimer) clearTimeout(recTimer); recFlush(); });
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target.closest('#btn-back-to-jomarid') : null;
+    if (t) { if (timer) clearTimeout(timer); flush(); if (recTimer) clearTimeout(recTimer); recFlush(); }
+  }, true);
+})();
+</script>
+
+
+  <!-- AUDIO SYNTHESIS ENGINE (NO EXTERNAL FILES NEEDED) -->
+  <script>
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+      }
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) this.ctx = new AudioContext();
+        }
+      }
+      playSword() {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + 0.15);
+      }
+      playMarch() {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(120, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(60, this.ctx.currentTime + 0.2);
+        gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + 0.2);
+      }
+      playVictory() {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        [261.63, 329.63, 392.00, 523.25].forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.12);
+          gain.gain.setValueAtTime(0.2, now + idx * 0.12);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.12 + 0.4);
+          osc.connect(gain); gain.connect(this.ctx.destination);
+          osc.start(now + idx * 0.12); osc.stop(now + idx * 0.12 + 0.4);
+        });
+      }
+    }
+    const audioFX = new SoundEngine();
+  </script>
+
+  <!-- MAIN MENU SCREEN -->
+  <div id="main-menu" class="screen active">
+    <div class="title-box">
+      <h1>HANNIBAL: BARCA</h1>
+      <p>TAKTIČKÝ Kampaňový Engine Druhé Punské Války</p>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:15px; width:280px;">
+      <button class="btn btn-success" id="btn-continue-campaign" style="font-size:1.1rem; padding:14px; display:none;" onclick="audioFX.init(); Game.continueCampaign();">▶ Pokračovat v kampani</button>
+      <button class="btn" id="btn-new-campaign" style="font-size:1.1rem; padding:14px;" onclick="audioFX.init(); Game.newCampaign();">Nová Kampaň</button>
+      <button class="btn" style="font-size:0.9rem;" onclick="Game.openHelpModal()">❓ Jak se hraje</button>
+      <button class="btn" id="btn-fullscreen-menu" style="font-size:0.85rem;" onclick="Game.toggleLandscape()">📱 Celá obrazovka / na šířku</button>
+      <p id="menu-save-info" style="font-size:0.75rem; color:var(--text-muted);"></p>
+    </div>
+  </div>
+
+  <!-- CAMPAIGN HUB SCREEN -->
+  <div id="campaign-hub" class="screen">
+    <div class="topbar">
+      <div class="cinzel" style="color:var(--gold); font-weight:700; font-size:1.1rem;">Kampaňové Velitelství</div>
+      <div class="res-group">
+        <div class="res-item">🪙 Zlato: <span id="res-gold">500</span></div>
+        <div class="res-item">🪖 Lidské Zdroje: <span id="res-manpower">10,000</span></div>
+        <div class="res-item">🏛️ Přízeň Senátu: <span id="res-favor">50%</span></div>
+        <div class="res-item">🏆 Rekord Nekonečna: <span id="res-endless-best">0</span></div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn" style="padding:6px 14px; font-size:0.8rem;" onclick="Game.openHelpModal()">❓ Nápověda</button>
+        <button class="btn" style="padding:6px 14px; font-size:0.8rem;" onclick="Game.showScreen('main-menu')">Menu</button>
+      </div>
+    </div>
+
+    <div class="campaign-layout">
+      <!-- MAP & SCENARIOS TREE -->
+      <div class="panel map-tree-container">
+        <h3 style="color:var(--gold);" class="cinzel">Postup Tažení (Západní Středomoří)</h3>
+        <div id="campaign-next" style="display:flex; gap:10px; align-items:center;"></div>
+        <div id="campaign-nodes-tree" class="nodes-grid"></div>
+        <button class="btn btn-danger" style="width:100%; margin-top:12px; padding:12px;" onclick="GameCampaign.startEndlessMode()">
+          ⚔️ Nekonečné Tažení - vlna za vlnou, dokud armáda vydrží
+        </button>
+      </div>
+
+      <!-- ROSTER & MANAGEMENT -->
+      <div class="panel roster-panel">
+        <h3 style="color:var(--gold);" class="cinzel">Aktivní Armáda</h3>
+        <div id="roster-list" class="roster-list"></div>
+        <div style="display:flex; gap:10px; margin-top:5px;">
+          <button class="btn" style="flex:1;" onclick="Game.openRecruitModal()">➕ Verbovat</button>
+          <button class="btn" style="flex:1;" title="Doplní ztráty všem jednotkám, na které máš zdroje" onclick="GameCampaign.replenishAll()">🩹 Doplnit vše</button>
+          <button class="btn" style="flex:1;" onclick="Game.openDoctrinesModal()">📜 Doktríny</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BATTLE SCREEN -->
+  <div id="battle-screen" class="screen">
+    <div class="battle-hud">
+      <div>
+        <h3 id="battle-title" style="color:var(--gold);" class="cinzel">Bitva</h3>
+        <span id="battle-turn-info" style="font-size:0.85rem; color:var(--text-muted);">Tah: Hráč</span>
+        <span id="battle-counts" style="font-size:0.8rem; color:var(--text-muted); margin-left:10px;"></span>
+        <div id="battle-objective" style="font-size:0.75rem; color:#c9b27a;"></div>
+      </div>
+      <div id="selected-unit-info" style="font-size:0.9rem; color:var(--gold); font-weight:600;">Vyberte jednotku na bojišti</div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn btn-small" id="btn-help" title="Nápověda (?)" onclick="Game.openHelpModal()">❓</button>
+        <button class="btn btn-small" id="btn-fullscreen" title="Celá obrazovka a zámek na šířku" onclick="Game.toggleLandscape()">⛶</button>
+        <button class="btn btn-small" id="btn-threat" title="Oblast hrozby nepřátel (H)" onclick="window.gameEngine.toggleThreat()">⚠ Hrozba</button>
+        <button class="btn btn-small" id="btn-next" title="Další jednotka (Tab)" onclick="window.gameEngine.selectNextReady()">⇥ Další</button>
+        <button class="btn btn-small" id="btn-undo" title="Vrátit pohyb (Z)" style="display:none;" onclick="window.gameEngine.undoMove()">↩ Vrátit</button>
+        <button class="btn btn-success" id="btn-ability" style="display:none;" title="Použít schopnost (A)" onclick="window.gameEngine.activateAbility(window.gameEngine.selectedUnit)">Schopnost</button>
+        <button class="btn" id="btn-endturn" title="Ukončit tah (Enter)" onclick="window.gameEngine.requestEndTurn()">Ukončit Tah ⏎</button>
+        <button class="btn btn-danger" onclick="GameCampaign.retreatFromBattle()">Ústup</button>
+      </div>
+    </div>
+
+    <div class="battle-container">
+      <div class="canvas-wrapper">
+        <canvas id="gameCanvas" width="900" height="600"></canvas>
+        <div id="turn-banner" class="turn-banner"></div>
+      </div>
+      <div class="battle-sidebar">
+        <h4 style="color:var(--gold);" class="cinzel">Bojový Deník</h4>
+        <div id="combat-log" class="log-box"></div>
+        <div id="unit-detail-card" style="background:#0a0806; border:1px solid var(--border-color); padding:10px; border-radius:4px; font-size:0.8rem; color:#aaa;">
+          <em>Klikněte na jednotku pro zobrazení podrobných taktických statistik.</em>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="battle-tooltip" class="battle-tooltip" style="display:none;"></div>
+  <div id="toast" class="toast"></div>
+
+  <!-- MINIGAME SCREEN (non-grid encounters: chases, raids, etc.) -->
+  <div id="minigame-screen" class="screen">
+    <div class="minigame-hud">
+      <div>
+        <h3 id="minigame-title" style="color:var(--gold);" class="cinzel">Minihra</h3>
+        <span id="minigame-subtitle" style="font-size:0.85rem; color:var(--text-muted);"></span>
+      </div>
+      <button class="btn btn-danger" onclick="MinigameEngine.abandon()">Ústup</button>
+    </div>
+    <div class="minigame-body">
+      <div class="minigame-main">
+        <div id="minigame-stats" class="minigame-stat-row"></div>
+        <div id="minigame-narrative" class="minigame-narrative"></div>
+        <div id="minigame-content"></div>
+      </div>
+      <div class="minigame-sidebar">
+        <h4 style="color:var(--gold);" class="cinzel">Deník</h4>
+        <div id="minigame-log" class="log-box"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALS -->
+  <div id="modal-recruit" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h3 style="color:var(--gold);" class="cinzel">Verbování Žoldnéřských Divizí</h3>
+      <div id="recruit-list" class="modal-list"></div>
+      <button class="btn" onclick="Game.closeModals()">Zavřít</button>
+    </div>
+  </div>
+
+  <div id="modal-help" class="modal-overlay hidden">
+    <div class="modal-box" style="width:680px;">
+      <h3 style="color:var(--gold);" class="cinzel">Jak se hraje</h3>
+      <div id="help-content" class="modal-list" style="max-height:60vh;"></div>
+      <button class="btn" onclick="Game.closeModals()">Zavřít</button>
+    </div>
+  </div>
+
+  <div id="modal-doctrines" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h3 style="color:var(--gold);" class="cinzel">Taktické Doktríny Kartága</h3>
+      <div id="doctrines-list" class="modal-list"></div>
+      <button class="btn" onclick="Game.closeModals()">Zavřít</button>
+    </div>
+  </div>
+
+  <div id="modal-battle-result" class="modal-overlay hidden">
+    <div class="modal-box" style="text-align:center;">
+      <h2 id="result-title" class="cinzel" style="color:var(--gold); font-size:2.2rem;">Vítězství!</h2>
+      <p id="result-desc" style="color:var(--text-main); font-size:1rem; line-height:1.4;"></p>
+      <button class="btn btn-success" id="result-action-btn" style="padding:12px 30px; margin-top:10px;" onclick="Game.finishBattleAndReturn()">Návrat do Velitelství</button>
+    </div>
+  </div>
+
+  <!-- SCRIPT ENGINE -->
+  <script>
+    /* ==========================================================================
+       1. CAMPAIGN DATA & CONFIGURATION
+       ========================================================================== */
+    /* ==========================================================================
+       TERÉN A KONFIGURACE BITEV — dává terénu skutečný mechanický dopad
+       a dělá z každé bitvy historicky odlišný taktický hlavolam.
+       ========================================================================== */
+    const TERRAIN_TYPES = {
+      plain:  { name: 'Pláň',         moveCost: 1, defBonus: 0,     passable: true,  color: '#1f1a14', colorAlt: '#17130e' },
+      hill:   { name: 'Kopec',        moveCost: 2, defBonus: 0.20,  passable: true,  color: '#3a3320', colorAlt: '#332c1c' },
+      forest: { name: 'Houština',     moveCost: 2, defBonus: 0.10,  passable: true,  color: '#1a2c1a', colorAlt: '#152315', concealment: true },
+      snow:   { name: 'Sníh',         moveCost: 2, defBonus: -0.05, passable: true,  color: '#3a4048', colorAlt: '#333940' },
+      river:  { name: 'Řeka',         moveCost: 1, defBonus: 0,     passable: false, color: '#132838', colorAlt: '#0e1f2c' },
+      ford:   { name: 'Brod',         moveCost: 2, defBonus: -0.20, passable: true,  color: '#26404f', colorAlt: '#1e3540', vulnerable: true },
+      wall:   { name: 'Hradba',       moveCost: 1, defBonus: 0,     passable: false, color: '#4a4438', colorAlt: '#413c31' },
+      gate:   { name: 'Brána',        moveCost: 1, defBonus: 0.15,  passable: true,  color: '#5a4a2a', colorAlt: '#4d3f23' },
+      cliff:  { name: 'Sráz',         moveCost: 1, defBonus: 0,     passable: false, color: '#0c0c0e', colorAlt: '#08080a' }
+    };
+    function getTerrainAt(scenarioConf, x, y) {
+      const key = `${x},${y}`;
+      const t = scenarioConf.terrainMap[key] || 'plain';
+      return TERRAIN_TYPES[t];
+    }
+
+    function makeUnit(id, name, type, team, x, y, stats, extra = {}) {
+      return Object.assign({
+        id, name, type, team, x, y,
+        hp: stats.maxHp, maxHp: stats.maxHp,
+        atk: stats.atk, def: stats.def, move: stats.move, range: stats.range || 1,
+        isCavalry: !!stats.isCavalry,
+        ability: stats.ability || null,
+        abilityUsed: false,
+        hasMoved: false, hasActed: false,
+        facing: team === 'player' ? 'E' : 'W',
+        morale: 100, hidden: false, statuses: {}
+      }, extra);
+    }
+
+    const UNIT_INFO = {
+      hannibal:              { label: 'Hannibalova Garda',       icon: '⭐', role: 'Velitel - jeho pád znamená porážku.' },
+      carthage_spearmen:     { label: 'Africká Falanx',          icon: '🛡️', role: 'Vyvážená pěchota se solidní obranou.' },
+      numidian_cavalry:      { label: 'Numidská jízda',          icon: '🐎', role: 'Rychlá jízda - výpad a ústup.' },
+      elephants:             { label: 'Bojoví sloni',            icon: '🐘', role: 'Obrovský útok i zdraví, zdupe okolí.' },
+      balearic_sling:        { label: 'Baleárští prakovníci',    icon: '🎯', role: 'Střelci s dosahem 3.' },
+      libyan_heavy:          { label: 'Libyjská těžká pěchota',  icon: '🛡️', role: 'Pomalá hradba štítů.' },
+      celtiberian_swordsman: { label: 'Keltiberský žoldnéř',     icon: '⚔️', role: 'Silný útok, slabší obrana.' }
+    };
+
+    const ABILITY_INFO = {
+      trample:  { name: 'Zdupání', icon: '🐘', desc: 'Zasáhne všechny sousedící nepřátele najednou.' },
+      inspire:  { name: 'Inspirace', icon: '📯', desc: 'Obnoví morálku všem spojencům v okolí 2 polí (1x za bitvu).' },
+      hitrun:   { name: 'Jízdní výpad', icon: '🐎', desc: 'Po útoku se může ještě jednou přesunout (pasivní).' },
+      precision:{ name: 'Přesná muška', icon: '🎯', desc: 'Ignoruje obranný bonus terénu cíle (pasivní).' }
+    };
+
+    const BATTLE_SCENARIOS = {
+      /* --- 1. SAGUNTUM: Obléhání. Hradba blokuje přímý postup, prorazit lze jen branami. --- */
+      SAGUNTUM_SIEGE: {
+        briefing: 'Hradba je neprůchodná. Musíš se protlačit jednou ze dvou bran, kde čekají nejsilnější obránci.',
+        terrainMap: (() => {
+          const m = {};
+          for (let y = 0; y < 8; y++) {
+            m[`6,${y}`] = (y === 2 || y === 5) ? 'gate' : 'wall';
+          }
+          return m;
+        })(),
+        playerSpawn: (roster) => roster.map((u, i) => ({ x: 1 + Math.floor(i / 8), y: 1 + (i % 8) })),
+        buildEnemies: (getStats) => [
+          makeUnit('e_gate1', 'Strážce Brány', 'roman_legion', 'enemy', 6, 2, bump(getStats('roman_legion'), 1.3, 1.2)),
+          makeUnit('e_gate2', 'Strážce Brány', 'roman_legion', 'enemy', 6, 5, bump(getStats('roman_legion'), 1.3, 1.2)),
+          makeUnit('e_def1', 'Saguntský Obránce', 'roman_legion', 'enemy', 8, 2, getStats('roman_legion')),
+          makeUnit('e_def2', 'Saguntský Obránce', 'roman_legion', 'enemy', 8, 5, getStats('roman_legion')),
+          makeUnit('e_def3', 'Saguntský Prakovník', 'balearic_sling', 'enemy', 9, 3, getStats('balearic_sling')),
+          makeUnit('e_def4', 'Saguntský Prakovník', 'balearic_sling', 'enemy', 9, 4, getStats('balearic_sling'))
+        ],
+        rules: {}
+      },
+
+      /* --- 2. RHÔNE: Přechod řeky. Brody jsou úzké hrdlo a jednotka v nich je zranitelná. --- */
+      RHONE_CROSSING: {
+        briefing: 'Řeku lze překročit jen u dvou brodů. Uprostřed brodu jsi zranitelný - nepřecházej nekrytý.',
+        terrainMap: (() => {
+          const m = {};
+          for (let y = 0; y < 8; y++) {
+            for (let x = 5; x <= 6; x++) {
+              m[`${x},${y}`] = (y === 1 || y === 6) ? 'ford' : 'river';
+            }
+          }
+          return m;
+        })(),
+        playerSpawn: (roster) => roster.map((u, i) => ({ x: 1 + Math.floor(i / 8), y: 1 + (i % 8) })),
+        buildEnemies: (getStats) => [
+          makeUnit('e_g1', 'Galský Bojovník', 'gallic_warrior', 'enemy', 7, 1, getStats('gallic_warrior')),
+          makeUnit('e_g2', 'Galský Bojovník', 'gallic_warrior', 'enemy', 7, 6, getStats('gallic_warrior')),
+          makeUnit('e_g3', 'Galský Náčelník', 'gallic_warrior', 'enemy', 8, 3, bump(getStats('gallic_warrior'), 1.25, 1.15)),
+          makeUnit('e_g4', 'Galský Bojovník', 'gallic_warrior', 'enemy', 9, 4, getStats('gallic_warrior'))
+        ],
+        rules: {}
+      },
+
+      /* --- 3. ALPY: Úzká stezka mezi srázy, přepady ze skal, mráz ubírá život každé kolo. --- */
+      ALPS_PASS: {
+        briefing: 'Jediná úzká stezka mezi srázy. V okolních skalách se skrývají horalé. Mráz ubírá životy - nezdržuj se.',
+        terrainMap: (() => {
+          const path = [[0,3],[1,3],[2,3],[3,3],[3,4],[3,5],[4,5],[5,5],[6,5],[6,4],[6,3],[7,3],[8,3],[8,4],[9,4],[10,4],[11,4]];
+          const m = {};
+          for (let y = 0; y < 8; y++) for (let x = 0; x < 12; x++) m[`${x},${y}`] = 'cliff';
+          path.forEach(([x,y]) => { m[`${x},${y}`] = 'snow'; });
+          m['3,2'] = 'forest'; m['8,5'] = 'forest';
+          return m;
+        })(),
+        playerSpawn: (roster) => roster.map((u, i) => [{x:0,y:3},{x:1,y:3},{x:2,y:3},{x:3,y:3}][i] || {x:0,y:3}),
+        buildEnemies: (getStats) => [
+          makeUnit('e_amb1', 'Horský Nájezdník', 'mountain_tribe', 'enemy', 3, 2, getStats('mountain_tribe'), { hidden: true }),
+          makeUnit('e_amb2', 'Horský Nájezdník', 'mountain_tribe', 'enemy', 8, 5, getStats('mountain_tribe'), { hidden: true }),
+          makeUnit('e_block1', 'Horal Strážce', 'mountain_tribe', 'enemy', 9, 4, getStats('mountain_tribe')),
+          makeUnit('e_block2', 'Horal Strážce', 'mountain_tribe', 'enemy', 11, 4, getStats('mountain_tribe'))
+        ],
+        rules: { globalAttrition: 3 }
+      },
+
+      /* --- 4. TICINUS: Čistě jezdecký souboj na otevřené pláni. --- */
+      TICINUS_CAVALRY: {
+        briefing: 'Pouze jezdectvo. Otevřená pláň přeje výpadu (Charge) - rozjeď se a hned udeř.',
+        terrainMap: {},
+        unitFilter: (type) => type === 'hannibal' || type === 'numidian_cavalry',
+        playerSpawn: (roster) => roster.map((u, i) => ({ x: 1, y: 1 + i * 2 })),
+        buildEnemies: (getStats) => [
+          makeUnit('e_c1', 'Římská Jízda', 'roman_cavalry', 'enemy', 10, 1, getStats('roman_cavalry')),
+          makeUnit('e_c2', 'Římská Jízda', 'roman_cavalry', 'enemy', 10, 3, getStats('roman_cavalry')),
+          makeUnit('e_c3', 'Římská Jízda', 'roman_cavalry', 'enemy', 10, 5, getStats('roman_cavalry')),
+          makeUnit('e_scipio', 'Publius Scipio', 'roman_cavalry', 'enemy', 9, 3, bump(getStats('roman_cavalry'), 1.3, 1.2))
+        ],
+        rules: {}
+      },
+
+      /* --- 5. TREBIA: Prochladlí Římané, Magonova léčka ukrytá v rákosí za jejich zády. --- */
+      RIVER_TREBIA: {
+        briefing: 'Římané se brodili ledovou vodou a jsou zesláblí. Magonův oddíl čeká skrytý v rákosí za jejich liniemi - vyčkej na vhodnou chvíli.',
+        terrainMap: (() => {
+          const m = {};
+          for (let x = 0; x < 12; x++) m[`${x},7`] = 'river';
+          m['9,6'] = 'forest'; m['10,6'] = 'forest';
+          return m;
+        })(),
+        playerSpawn: (roster) => roster.map((u, i) => ({ x: 1 + Math.floor(i / 8), y: 1 + (i % 8) })),
+        buildEnemies: (getStats) => [
+          makeUnit('e_l1', 'Prochladlá Legie', 'roman_legion', 'enemy', 7, 1, getStats('roman_legion'), { statuses: { chilled: 3 } }),
+          makeUnit('e_l2', 'Prochladlá Legie', 'roman_legion', 'enemy', 7, 3, getStats('roman_legion'), { statuses: { chilled: 3 } }),
+          makeUnit('e_l3', 'Prochladlá Legie', 'roman_legion', 'enemy', 8, 5, getStats('roman_legion'), { statuses: { chilled: 3 } }),
+          makeUnit('e_l4', 'Prochladlý Velitel', 'roman_legion', 'enemy', 9, 3, bump(getStats('roman_legion'), 1.2, 1.15), { statuses: { chilled: 3 } })
+        ],
+        buildAmbush: (getStats) => [
+          makeUnit('e_mago1', 'Magonův Zvěd', 'carthage_spearmen', 'player', 9, 6, getStats('carthage_spearmen'), { hidden: true, isAmbush: true }),
+          makeUnit('e_mago2', 'Magonův Zvěd', 'carthage_spearmen', 'player', 10, 6, getStats('carthage_spearmen'), { hidden: true, isAmbush: true })
+        ],
+        rules: {}
+      },
+
+      /* --- 6. CANNAE: Hustý římský blok uprostřed, jízda čeká na křídlech k obchvatu. --- */
+      CANNAE_PLAINS: {
+        briefing: 'Římská formace je pevná zepředu. Neútoč čelně - obtoč ji jízdou po křídlech a rozdrť ji obklíčením zezadu.',
+        terrainMap: {},
+        playerSpawn: (roster) => {
+          // Numidská jízda startuje předsunutá na kraje pro okamžitý obchvat
+          const flankSlots = [{x:5,y:0},{x:5,y:7}];
+          const centerSlots = [];
+          for (let i = 0; i < 8; i++) centerSlots.push({ x: 1 + Math.floor(i/8), y: 1 + (i%6) });
+          let flankIdx = 0, centerIdx = 0;
+          return roster.map(u => {
+            if (u.type === 'numidian_cavalry' && flankIdx < flankSlots.length) return flankSlots[flankIdx++];
+            return centerSlots[centerIdx++] || { x: 1, y: 1 };
+          });
+        },
+        buildEnemies: (getStats) => {
+          const units = [];
+          let n = 0;
+          for (let y = 1; y <= 6; y++) {
+            for (let x = 7; x <= 8; x++) {
+              n++;
+              units.push(makeUnit('e_r' + n, `${n === 1 ? 'Konzul Varro' : 'Římská Legie'} ${n}`, 'roman_legion', 'enemy', x, y,
+                n === 1 ? bump(getStats('roman_legion'), 1.3, 1.3) : getStats('roman_legion')));
+            }
+          }
+          return units;
+        },
+        rules: { encirclementBonus: true }
+      },
+
+      /* --- 7. TRASIMENE: Celá armáda ukrytá v kopcích kolem jezera čeká na římskou kolonu. --- */
+      TRASIMENE_AMBUSH: {
+        briefing: 'Tvá armáda je ukrytá v kopcích a mlze. Nech Římany vstoupit hlouběji do údolí a pak udeř ze všech stran - jezero za jejich zády jim nedovolí ustoupit.',
+        allPlayerHidden: true,
+        terrainMap: (() => {
+          const m = {};
+          for (let x = 0; x < 12; x++) m[`${x},7`] = 'river'; // jezero blokuje ústup
+          [[1,0],[2,0],[4,1],[7,0],[9,1],[10,0]].forEach(([x,y]) => { m[`${x},${y}`] = 'hill'; });
+          [[2,6],[5,6],[9,6]].forEach(([x,y]) => { m[`${x},${y}`] = 'forest'; });
+          return m;
+        })(),
+        playerSpawn: (roster) => {
+          const hidingSpots = [{x:1,y:0},{x:2,y:0},{x:4,y:1},{x:7,y:0},{x:9,y:1},{x:10,y:0},{x:2,y:6},{x:5,y:6},{x:9,y:6}];
+          return roster.map((u, i) => hidingSpots[i % hidingSpots.length]);
+        },
+        buildEnemies: (getStats) => [
+          makeUnit('e_col1', 'Konzul Flaminius', 'roman_legion', 'enemy', 3, 3, bump(getStats('roman_legion'), 1.2, 1.15)),
+          makeUnit('e_col2', 'Legie v Pochodu', 'roman_legion', 'enemy', 5, 3, getStats('roman_legion')),
+          makeUnit('e_col3', 'Legie v Pochodu', 'roman_legion', 'enemy', 7, 4, getStats('roman_legion')),
+          makeUnit('e_col4', 'Legie v Pochodu', 'roman_legion', 'enemy', 9, 3, getStats('roman_legion')),
+          makeUnit('e_vel1', 'Římský Zvěd', 'roman_velites', 'enemy', 4, 4, getStats('roman_velites')),
+          makeUnit('e_vel2', 'Římský Zvěd', 'roman_velites', 'enemy', 8, 3, getStats('roman_velites'))
+        ],
+        rules: {}
+      },
+
+      /* --- 8. TARENTUM: Jedna brána je od začátku otevřená zradou, posádka je zaskočená. --- */
+      TARENTUM_BETRAYAL: {
+        briefing: 'Severní brána je díky zrádcům otevřená - vtrhni dovnitř, než se posádka plně probere z prvního šoku.',
+        terrainMap: (() => {
+          const m = {};
+          for (let y = 0; y < 8; y++) {
+            m[`6,${y}`] = (y === 2) ? 'plain' /* zrazená otevřená brána */ : (y === 5 ? 'gate' : 'wall');
+          }
+          return m;
+        })(),
+        playerSpawn: (roster) => roster.map((u, i) => ({ x: 1 + Math.floor(i / 8), y: 1 + (i % 8) })),
+        buildEnemies: (getStats) => [
+          makeUnit('e_t1', 'Zaskočený Strážce', 'roman_legion', 'enemy', 7, 2, getStats('roman_legion'), { statuses: { sleepy: 2 } }),
+          makeUnit('e_t2', 'Posádka Tarentu', 'roman_legion', 'enemy', 8, 2, getStats('roman_legion'), { statuses: { sleepy: 2 } }),
+          makeUnit('e_t3', 'Strážce Jižní Brány', 'roman_legion', 'enemy', 6, 5, bump(getStats('roman_legion'), 1.2, 1.1)),
+          makeUnit('e_t4', 'Posádka Tarentu', 'roman_legion', 'enemy', 8, 5, getStats('roman_legion')),
+          makeUnit('e_t5', 'Velitel Posádky', 'roman_triarii', 'enemy', 9, 3, getStats('roman_triarii'), { statuses: { sleepy: 1 } })
+        ],
+        rules: {}
+      },
+
+      /* --- 9. ZAMA: Finále. Numidové bojují za Řím, legie znají slabinu slonů. Nejtěžší bitva. --- */
+      ZAMA_FINALE: {
+        briefing: 'Masinissova jízda bojuje proti tobě a římské oddíly jsou cvičené proti slonům. Bez chytré taktiky tuto bitvu neustojíš.',
+        terrainMap: {},
+        playerSpawn: (roster) => roster.map((u, i) => ({ x: 1 + Math.floor(i / 8), y: 1 + (i % 8) })),
+        buildEnemies: (getStats) => [
+          makeUnit('e_z1', 'Scipio Africký', 'roman_legion', 'enemy', 8, 3, bump(getStats('roman_legion'), 1.35, 1.3)),
+          makeUnit('e_z2', 'Triarii Veterán', 'roman_triarii', 'enemy', 8, 2, getStats('roman_triarii')),
+          makeUnit('e_z3', 'Triarii Veterán', 'roman_triarii', 'enemy', 8, 5, getStats('roman_triarii')),
+          makeUnit('e_z4', 'Legie', 'roman_legion', 'enemy', 9, 1, getStats('roman_legion')),
+          makeUnit('e_z5', 'Legie', 'roman_legion', 'enemy', 9, 6, getStats('roman_legion')),
+          makeUnit('e_z6', 'Zvěd Velites', 'roman_velites', 'enemy', 7, 4, getStats('roman_velites')),
+          makeUnit('e_z7', 'Massinissova Jízda', 'numidian_cavalry', 'enemy', 10, 1, getStats('numidian_cavalry')),
+          makeUnit('e_z8', 'Massinissova Jízda', 'numidian_cavalry', 'enemy', 10, 6, getStats('numidian_cavalry'))
+        ],
+        rules: { antiElephant: true }
+      }
+    };
+    function bump(stats, atkMult, defMult) {
+      return Object.assign({}, stats, { atk: Math.round(stats.atk * atkMult), def: Math.round(stats.def * defMult) });
+    }
+
+    /* ==========================================================================
+       ENDLESS MOD — procedurálně generované vlny rostoucí obtížnosti.
+       Používá stejný TacticalEngine, jen bez pevně dané mapy/kampaně.
+       ========================================================================== */
+    const ENDLESS_ENEMY_NAMES = {
+      roman_legion: 'Legionář', roman_cavalry: 'Římský Jezdec', roman_triarii: 'Veterán Triarii',
+      roman_velites: 'Velites Zvěd', gallic_warrior: 'Galský Nájezdník', mountain_tribe: 'Horský Bojovník',
+      numidian_cavalry: 'Odbojný Jezdec'
+    };
+
+    function generateEndlessTerrain(wave) {
+      const m = {};
+      const types = ['hill', 'forest', 'snow'];
+      const numFeatures = 2 + Math.min(7, Math.floor(wave / 2));
+      for (let i = 0; i < numFeatures; i++) {
+        const type = types[Math.floor(Math.random() * types.length)];
+        const cx = 3 + Math.floor(Math.random() * 6), cy = Math.floor(Math.random() * 8);
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dy = -1; dy <= 1; dy++) {
+            if (Math.random() < 0.45) continue;
+            const x = cx + dx, y = cy + dy;
+            if (x >= 2 && x < 12 && y >= 0 && y < 8) m[`${x},${y}`] = type;
+          }
+        }
+      }
+      // Občasná řeka jako překážka od vlny 5 dál
+      if (wave >= 5 && Math.random() < 0.5) {
+        const riverX = 5 + Math.floor(Math.random() * 2);
+        for (let y = 0; y < 8; y++) m[`${riverX},${y}`] = (y === Math.floor(Math.random() * 8)) ? 'ford' : 'river';
+      }
+      return m;
+    }
+
+    function generateEndlessEnemies(wave, getStats) {
+      const pool = ['roman_legion', 'gallic_warrior', 'mountain_tribe'];
+      if (wave >= 2) pool.push('roman_cavalry', 'roman_velites');
+      if (wave >= 4) pool.push('roman_triarii');
+      if (wave >= 7) pool.push('numidian_cavalry'); // odpadlíci, co přeběhli k Římu
+
+      const count = Math.min(16, 4 + Math.floor(wave * 1.25));
+      const statMult = 1 + (wave - 1) * 0.09;
+
+      // Připrav volná pole na východní straně mapy, zamíchej a vezmi potřebný počet (zabrání kolizím)
+      const spots = [];
+      for (let x = 7; x < 12; x++) for (let y = 0; y < 8; y++) spots.push({ x, y });
+      for (let i = spots.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [spots[i], spots[j]] = [spots[j], spots[i]];
+      }
+
+      const units = [];
+      for (let i = 0; i < count && i < spots.length; i++) {
+        const type = pool[Math.floor(Math.random() * pool.length)];
+        const stats = bump(getStats(type), statMult, statMult);
+        const isElite = Math.random() < 0.12 + wave * 0.01;
+        const finalStats = isElite ? bump(stats, 1.25, 1.2) : stats;
+        const name = `${isElite ? 'Elitní ' : ''}${ENDLESS_ENEMY_NAMES[type] || type} V${wave}`;
+        units.push(makeUnit(`ew_${wave}_${i}`, name, type, 'enemy', spots[i].x, spots[i].y, finalStats));
+      }
+      return units;
+    }
+
+    const CAMPAIGN_MAP = {
+      nodes: [
+        {
+          id: 'saguntum',
+          title: '1. Obléhání Sagunta (219 př. n. l.)',
+          region: 'Iberie',
+          terrain: 'hills',
+          desc: 'Dobytí klíčového římského spojeneckého města v Iberii. Tato bitva tě zároveň krok za krokem naučí ovládat armádu.',
+          briefing: 'Obránci drží hradby a bránu. Frontální útok na hradbu je zbytečný – prorazit lze jen branou, kde na tebe čekají nejsilnější obránci. (Výcvikové obléhání - povede tě to krok za krokem.)',
+          reqNodes: [],
+          unlocked: true,
+          completed: false,
+          rewards: { gold: 350, senateFavor: 10, manpower: 1500 },
+          scenario: 'SAGUNTUM_SIEGE'
+        },
+        {
+          id: 'rhone',
+          title: '2. Přechod Řeky Rhôny (218 př. n. l.)',
+          region: 'Gálie',
+          terrain: 'river',
+          desc: 'Bojový přechod dravé řeky pod tlakem nepřátelských galských kmenů nakloněných Římu.',
+          briefing: 'Řeku lze překročit jen u brodů. Jednotka uprostřed brodu je zranitelná (-20% obrany) – nepřecházej nekryté a po jedné.',
+          reqNodes: ['saguntum'],
+          unlocked: false,
+          completed: false,
+          rewards: { gold: 250, senateFavor: 5, manpower: 1000 },
+          scenario: 'RHONE_CROSSING'
+        },
+        {
+          id: 'scipio_chase',
+          title: '3. Útěk před Scipiovou Jízdou (218 př. n. l.)',
+          region: 'Gálie',
+          terrain: 'plains',
+          desc: 'Publius Scipio vylodil svou armádu dřív, než jsi čekal, a jeho jízdní předvoj se ti snaží dostat na paty, než zmizíš v horách.',
+          briefing: 'Toto není bitva na mřížce - je to honička. Každé kolo vyber tempo pochodu. Rychlý pochod zkracuje čas, ale vyčerpává kolonu; opatrný postup chrání muže, ale Scipio se přibližuje.',
+          reqNodes: ['rhone'],
+          unlocked: false,
+          completed: false,
+          rewards: { gold: 150, senateFavor: 5, manpower: 500 },
+          kind: 'minigame',
+          minigame: 'SCIPIO_CHASE'
+        },
+        {
+          id: 'alps',
+          title: '4. Horský Průsmyk v Alpách (218 př. n. l.)',
+          region: 'Alpy',
+          terrain: 'snow',
+          desc: 'Legendární přechod zasněžených velehor. Extrémní mráz a horské kmeny číhající v úzkých soutěskách.',
+          briefing: 'Sníh zpomaluje pohyb všem. Horské kmeny se skrývají ve skalách podél cesty a udeří, když se přiblížíš. Mráz navíc každé kolo ubírá životy - nezdržuj se.',
+          reqNodes: ['scipio_chase'],
+          unlocked: false,
+          completed: false,
+          rewards: { gold: 200, senateFavor: 15, manpower: 500 },
+          scenario: 'ALPS_PASS'
+        },
+        {
+          id: 'ticinus',
+          title: '5. Bitva u Ticina (218 př. n. l.)',
+          region: 'Severní Itálie',
+          terrain: 'plains',
+          desc: 'První přímý střet s římskými legiemi v Itálii. Souboj převážně jezdectva a průzkumných jednotek.',
+          briefing: 'Pouze jízda. Otevřená pláň přeje rychlému manévrování - jednotka, která se rozjede a hned zaútočí, získá bonus za výpad (Charge).',
+          reqNodes: ['alps'],
+          unlocked: false,
+          completed: false,
+          rewards: { gold: 300, senateFavor: 10, manpower: 2000 },
+          scenario: 'TICINUS_CAVALRY'
+        },
+        {
+          id: 'trebia',
+          title: '6. Bitva u Trebie (218 př. n. l.)',
+          region: 'Severní Itálie',
+          terrain: 'river',
+          desc: 'Taktická léčka u zamrzlé řeky Trebie. Využij skrytý oddíl v rákosí k zdrcujícímu úderu do zády Římanů.',
+          briefing: 'Římané se brodili ledovou řekou před bitvou a jsou zesláblí. Magonův oddíl je ukrytý v rákosí - vyčkej, než se Římané zapojí, a udeř jim do zad.',
+          reqNodes: ['ticinus'],
+          unlocked: false,
+          completed: false,
+          rewards: { gold: 500, senateFavor: 20, manpower: 3000 },
+          scenario: 'RIVER_TREBIA'
+        },
+        {
+          id: 'trasimene',
+          title: '7. Léčka u Trasimenského jezera (217 př. n. l.)',
+          region: 'Etrurie',
+          terrain: 'hills',
+          desc: 'Dokonalá past. Celá armáda se ukryje v kopcích kolem jezera a čeká, až římská kolona vpochoduje přímo do sevření.',
+          briefing: 'Téměř všechny tvé jednotky začínají skryté v okolních kopcích. Nech římskou kolonu vejít do údolí, pak udeř ze všech stran najednou - z mlhy tě stejně nikdo neuvidí přicházet.',
+          reqNodes: ['trebia'],
+          unlocked: false,
+          completed: false,
+          rewards: { gold: 400, senateFavor: 15, manpower: 2000 },
+          scenario: 'TRASIMENE_AMBUSH'
+        },
+        {
+          id: 'cannae',
+          title: '8. Zkáza u Cannae (216 př. n. l.)',
+          region: 'Apulie',
+          terrain: 'plains',
+          desc: 'Vrcholné dílo taktického genia. Proveď slavný obchvat a zcela obklíč trojnásobnou římskou přesilu!',
+          briefing: 'Římská formace je hustá a silná zepředu. Neútoč čelně - obtoč ji jezdectvem po křídlech a udeř zezadu. Obklíčená jednotka (3+ nepřátel kolem) ztrácí morálku i obranu.',
+          reqNodes: ['trasimene'],
+          unlocked: false,
+          completed: false,
+          rewards: { gold: 1000, senateFavor: 40, manpower: 5000 },
+          scenario: 'CANNAE_PLAINS'
+        },
+        {
+          id: 'supply_raid',
+          title: '9. Noční Nálet na Zásobovací Konvoj (213 př. n. l.)',
+          region: 'Apulie',
+          terrain: 'plains',
+          desc: 'Roky vyčerpávající války po Cannae. Řím se vyhýbá otevřené bitvě, tak musíš armádu živit nájezdy na jeho zásobovací konvoje.',
+          briefing: 'Žádná mřížka, žádný boj na poli - rozděl omezené nájezdní oddíly mezi konvoj vozů. Příliš mnoho vozů najednou tě prozradí, příliš málo síly na jeden vůz raid zmaří.',
+          reqNodes: ['cannae'],
+          unlocked: false,
+          completed: false,
+          rewards: { gold: 300, senateFavor: 5, manpower: 800 },
+          kind: 'minigame',
+          minigame: 'SUPPLY_RAID'
+        },
+        {
+          id: 'tarentum',
+          title: '10. Dobytí Tarentu (212 př. n. l.)',
+          region: 'Kampánie',
+          terrain: 'hills',
+          desc: 'Zrádci uvnitř města ti v noci otevřou jednu bránu - ale posádka se rychle probouzí a organizuje odpor.',
+          briefing: 'Jedna brána je od začátku otevřená zradou - využij moment překvapení, než se posádka plně probere a stáhne k pevnějším pozicím.',
+          reqNodes: ['supply_raid'],
+          unlocked: false,
+          completed: false,
+          rewards: { gold: 600, senateFavor: 10, manpower: 1500 },
+          scenario: 'TARENTUM_BETRAYAL'
+        },
+        {
+          id: 'zama',
+          title: '11. Bitva u Zamy (202 př. n. l.)',
+          region: 'Afrika',
+          terrain: 'plains',
+          desc: 'Konec cesty. Scipio přenesl válku do Afriky a numidský král Massinissa nyní jede po boku Říma. Poslední, zoufalá bitva o osud Kartága.',
+          briefing: 'Numidská jízda tentokrát bojuje PROTI tobě. Římané navíc znají slabinu slonů - vůči nim mají zvýšené poškození. Toto je nejtěžší bitva tažení.',
+          reqNodes: ['tarentum'],
+          unlocked: false,
+          completed: false,
+          rewards: { gold: 300, senateFavor: 5, manpower: 500 },
+          scenario: 'ZAMA_FINALE'
+        }
+      ]
+    };
+
+    /* ==========================================================================
+       2. META STRATEGY MANAGER
+       ========================================================================== */
+    class MetaStrategyManager {
+      constructor() {
+        this.gold = 500;
+        this.manpower = 10000;
+        this.senateFavor = 50;
+        this.playerRoster = [
+          { id: 'u_hannibal', type: 'hannibal', name: 'Hannibalova Garda', xp: 120, level: 3, hpPercent: 1.0 },
+          { id: 'u_spear_1', type: 'carthage_spearmen', name: '1. Africká Falanx', xp: 40, level: 1, hpPercent: 1.0 },
+          { id: 'u_numid_1', type: 'numidian_cavalry', name: 'Numidští Jezdci', xp: 80, level: 2, hpPercent: 1.0 },
+          { id: 'u_eleph_1', type: 'elephants', name: 'Bojoví Sloni', xp: 20, level: 1, hpPercent: 1.0 }
+        ];
+
+        this.tutorialDone = false;
+        this.saguntumBonusGiven = false;
+
+        this.doctrines = {
+          DOUBLE_ENVELOPE: { name: 'Dvojitý Obchvat', unlocked: false, cost: 30, desc: '+30% poškození při útoku z boku nebo ze zad' },
+          SACRED_BAND:      { name: 'Posvátná Kohorta', unlocked: false, cost: 35, desc: 'Africké falanzy mají +25% k obraně' },
+          DESERT_SCOUTS:   { name: 'Pouštní Průzkumníci', unlocked: false, cost: 25, desc: '+1 k pohybu pro numidské jezdce' },
+          FABIAN_DELAY:    { name: 'Fabiánská Taktika', unlocked: false, cost: 30, desc: 'Celá armáda +15% obrany, ale -1 pohyb (defenzivní válčení)' },
+          NUMIDIAN_SUPREMACY: { name: 'Numidská Nadvláda', unlocked: false, cost: 40, desc: 'Veškerá jízda +2 pohyb a +15% šance na kritický zásah' },
+          IRON_DISCIPLINE: { name: 'Železná Disciplína', unlocked: false, cost: 45, desc: 'Jednotky se nikdy nedají na útěk, dokud mají nad 50% zdraví' }
+        };
+      }
+
+      replenishCost(unit) {
+        const missingHp = Math.max(0, 1.0 - unit.hpPercent);
+        return { gold: Math.round(missingHp * 120), mp: Math.round(missingHp * 800) };
+      }
+
+      replenishUnit(unitId) {
+        const unit = this.playerRoster.find(u => u.id === unitId);
+        if (!unit || unit.hpPercent >= 1.0) return false;
+        const { gold: goldCost, mp: manpowerCost } = this.replenishCost(unit);
+
+        if (this.gold >= goldCost && this.manpower >= manpowerCost) {
+          this.gold -= goldCost;
+          this.manpower -= manpowerCost;
+          unit.hpPercent = 1.0;
+          return true;
+        }
+        return false;
+      }
+
+      recruitUnit(unitType) {
+        const catalog = {
+          carthage_spearmen: { name: 'Africká Falanx', gold: 150, mp: 1000 },
+          numidian_cavalry: { name: 'Numidští Jezdci', gold: 220, mp: 800 },
+          elephants:        { name: 'Bojoví Sloni', gold: 450, mp: 500 },
+          balearic_sling:   { name: 'Baleárští Prakovníci', gold: 180, mp: 600 },
+          libyan_heavy:     { name: 'Libyjská Těžká Pěchota', gold: 280, mp: 1200 },
+          celtiberian_swordsman: { name: 'Keltiberský Žoldnéř', gold: 200, mp: 700 }
+        };
+
+        const item = catalog[unitType];
+        if (item && this.gold >= item.gold && this.manpower >= item.mp) {
+          this.gold -= item.gold;
+          this.manpower -= item.mp;
+          this.playerRoster.push({
+            id: 'u_' + Date.now(),
+            type: unitType,
+            name: item.name,
+            xp: 0,
+            level: 1,
+            hpPercent: 1.0
+          });
+          return true;
+        }
+        return false;
+      }
+
+      unlockDoctrine(key) {
+        const doc = this.doctrines[key];
+        if (doc && !doc.unlocked && this.senateFavor >= doc.cost) {
+          this.senateFavor -= doc.cost;
+          doc.unlocked = true;
+          return true;
+        }
+        return false;
+      }
+    }
+
+    /* ==========================================================================
+       3. CAMPAIGN HUB CONTROLLER
+       ========================================================================== */
+    window.GameCampaign = {
+      meta: new MetaStrategyManager(),
+      selectedNodeId: 'saguntum',
+
+      /* ===================== ULOŽENÍ POSTUPU ===================== */
+      SAVE_KEY: 'hannibal_save_v1',
+      started: false,
+
+      serialize() {
+        const m = this.meta;
+        const doctrines = {}; Object.keys(m.doctrines).forEach(k => { doctrines[k] = !!m.doctrines[k].unlocked; });
+        const nodes = {}; CAMPAIGN_MAP.nodes.forEach(n => { nodes[n.id] = { unlocked: !!n.unlocked, completed: !!n.completed }; });
+        return { v: 1, savedAt: Date.now(), gold: m.gold, manpower: m.manpower, senateFavor: m.senateFavor,
+                 roster: m.playerRoster, tutorialDone: m.tutorialDone, saguntumBonusGiven: m.saguntumBonusGiven, doctrines, nodes };
+      },
+
+      saveGame() {
+        if (!this.started) return;
+        const data = this.serialize();
+        try { localStorage.setItem(this.SAVE_KEY, JSON.stringify(data)); } catch (e) { /* bez uložení se dá hrát dál */ }
+        this.reportRecords(data);
+      },
+
+      // Rekordy hry (jomaridRecord v mostu): hra jen hlásí aktuální hodnoty z postupu, o zápisu a herních odznacích rozhoduje server.
+      reportRecords(d) {
+        if (typeof jomaridRecord !== 'function' || !d) return;
+        try {
+          const nodes = d.nodes || {};
+          const doctrines = d.doctrines || {};
+          jomaridRecord('chapters_completed', Object.keys(nodes).filter(k => nodes[k] && nodes[k].completed).length);
+          jomaridRecord('doctrines_unlocked', Object.keys(doctrines).filter(k => doctrines[k]).length);
+          jomaridRecord('top_unit_level', Math.max(0, ...(d.roster || []).map(u => Number(u.level) || 0)));
+          jomaridRecord('endless_wave', this.getEndlessBest());
+        } catch (e) { /* hra jde dál bez hlášení */ }
+      },
+
+      readSave() {
+        try {
+          const raw = localStorage.getItem(this.SAVE_KEY);
+          if (!raw) return null;
+          const d = JSON.parse(raw);
+          if (!d || d.v !== 1 || !Array.isArray(d.roster) || typeof d.gold !== 'number') return null;
+          return d;
+        } catch (e) { return null; }
+      },
+
+      hasSave() { return !!this.readSave(); },
+
+      loadGame() {
+        const d = this.readSave();
+        if (!d) return false;
+        this.resetState();
+        const m = this.meta;
+        m.gold = d.gold; m.manpower = d.manpower; m.senateFavor = d.senateFavor;
+        m.playerRoster = d.roster;
+        m.tutorialDone = !!d.tutorialDone; m.saguntumBonusGiven = !!d.saguntumBonusGiven;
+        Object.keys(m.doctrines).forEach(k => { m.doctrines[k].unlocked = !!(d.doctrines && d.doctrines[k]); });
+        CAMPAIGN_MAP.nodes.forEach(n => {
+          const st = d.nodes && d.nodes[n.id];
+          if (st) { n.unlocked = !!st.unlocked; n.completed = !!st.completed; }
+        });
+        this.started = true;
+        return true;
+      },
+
+      resetState() {
+        this.meta = new MetaStrategyManager();
+        CAMPAIGN_MAP.nodes.forEach(n => { n.completed = false; n.unlocked = n.reqNodes.length === 0; });
+        this.selectedNodeId = 'saguntum';
+      },
+
+      nextNode() {
+        return CAMPAIGN_MAP.nodes.find(n => n.unlocked && !n.completed) || null;
+      },
+
+      replenishAll() {
+        let healed = 0, spentG = 0, spentM = 0;
+        this.meta.playerRoster.forEach(u => {
+          if (u.hpPercent >= 1.0) return;
+          const c = this.meta.replenishCost(u);
+          if (this.meta.replenishUnit(u.id)) { healed++; spentG += c.gold; spentM += c.mp; }
+        });
+        if (healed > 0) Game.toast(`Doplněno ${healed} jednotek (−${spentG} zlata, −${spentM.toLocaleString('cs-CZ')} lidí).`);
+        else Game.toast('Není co doplňovat, nebo nemáš dost zdrojů.');
+        this.renderHub();
+      },
+
+      renderHub() {
+        Game.showScreen('campaign-hub');
+        this.started = true;
+        this.saveGame();
+        document.getElementById('res-gold').innerText = this.meta.gold.toLocaleString();
+        document.getElementById('res-manpower').innerText = this.meta.manpower.toLocaleString();
+        document.getElementById('res-favor').innerText = this.meta.senateFavor + '%';
+        document.getElementById('res-endless-best').innerText = this.getEndlessBest();
+
+        const next = this.nextNode();
+        const nextBox = document.getElementById('campaign-next');
+        nextBox.innerHTML = next
+          ? `<button class="btn btn-success" style="flex:1; padding:12px;" onclick="GameCampaign.selectNode('${next.id}')">▶ Pokračovat v tažení: ${next.title}</button>`
+          : `<div style="color:#4caf50; font-weight:600;">🏆 Kampaň dokončena! Zkus Nekonečné Tažení nebo opakuj bitvy.</div>`;
+
+        // Render Scenario Tree
+        const treeContainer = document.getElementById('campaign-nodes-tree');
+        treeContainer.innerHTML = CAMPAIGN_MAP.nodes.map(node => `
+          <div class="node-card ${node.completed ? 'completed' : node.unlocked ? 'active' : 'locked'} ${next && next.id === node.id ? 'next-target' : ''}"
+               id="node-${node.id}" onclick="GameCampaign.selectNode('${node.id}')"
+               title="${node.unlocked ? '' : 'Nejdřív dokonči předchozí kapitolu tažení'}">
+            <div class="node-info">
+              <div style="display:flex; gap:10px; align-items:center; margin-bottom:4px; flex-wrap:wrap;">
+                <span class="node-tag tag-region">${node.region}</span>
+                ${node.kind === 'minigame' ? '<span class="node-tag tag-minigame">⚡ Minihra</span>' : ''}
+                ${next && next.id === node.id ? '<span class="node-tag next-badge">▶ Další cíl</span>' : ''}
+                ${node.completed ? '<span style="color:#4caf50; font-weight:bold; font-size:0.8rem;">✓ DOKONČENO</span>' : ''}
+                ${!node.unlocked ? '<span style="color:var(--text-muted); font-size:0.8rem;">🔒 Zamčeno</span>' : ''}
+              </div>
+              <h4>${node.title}</h4>
+              <p>${node.desc}</p>
+              ${node.unlocked && node.briefing ? `<p style="color:var(--gold); font-size:0.78rem; margin-top:6px; font-style:italic;">💡 ${node.briefing}</p>` : ''}
+              <p style="font-size:0.75rem; margin-top:6px; color:#a5d6a7;">Odměna: 🪙 ${node.rewards.gold} &nbsp; 🪖 ${node.rewards.manpower.toLocaleString('cs-CZ')} &nbsp; 🏛️ +${node.rewards.senateFavor}%</p>
+            </div>
+            <div style="text-align:right;">
+              <button class="btn" style="padding:8px 16px; font-size:0.8rem;" ${!node.unlocked ? 'disabled' : ''}>
+                ${node.completed ? 'Opakovat' : 'Vstoupit'}
+              </button>
+            </div>
+          </div>
+        `).join('');
+        if (next) {
+          const el = document.getElementById('node-' + next.id);
+          if (el && el.scrollIntoView) { try { el.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
+        }
+
+        // Render Roster List
+        if (window.gameEngine) window.gameEngine.meta = this.meta; // aby šly spočítat skutečné statistiky vč. doktrín
+        const rosterContainer = document.getElementById('roster-list');
+        rosterContainer.innerHTML = this.meta.playerRoster.map(u => {
+          const hpPct = Math.round(u.hpPercent * 100);
+          const info = UNIT_INFO[u.type] || { label: u.type, icon: '❔', role: '' };
+          const st = window.gameEngine ? window.gameEngine.getUnitStats(u.type, u.level, 'player') : null;
+          const cost = this.meta.replenishCost(u);
+          const canAfford = this.meta.gold >= cost.gold && this.meta.manpower >= cost.mp;
+          return `
+            <div class="roster-card" title="${info.role}">
+              <div class="roster-header">
+                <span class="roster-title">${info.icon} ${u.name}</span>
+                <span style="font-size:0.75rem; color:var(--gold);">Lvl ${u.level}</span>
+              </div>
+              <div style="font-size:0.72rem; color:var(--text-muted);">${info.label}${st ? ` &nbsp;|&nbsp; ⚔ ${st.atk} &nbsp; 🛡 ${st.def} &nbsp; 👣 ${st.move} &nbsp; 🏹 ${st.range}` : ''}</div>
+              <div class="roster-stats">
+                <div>❤ ${hpPct}%${st ? ` (${Math.round(st.maxHp * u.hpPercent)}/${st.maxHp})` : ''}</div>
+                <div>XP ${u.xp}/100</div>
+                <div></div>
+              </div>
+              <div class="bar-bg"><div class="bar-fill-hp" style="width:${hpPct}%;"></div></div>
+              <div class="bar-bg" style="height:4px;"><div class="bar-fill-xp" style="width:${Math.min(100, u.xp)}%;"></div></div>
+              ${u.hpPercent < 1.0 ? `
+                <button class="btn btn-success" style="padding:4px 8px; font-size:0.75rem; margin-top:4px;" ${canAfford ? '' : 'disabled'}
+                        title="${canAfford ? '' : 'Nemáš dost zlata nebo lidí'}"
+                        onclick="Game.replenish('${u.id}')">
+                  Doplnit ztráty (🪙 ${cost.gold} / 🪖 ${cost.mp})
+                </button>
+              ` : ''}
+            </div>
+          `;
+        }).join('');
+      },
+
+      selectNode(nodeId) {
+        const node = CAMPAIGN_MAP.nodes.find(n => n.id === nodeId);
+        if (!node || !node.unlocked) return;
+        if (this.meta.playerRoster.length === 0) {
+          Game.toast('Tvá armáda byla zcela zničena! Nejprve musíš naverbovat nové jednotky.');
+          return;
+        }
+        this.selectedNodeId = nodeId;
+        if (node.kind === 'minigame') {
+          Game.startMinigame(node);
+          return;
+        }
+        Game.showScreen('battle-screen');
+        window.gameEngine.loadCampaignScenario(node, this.meta);
+      },
+
+      /* ===================== ENDLESS MOD ===================== */
+      getEndlessBest() {
+        try { return parseInt(localStorage.getItem('hannibal_endless_best') || '0', 10); } catch (e) { return 0; }
+      },
+
+      saveEndlessBest(wave) {
+        try {
+          if (wave > this.getEndlessBest()) localStorage.setItem('hannibal_endless_best', String(wave));
+        } catch (e) { /* localStorage nedostupný - tiše ignorujeme */ }
+      },
+
+      startEndlessMode() {
+        if (this.meta.playerRoster.length === 0) {
+          Game.toast('Tvá armáda byla zcela zničena! Nejprve musíš naverbovat nové jednotky.');
+          return;
+        }
+        Game.showScreen('battle-screen');
+        window.gameEngine.loadEndlessWave(1, this.meta);
+      },
+
+      // Odměna v Jomarid Coins (jen žádost, o výši a denním stropu rozhoduje server; mimo appku se nic neděje)
+      rewardCoins(reason, amount) {
+        try { if (typeof jomaridReward === 'function') jomaridReward(reason, amount); } catch (e) { /* hra jde dál bez odměny */ }
+      },
+
+      onEndlessWaveVictory(battleUnits, wave) {
+        audioFX.playVictory();
+        const { lost } = this.syncRosterFromBattle(battleUnits);
+        this.saveEndlessBest(wave);
+        this.saveGame();
+        // Mírná odměna a částečné doléčení mezi vlnami
+        this.meta.gold += 40 + wave * 8;
+        this.meta.playerRoster.forEach(u => {
+          u.hpPercent = Math.min(1, u.hpPercent + 0.15);
+          u.xp += 20;
+          if (u.xp >= 100) { u.level += 1; u.xp -= 100; }
+        });
+        this.rewardCoins('wave', 2);
+        let msg = `Vlna ${wave} poražena! Jednotky se částečně doléčily a získal jsi +${40 + wave * 8} Zlata.`;
+        if (lost.length > 0) msg += ` Padli však: ${lost.map(u => u.name).join(', ')}.`;
+        if (this.meta.playerRoster.length === 0) {
+          msg += ' Bez jediné živé jednotky nemůžeš pokračovat dál.';
+          Game.showBattleResultModal(true, msg, 'Návrat do Velitelství', () => Game.finishBattleAndReturn());
+          return;
+        }
+        Game.showBattleResultModal(true, msg, `Pokračovat do vlny ${wave + 1} ›`, () => {
+          Game.closeModals();
+          Game.showScreen('battle-screen');
+          window.gameEngine.loadEndlessWave(wave + 1, this.meta);
+        });
+      },
+
+      onEndlessDefeat(battleUnits, wave, hannibalFell) {
+        const { lost } = this.syncRosterFromBattle(battleUnits);
+        this.saveEndlessBest(Math.max(0, wave - 1));
+        this.saveGame();
+        const isRecord = wave - 1 >= this.getEndlessBest() && wave > 1;
+        let msg = hannibalFell
+          ? `HANNIBAL PADL ve vlně ${wave}! Nekonečné tažení tu končí.`
+          : `Armáda byla rozdrcena ve vlně ${wave}. Nekonečné tažení tu končí.`;
+        msg += ` Dosáhl jsi vlny ${Math.max(1, wave - 1)}.`;
+        if (lost.length > 0) msg += ` Trvale jsi přišel o: ${lost.map(u => u.name).join(', ')}.`;
+        Game.showBattleResultModal(false, msg, 'Návrat do Velitelství', () => Game.finishBattleAndReturn());
+      },
+
+      /* Trvale promítne výsledek bitvy (zranění i ztráty) zpět do rosteru mezi bitvami */
+      syncRosterFromBattle(battleUnits) {
+        if (!battleUnits) return { lost: [] };
+        const survivors = battleUnits.filter(u => u.team === 'player' && !u.isAmbush && u.hp > 0);
+        const survivorIds = new Set(survivors.map(u => u.id));
+        survivors.forEach(bu => {
+          const rosterUnit = this.meta.playerRoster.find(u => u.id === bu.id);
+          if (rosterUnit) rosterUnit.hpPercent = Math.max(0.05, bu.hp / bu.maxHp);
+        });
+        const lost = this.meta.playerRoster.filter(u => !survivorIds.has(u.id));
+        this.meta.playerRoster = this.meta.playerRoster.filter(u => survivorIds.has(u.id));
+        return { lost };
+      },
+
+      retreatFromBattle() {
+        const isEndless = window.gameEngine.isEndless;
+        const confirmMsg = isEndless
+          ? "Opravdu chceš ukončit nekonečné tažení a vrátit se do velitelství? Dosažená vlna se uloží jako rekord."
+          : "Opravdu chceš ustoupit z bitvy? Zranění jednotek zůstane a případné ztráty jsou trvalé.";
+        if (confirm(confirmMsg)) {
+          const { lost } = this.syncRosterFromBattle(window.gameEngine.units);
+          if (isEndless) this.saveEndlessBest(Math.max(0, window.gameEngine.endlessWave - 1));
+          Game.showScreen('campaign-hub');
+          this.renderHub();
+          if (lost.length > 0) {
+            Game.toast(`Při ústupu jsi přišel o: ${lost.map(u => u.name).join(', ')}`);
+          }
+        }
+      },
+
+      /* CRITICAL FIX #5: Safe Null Check in onBattleVictory */
+      onBattleVictory(battleResults, battleUnits) {
+        audioFX.playVictory();
+        const { lost } = this.syncRosterFromBattle(battleUnits);
+        const node = CAMPAIGN_MAP.nodes.find(n => n.id === this.selectedNodeId);
+        if (node) {
+          node.completed = true;
+          // Unlock dependent nodes
+          CAMPAIGN_MAP.nodes.forEach(n => {
+            if (n.reqNodes.includes(node.id)) n.unlocked = true;
+          });
+          this.meta.gold += node.rewards.gold;
+          this.meta.senateFavor = Math.min(100, this.meta.senateFavor + node.rewards.senateFavor);
+          this.meta.manpower += node.rewards.manpower;
+
+          // Award XP to surviving player units
+          this.meta.playerRoster.forEach(u => {
+            u.xp += 35;
+            if (u.xp >= 100) { u.level += 1; u.xp -= 100; }
+          });
+        }
+        if (node) this.rewardCoins('victory', 10);
+        let msg = `Dosáhl jsi slavného vítězství! Získal jsi +${node ? node.rewards.gold : 100} Zlata a posílil důvěru Senátu.`;
+        if (lost.length > 0) msg += ` Ve vřavě boje jsi ale nadobro ztratil: ${lost.map(u => u.name).join(', ')}.`;
+
+        // Pád Sagunta = narativní odměna "plné zásoby a síly" před výpravou na Alpy (jednorázově, jen tahle kampaň)
+        if (node && node.id === 'saguntum' && !this.meta.saguntumBonusGiven) {
+          this.meta.saguntumBonusGiven = true;
+          const bonusGold = 400, bonusManpower = 2500;
+          this.meta.gold += bonusGold;
+          this.meta.manpower += bonusManpower;
+          this.meta.playerRoster.forEach(u => { u.hpPercent = 1.0; });
+          msg += ` Pád Sagunta vydal bohaté sklady - armáda je plně doplněna a doléčena (+${bonusGold} Zlata, +${bonusManpower.toLocaleString('cs-CZ')} Lidí) a připravena vyrazit na dlouhou cestu přes Alpy!`;
+        }
+
+        this.saveGame();
+        Game.showBattleResultModal(true, msg);
+      },
+
+      onBattleDefeat(battleUnits, hannibalFell) {
+        const { lost } = this.syncRosterFromBattle(battleUnits);
+        let msg = hannibalFell
+          ? "HANNIBAL PADL V BOJI! Bez svého legendárního velitele se Kartágo nemůže dále bránit na tomto bojišti."
+          : "Tvá armáda byla poražena a rozprášena. Ustup k nejbližším základnám a doplň síly.";
+        if (lost.length > 0) msg += ` Trvale jsi přišel o: ${lost.map(u => u.name).join(', ')}.`;
+        this.saveGame();
+        Game.showBattleResultModal(false, msg);
+      },
+
+      /* ===================== MINIHRY: dokončení a odměny ===================== */
+      onMinigameComplete(node, result) {
+        if (node) {
+          node.completed = true;
+          CAMPAIGN_MAP.nodes.forEach(n => {
+            if (n.reqNodes.includes(node.id)) n.unlocked = true;
+          });
+          const mult = result.rewardMultiplier != null ? result.rewardMultiplier : 1;
+          const gold = Math.round(node.rewards.gold * mult);
+          const manpower = Math.round(node.rewards.manpower * mult);
+          const favor = Math.round(node.rewards.senateFavor * mult);
+          this.meta.gold += gold;
+          this.meta.manpower += manpower;
+          this.meta.senateFavor = Math.min(100, this.meta.senateFavor + favor);
+          result.goldGained = gold;
+          result.manpowerGained = manpower;
+          if (result.success !== false) this.rewardCoins('victory', 5);
+        }
+        this.saveGame();
+        Game.showBattleResultModal(
+          result.success !== false,
+          result.narrative || 'Minihra dokončena.',
+          'Návrat do Velitelství',
+          () => Game.finishBattleAndReturn()
+        );
+      }
+    };
+
+    /* ==========================================================================
+       4. TACTICAL CANVAS BATTLE ENGINE (FIXED BUGS & EXTENDED)
+       ========================================================================== */
+    class TacticalEngine {
+      constructor(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d');
+        this.cols = 12;
+        this.rows = 8;
+        this.tileSize = 70;
+        this.offsetX = 30;
+        this.offsetY = 20;
+
+        this.units = [];
+        this.selectedUnit = null;
+        this.reachable = {};
+        this.turn = 'player';
+        this.meta = null;
+        this.currentScenario = null;
+        this.scenarioConf = null;
+        this.floatingTexts = [];
+        this.attackEffects = [];
+        this.shakeUntil = 0;
+        this.shakeMag = 0;
+
+        this.hover = null;
+        this.undoState = null;
+        this.showThreat = false;
+        this.enemyTrails = [];
+        this.turnNumber = 1;
+        this._endConfirm = false;
+        this._rafPending = false;
+
+        this.touchMode = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+        this.pendingTarget = null;
+        this.canvas.addEventListener('pointerdown', (e) => { if (e.pointerType) this.touchMode = (e.pointerType === 'touch' || e.pointerType === 'pen'); });
+        window.addEventListener('resize', () => this.fitCanvas());
+        window.addEventListener('orientationchange', () => setTimeout(() => this.fitCanvas(), 250));
+
+        this.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
+        this.canvas.addEventListener('mousemove', (e) => this.handleHover(e));
+        this.canvas.addEventListener('mouseleave', () => { if (this.touchMode) return; this.hover = null; this.hideTooltip(); this.requestRender(); });
+        document.addEventListener('keydown', (e) => this.handleKey(e));
+      }
+
+      resetBattleUiState() {
+        this.hover = null;
+        this.undoState = null;
+        this.enemyTrails = [];
+        this.turnNumber = 1;
+        this._endConfirm = false;
+        this.pendingTarget = null;
+        this.hideTooltip();
+        this.updateUnitDetailCard(null);
+        this.showBanner('Bitva začíná');
+        this.fitCanvas();
+        requestAnimationFrame(() => this.fitCanvas());
+        if (this.isPortraitPhone() && !this._portraitTip) {
+          this._portraitTip = true;
+          Game.toast('Tip: pro větší bojiště otoč telefon na šířku (nebo použij ⛶). Cíl nejdřív ťukni pro náhled, druhé ťuknutí zaútočí.', 6000);
+        }
+      }
+
+      /* ===================== POMOCNÉ UI FUNKCE ===================== */
+      /* Přizpůsobí velikost plátna dostupnému místu (telefon na výšku/na šířku, velký monitor), poměr 3:2 zůstává */
+      fitCanvas() {
+        const wrap = this.canvas.parentElement;
+        if (!wrap) return;
+        const cw = wrap.clientWidth, ch = wrap.clientHeight;
+        if (!cw || !ch) return; // obrazovka není vidět
+        const cs = window.getComputedStyle ? window.getComputedStyle(wrap) : null;
+        const padX = cs ? (parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)) || 0 : 0;
+        const padY = cs ? (parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)) || 0 : 0;
+        const availW = Math.max(120, cw - padX - 4), availH = Math.max(80, ch - padY - 4);
+        // Na výšku řídí velikost jen šířka obrazovky (výška plátna se pak přizpůsobí, zbytek patří deníku)
+        const scale = this.isPortraitPhone()
+          ? Math.min(availW / this.canvas.width, 1.6)
+          : Math.min(availW / this.canvas.width, availH / this.canvas.height, 1.6);
+        this.canvas.style.width = Math.floor(this.canvas.width * scale) + 'px';
+        this.canvas.style.height = Math.floor(this.canvas.height * scale) + 'px';
+      }
+
+      isPortraitPhone() {
+        return window.innerWidth <= 900 && window.innerHeight > window.innerWidth;
+      }
+
+      requestRender() {
+        if (this._rafPending) return;
+        this._rafPending = true;
+        requestAnimationFrame(() => { this._rafPending = false; this.render(); });
+      }
+
+      eventToTile(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / (rect.width || 1);
+        const scaleY = this.canvas.height / (rect.height || 1);
+        const mouseX = (e.clientX - rect.left) * scaleX;
+        const mouseY = (e.clientY - rect.top) * scaleY;
+        return { col: Math.floor((mouseX - this.offsetX) / this.tileSize), row: Math.floor((mouseY - this.offsetY) / this.tileSize) };
+      }
+
+      isBattleActive() {
+        const s = document.getElementById('battle-screen');
+        const modal = document.getElementById('modal-battle-result');
+        return s && s.classList.contains('active') && modal && modal.classList.contains('hidden');
+      }
+
+      /* Jednotky, které v tomto tahu ještě vůbec nehrály */
+      idleUnits() {
+        return this.units.filter(u => u.team === 'player' && u.hp > 0 && !u.routed && !u.hasMoved && !u.hasActed);
+      }
+
+      isFinished(u) {
+        return u.hasActed && (u.hasMoved || u.ability !== 'hitrun');
+      }
+
+      handleKey(e) {
+        if (!this.isBattleActive()) return;
+        const helpOpen = !document.getElementById('modal-help').classList.contains('hidden');
+        if (e.key === 'Escape') {
+          if (helpOpen) { Game.closeModals(); return; }
+          this.selectedUnit = null; this.updateUnitDetailCard(null); this.render(); return;
+        }
+        if (helpOpen) return;
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.requestEndTurn(); }
+        else if (e.key === 'Tab') { e.preventDefault(); this.selectNextReady(); }
+        else if (e.key === 'z' || e.key === 'Z' || e.key === 'Backspace') { e.preventDefault(); this.undoMove(); }
+        else if (e.key === 'a' || e.key === 'A') { this.activateAbility(this.selectedUnit); }
+        else if (e.key === 'h' || e.key === 'H') { this.toggleThreat(); }
+        else if (e.key === '?' || e.key === 'F1') { e.preventDefault(); Game.openHelpModal(); }
+      }
+
+      toggleThreat() {
+        this.showThreat = !this.showThreat;
+        const btn = document.getElementById('btn-threat');
+        if (btn) btn.classList.toggle('btn-active', this.showThreat);
+        this.log(this.showThreat ? 'Zobrazena oblast hrozby: červená pole může nepřítel příští tah zasáhnout.' : 'Oblast hrozby skryta.', 'info');
+        this.render();
+      }
+
+      selectNextReady() {
+        if (this.turn !== 'player') return;
+        const ready = this.units
+          .filter(u => u.team === 'player' && u.hp > 0 && !u.routed && !this.isFinished(u) && this.isVisibleTo(u, 'player'))
+          .sort((a, b) => (a.y - b.y) || (a.x - b.x));
+        if (ready.length === 0) { this.log('Všechny jednotky už jednaly - ukonči tah.', 'info'); return; }
+        const idx = ready.indexOf(this.selectedUnit);
+        this.selectedUnit = ready[(idx + 1) % ready.length];
+        audioFX.playMarch();
+        this.updateUnitDetailCard(this.selectedUnit);
+        if (typeof Tutorial !== 'undefined') Tutorial.notify('select');
+        this.render();
+      }
+
+      /* Tlačítko Ukončit tah: pokud některé jednotky ještě nehrály, vyžádá druhé kliknutí (nenápadné potvrzení bez dialogu) */
+      requestEndTurn() {
+        if (this.turn !== 'player') return;
+        const idle = this.idleUnits().length;
+        const tutorialOn = typeof Tutorial !== 'undefined' && Tutorial.active;
+        const btn = document.getElementById('btn-endturn');
+        if (idle > 0 && !this._endConfirm && !tutorialOn) {
+          this._endConfirm = true;
+          if (btn) { btn.classList.add('btn-warn'); btn.innerText = `Opravdu? ${idle} nehrálo - klikni znovu`; }
+          clearTimeout(this._endConfirmTimer);
+          this._endConfirmTimer = setTimeout(() => { this._endConfirm = false; if (btn) btn.classList.remove('btn-warn'); this.updateHud(); }, 3000);
+          return;
+        }
+        this._endConfirm = false;
+        clearTimeout(this._endConfirmTimer);
+        if (btn) btn.classList.remove('btn-warn');
+        this.endTurn();
+      }
+
+      updateHud() {
+        const undoBtn = document.getElementById('btn-undo');
+        if (undoBtn) undoBtn.style.display = this.canUndo() ? 'inline-flex' : 'none';
+        const endBtn = document.getElementById('btn-endturn');
+        if (endBtn && !this._endConfirm) {
+          const idle = this.turn === 'player' ? this.idleUnits().length : 0;
+          endBtn.innerText = idle > 0 ? `Ukončit Tah (${idle} nehrálo)` : 'Ukončit Tah ⏎';
+        }
+        const counts = document.getElementById('battle-counts');
+        if (counts) {
+          const mine = this.units.filter(u => u.team === 'player' && u.hp > 0).length;
+          const foes = this.units.filter(u => u.team === 'enemy' && u.hp > 0 && this.isVisibleTo(u, 'player')).length;
+          const hiddenFoes = this.units.filter(u => u.team === 'enemy' && u.hp > 0 && !this.isVisibleTo(u, 'player')).length;
+          counts.innerText = `Tah ${this.turnNumber} • Tvoji: ${mine} • Nepřátelé: ${foes}${hiddenFoes ? ' (+ skrytí)' : ''}`;
+        }
+        const obj = document.getElementById('battle-objective');
+        if (obj) {
+          const conf = this.scenarioConf;
+          obj.innerText = '🎯 ' + ((conf && conf.objective) || 'Znič všechny nepřátele a nenech padnout Hannibala');
+        }
+      }
+
+      showBanner(text) {
+        const b = document.getElementById('turn-banner');
+        if (!b) return;
+        b.innerText = text;
+        b.classList.remove('show');
+        void b.offsetWidth; // restart animace
+        b.classList.add('show');
+      }
+
+      /* ===================== NÁPOVĚDA K POLÍČKU / JEDNOTCE (hover) ===================== */
+      hideTooltip() {
+        const t = document.getElementById('battle-tooltip');
+        if (t) t.style.display = 'none';
+      }
+
+      angleLabel(angle) {
+        return angle === 'rear' ? 'ze zad (+45% útok)' : angle === 'flank' ? 'z boku (+20% útok)' : 'zepředu';
+      }
+
+      handleHover(e) {
+        const { col, row } = this.eventToTile(e);
+        if (!this.inBounds(col, row)) {
+          if (this.hover) { this.hover = null; this.hideTooltip(); this.requestRender(); }
+          return;
+        }
+        const changed = !this.hover || this.hover.col !== col || this.hover.row !== row;
+        this.hover = { col, row };
+        this.showTooltip(e.clientX, e.clientY, col, row);
+        if (changed) this.requestRender();
+      }
+
+      showTooltip(cx, cy, col, row) {
+        const tip = document.getElementById('battle-tooltip');
+        if (!tip) return;
+        const unit = this.units.find(u => u.hp > 0 && u.x === col && u.y === row && this.isVisibleTo(u, 'player'));
+        const terrain = this.getTerrain(col, row);
+        const sel = this.selectedUnit;
+        let html = '';
+        if (unit) {
+          const side = unit.team === 'player' ? '<span style="color:#81d4fa;">Tvoje jednotka</span>' : '<span style="color:#ef9a9a;">Nepřítel</span>';
+          html += `<strong style="color:var(--gold);">${unit.name}</strong> ${side}<br>`;
+          html += `❤ ${unit.hp}/${unit.maxHp} &nbsp; ⚔ ${unit.atk} &nbsp; 🛡 ${unit.def} &nbsp; 👣 ${unit.move} &nbsp; 🏹 ${unit.range}<br>`;
+          html += `Morálka ${Math.round(unit.morale)}%${unit.routed ? ' - <span style="color:#ff5252;">na útěku</span>' : this.moraleShaken(unit) ? ' - <span style="color:#ff9800;">otřesen</span>' : ''}`;
+          if (unit.team === 'enemy' && sel && sel.team === 'player' && !sel.hasActed) {
+            const dist = Math.abs(sel.x - unit.x) + Math.abs(sel.y - unit.y);
+            let from = null, label = '';
+            if (dist <= sel.range) { from = sel; label = 'Útok teď'; }
+            else if (!sel.hasMoved) {
+              const ap = this.findApproachTile(sel, unit);
+              if (ap) { from = ap.ghost; label = `Klik: přiblíží se (cena ${ap.cost}) a zaútočí`; }
+            }
+            if (from) {
+              const p = this.previewAttack(from, unit);
+              html += `<hr style="border:0;border-top:1px solid #3d3222;margin:5px 0;">`;
+              html += `<span style="color:#ffd700;">${label}</span><br>`;
+              html += `Útok ${this.angleLabel(p.angle)}: <strong>${p.min}-${p.max}</strong> dmg`;
+              if (p.critChance) html += ` <span style="color:#aaa;">(krit ${Math.round(p.critChance * 100)}%)</span>`;
+              if (p.encircled) html += `<br><span style="color:#a5d6a7;">Obklíčen: nižší obrana</span>`;
+              if (p.counter) html += `<br><span style="color:#ffab91;">Protiúder: ~${p.counter} dmg</span>`;
+              if (p.kills) html += `<br><strong style="color:#ff5252;">💀 Padne</strong>`;
+              else if (p.mayKill) html += `<br><span style="color:#ff9800;">Může padnout</span>`;
+            } else {
+              html += `<hr style="border:0;border-top:1px solid #3d3222;margin:5px 0;"><span style="color:#aaa;">Mimo dosah vybrané jednotky</span>`;
+            }
+          } else if (unit.team === 'player' && !unit.routed) {
+            html += `<br><span style="color:#aaa;">${this.isFinished(unit) ? 'Už jednala' : 'Klikni pro výběr'}</span>`;
+          }
+        } else {
+          html += `<strong style="color:var(--gold);">${terrain.name}</strong><br>`;
+          html += terrain.passable ? `Cena pohybu: ${terrain.moveCost}` : '<span style="color:#ff9800;">Neprůchozí</span>';
+          if (terrain.defBonus) html += `<br>Obrana: ${terrain.defBonus > 0 ? '+' : ''}${Math.round(terrain.defBonus * 100)}%`;
+          if (terrain.concealment) html += `<br><span style="color:#9575cd;">Skrývá jednotky</span>`;
+          if (sel && sel.team === 'player' && !sel.hasMoved) {
+            const reach = this.getReachableTiles(sel);
+            const c = reach[`${col},${row}`];
+            if (c !== undefined) html += `<br><span style="color:#a5d6a7;">Dosažitelné (cena ${c}/${sel.move}) - klikni pro přesun</span>`;
+          }
+        }
+        tip.innerHTML = html;
+        tip.style.display = 'block';
+        const w = tip.offsetWidth || 220;
+        const left = (cx + 18 + w > window.innerWidth) ? cx - w - 14 : cx + 18;
+        tip.style.left = Math.max(4, left) + 'px';
+        tip.style.top = Math.min(window.innerHeight - 40, cy + 14) + 'px';
+        if (this.touchMode) {
+          clearTimeout(this._tipTimer);
+          this._tipTimer = setTimeout(() => this.hideTooltip(), 4000);
+        }
+      }
+
+      /* Najde nejlepší dosažitelné pole, ze kterého jde zaútočit na cíl (preferuje bok/záda, vyhýbá se protiúderu) */
+      findApproachTile(unit, target) {
+        const reach = this.getReachableTiles(unit);
+        let best = null;
+        Object.keys(reach).forEach(key => {
+          const [x, y] = key.split(',').map(Number);
+          const dist = Math.abs(x - target.x) + Math.abs(y - target.y);
+          if (dist > unit.range || dist === 0) return;
+          const cost = reach[key];
+          const ghost = Object.assign(Object.create(unit), { x, y, _charging: !!unit.isCavalry && (Math.abs(x - unit.x) + Math.abs(y - unit.y)) >= 2 });
+          const angle = this.classifyAngle(ghost, target);
+          const dmg = this.computeDamage(ghost, target, angle, ghost._charging, true).dmg;
+          let counter = 0;
+          if (angle === 'front' && dist <= target.range) counter = this.computeDamage(target, ghost, 'front', false, true).dmg * 0.5;
+          const score = dmg - counter - cost * 0.3 + (unit.range > 1 ? dist * 2 : 0);
+          if (!best || score > best.score) best = { x, y, cost, angle, score, ghost };
+        });
+        return best;
+      }
+
+      /* ===================== POHYB A VRÁCENÍ TAHU ===================== */
+      moveSelectedTo(col, row) {
+        const u = this.selectedUnit;
+        const dist = Math.abs(col - u.x) + Math.abs(row - u.y);
+        const prev = { unit: u, x: u.x, y: u.y, facing: u.facing };
+        const hiddenBefore = this.units.filter(o => o.hidden).length;
+        u.facing = this.facingFromMove(col - u.x, row - u.y);
+        u.x = col;
+        u.y = row;
+        u.hasMoved = true;
+        u._charging = !!u.isCavalry && dist >= 2;
+        audioFX.playMarch();
+        this.log(`${u.name} se přesunul na pozici [${col}, ${row}]${u._charging ? ' (výpad!)' : ''}`, 'player');
+        if (typeof Tutorial !== 'undefined') Tutorial.notify('move');
+        this.checkAmbushReveals();
+        // Pohyb, který odhalil skryté jednotky, nelze vzít zpět (jinak by šlo zdarma průzkumem zjišťovat pasti)
+        const revealed = this.units.filter(o => o.hidden).length !== hiddenBefore;
+        this.undoState = revealed ? null : prev;
+        this.updateUnitDetailCard(u);
+      }
+
+      canUndo() {
+        const s = this.undoState;
+        return !!(s && this.turn === 'player' && s.unit.hp > 0 && this.units.includes(s.unit) && s.unit.hasMoved && !s.unit.hasActed);
+      }
+
+      undoMove() {
+        if (!this.canUndo()) { return; }
+        const s = this.undoState;
+        const u = s.unit;
+        u.x = s.x; u.y = s.y; u.facing = s.facing;
+        u.hasMoved = false; u._charging = false;
+        this.undoState = null;
+        this.selectedUnit = u;
+        this.log(`${u.name} se vrátil na původní pozici.`, 'player');
+        this.updateUnitDetailCard(u);
+        this.render();
+      }
+
+      log(msg, type = 'info') {
+        const box = document.getElementById('combat-log');
+        const entry = document.createElement('div');
+        entry.className = `log-entry ${type === 'player' ? 'log-player' : type === 'enemy' ? 'log-enemy' : ''}`;
+        entry.innerText = msg;
+        box.appendChild(entry);
+        box.scrollTop = box.scrollHeight;
+      }
+
+      /* ===================== NAČTENÍ BITVY ===================== */
+      loadCampaignScenario(node, meta) {
+        this.meta = meta;
+        this.isEndless = false;
+        this.currentScenario = node;
+        this.scenarioConf = BATTLE_SCENARIOS[node.scenario];
+        this.units = [];
+        this.selectedUnit = null;
+        this.floatingTexts = [];
+        this.attackEffects = [];
+        this.shakeUntil = 0;
+        this.turn = 'player';
+        this.resetBattleUiState();
+
+        document.getElementById('battle-title').innerText = node.title;
+        document.getElementById('battle-turn-info').innerText = "Tah: Hráč";
+        document.getElementById('combat-log').innerHTML = '';
+        this.log(`Bitva započata: ${node.title}`, 'info');
+        if (this.scenarioConf.briefing) {
+          this.log(`📜 ${this.scenarioConf.briefing}`, 'info');
+        }
+
+        const conf = this.scenarioConf;
+        let roster = meta.playerRoster.filter(u => !conf.unitFilter || conf.unitFilter(u.type));
+        if (roster.length === 0) roster = meta.playerRoster; // pojistka, ať nikdy nevstoupíš do bitvy bez jednotek
+
+        const spawns = conf.playerSpawn(roster);
+        this.spawnPlayerRoster(roster, spawns, conf);
+
+        const enemyUnits = conf.buildEnemies(t => this.getUnitStats(t, 1, 'enemy'));
+        enemyUnits.forEach(u => this.units.push(u));
+
+        if (conf.buildAmbush) {
+          conf.buildAmbush(t => this.getUnitStats(t, 1, 'player')).forEach(u => this.units.push(u));
+        }
+
+        // Saguntum zároveň slouží jako interaktivní tutoriál - spustí se jen jednou za kampaň
+        if (node.id === 'saguntum' && this.meta && !this.meta.tutorialDone && typeof Tutorial !== 'undefined') {
+          setTimeout(() => Tutorial.start(), 500);
+        }
+
+        this.render();
+      }
+
+      /* Endless mod: stejný engine, procedurálně generovaná mapa a stupňující se nepřátelé */
+      loadEndlessWave(wave, meta) {
+        this.meta = meta;
+        this.isEndless = true;
+        this.endlessWave = wave;
+        this.currentScenario = { title: `Nekonečné Tažení — Vlna ${wave}` };
+        this.scenarioConf = { terrainMap: generateEndlessTerrain(wave), rules: {} };
+        this.units = [];
+        this.selectedUnit = null;
+        this.floatingTexts = [];
+        this.attackEffects = [];
+        this.shakeUntil = 0;
+        this.turn = 'player';
+        this.resetBattleUiState();
+
+        document.getElementById('battle-title').innerText = this.currentScenario.title;
+        document.getElementById('battle-turn-info').innerText = "Tah: Hráč";
+        document.getElementById('combat-log').innerHTML = '';
+        this.log(`Vlna ${wave} započata! Nepřátel přibývá s každou další vlnou.`, 'info');
+
+        const roster = meta.playerRoster;
+        const spawns = roster.map((u, i) => ({ x: 1 + Math.floor(i / 8), y: 1 + (i % 8) }));
+        this.spawnPlayerRoster(roster, spawns, {});
+
+        generateEndlessEnemies(wave, t => this.getUnitStats(t, 1, 'enemy')).forEach(u => this.units.push(u));
+
+        this.render();
+      }
+
+      spawnPlayerRoster(roster, spawns, conf) {
+        this.hannibalPresent = roster.some(u => u.type === 'hannibal');
+        roster.forEach((u, idx) => {
+          let stats = this.getUnitStats(u.type, u.level, 'player');
+          let pos = spawns[idx] || { x: 1, y: 1 + idx };
+          let unit = makeUnit(u.id, u.name, u.type, 'player', pos.x, pos.y, stats);
+          unit.hp = Math.max(1, Math.round(stats.maxHp * u.hpPercent));
+          unit.level = u.level;
+          if (conf.allPlayerHidden) unit.hidden = true;
+          this.units.push(unit);
+        });
+      }
+
+      /* ===================== STATISTIKY JEDNOTEK (vč. doktrín a veteránských úrovní) ===================== */
+      getUnitStats(type, level = 1, team = 'player') {
+        let base;
+        switch (type) {
+          case 'hannibal':          base = { maxHp: 220, atk: 45, def: 35, move: 3, range: 1, ability: 'inspire' }; break;
+          case 'carthage_spearmen': base = { maxHp: 150, atk: 28, def: 30, move: 2, range: 1 }; break;
+          case 'numidian_cavalry':  base = { maxHp: 110, atk: 35, def: 18, move: 4, range: 1, isCavalry: true, ability: 'hitrun' }; break;
+          case 'elephants':         base = { maxHp: 280, atk: 55, def: 25, move: 2, range: 1, ability: 'trample' }; break;
+          case 'balearic_sling':    base = { maxHp: 90,  atk: 32, def: 12, move: 2, range: 3, ability: 'precision' }; break;
+          case 'libyan_heavy':      base = { maxHp: 180, atk: 26, def: 38, move: 1, range: 1 }; break;
+          case 'celtiberian_swordsman': base = { maxHp: 130, atk: 38, def: 20, move: 2, range: 1 }; break;
+          case 'roman_legion':      base = { maxHp: 140, atk: 30, def: 25, move: 2, range: 1 }; break;
+          case 'roman_cavalry':     base = { maxHp: 110, atk: 32, def: 18, move: 3, range: 1, isCavalry: true }; break;
+          case 'roman_triarii':     base = { maxHp: 170, atk: 34, def: 32, move: 1, range: 1 }; break;
+          case 'roman_velites':     base = { maxHp: 80,  atk: 24, def: 10, move: 3, range: 2 }; break;
+          case 'gallic_warrior':    base = { maxHp: 130, atk: 33, def: 18, move: 2, range: 1 }; break;
+          case 'mountain_tribe':    base = { maxHp: 100, atk: 30, def: 16, move: 2, range: 1 }; break;
+          default:                  base = { maxHp: 120, atk: 25, def: 20, move: 2, range: 1 }; break;
+        }
+        base = Object.assign({}, base);
+        // Doktrína: Posvátná Kohorta - africké falangy +25% obrany
+        if (team === 'player' && this.meta && this.meta.doctrines.SACRED_BAND.unlocked && type === 'carthage_spearmen') {
+          base.def = Math.round(base.def * 1.25);
+        }
+        // Doktrína: Pouštní Průzkumníci - numidští jezdci +1 pohyb
+        if (team === 'player' && this.meta && this.meta.doctrines.DESERT_SCOUTS.unlocked && type === 'numidian_cavalry') {
+          base.move += 1;
+        }
+        // Doktrína: Fabiánská Taktika - celá armáda +15% obrany, -1 pohyb
+        if (team === 'player' && this.meta && this.meta.doctrines.FABIAN_DELAY.unlocked) {
+          base.def = Math.round(base.def * 1.15);
+          base.move = Math.max(1, base.move - 1);
+        }
+        // Doktrína: Numidská Nadvláda - veškerá jízda +2 pohyb (crit bonus je řešen v resolveAttack)
+        if (team === 'player' && this.meta && this.meta.doctrines.NUMIDIAN_SUPREMACY.unlocked && base.isCavalry) {
+          base.move += 2;
+        }
+        // Veteránská úroveň: každá úroveň nad 1 skutečně posiluje jednotku (dřív se jen zobrazovala, ale nic nedělala)
+        if (level > 1) {
+          const lvlMult = 1 + (level - 1) * 0.06;
+          base.atk = Math.round(base.atk * lvlMult);
+          base.def = Math.round(base.def * lvlMult);
+          base.maxHp = Math.round(base.maxHp * (1 + (level - 1) * 0.08));
+        }
+        return base;
+      }
+
+      /* ===================== TERÉN A POHYB (respektuje náklady a překážky) ===================== */
+      getTerrain(x, y) {
+        return getTerrainAt(this.scenarioConf, x, y);
+      }
+
+      isOccupied(x, y) {
+        return this.units.some(u => u.hp > 0 && u.x === x && u.y === y);
+      }
+
+      /* Skryté nepřátelské jednotky jsou pro hráče neviditelné (a naopak skryté hráčovy jednotky pro AI). */
+      isVisibleTo(unit, viewerTeam) {
+        if (!unit.hidden) return true;
+        return unit.team === viewerTeam;
+      }
+
+      inBounds(x, y) { return x >= 0 && x < this.cols && y >= 0 && y < this.rows; }
+
+      /* Dijkstra-like výpočet dosažitelných polí s ohledem na terén a obsazenost */
+      getReachableTiles(unit) {
+        const costs = {};
+        const startKey = `${unit.x},${unit.y}`;
+        costs[startKey] = 0;
+        let frontier = [{ x: unit.x, y: unit.y }];
+        while (frontier.length) {
+          const cur = frontier.shift();
+          const curCost = costs[`${cur.x},${cur.y}`];
+          for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+            const nx = cur.x + dx, ny = cur.y + dy;
+            if (!this.inBounds(nx, ny)) continue;
+            const terrain = this.getTerrain(nx, ny);
+            if (!terrain.passable) continue;
+            if (this.units.some(u => u.hp > 0 && u.x === nx && u.y === ny)) continue; // jednotky nelze procházet
+            const newCost = curCost + terrain.moveCost;
+            const key = `${nx},${ny}`;
+            if (newCost <= unit.move && (costs[key] === undefined || newCost < costs[key])) {
+              costs[key] = newCost;
+              frontier.push({ x: nx, y: ny });
+            }
+          }
+        }
+        delete costs[startKey];
+        return costs;
+      }
+
+      /* ===================== SMĚROVÁNÍ A FLANKOVÁNÍ ===================== */
+      dirVector(dir) {
+        return { N: {x:0,y:-1}, S: {x:0,y:1}, E: {x:1,y:0}, W: {x:-1,y:0} }[dir];
+      }
+
+      facingFromMove(dx, dy) {
+        if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 'E' : 'W';
+        return dy >= 0 ? 'S' : 'N';
+      }
+
+      classifyAngle(attacker, target) {
+        const dx = attacker.x - target.x, dy = attacker.y - target.y;
+        let attackDir;
+        if (Math.abs(dx) > Math.abs(dy)) attackDir = dx > 0 ? 'E' : 'W';
+        else attackDir = dy > 0 ? 'S' : 'N';
+        const opposite = { N: 'S', S: 'N', E: 'W', W: 'E' };
+        if (attackDir === target.facing) return 'front';
+        if (attackDir === opposite[target.facing]) return 'rear';
+        return 'flank';
+      }
+
+      countAdjacentEnemies(unit) {
+        let n = 0;
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dy = -1; dy <= 1; dy++) {
+            if (dx === 0 && dy === 0) continue;
+            const found = this.units.find(u => u.hp > 0 && u.team !== unit.team && u.x === unit.x + dx && u.y === unit.y + dy);
+            if (found) n++;
+          }
+        }
+        return n;
+      }
+
+      /* Formace: sousedící spojenecké jednotky STEJNÉHO typu (kromě jízdy/hrdiny) drží soudržnou linii a posilují se navzájem */
+      countAdjacentSameTypeAllies(unit) {
+        if (unit.isCavalry || unit.type === 'hannibal') return 0;
+        let n = 0;
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dy = -1; dy <= 1; dy++) {
+            if (dx === 0 && dy === 0) continue;
+            const found = this.units.find(u => u.hp > 0 && u !== unit && u.team === unit.team && u.type === unit.type && u.x === unit.x + dx && u.y === unit.y + dy);
+            if (found) n++;
+          }
+        }
+        return n;
+      }
+
+      /* ===================== MORÁLKA ===================== */
+      applyMorale(unit, amount) {
+        unit.morale = Math.max(0, Math.min(100, unit.morale - amount));
+        const ironDiscipline = unit.team === 'player' && this.meta && this.meta.doctrines.IRON_DISCIPLINE.unlocked;
+        const immuneToRout = ironDiscipline && unit.hp > unit.maxHp * 0.5;
+        if (unit.morale <= 0 && !unit.routed && !immuneToRout) {
+          unit.routed = true;
+          this.log(`${unit.name} se dává na útěk! Morálka zlomena!`, unit.team === 'player' ? 'enemy' : 'player');
+        }
+      }
+
+      moraleShaken(unit) { return unit.morale <= 40 && unit.morale > 0; }
+
+      /* ===================== BOJ ===================== */
+      /* preview=true: deterministická hodnota bez náhody (pro náhled poškození v UI), vrací i rozptyl min/max */
+      computeDamage(attacker, target, angle, charged, preview = false) {
+        let atk = attacker.atk;
+        if (attacker.statuses.chilled > 0) atk *= 0.85;
+        if (this.moraleShaken(attacker)) atk *= 0.85;
+        if (charged) atk *= 1.25;
+
+        let angleAtkMult = angle === 'rear' ? 1.45 : angle === 'flank' ? 1.20 : 1.0;
+        let angleDefMult = angle === 'rear' ? 0.65 : angle === 'flank' ? 0.85 : 1.0;
+        atk *= angleAtkMult;
+
+        let def = target.def;
+        const terrain = this.getTerrain(target.x, target.y);
+        if (attacker.ability !== 'precision') {
+          def *= (1 + terrain.defBonus);
+        }
+        if (this.moraleShaken(target)) def *= 0.85;
+        if (target.statuses && target.statuses.sleepy > 0) def *= 0.8;
+        const formationAllies = this.countAdjacentSameTypeAllies(target);
+        if (formationAllies > 0) def *= (1 + Math.min(3, formationAllies) * 0.05);
+        def *= angleDefMult;
+
+        const encircled = this.countAdjacentEnemies(target) >= 3;
+        if (encircled) def *= 0.75;
+
+        // Doktrína Dvojitý Obchvat: bonus PLATÍ POUZE při skutečném úderu z boku/zad (ne vždy!)
+        if (this.meta && this.meta.doctrines.DOUBLE_ENVELOPE.unlocked && angle !== 'front' && attacker.team === 'player') {
+          atk *= 1.3;
+        }
+
+        // Zama: římské oddíly jsou cvičené proti slonům
+        if (this.scenarioConf && this.scenarioConf.rules && this.scenarioConf.rules.antiElephant && target.type === 'elephants') {
+          atk *= 1.5;
+        }
+
+        let dmg = Math.max(4, atk - def * 0.4);
+        let critChance = 0.12;
+        if (attacker.isCavalry && attacker.team === 'player' && this.meta && this.meta.doctrines.NUMIDIAN_SUPREMACY.unlocked) {
+          critChance += 0.15;
+        }
+        if (preview) {
+          return { dmg: Math.round(dmg), min: Math.round(dmg * 0.85), max: Math.round(dmg * 1.15),
+                   critChance, isCrit: false, angle, encircled };
+        }
+        const isCrit = Math.random() < critChance;
+        if (isCrit) dmg *= 1.6;
+        dmg *= (0.85 + Math.random() * 0.3);
+        dmg = Math.round(dmg);
+
+        return { dmg, isCrit, angle, encircled };
+      }
+
+      /* Náhled souboje pro hover: poškození, protiúder, zda cíl padne */
+      previewAttack(attacker, target) {
+        const angle = this.classifyAngle(attacker, target);
+        const charged = !!attacker._charging;
+        const p = this.computeDamage(attacker, target, angle, charged, true);
+        let counter = 0;
+        const dist = Math.abs(attacker.x - target.x) + Math.abs(attacker.y - target.y);
+        if (angle === 'front' && !target.routed && dist <= target.range && target.hp > p.min) {
+          counter = Math.round(this.computeDamage(target, attacker, 'front', false, true).dmg * 0.5);
+        }
+        return { angle, min: p.min, max: p.max, dmg: p.dmg, critChance: p.critChance, counter,
+                 kills: p.min >= target.hp, mayKill: p.max >= target.hp, encircled: p.encircled };
+      }
+
+      floatText(x, y, text, color) {
+        this.floatingTexts.push({ x, y, text, color, life: 45, startTime: Date.now() });
+      }
+
+      executeAttack(attacker, target, opts = {}) {
+        const angle = opts.ambush ? 'rear' : this.classifyAngle(attacker, target);
+        const charged = !!attacker._charging;
+        const result = this.computeDamage(attacker, target, angle, charged);
+
+        audioFX.playSword();
+        this.addSlash(attacker.x, attacker.y, target.x, target.y, result.isCrit ? '#ffd700' : '#ff8a65');
+        if (result.isCrit) this.triggerShake(9);
+        target.hp -= result.dmg;
+        attacker.hasActed = true;
+        if (attacker.hidden) { attacker.hidden = false; this.log(`${attacker.name} vyráží z úkrytu!`, attacker.team); }
+
+        let angleTxt = angle === 'rear' ? ' [ÚDER ZEZADU]' : angle === 'flank' ? ' [ÚDER Z BOKU]' : '';
+        let critTxt = result.isCrit ? ' KRITICKY!' : '';
+        this.log(`${attacker.name} zaútočil na ${target.name}${angleTxt} a způsobil ${result.dmg} poškození!${critTxt}`, attacker.team);
+        this.floatText(target.x, target.y, `-${result.dmg}`, result.isCrit ? '#ffd700' : '#ff5252');
+        if (attacker.team === 'player' && typeof Tutorial !== 'undefined') Tutorial.notify('attack');
+
+        this.applyMorale(target, (result.dmg / target.maxHp) * 50 + (angle !== 'front' ? 15 : 0) + (result.encircled ? 15 : 0));
+        this.resolveCounterAttack(attacker, target, angle);
+
+        if (target.hp <= 0) {
+          this.log(`${target.name} byl zničen!`, attacker.team === 'player' ? 'player' : 'enemy');
+          this.units.forEach(u => {
+            if (u !== target && u.team === target.team && u.hp > 0 && Math.abs(u.x - target.x) <= 2 && Math.abs(u.y - target.y) <= 2) {
+              this.applyMorale(u, 10);
+            }
+          });
+          this.units = this.units.filter(u => u !== target);
+        }
+        if (attacker.hp <= 0) {
+          this.log(`${attacker.name} padl při protiútoku!`, attacker.team === 'player' ? 'enemy' : 'player');
+          this.units = this.units.filter(u => u !== attacker);
+        }
+
+        this.checkAmbushReveals();
+        // Jízdní výpad: pokud jednotka ještě nepohnula, smí po útoku ještě ustoupit/přesunout se
+        if (attacker.hp > 0 && attacker.ability === 'hitrun' && !attacker.hasMoved) {
+          this.log(`${attacker.name} je připraven k ústupu po výpadu (klikni na pole pro přesun).`, 'info');
+          this.updateUnitDetailCard(attacker);
+        } else {
+          this.selectedUnit = null;
+          this.updateUnitDetailCard(null);
+        }
+        this.checkBattleEnd();
+        this.render();
+      }
+
+      /* Protiútok: pokud cíl přežije čelní útok na blízko a má dosah, opětuje úder za poloviční poškození */
+      resolveCounterAttack(attacker, target, angle) {
+        if (target.hp <= 0 || angle !== 'front' || target.routed) return;
+        const dist = Math.abs(attacker.x - target.x) + Math.abs(attacker.y - target.y);
+        if (dist > target.range) return;
+        const counterResult = this.computeDamage(target, attacker, 'front', false);
+        const counterDmg = Math.round(counterResult.dmg * 0.5);
+        attacker.hp -= counterDmg;
+        this.floatText(attacker.x, attacker.y, `-${counterDmg}`, '#ffab91');
+        this.log(`${target.name} opětuje úder a zraňuje ${attacker.name} za ${counterDmg}!`, target.team);
+      }
+
+      /* ===================== AKTIVNÍ SCHOPNOSTI ===================== */
+      activateAbility(unit) {
+        if (!unit || unit.hasActed || unit.team !== 'player') return;
+        if (unit.ability === 'trample') {
+          const targets = this.units.filter(u => u.team !== unit.team && u.hp > 0 && Math.abs(u.x - unit.x) <= 1 && Math.abs(u.y - unit.y) <= 1);
+          if (targets.length === 0) { this.log('Žádný nepřítel není v dosahu zdupání.', 'info'); return; }
+          unit.hasActed = true;
+          audioFX.playSword();
+          this.triggerShake(12);
+          targets.forEach(t => {
+            const angle = this.classifyAngle(unit, t);
+            const dmg = Math.round(this.computeDamage(unit, t, angle, false).dmg * 0.7);
+            t.hp -= dmg;
+            this.addSlash(unit.x, unit.y, t.x, t.y, '#ffd700');
+            this.floatText(t.x, t.y, `-${dmg}`, '#ffd700');
+            this.applyMorale(t, (dmg / t.maxHp) * 50 + 20);
+            this.log(`${unit.name} zdupal ${t.name} za ${dmg} (Zdupání)!`, unit.team);
+          });
+          this.units = this.units.filter(u => u.hp > 0);
+        } else if (unit.ability === 'inspire') {
+          if (unit.abilityUsed) { this.log('Inspirace už byla v této bitvě vyčerpána.', 'info'); return; }
+          unit.abilityUsed = true;
+          unit.hasActed = true;
+          const allies = this.units.filter(u => u.team === unit.team && u !== unit && Math.abs(u.x - unit.x) <= 2 && Math.abs(u.y - unit.y) <= 2);
+          allies.forEach(a => { a.morale = 100; a.routed = false; });
+          this.log(`${unit.name} burcuje muže k boji! Morálka spojenců v okolí plně obnovena.`, unit.team);
+        } else {
+          return;
+        }
+        this.selectedUnit = null;
+        this.updateUnitDetailCard(null);
+        this.checkBattleEnd();
+        this.render();
+      }
+
+      /* Skryté jednotky se odhalí, pokud se k nim protivník přiblíží na dotek */
+      checkAmbushReveals() {
+        this.units.forEach(u => {
+          if (!u.hidden) return;
+          const spotted = this.units.some(o => o.team !== u.team && o.hp > 0 &&
+            Math.abs(o.x - u.x) <= 1 && Math.abs(o.y - u.y) <= 1);
+          if (spotted) {
+            u.hidden = false;
+            this.log(`${u.name} byl odhalen!`, 'info');
+          }
+        });
+      }
+
+      /* ===================== OVLÁDÁNÍ MYŠÍ/DOTYKEM ===================== */
+      handleCanvasClick(e) {
+        if (this.turn !== 'player') return;
+
+        const { col, row } = this.eventToTile(e);
+
+        if (!this.inBounds(col, row)) {
+          this.selectedUnit = null;
+          this.updateUnitDetailCard(null);
+          this.render();
+          return;
+        }
+
+        const clickedUnit = this.units.find(u => u.hp > 0 && u.x === col && u.y === row && this.isVisibleTo(u, 'player'));
+        const sel = this.selectedUnit;
+        if (this.pendingTarget && this.pendingTarget !== clickedUnit) this.pendingTarget = null;
+
+        if (clickedUnit) {
+          if (clickedUnit.team === 'player' && !clickedUnit.routed) {
+            if (clickedUnit === sel) {
+              // Opětovné kliknutí na vybranou jednotku ji odznačí
+              this.selectedUnit = null;
+              this.updateUnitDetailCard(null);
+            } else if (this.isFinished(clickedUnit) || (clickedUnit.hasMoved && clickedUnit.hasActed)) {
+              this.log(`${clickedUnit.name} již provedl svůj tah.`, 'info');
+              this.updateUnitDetailCard(clickedUnit);
+            } else {
+              this.selectedUnit = clickedUnit;
+              audioFX.playMarch();
+              if (typeof Tutorial !== 'undefined') Tutorial.notify('select');
+              this.updateUnitDetailCard(clickedUnit);
+            }
+          } else if (clickedUnit.team === 'enemy' && sel && sel.team === 'player' && !sel.hasActed) {
+            const dist = Math.abs(col - sel.x) + Math.abs(row - sel.y);
+            const attackable = dist <= sel.range || (!sel.hasMoved && !!this.findApproachTile(sel, clickedUnit));
+            // Dotyk: první ťuknutí na cíl ukáže náhled poškození, druhé ťuknutí zaútočí (bez náhody omylem)
+            if (this.touchMode && attackable && this.pendingTarget !== clickedUnit) {
+              this.pendingTarget = clickedUnit;
+              this.showTooltip(e.clientX, e.clientY, col, row);
+              this.log('Ťukni na cíl znovu pro útok.', 'info');
+              this.render();
+              return;
+            }
+            this.pendingTarget = null;
+            if (dist <= sel.range) {
+              this.executeAttack(sel, clickedUnit);
+              return;
+            }
+            // Mimo dosah: pokud jednotka ještě nešla, sama zvolí nejlepší pole, přiblíží se a zaútočí
+            const ap = !sel.hasMoved ? this.findApproachTile(sel, clickedUnit) : null;
+            if (ap) {
+              this.moveSelectedTo(ap.x, ap.y);
+              this.executeAttack(sel, clickedUnit);
+              return;
+            }
+            this.log('Cíl je mimo dosah útoku!', 'info');
+          } else {
+            // Bez výběru (nebo po akci) kliknutí na jednotku jen zobrazí její detaily
+            this.updateUnitDetailCard(clickedUnit);
+          }
+        } else if (sel && !sel.hasMoved) {
+          const reach = this.getReachableTiles(sel);
+          if (reach[`${col},${row}`] !== undefined) {
+            this.moveSelectedTo(col, row);
+            // Pokud po přesunu není v dosahu žádný nepřítel, jednotku rovnou odznačíme
+            const anyTargetInRange = this.units.some(u => u.team === 'enemy' && u.hp > 0 && this.isVisibleTo(u, 'player') &&
+              Math.abs(u.x - sel.x) + Math.abs(u.y - sel.y) <= sel.range);
+            if (!anyTargetInRange) this.selectedUnit = null;
+          }
+        }
+        this.render();
+      }
+
+      /* ===================== TAH NEPŘÍTELE (AI) ===================== */
+      endTurn() {
+        if (this.turn !== 'player') return;
+        if (typeof Tutorial !== 'undefined') Tutorial.notify('endturn');
+        this.turn = 'enemy';
+        this.selectedUnit = null;
+        this.undoState = null;
+        this.pendingTarget = null;
+        this.enemyTrails = [];
+        this.updateUnitDetailCard(null);
+        this.showBanner('Tah nepřítele');
+        document.getElementById('battle-turn-info').innerText = "Tah: Nepřítel AI";
+        this.render();
+        setTimeout(() => this.runEnemyPhase(), 500);
+      }
+
+      fleeUnit(unit, threats) {
+        const reach = this.getReachableTiles(unit);
+        let bestTile = null, bestDist = -1;
+        Object.keys(reach).forEach(key => {
+          const [x, y] = key.split(',').map(Number);
+          const minDistToThreat = Math.min(...threats.map(t => Math.abs(t.x - x) + Math.abs(t.y - y)));
+          if (minDistToThreat > bestDist) { bestDist = minDistToThreat; bestTile = { x, y }; }
+        });
+        if (bestTile) {
+          unit.facing = this.facingFromMove(bestTile.x - unit.x, bestTile.y - unit.y);
+          unit.x = bestTile.x; unit.y = bestTile.y;
+          this.log(`${unit.name} v panice prchá z bojiště!`, 'enemy');
+        }
+      }
+
+      runEnemyPhase() {
+        const posBefore = new Map(this.units.map(u => [u, { x: u.x, y: u.y }]));
+        this.checkAmbushReveals();
+        let enemies = this.units.filter(u => u.team === 'enemy' && !u.hidden);
+
+        enemies.forEach(enemy => {
+          if (enemy.hp <= 0) return;
+          const players = this.units.filter(u => u.team === 'player' && u.hp > 0 && this.isVisibleTo(u, 'enemy'));
+          if (players.length === 0) return;
+
+          if (enemy.routed) { this.fleeUnit(enemy, players); return; }
+
+          const inRangeNow = players.filter(p => Math.abs(p.x - enemy.x) + Math.abs(p.y - enemy.y) <= enemy.range);
+          if (inRangeNow.length > 0) {
+            const target = inRangeNow.sort((a, b) => a.hp - b.hp)[0];
+            this.aiAttack(enemy, target);
+            return;
+          }
+
+          // Zvaž všechna dosažitelná pole (včetně setrvání na místě) a hledej pozici pro útok, ideálně z boku/zad
+          const reach = this.getReachableTiles(enemy);
+          const options = [{ x: enemy.x, y: enemy.y, cost: 0 }];
+          Object.keys(reach).forEach(key => {
+            const [x, y] = key.split(',').map(Number);
+            options.push({ x, y, cost: reach[key] });
+          });
+
+          let bestOption = null, bestScore = -1, bestTarget = null;
+          options.forEach(opt => {
+            players.forEach(p => {
+              const dist = Math.abs(p.x - opt.x) + Math.abs(p.y - opt.y);
+              if (dist > enemy.range) return;
+              const fakeAttacker = { x: opt.x, y: opt.y };
+              const angle = this.classifyAngle(fakeAttacker, p);
+              let score = angle === 'rear' ? 3 : angle === 'flank' ? 2 : 1;
+              score += (1 - p.hp / p.maxHp); // preferuj slabší cíle
+              if (score > bestScore) { bestScore = score; bestOption = opt; bestTarget = p; }
+            });
+          });
+
+          if (bestOption && bestTarget) {
+            if (bestOption.x !== enemy.x || bestOption.y !== enemy.y) {
+              enemy.facing = this.facingFromMove(bestOption.x - enemy.x, bestOption.y - enemy.y);
+              enemy._charging = enemy.isCavalry && bestOption.cost >= 2;
+              enemy.x = bestOption.x; enemy.y = bestOption.y;
+            }
+            this.aiAttack(enemy, bestTarget);
+          } else {
+            // Nikoho nedosáhne - přesune se blíž k nejbližšímu hráči
+            let closest = players.sort((a, b) => (Math.abs(a.x-enemy.x)+Math.abs(a.y-enemy.y)) - (Math.abs(b.x-enemy.x)+Math.abs(b.y-enemy.y)))[0];
+            let best = null, bestDist = Math.abs(closest.x - enemy.x) + Math.abs(closest.y - enemy.y);
+            Object.keys(reach).forEach(key => {
+              const [x, y] = key.split(',').map(Number);
+              const d = Math.abs(closest.x - x) + Math.abs(closest.y - y);
+              if (d < bestDist) { bestDist = d; best = { x, y }; }
+            });
+            if (best) {
+              enemy.facing = this.facingFromMove(best.x - enemy.x, best.y - enemy.y);
+              enemy.x = best.x; enemy.y = best.y;
+            }
+          }
+        });
+
+        this.checkAmbushReveals();
+        this.applyGlobalAttrition();
+        this.tickStatuses();
+        this.units.forEach(u => { u.hasMoved = false; u.hasActed = false; u._charging = false; });
+        // Stopy pohybu nepřátel zůstanou zobrazené po dobu hráčova tahu, ať je vidět, co se stalo
+        this.enemyTrails = [];
+        this.units.forEach(u => {
+          const b = posBefore.get(u);
+          if (u.team === 'enemy' && u.hp > 0 && b && (b.x !== u.x || b.y !== u.y) && this.isVisibleTo(u, 'player')) {
+            this.enemyTrails.push({ x1: b.x, y1: b.y, x2: u.x, y2: u.y });
+          }
+        });
+        this.turnNumber += 1;
+        this.turn = 'player';
+        this.showBanner(`Tah ${this.turnNumber} - tvůj tah`);
+        document.getElementById('battle-turn-info').innerText = "Tah: Hráč";
+        this.checkBattleEnd();
+        this.autoFleeRoutedPlayers();
+        this.render();
+      }
+
+      aiAttack(attacker, target) {
+        const angle = this.classifyAngle(attacker, target);
+        const charged = !!attacker._charging;
+        const result = this.computeDamage(attacker, target, angle, charged);
+        audioFX.playSword();
+        this.addSlash(attacker.x, attacker.y, target.x, target.y, result.isCrit ? '#ffd700' : '#ef5350');
+        if (result.isCrit) this.triggerShake(9);
+        target.hp -= result.dmg;
+        if (attacker.hidden) { attacker.hidden = false; this.log(`${attacker.name} vyráží z úkrytu!`, 'enemy'); }
+        let angleTxt = angle === 'rear' ? ' [ÚDER ZEZADU]' : angle === 'flank' ? ' [ÚDER Z BOKU]' : '';
+        this.log(`${attacker.name} zaútočil na ${target.name}${angleTxt} za ${result.dmg} dmg!${result.isCrit ? ' KRITICKY!' : ''}`, 'enemy');
+        this.floatText(target.x, target.y, `-${result.dmg}`, '#ff5252');
+        this.applyMorale(target, (result.dmg / target.maxHp) * 50 + (angle !== 'front' ? 15 : 0) + (result.encircled ? 15 : 0));
+        this.resolveCounterAttack(attacker, target, angle);
+        if (target.hp <= 0) {
+          this.log(`${target.name} padl v boji!`, 'enemy');
+          this.units = this.units.filter(u => u !== target);
+        }
+        if (attacker.hp <= 0) {
+          this.log(`${attacker.name} padl při protiútoku!`, 'player');
+          this.units = this.units.filter(u => u !== attacker);
+        }
+      }
+
+      autoFleeRoutedPlayers() {
+        this.units.filter(u => u.team === 'player' && u.routed).forEach(u => {
+          const enemies = this.units.filter(e => e.team === 'enemy' && this.isVisibleTo(e, 'player'));
+          if (enemies.length > 0) this.fleeUnit(u, enemies);
+        });
+      }
+
+      applyGlobalAttrition() {
+        const rule = this.scenarioConf && this.scenarioConf.rules && this.scenarioConf.rules.globalAttrition;
+        if (!rule) return;
+        this.units.forEach(u => { u.hp -= rule; });
+        const dead = this.units.filter(u => u.hp <= 0);
+        dead.forEach(u => this.log(`${u.name} podlehl krutému mrazu!`, 'info'));
+        this.units = this.units.filter(u => u.hp > 0);
+        if (rule) this.log(`❄️ Mráz si vyžádal svou daň (-${rule} HP všem).`, 'info');
+      }
+
+      tickStatuses() {
+        this.units.forEach(u => {
+          if (u.statuses.chilled > 0) u.statuses.chilled--;
+          if (u.statuses.sleepy > 0) u.statuses.sleepy--;
+          // Regenerace morálky mimo boj
+          const nearEnemy = this.units.some(o => o.team !== u.team && Math.abs(o.x-u.x)<=1 && Math.abs(o.y-u.y)<=1);
+          if (!nearEnemy) {
+            u.morale = Math.min(100, u.morale + 8);
+            if (u.routed && u.morale > 25) { u.routed = false; this.log(`${u.name} se znovu sebral a vrací se do boje.`, 'info'); }
+          }
+        });
+      }
+
+      checkBattleEnd() {
+        const players = this.units.filter(u => u.team === 'player');
+        const enemies = this.units.filter(u => u.team === 'enemy');
+        const hannibalDown = this.hannibalPresent && !this.units.some(u => u.type === 'hannibal' && u.team === 'player' && u.hp > 0);
+
+        if (this.isEndless) {
+          if (hannibalDown) {
+            this.log('Hannibal padl! Nekonečné tažení končí zde...', 'enemy');
+            GameCampaign.onEndlessDefeat(this.units, this.endlessWave, true);
+          } else if (enemies.length === 0) {
+            GameCampaign.onEndlessWaveVictory(this.units, this.endlessWave);
+          } else if (players.length === 0) {
+            GameCampaign.onEndlessDefeat(this.units, this.endlessWave, false);
+          }
+          return;
+        }
+
+        if (hannibalDown) {
+          this.log('Hannibal padl! Bez svého velitele armáda ztrácí vůli bojovat...', 'enemy');
+          GameCampaign.onBattleDefeat(this.units, true);
+        } else if (enemies.length === 0) {
+          GameCampaign.onBattleVictory({}, this.units);
+        } else if (players.length === 0) {
+          GameCampaign.onBattleDefeat(this.units, false);
+        }
+      }
+
+      updateUnitDetailCard(u) {
+        const abilityBtn = document.getElementById('btn-ability');
+        if (!u) {
+          document.getElementById('selected-unit-info').innerText = 'Vyberte jednotku na bojišti';
+          document.getElementById('unit-detail-card').innerHTML = '';
+          abilityBtn.style.display = 'none';
+          return;
+        }
+        document.getElementById('selected-unit-info').innerText = `${u.name} (HP: ${u.hp}/${u.maxHp})`;
+        const terrain = this.getTerrain(u.x, u.y);
+        let statusTxt = [];
+        if (u.routed) statusTxt.push('<span style="color:#ff5252;">NA ÚTĚKU</span>');
+        else if (this.moraleShaken(u)) statusTxt.push('<span style="color:#ff9800;">OTŘESEN</span>');
+        if (u.statuses.chilled > 0) statusTxt.push('<span style="color:#81d4fa;">PROCHLADLÝ</span>');
+        if (u.statuses.sleepy > 0) statusTxt.push('<span style="color:#ce93d8;">ZASKOČENÝ</span>');
+        if (u.hidden) statusTxt.push('<span style="color:#9575cd;">SKRYT</span>');
+
+        let abilityTxt = '';
+        const activeAbilities = ['trample', 'inspire'];
+        if (u.ability && ABILITY_INFO[u.ability]) {
+          const info = ABILITY_INFO[u.ability];
+          abilityTxt = `<br><span style="color:#80cbc4;">${info.icon} ${info.name}${activeAbilities.includes(u.ability) ? '' : ' (pasivní)'}: ${info.desc}</span>`;
+        }
+
+        const formationAllies = this.countAdjacentSameTypeAllies(u);
+        let formationTxt = formationAllies > 0 ? `<br><span style="color:#a5d6a7;">🛡️ Formace: +${Math.min(3, formationAllies) * 5}% obrany (${formationAllies} stejný typ v okolí)</span>` : '';
+
+        document.getElementById('unit-detail-card').innerHTML = `
+          <strong style="color:var(--gold);">${u.name}</strong><br>
+          Zdraví: ${u.hp} / ${u.maxHp} | Morálka: ${Math.round(u.morale)}%<br>
+          Útok: ${u.atk} | Obrana: ${u.def}<br>
+          Pohyb: ${u.move} políčka | Dosah: ${u.range}<br>
+          Terén: ${terrain.name} ${terrain.defBonus ? `(${terrain.defBonus > 0 ? '+' : ''}${Math.round(terrain.defBonus*100)}% obrany)` : ''}<br>
+          ${statusTxt.length ? statusTxt.join(' ') : ''}${abilityTxt}${formationTxt}
+        `;
+
+        if (u.team === 'player' && activeAbilities.includes(u.ability) && !u.hasActed && !u.abilityUsed) {
+          abilityBtn.style.display = 'inline-flex';
+          abilityBtn.innerText = `${ABILITY_INFO[u.ability].icon} ${ABILITY_INFO[u.ability].name}`;
+        } else {
+          abilityBtn.style.display = 'none';
+        }
+      }
+
+      /* ===================== VYKRESLENÍ ===================== */
+      /* ===================== VIZUÁLNÍ EFEKTY ===================== */
+      tileCenter(x, y) {
+        return { px: this.offsetX + x * this.tileSize + this.tileSize / 2, py: this.offsetY + y * this.tileSize + this.tileSize / 2 };
+      }
+
+      triggerShake(magnitude = 6) {
+        this.shakeUntil = Date.now() + 220;
+        this.shakeMag = magnitude;
+      }
+
+      addSlash(ax, ay, tx, ty, color) {
+        const a = this.tileCenter(ax, ay), t = this.tileCenter(tx, ty);
+        this.attackEffects.push({ x1: a.px, y1: a.py, x2: t.px, y2: t.py, start: Date.now(), duration: 280, color: color || '#ffd700' });
+        this.triggerShake(5);
+      }
+
+      drawTerrainTile(type, x, y, size) {
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, y, size, size);
+        ctx.clip();
+        if (type === 'hill') {
+          ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+          ctx.lineWidth = 2;
+          for (let i = -size; i < size * 2; i += 11) {
+            ctx.beginPath(); ctx.moveTo(x + i, y + size); ctx.lineTo(x + i + size, y); ctx.stroke();
+          }
+        } else if (type === 'forest') {
+          ctx.fillStyle = 'rgba(180,255,180,0.10)';
+          for (let i = 0; i < 6; i++) {
+            const px = x + 10 + (i * 11) % (size - 16);
+            const py = y + 12 + Math.floor(i / 3) * 22;
+            ctx.beginPath(); ctx.arc(px, py, 3.5, 0, Math.PI * 2); ctx.fill();
+          }
+        } else if (type === 'snow') {
+          ctx.fillStyle = 'rgba(255,255,255,0.55)';
+          for (let i = 0; i < 9; i++) {
+            const px = x + (i * 13) % size;
+            const py = y + (i * 23) % size;
+            ctx.beginPath(); ctx.arc(px, py, 1.4, 0, Math.PI * 2); ctx.fill();
+          }
+        } else if (type === 'river' || type === 'ford') {
+          ctx.strokeStyle = 'rgba(180,220,255,0.18)';
+          ctx.lineWidth = 2;
+          for (let i = 0; i < 3; i++) {
+            const wy = y + 14 + i * 20;
+            ctx.beginPath();
+            ctx.moveTo(x, wy);
+            ctx.quadraticCurveTo(x + size / 4, wy - 6, x + size / 2, wy);
+            ctx.quadraticCurveTo(x + size * 3 / 4, wy + 6, x + size, wy);
+            ctx.stroke();
+          }
+        } else if (type === 'wall' || type === 'cliff') {
+          ctx.strokeStyle = 'rgba(255,255,255,0.09)';
+          ctx.lineWidth = 1;
+          for (let row = 0; row < size; row += 12) {
+            ctx.beginPath(); ctx.moveTo(x, y + row); ctx.lineTo(x + size, y + row); ctx.stroke();
+            const offset = (row / 12) % 2 === 0 ? 0 : 15;
+            for (let col = offset; col < size; col += 30) {
+              ctx.beginPath(); ctx.moveTo(x + col, y + row); ctx.lineTo(x + col, y + row + 12); ctx.stroke();
+            }
+          }
+        } else if (type === 'gate') {
+          ctx.strokeStyle = 'rgba(255,215,0,0.35)';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(x + 8, y + 6, size - 16, size - 12);
+        }
+        ctx.restore();
+      }
+
+      drawUnitIcon(unit, cx, cy) {
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+
+        if (unit.type === 'hannibal') {
+          ctx.beginPath();
+          for (let i = 0; i < 5; i++) {
+            const a1 = (i * 2 * Math.PI / 5) - Math.PI / 2;
+            const a2 = a1 + Math.PI / 5;
+            const xo = Math.cos(a1) * 10, yo = Math.sin(a1) * 10;
+            const xi = Math.cos(a2) * 4, yi = Math.sin(a2) * 4;
+            if (i === 0) ctx.moveTo(xo, yo); else ctx.lineTo(xo, yo);
+            ctx.lineTo(xi, yi);
+          }
+          ctx.closePath();
+          ctx.fill();
+        } else if (unit.type === 'elephants') {
+          ctx.beginPath();
+          ctx.ellipse(0, 2, 11, 8, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(9, 2);
+          ctx.quadraticCurveTo(17, 4, 14, 13);
+          ctx.stroke();
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(8, 6); ctx.lineTo(13, 9);
+          ctx.stroke();
+        } else if (unit.isCavalry) {
+          ctx.beginPath();
+          ctx.ellipse(-2, 3, 9, 6, 0.3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(4, -2);
+          ctx.quadraticCurveTo(10, -9, 12, -4);
+          ctx.lineTo(9, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(-6, 7); ctx.lineTo(-7, 13);
+          ctx.moveTo(2, 8); ctx.lineTo(3, 14);
+          ctx.stroke();
+        } else if (unit.range >= 2) {
+          ctx.beginPath(); ctx.arc(6, -6, 3, 0, Math.PI * 2); ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(0, 9); ctx.lineTo(0, -4); ctx.lineTo(7, -7);
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(-7, -8); ctx.lineTo(7, -8); ctx.lineTo(7, 4);
+          ctx.lineTo(0, 10); ctx.lineTo(-7, 4);
+          ctx.closePath();
+          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(10, -14); ctx.lineTo(10, 10); ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      /* ===================== VYKRESLENÍ ===================== */
+      render() {
+        const now = Date.now();
+        let shakeX = 0, shakeY = 0;
+        if (this.shakeUntil && now < this.shakeUntil) {
+          shakeX = (Math.random() - 0.5) * this.shakeMag;
+          shakeY = (Math.random() - 0.5) * this.shakeMag;
+        }
+
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.save();
+        this.ctx.translate(shakeX, shakeY);
+
+        for (let r = 0; r < this.rows; r++) {
+          for (let c = 0; c < this.cols; c++) {
+            const x = this.offsetX + c * this.tileSize;
+            const y = this.offsetY + r * this.tileSize;
+            const isEven = (r + c) % 2 === 0;
+            const terrain = this.getTerrain(c, r);
+            this.ctx.fillStyle = isEven ? terrain.color : terrain.colorAlt;
+            this.ctx.fillRect(x, y, this.tileSize, this.tileSize);
+            this.drawTerrainTile(Object.keys(TERRAIN_TYPES).find(k => TERRAIN_TYPES[k] === terrain), x, y, this.tileSize);
+            this.ctx.strokeStyle = '#2d241a';
+            this.ctx.strokeRect(x, y, this.tileSize, this.tileSize);
+          }
+        }
+
+        // Oblast hrozby: pole, která může nepřítel v příštím tahu zasáhnout (přepínač H)
+        if (this.showThreat) {
+          const threat = new Set();
+          this.units.forEach(en => {
+            if (en.team !== 'enemy' || en.hp <= 0 || en.routed || !this.isVisibleTo(en, 'player')) return;
+            const reachE = this.getReachableTiles(en);
+            const origins = [[en.x, en.y]].concat(Object.keys(reachE).map(k => k.split(',').map(Number)));
+            origins.forEach(([ox, oy]) => {
+              for (let dx = -en.range; dx <= en.range; dx++) {
+                for (let dy = -en.range; dy <= en.range; dy++) {
+                  if (Math.abs(dx) + Math.abs(dy) > en.range) continue;
+                  const tx = ox + dx, ty = oy + dy;
+                  if (this.inBounds(tx, ty)) threat.add(`${tx},${ty}`);
+                }
+              }
+            });
+          });
+          threat.forEach(key => {
+            const [c, r] = key.split(',').map(Number);
+            this.ctx.fillStyle = 'rgba(220, 40, 40, 0.18)';
+            this.ctx.fillRect(this.offsetX + c * this.tileSize + 1, this.offsetY + r * this.tileSize + 1, this.tileSize - 2, this.tileSize - 2);
+          });
+        }
+
+        let selReach = null;
+        if (this.selectedUnit && !this.selectedUnit.hasMoved && this.turn === 'player') {
+          selReach = this.getReachableTiles(this.selectedUnit);
+          Object.keys(selReach).forEach(key => {
+            const [c, r] = key.split(',').map(Number);
+            const x = this.offsetX + c * this.tileSize, y = this.offsetY + r * this.tileSize;
+            this.ctx.fillStyle = 'rgba(76, 175, 80, 0.25)';
+            this.ctx.fillRect(x + 2, y + 2, this.tileSize - 4, this.tileSize - 4);
+            this.ctx.strokeStyle = 'rgba(129, 199, 132, 0.45)';
+            this.ctx.strokeRect(x + 2.5, y + 2.5, this.tileSize - 5, this.tileSize - 5);
+          });
+        }
+        if (this.selectedUnit && !this.selectedUnit.hasActed && this.turn === 'player') {
+          const u = this.selectedUnit;
+          this.units.forEach(target => {
+            if (target.team === 'enemy' && target.hp > 0 && this.isVisibleTo(target, 'player')) {
+              const dist = Math.abs(target.x - u.x) + Math.abs(target.y - u.y);
+              const x = this.offsetX + target.x * this.tileSize, y = this.offsetY + target.y * this.tileSize;
+              if (dist <= u.range) {
+                this.ctx.strokeStyle = 'rgba(244, 67, 54, 0.95)';
+                this.ctx.lineWidth = 3;
+                this.ctx.strokeRect(x + 4, y + 4, this.tileSize - 8, this.tileSize - 8);
+                this.ctx.lineWidth = 1;
+              } else if (selReach) {
+                // Cíl, na který jednotka dosáhne po přesunu (klik = přiblíží se a zaútočí)
+                const canReach = Object.keys(selReach).some(k => {
+                  const [c, r] = k.split(',').map(Number);
+                  return Math.abs(c - target.x) + Math.abs(r - target.y) <= u.range;
+                });
+                if (canReach) {
+                  this.ctx.setLineDash([6, 4]);
+                  this.ctx.strokeStyle = 'rgba(255, 152, 0, 0.95)';
+                  this.ctx.lineWidth = 3;
+                  this.ctx.strokeRect(x + 4, y + 4, this.tileSize - 8, this.tileSize - 8);
+                  this.ctx.setLineDash([]);
+                  this.ctx.lineWidth = 1;
+                }
+              }
+            }
+          });
+        }
+
+        // Stopy pohybu nepřátel z posledního tahu
+        if (this.enemyTrails && this.enemyTrails.length && this.turn === 'player') {
+          this.ctx.save();
+          this.ctx.setLineDash([5, 5]);
+          this.ctx.strokeStyle = 'rgba(239, 154, 154, 0.75)';
+          this.ctx.fillStyle = 'rgba(239, 154, 154, 0.75)';
+          this.ctx.lineWidth = 2;
+          this.enemyTrails.forEach(t => {
+            const a = this.tileCenter(t.x1, t.y1), b = this.tileCenter(t.x2, t.y2);
+            this.ctx.beginPath(); this.ctx.moveTo(a.px, a.py); this.ctx.lineTo(b.px, b.py); this.ctx.stroke();
+            this.ctx.setLineDash([]);
+            const ang = Math.atan2(b.py - a.py, b.px - a.px);
+            this.ctx.beginPath();
+            this.ctx.moveTo(b.px - Math.cos(ang) * 26, b.py - Math.sin(ang) * 26);
+            this.ctx.lineTo(b.px - Math.cos(ang - 0.5) * 38, b.py - Math.sin(ang - 0.5) * 38);
+            this.ctx.lineTo(b.px - Math.cos(ang + 0.5) * 38, b.py - Math.sin(ang + 0.5) * 38);
+            this.ctx.closePath(); this.ctx.fill();
+            this.ctx.beginPath(); this.ctx.arc(a.px, a.py, 5, 0, Math.PI * 2); this.ctx.fill();
+            this.ctx.setLineDash([5, 5]);
+          });
+          this.ctx.restore();
+        }
+
+        if (this.pendingTarget && this.pendingTarget.hp > 0) {
+          const px = this.offsetX + this.pendingTarget.x * this.tileSize, py = this.offsetY + this.pendingTarget.y * this.tileSize;
+          this.ctx.strokeStyle = '#ffd700';
+          this.ctx.lineWidth = 4;
+          this.ctx.strokeRect(px + 2, py + 2, this.tileSize - 4, this.tileSize - 4);
+          this.ctx.lineWidth = 1;
+        }
+
+        // Zvýraznění políčka pod kurzorem
+        if (this.hover) {
+          const hx = this.offsetX + this.hover.col * this.tileSize, hy = this.offsetY + this.hover.row * this.tileSize;
+          this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+          this.ctx.lineWidth = 2;
+          this.ctx.strokeRect(hx + 1, hy + 1, this.tileSize - 2, this.tileSize - 2);
+          this.ctx.lineWidth = 1;
+        }
+
+        this.units.forEach(u => {
+          if (!this.isVisibleTo(u, 'player')) return;
+          const x = this.offsetX + u.x * this.tileSize;
+          const y = this.offsetY + u.y * this.tileSize;
+          const tokenCx = x + this.tileSize / 2, tokenCy = y + this.tileSize / 2 - 4;
+
+          if (this.selectedUnit === u) {
+            this.ctx.strokeStyle = '#ffd700';
+            this.ctx.lineWidth = 3;
+            this.ctx.strokeRect(x + 3, y + 3, this.tileSize - 6, this.tileSize - 6);
+            this.ctx.lineWidth = 1;
+          }
+
+          const finished = u.team === 'player' && this.turn === 'player' && this.isFinished(u);
+          this.ctx.globalAlpha = u.hidden ? 0.55 : (finished ? 0.62 : 1);
+
+          // Základní token s jemným gradientem místo ploché barvy
+          const grad = this.ctx.createRadialGradient(tokenCx - 6, tokenCy - 6, 2, tokenCx, tokenCy, 24);
+          if (u.routed) { grad.addColorStop(0, '#666'); grad.addColorStop(1, '#333'); }
+          else if (u.team === 'player') { grad.addColorStop(0, '#3a6690'); grad.addColorStop(1, '#182c40'); }
+          else { grad.addColorStop(0, '#a83030'); grad.addColorStop(1, '#5c1212'); }
+          this.ctx.fillStyle = grad;
+          this.ctx.beginPath();
+          this.ctx.arc(tokenCx, tokenCy, 22, 0, Math.PI * 2);
+          this.ctx.fill();
+          this.ctx.strokeStyle = u.team === 'player' ? '#81d4fa' : '#ef9a9a';
+          this.ctx.lineWidth = 2;
+          this.ctx.stroke();
+          this.ctx.lineWidth = 1;
+
+          this.drawUnitIcon(u, tokenCx, tokenCy);
+
+          // Ukazatel směru čelem
+          const fv = this.dirVector(u.facing);
+          this.ctx.fillStyle = '#ffd700';
+          this.ctx.beginPath();
+          this.ctx.arc(tokenCx + fv.x * 25, tokenCy + fv.y * 25, 3.5, 0, Math.PI * 2);
+          this.ctx.fill();
+
+          this.ctx.globalAlpha = 1;
+          if (u.team === 'player' && this.turn === 'player' && !u.routed) {
+            if (finished) {
+              this.ctx.fillStyle = '#9e9e9e';
+              this.ctx.font = 'bold 12px Montserrat';
+              this.ctx.textAlign = 'center';
+              this.ctx.fillText('✓', x + 12, y + 14);
+            } else if (!u.hasMoved && !u.hasActed) {
+              this.ctx.fillStyle = '#69f0ae';
+              this.ctx.beginPath(); this.ctx.arc(x + 11, y + 11, 4.5, 0, Math.PI * 2); this.ctx.fill();
+            }
+          }
+          this.ctx.fillStyle = '#ffffff';
+          this.ctx.font = 'bold 10px Montserrat';
+          this.ctx.textAlign = 'center';
+          this.ctx.fillText(u.name.substring(0, 9), x + this.tileSize / 2, y + this.tileSize / 2 + 18);
+
+          const hpPct = Math.max(0, u.hp / u.maxHp);
+          this.ctx.fillStyle = '#000000';
+          this.ctx.fillRect(x + 10, y + this.tileSize - 12, this.tileSize - 20, 5);
+          this.ctx.fillStyle = hpPct > 0.5 ? '#4caf50' : hpPct > 0.25 ? '#ff9800' : '#f44336';
+          this.ctx.fillRect(x + 10, y + this.tileSize - 12, (this.tileSize - 20) * hpPct, 5);
+
+          let icons = '';
+          if (u.routed) icons += '💨';
+          else if (this.moraleShaken(u)) icons += '😰';
+          if (u.statuses.chilled > 0) icons += '❄️';
+          if (u.statuses.sleepy > 0) icons += '💤';
+          if (u.hidden) icons += '👁️';
+          if (icons) {
+            this.ctx.font = '11px Montserrat';
+            this.ctx.fillText(icons, x + this.tileSize / 2, y + 12);
+          }
+        });
+
+        // Efekty útoku (rychlá čára/záblesk mezi útočníkem a cílem)
+        this.attackEffects = this.attackEffects.filter(f => now - f.start < f.duration);
+        this.attackEffects.forEach(f => {
+          const progress = (now - f.start) / f.duration;
+          this.ctx.globalAlpha = 1 - progress;
+          this.ctx.strokeStyle = f.color;
+          this.ctx.lineWidth = 4 * (1 - progress) + 1;
+          this.ctx.beginPath();
+          this.ctx.moveTo(f.x1, f.y1);
+          this.ctx.lineTo(f.x2, f.y2);
+          this.ctx.stroke();
+          this.ctx.globalAlpha = 1;
+        });
+
+        // Létající poškození
+        this.floatingTexts = this.floatingTexts.filter(f => now - f.startTime < 900);
+        this.floatingTexts.forEach(f => {
+          const progress = (now - f.startTime) / 900;
+          const x = this.offsetX + f.x * this.tileSize + this.tileSize / 2;
+          const y = this.offsetY + f.y * this.tileSize + this.tileSize / 2 - progress * 30;
+          this.ctx.globalAlpha = 1 - progress;
+          this.ctx.fillStyle = f.color;
+          this.ctx.font = 'bold 15px Montserrat';
+          this.ctx.textAlign = 'center';
+          this.ctx.fillText(f.text, x, y);
+          this.ctx.globalAlpha = 1;
+        });
+
+        this.ctx.restore();
+        this.updateHud();
+
+        const stillAnimating = this.floatingTexts.length > 0 || this.attackEffects.length > 0 || (this.shakeUntil && now < this.shakeUntil);
+        if (stillAnimating) {
+          requestAnimationFrame(() => this.render());
+        }
+      }
+    }
+
+    /* ==========================================================================
+       4.5 INTERAKTIVNÍ TUTORIÁL (naroubovaný na obléhání Sagunta)
+       ========================================================================== */
+    window.Tutorial = {
+      active: false,
+      stepIndex: 0,
+      steps: [],
+
+      init() {
+        this.steps = [
+          {
+            text: 'Vítej u obléhání Sagunta! Tahle bitva ti zároveň poslouží jako výcvik - povedu tě krok za krokem. Až ji vyhraješ, Hannibal získá z dobytého města PLNÉ zásoby a síly na dlouhou cestu přes Alpy.',
+            wait: null, target: null
+          },
+          {
+            text: 'Klikni na jednotku ve svém vojsku a vyber ji. Zelená tečka v rohu znamená, že jednotka v tomto tahu ještě nehrála. Klávesa Tab přepíná mezi jednotkami.',
+            wait: 'select', target: '#gameCanvas'
+          },
+          {
+            text: 'Zelená pole ukazují, kam se jednotka dostane - terén (kopce, brod, sníh) pohyb zpomaluje a hradby blokují. Najetím myši na pole uvidíš jeho cenu. Klikni na zelené pole. Přesun můžeš vrátit tlačítkem "Vrátit" (Z).',
+            wait: 'move', target: '#gameCanvas'
+          },
+          {
+            text: 'Najeď myší na nepřítele - uvidíš náhled poškození i protiúderu. Červený rámeček = v dosahu, oranžový čárkovaný = dosáhneš po přesunu (klik se přiblíží a zaútočí sám). Útok z boku nebo zezadu bolí mnohem víc než čelní!',
+            wait: 'attack', target: '#gameCanvas'
+          },
+          {
+            text: 'Pokud má vybraná jednotka speciální schopnost, objeví se tlačítko "Schopnost" - některé (jako Zdupání slonů) zasáhnou více nepřátel najednou.',
+            wait: null, target: '#btn-ability'
+          },
+          {
+            text: 'Až dojednáš tahy všech jednotek, ukonči tah tlačítkem "Ukončit Tah" a sleduj, jak reaguje nepřítel.',
+            wait: 'endturn', target: '#btn-endturn'
+          },
+          {
+            text: 'To je vše! Zbytek obléhání už zvládneš sám - znič všechny obránce a prolom brány Sagunta. Hodně štěstí, veliteli.',
+            wait: null, target: null
+          }
+        ];
+      },
+
+      start() {
+        this.init();
+        this.active = true;
+        this.stepIndex = 0;
+        this.render();
+      },
+
+      /* Zavoláno z herní logiky (výběr/pohyb/útok/konec tahu) - postoupí tutoriál, pokud na danou akci právě čeká */
+      notify(eventType) {
+        if (!this.active) return;
+        const step = this.steps[this.stepIndex];
+        if (step && step.wait === eventType) this.next();
+      },
+
+      next() {
+        this.stepIndex++;
+        if (this.stepIndex >= this.steps.length) { this.finish(); return; }
+        this.render();
+      },
+
+      skip() { this.finish(); },
+
+      finish() {
+        this.active = false;
+        this.clearDOM();
+        if (window.GameCampaign && GameCampaign.meta) GameCampaign.meta.tutorialDone = true;
+      },
+
+      clearDOM() {
+        const box = document.getElementById('tutorial-box');
+        if (box) box.remove();
+        const hl = document.getElementById('tutorial-highlight');
+        if (hl) hl.remove();
+      },
+
+      render() {
+        this.clearDOM();
+        const step = this.steps[this.stepIndex];
+        if (!step) return;
+
+        if (step.target) {
+          const el = document.querySelector(step.target);
+          if (el) {
+            const rect = el.getBoundingClientRect();
+            const hl = document.createElement('div');
+            hl.id = 'tutorial-highlight';
+            hl.className = 'tutorial-highlight';
+            hl.style.left = (rect.left - 6) + 'px';
+            hl.style.top = (rect.top - 6) + 'px';
+            hl.style.width = (rect.width + 12) + 'px';
+            hl.style.height = (rect.height + 12) + 'px';
+            document.body.appendChild(hl);
+          }
+        }
+
+        const box = document.createElement('div');
+        box.id = 'tutorial-box';
+        box.className = 'tutorial-box';
+        const canAdvanceManually = !step.wait;
+        box.innerHTML = `
+          <h4>📖 Výcvik (${this.stepIndex + 1}/${this.steps.length})</h4>
+          <p>${step.text}</p>
+          <div class="tutorial-actions">
+            <button class="tutorial-skip" onclick="Tutorial.skip()">Přeskočit tutoriál</button>
+            ${canAdvanceManually
+              ? '<button class="btn" style="padding:6px 16px; font-size:0.8rem;" onclick="Tutorial.next()">Další ›</button>'
+              : '<span style="font-size:0.75rem; color:var(--text-muted);">(proveď akci pro pokračování)</span>'}
+          </div>
+        `;
+        document.body.appendChild(box);
+      }
+    };
+
+    /* ==========================================================================
+       4.6 MINIHRY - alternativní mechaniky mimo mřížkovou bitvu
+       ========================================================================== */
+    window.MinigameEngine = {
+      state: null,
+
+      log(msg) {
+        const box = document.getElementById('minigame-log');
+        if (!box) return;
+        const entry = document.createElement('div');
+        entry.className = 'log-entry';
+        entry.innerText = msg;
+        box.appendChild(entry);
+        box.scrollTop = box.scrollHeight;
+      },
+
+      start(node) {
+        document.getElementById('minigame-log').innerHTML = '';
+        if (node.minigame === 'SCIPIO_CHASE') this.startScipioChase(node);
+        else if (node.minigame === 'SUPPLY_RAID') this.startSupplyRaid(node);
+      },
+
+      abandon() {
+        if (confirm('Opravdu chceš tuto minihru opustit bez odměny?')) {
+          this.state = null;
+          Game.showScreen('campaign-hub');
+          GameCampaign.renderHub();
+        }
+      },
+
+      renderStats(stats) {
+        document.getElementById('minigame-stats').innerHTML = stats.map(s => `
+          <div class="minigame-stat"><div class="label">${s.label}</div><div class="value">${s.value}</div></div>
+        `).join('');
+      },
+
+      /* ---------------- MINIHRA 1: Útěk před Scipiovou jízdou ---------------- */
+      startScipioChase(node) {
+        const roster = GameCampaign.meta.playerRoster;
+        this.state = {
+          type: 'SCIPIO_CHASE',
+          node,
+          round: 1,
+          maxRounds: 6,
+          distance: 55,
+          cohesion: 100,
+          hasScout: roster.some(u => u.type === 'numidian_cavalry'),
+          caughtCount: 0
+        };
+        document.getElementById('minigame-title').innerText = node.title;
+        document.getElementById('minigame-subtitle').innerText = 'Honička - udrž náskok před Scipiovými jezdci';
+        this.log('Scipiovi jezdci se objevili na obzoru za kolonou. Musíš se dostat do bezpečí hor, než tě dostihnou.');
+        if (this.state.hasScout) this.log('Numidští jezdci v tvém voje mohou krýt ústup (bonus při opatrném postupu).');
+        this.renderScipioChase();
+      },
+
+      renderScipioChase() {
+        const s = this.state;
+        this.renderStats([
+          { label: 'Kolo', value: `${s.round}/${s.maxRounds}` },
+          { label: 'Náskok', value: Math.max(0, Math.round(s.distance)) },
+          { label: 'Soudržnost', value: Math.max(0, Math.round(s.cohesion)) + '%' }
+        ]);
+        const gapPct = Math.max(0, Math.min(100, s.distance));
+        const gapColor = s.distance <= 15 ? '#e53935' : s.distance <= 30 ? '#ff9800' : '#4caf50';
+        const cohColor = s.cohesion >= 70 ? '#4caf50' : s.cohesion >= 40 ? '#ff9800' : '#e53935';
+        document.getElementById('minigame-narrative').innerHTML =
+          `<b>Cíl:</b> přežij ${s.maxRounds} kol honičky. Nechtěj, aby náskok klesl na 0 (Scipio tě dostihne a ztratíš soudržnost). Vítězství = velká soudržnost + žádné dostižení.<br><br>` +
+          (s.lastNote ? `<i>${s.lastNote}</i><br><br>` : '') +
+          (s.round === 1 ? 'Kolona vyráží. Zvol tempo pochodu pro tohle kolo.'
+            : (s.distance <= 15 ? '<b style="color:#ff7961;">Jezdci jsou nebezpečně blízko - slyšíš je za zády!</b>' : 'Kolona postupuje k horám. Zvol tempo pochodu pro tohle kolo.')) +
+          `<div style="margin-top:12px; font-size:0.75rem; color:var(--text-muted);">Náskok před Scipiem</div><div class="meter"><div style="width:${gapPct}%; background:${gapColor};"></div></div>` +
+          `<div style="margin-top:8px; font-size:0.75rem; color:var(--text-muted);">Soudržnost kolony</div><div class="meter"><div style="width:${Math.max(0, s.cohesion)}%; background:${cohColor};"></div></div>`;
+
+        document.getElementById('minigame-content').innerHTML = `
+          <div class="minigame-choices">
+            <div class="choice-card" onclick="MinigameEngine.scipioChoosePace('forced')">
+              <h4>⚡ Forsírovaný pochod</h4>
+              <p>Náskok <b style="color:#a5d6a7;">+18 až +26</b>, soudržnost <b style="color:#ff7961;">−10 až −16</b>. Rychle, ale vyčerpává.</p>
+            </div>
+            <div class="choice-card" onclick="MinigameEngine.scipioChoosePace('normal')">
+              <h4>🚶 Běžný pochod</h4>
+              <p>Náskok <b style="color:#a5d6a7;">+8 až +14</b>, soudržnost <b style="color:#ff7961;">−2 až −6</b>. Vyvážené.</p>
+            </div>
+            <div class="choice-card" onclick="MinigameEngine.scipioChoosePace('careful')">
+              <h4>🛡️ Opatrný postup${this.state.hasScout ? ' (s numidskou rojnicí)' : ''}</h4>
+              <p>${this.state.hasScout ? 'Náskok <b style="color:#a5d6a7;">+10 až +16</b>, soudržnost <b style="color:#a5d6a7;">0 až +3</b>. Numidská jízda kryje zadní voj - nejlepší volba!' : 'Náskok <b style="color:#a5d6a7;">+2 až +6</b>, soudržnost se drží. Pomalé (Numidská jízda by zde pomohla).'}</p>
+            </div>
+          </div>
+        `;
+      },
+
+      scipioChoosePace(pace) {
+        const s = this.state;
+        let distGain, cohesionDelta;
+        if (pace === 'forced') {
+          distGain = 18 + Math.random() * 8;
+          cohesionDelta = -(10 + Math.random() * 6);
+          this.log(`Kolo ${s.round}: Forsírovaný pochod - muži jsou vyčerpaní, ale vzdálenost roste.`);
+        } else if (pace === 'normal') {
+          distGain = 8 + Math.random() * 6;
+          cohesionDelta = -(2 + Math.random() * 4);
+          this.log(`Kolo ${s.round}: Běžné tempo pochodu.`);
+        } else {
+          if (s.hasScout) {
+            distGain = 10 + Math.random() * 6;
+            cohesionDelta = Math.random() * 3;
+            this.log(`Kolo ${s.round}: Numidská rojnice kryje ústup - opatrný postup bez ztrát.`);
+          } else {
+            distGain = 2 + Math.random() * 4;
+            cohesionDelta = -2 + Math.random() * 4;
+            this.log(`Kolo ${s.round}: Opatrný postup - pomalý, ale bezpečný.`);
+          }
+        }
+        const distBefore = s.distance, cohBefore = s.cohesion;
+        s.distance += distGain;
+        s.cohesion = Math.min(100, Math.max(0, s.cohesion + cohesionDelta));
+
+        // Scipiova jízda se stále přibližuje - náhodný tlak (−6 až −12 náskoku každé kolo)
+        s.distance -= 6 + Math.random() * 6;
+
+        if (s.distance <= 0) {
+          s.caughtCount += 1;
+          s.cohesion = Math.max(0, s.cohesion - (8 + Math.random() * 7));
+          s.distance = 8;
+          this.log('Scipiovi jezdci dostihli zadní voj! Strhla se krátká srážka, než se koloně podařilo utrhnout.');
+        }
+
+        const dD = Math.round(s.distance - distBefore), dC = Math.round(s.cohesion - cohBefore);
+        s.lastNote = `Minulé kolo: náskok ${dD >= 0 ? '+' : ''}${dD}, soudržnost ${dC >= 0 ? '+' : ''}${dC}.`;
+        s.round += 1;
+        if (s.round > s.maxRounds) { this.finishScipioChase(); return; }
+        this.renderScipioChase();
+      },
+
+      finishScipioChase() {
+        const s = this.state;
+        let mult, success, narrative;
+        if (s.caughtCount === 0 && s.cohesion >= 70) {
+          mult = 1.5; success = true;
+          narrative = 'Kolona unikla Scipiovým jezdcům beze ztrát a v dobré kondici! Vojáci vstupují do hor odpočatí a odhodlaní.';
+        } else if (s.caughtCount <= 1 && s.cohesion >= 40) {
+          mult = 1.0; success = true;
+          narrative = 'Kolona dorazila k horám v pořádku, i když s pár odřenýma ušima po srážkách se Scipiovou jízdou.';
+          this.applyRandomRosterDamage(1, 6);
+        } else {
+          mult = 0.5; success = false;
+          narrative = 'Honička byla krutá - kolona ztratila soudržnost a část zásob v panice při útěku, ale podařilo se utéct do bezpečí hor.';
+          this.applyRandomRosterDamage(2, 14);
+        }
+        GameCampaign.onMinigameComplete(s.node, { success, rewardMultiplier: mult, narrative });
+      },
+
+      /* ---------------- MINIHRA 2: Noční nálet na zásobovací konvoj ---------------- */
+      startSupplyRaid(node) {
+        const wagonNames = ['Obilní vůz', 'Vůz se zbraněmi', 'Vůz s mincemi', 'Doprovodný vůz'];
+        const wagons = wagonNames.map((name, i) => {
+          const guard = 2 + Math.floor(Math.random() * 8);
+          return {
+            id: 'w' + i,
+            name,
+            guard,
+            revealed: false,
+            loot: 60 + Math.floor(Math.random() * 140),
+            allocated: 0
+          };
+        });
+        this.state = { type: 'SUPPLY_RAID', node, tokens: 4, wagons, resolved: false };
+        document.getElementById('minigame-title').innerText = node.title;
+        document.getElementById('minigame-subtitle').innerText = 'Nálet na konvoj - rozděl nájezdníky mezi vozy';
+        this.log('Zvědové vyčíhli noční zásobovací konvoj. Rozděl omezené nájezdní síly mezi vozy, nebo vyšli zvěda, ať zjistíš síla hlídky.');
+        this.renderSupplyRaid();
+      },
+
+      guardHint(wagon) {
+        if (wagon.revealed) return `Hlídka: přesně ${wagon.guard}`;
+        if (wagon.guard <= 3) return 'Hlídka: slabá (odhad)';
+        if (wagon.guard <= 6) return 'Hlídka: střední (odhad)';
+        return 'Hlídka: silná (odhad)';
+      },
+
+      /* Odhad šance na úspěch přepadu vozu (přesný při zjištěné hlídce, jinak rozmezí podle odhadu síly) */
+      raidChanceText(w) {
+        if (w.allocated <= 0) return '';
+        const calc = g => Math.max(8, Math.min(95, w.allocated * 28 - g * 7 + 10));
+        let lo, hi;
+        if (w.revealed) { lo = hi = calc(w.guard); }
+        else {
+          const range = w.guard <= 3 ? [2, 3] : w.guard <= 6 ? [4, 6] : [7, 9];
+          lo = calc(range[1]); hi = calc(range[0]);
+        }
+        const txt = lo === hi ? `${lo}%` : `${lo}-${hi}%`;
+        const col = hi >= 65 ? '#a5d6a7' : hi >= 35 ? '#ffcc80' : '#ff7961';
+        return `<div style="font-size:0.8rem; color:${col};">Šance: <b>${txt}</b></div>`;
+      },
+
+      renderSupplyRaid() {
+        const s = this.state;
+        this.renderStats([
+          { label: 'Nájezdní tokeny', value: s.tokens },
+          { label: 'Vozů', value: s.wagons.length }
+        ]);
+        document.getElementById('minigame-narrative').innerText =
+          'Cíl: nasbírej co nejvíc kořisti. Přiřaď tokeny vozům (0-3 na vůz) - víc tokenů = větší šance, ale zbude jich méně na ostatní vozy. Zvěd (−1 token) odhalí přesnou sílu hlídky. Neúspěšný přepad lehce zraní nájezdníky (nikdy nezabije). Nic nepřidělit = bezpečné, ale skoro bez kořisti.';
+
+        document.getElementById('minigame-content').innerHTML = `
+          <div class="wagon-row">
+            ${s.wagons.map(w => `
+              <div class="wagon-card">
+                <h4>${w.name}</h4>
+                <div class="guard-hint">${this.guardHint(w)}</div>
+                <div style="font-size:0.78rem; color:var(--gold);">Kořist: ~${w.loot} Zlata</div>
+                ${this.raidChanceText(w)}
+                <div class="wagon-token-row">
+                  <button class="token-btn" ${w.allocated <= 0 ? 'disabled' : ''} onclick="MinigameEngine.raidAdjust('${w.id}', -1)">-</button>
+                  <span class="token-count">${w.allocated}</span>
+                  <button class="token-btn" ${(s.tokens <= 0 || w.allocated >= 3) ? 'disabled' : ''} onclick="MinigameEngine.raidAdjust('${w.id}', 1)">+</button>
+                </div>
+                <button class="btn" style="padding:4px 8px; font-size:0.7rem;" ${(w.revealed || s.tokens <= 0) ? 'disabled' : ''} onclick="MinigameEngine.scoutWagon('${w.id}')">👁 Zvěd (-1 token)</button>
+              </div>
+            `).join('')}
+          </div>
+          <div style="margin-top:18px; text-align:center;">
+            <button class="btn btn-success" style="padding:12px 30px;" onclick="MinigameEngine.resolveSupplyRaid()">Zaútočit na konvoj</button>
+          </div>
+        `;
+      },
+
+      raidAdjust(wagonId, delta) {
+        const s = this.state;
+        const w = s.wagons.find(x => x.id === wagonId);
+        if (!w) return;
+        if (delta > 0 && s.tokens > 0 && w.allocated < 3) { w.allocated += 1; s.tokens -= 1; }
+        else if (delta < 0 && w.allocated > 0) { w.allocated -= 1; s.tokens += 1; }
+        this.renderSupplyRaid();
+      },
+
+      scoutWagon(wagonId) {
+        const s = this.state;
+        const w = s.wagons.find(x => x.id === wagonId);
+        if (!w || w.revealed || s.tokens <= 0) return;
+        w.revealed = true;
+        s.tokens -= 1;
+        this.log(`Zvěd ohlásil: ${w.name} má hlídku síly ${w.guard}.`);
+        this.renderSupplyRaid();
+      },
+
+      resolveSupplyRaid() {
+        const s = this.state;
+        const attempted = s.wagons.filter(w => w.allocated > 0);
+        if (attempted.length === 0) {
+          GameCampaign.onMinigameComplete(s.node, {
+            success: null, rewardMultiplier: 0.3,
+            narrative: 'Nájezdníci se raději v tichosti stáhli - žádný vůz nebyl přepaden, žádné ztráty, žádná velká kořist.'
+          });
+          return;
+        }
+        let totalLoot = 0, successes = 0;
+        attempted.forEach(w => {
+          const chance = Math.max(8, Math.min(95, w.allocated * 28 - w.guard * 7 + 10));
+          const roll = Math.random() * 100;
+          if (roll < chance) {
+            successes += 1;
+            totalLoot += w.loot;
+            this.log(`${w.name}: úspěšný přepad (${Math.round(chance)}% šance)! Kořist +${w.loot} Zlata.`);
+          } else {
+            this.log(`${w.name}: hlídka nájezd odrazila (${Math.round(chance)}% šance). Ztráty mezi nájezdníky.`);
+            this.applyRandomRosterDamage(1, 8);
+          }
+        });
+        const ratio = successes / attempted.length;
+        const mult = 0.4 + ratio * 1.1;
+        const success = ratio >= 0.5;
+        const narrative = successes === attempted.length
+          ? `Dokonalý nálet! Všech ${successes} napadených vozů padlo do tvých rukou, celkem +${totalLoot} Zlata v kořisti.`
+          : successes === 0
+            ? 'Nálet byl odhalen a odražen na celé čáře - konvoj unikl beze ztrát na své straně.'
+            : `Částečný úspěch - ${successes} z ${attempted.length} vozů padlo, celkem +${totalLoot} Zlata v kořisti.`;
+        GameCampaign.onMinigameComplete(s.node, { success, rewardMultiplier: mult, narrative });
+      },
+
+      /* Abstraktní ztráty z minihry - nikdy nezabíjí jednotky, jen je zraní (na rozdíl od taktických bitev) */
+      applyRandomRosterDamage(times, pctEach) {
+        const roster = GameCampaign.meta.playerRoster;
+        if (!roster || roster.length === 0) return;
+        for (let i = 0; i < times; i++) {
+          const u = roster[Math.floor(Math.random() * roster.length)];
+          u.hpPercent = Math.max(0.1, u.hpPercent - pctEach / 100);
+        }
+      }
+    };
+
+    /* ==========================================================================
+       5. MAIN UI MANAGER
+       ========================================================================== */
+    window.Game = {
+      showScreen(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        if (screenId) document.getElementById(screenId).classList.add('active');
+        if (screenId === 'main-menu') this.refreshMenu();
+        if (screenId === 'battle-screen' && window.gameEngine) {
+          window.gameEngine.fitCanvas();
+          requestAnimationFrame(() => window.gameEngine && window.gameEngine.fitCanvas());
+        }
+      },
+
+      /* Celá obrazovka + zámek na šířku (funguje na Androidu/Chrome; na iPhonu to prohlížeč nedovolí) */
+      async toggleLandscape() {
+        try {
+          if (!document.fullscreenElement) {
+            await document.documentElement.requestFullscreen();
+            if (screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape');
+            this.toast('Celá obrazovka zapnuta, orientace zamčena na šířku.');
+          } else {
+            if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
+            await document.exitFullscreen();
+          }
+        } catch (e) {
+          this.toast('Toto zařízení zámek orientace nepodporuje - otoč telefon ručně.');
+        }
+      },
+
+      refreshMenu() {
+        const cont = document.getElementById('btn-continue-campaign');
+        const info = document.getElementById('menu-save-info');
+        if (!cont) return;
+        const save = GameCampaign.readSave();
+        const hasProgress = GameCampaign.started || !!save;
+        cont.style.display = hasProgress ? 'inline-flex' : 'none';
+        if (info) {
+          if (GameCampaign.started) info.innerText = 'Postup se ukládá automaticky.';
+          else if (save) info.innerText = `Uložený postup: ${save.nodes ? Object.values(save.nodes).filter(n => n.completed).length : 0}/${CAMPAIGN_MAP.nodes.length} kapitol dokončeno.`;
+          else info.innerText = '';
+        }
+        const nb = document.getElementById('btn-new-campaign');
+        if (nb) { nb.classList.remove('btn-warn'); nb.innerText = 'Nová Kampaň'; }
+        this._newConfirm = false;
+      },
+
+      /* Pokračovat: načte uložený postup (nebo se vrátí k rozehrané kampani v paměti) */
+      continueCampaign() {
+        if (!GameCampaign.started) {
+          if (!GameCampaign.loadGame()) { this.toast('Uložený postup se nepodařilo načíst - začni novou kampaň.'); return; }
+        }
+        GameCampaign.renderHub();
+      },
+
+      /* Nová kampaň: pokud existuje postup, vyžaduje druhé kliknutí (bez dialogu) */
+      newCampaign() {
+        const hasProgress = GameCampaign.started || GameCampaign.hasSave();
+        const nb = document.getElementById('btn-new-campaign');
+        if (hasProgress && !this._newConfirm) {
+          this._newConfirm = true;
+          if (nb) { nb.classList.add('btn-warn'); nb.innerText = 'Smaže postup! Klikni znovu'; }
+          clearTimeout(this._newTimer);
+          this._newTimer = setTimeout(() => this.refreshMenu(), 3500);
+          return;
+        }
+        clearTimeout(this._newTimer);
+        this._newConfirm = false;
+        GameCampaign.resetState();
+        GameCampaign.started = true;
+        GameCampaign.renderHub();
+      },
+
+      startCampaign() {
+        GameCampaign.started = true;
+        GameCampaign.renderHub();
+      },
+
+      startMinigame(node) {
+        this.showScreen('minigame-screen');
+        MinigameEngine.start(node);
+      },
+
+      toast(msg, ms = 3000) {
+        const t = document.getElementById('toast');
+        if (!t) return;
+        t.innerText = msg;
+        t.classList.add('show');
+        clearTimeout(this._toastTimer);
+        this._toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+      },
+
+      recruitCatalog() {
+        return {
+          carthage_spearmen:    { gold: 150, mp: 1000 },
+          numidian_cavalry:     { gold: 220, mp: 800 },
+          elephants:            { gold: 450, mp: 500 },
+          balearic_sling:       { gold: 180, mp: 600 },
+          libyan_heavy:         { gold: 280, mp: 1200 },
+          celtiberian_swordsman:{ gold: 200, mp: 700 }
+        };
+      },
+
+      openRecruitModal() {
+        const list = document.getElementById('recruit-list');
+        const catalog = this.recruitCatalog();
+        const m = GameCampaign.meta;
+        if (window.gameEngine) window.gameEngine.meta = m;
+        list.innerHTML = `<div style="font-size:0.85rem; color:var(--gold);">Máš: 🪙 ${m.gold.toLocaleString('cs-CZ')} Zlata &nbsp; 🪖 ${m.manpower.toLocaleString('cs-CZ')} Lidí</div>` +
+          Object.keys(catalog).map(type => {
+            const item = catalog[type];
+            const info = UNIT_INFO[type];
+            const st = window.gameEngine ? window.gameEngine.getUnitStats(type, 1, 'player') : null;
+            const okGold = m.gold >= item.gold, okMp = m.manpower >= item.mp;
+            const can = okGold && okMp;
+            return `
+          <div class="modal-item">
+            <div>
+              <strong style="color:var(--gold);">${info.icon} ${info.label}</strong><br>
+              <span style="font-size:0.8rem; color:#aaa;">Cena: <span style="color:${okGold ? '#aaa' : '#ff7961'};">${item.gold} Zlata</span> | <span style="color:${okMp ? '#aaa' : '#ff7961'};">${item.mp.toLocaleString('cs-CZ')} Lidí</span></span><br>
+              ${st ? `<span style="font-size:0.75rem; color:#bdbdbd;">❤ ${st.maxHp} &nbsp; ⚔ ${st.atk} &nbsp; 🛡 ${st.def} &nbsp; 👣 ${st.move} &nbsp; 🏹 ${st.range}</span><br>` : ''}
+              <span style="font-size:0.75rem; color:#80cbc4;">${info.role}${st && st.ability && ABILITY_INFO[st.ability] ? ' ' + ABILITY_INFO[st.ability].icon + ' ' + ABILITY_INFO[st.ability].name + '.' : ''}</span>
+            </div>
+            <button class="btn" ${can ? '' : 'disabled'} title="${can ? '' : 'Nemáš dost zlata nebo lidí'}" onclick="Game.recruit('${type}')">Verbovat</button>
+          </div>`;
+          }).join('');
+        document.getElementById('modal-recruit').classList.remove('hidden');
+      },
+
+      recruit(type) {
+        const ok = GameCampaign.meta.recruitUnit(type);
+        if (ok) {
+          this.toast(`Naverbováno: ${UNIT_INFO[type].label}.`);
+          GameCampaign.renderHub();
+          this.openRecruitModal(); // zůstane otevřené, ať jde verbovat víc jednotek
+        } else {
+          this.toast('Nemáš dost zlata nebo lidí.');
+        }
+      },
+
+      replenish(unitId) {
+        const ok = GameCampaign.meta.replenishUnit(unitId);
+        this.toast(ok ? 'Jednotka doplněna.' : 'Nemáš dost zlata nebo lidí.');
+        GameCampaign.renderHub();
+      },
+
+      openDoctrinesModal() {
+        const list = document.getElementById('doctrines-list');
+        const m = GameCampaign.meta;
+        list.innerHTML = `<div style="font-size:0.85rem; color:var(--gold);">Přízeň Senátu: 🏛️ ${m.senateFavor}% (odemčení doktríny ji spotřebuje)</div>` +
+          Object.keys(m.doctrines).map(k => {
+          const doc = m.doctrines[k];
+          const can = !doc.unlocked && m.senateFavor >= doc.cost;
+          const missing = doc.cost - m.senateFavor;
+          return `
+            <div class="modal-item" style="${doc.unlocked ? 'border-color:#2e7d32;' : ''}">
+              <div>
+                <strong style="color:var(--gold);">${doc.name}</strong> ${doc.unlocked ? '<span style="color:#4caf50; font-size:0.75rem;">✓ aktivní</span>' : ''}<br>
+                <span style="font-size:0.8rem; color:#aaa;">${doc.desc}</span><br>
+                <span style="font-size:0.75rem; color:${can || doc.unlocked ? '#a5d6a7' : '#ff7961'};">${doc.unlocked ? 'Odemčeno' : `Cena: ${doc.cost}% Přízně${can ? '' : ` (chybí ${missing}%)`}`}</span>
+              </div>
+              <button class="btn" ${can ? '' : 'disabled'} onclick="Game.unlockDoctrine('${k}')">
+                ${doc.unlocked ? 'Odemčeno' : 'Odemknout'}
+              </button>
+            </div>
+          `;
+        }).join('');
+        document.getElementById('modal-doctrines').classList.remove('hidden');
+      },
+
+      unlockDoctrine(key) {
+        const ok = GameCampaign.meta.unlockDoctrine(key);
+        this.toast(ok ? `Doktrína odemčena: ${GameCampaign.meta.doctrines[key].name}.` : 'Nemáš dost Přízně Senátu.');
+        GameCampaign.renderHub();
+        this.openDoctrinesModal();
+      },
+
+      openHelpModal() {
+        const terrainRows = Object.keys(TERRAIN_TYPES).map(k => {
+          const t = TERRAIN_TYPES[k];
+          return `<tr><td>${t.name}</td><td>${t.passable ? t.moveCost : '-'}</td><td>${t.passable ? (t.defBonus ? (t.defBonus > 0 ? '+' : '') + Math.round(t.defBonus * 100) + '%' : '0') : 'neprůchozí'}</td></tr>`;
+        }).join('');
+        const abilityRows = Object.keys(ABILITY_INFO).map(k => `<tr><td>${ABILITY_INFO[k].icon} ${ABILITY_INFO[k].name}</td><td>${ABILITY_INFO[k].desc}</td></tr>`).join('');
+        document.getElementById('help-content').innerHTML = `
+          <div class="help-section"><h4>🎯 Cíl</h4>Vyhraj bitvu zničením všech nepřátel. Pokud padne Hannibal, bitva je prohraná. Mezi bitvami doplňuješ armádu, verbuješ a odemykáš doktríny. Postup se ukládá automaticky.</div>
+          <div class="help-section"><h4>🖱️ Ovládání bitvy</h4>
+            <b>Klik</b> na svou jednotku = výběr (zelená tečka značí, že ještě nehrála). <b>Zelená pole</b> = kam může jít, <b>červený rámeček</b> = nepřítel v dosahu, <b>oranžový čárkovaný</b> = dosáhneš po přesunu (klik se přiblíží a zaútočí sám na nejlepším poli). <b>Najetím myši</b> na nepřítele uvidíš náhled poškození a protiúderu.<br>
+            <kbd>Tab</kbd> další jednotka &nbsp; <kbd>Z</kbd> vrátit pohyb &nbsp; <kbd>A</kbd> schopnost &nbsp; <kbd>H</kbd> oblast hrozby &nbsp; <kbd>Enter</kbd> ukončit tah &nbsp; <kbd>Esc</kbd> odznačit &nbsp; <kbd>?</kbd> nápověda</div>
+          <div class="help-section"><h4>🧭 Směr útoku</h4>Každá jednotka míří čelem tam, kam se naposledy pohnula (žlutá tečka). Útok <b>z boku</b> dává +20 % útoku a −15 % obrany cíle, útok <b>zezadu</b> +45 % a −35 %. Čelní útok vyvolá protiúder (50 % poškození). Tři a více nepřátel kolem = obklíčení (−25 % obrany).</div>
+          <div class="help-section"><h4>🗺️ Terén</h4><table class="help-table"><tr><th>Terén</th><th>Cena pohybu</th><th>Obrana</th></tr>${terrainRows}</table></div>
+          <div class="help-section"><h4>😰 Morálka</h4>Zranění, boční útoky a pád spojenců snižují morálku. Pod 40 % je jednotka otřesená (slabší), na 0 % utíká z boje. Inspirace Hannibala morálku obnoví.</div>
+          <div class="help-section"><h4>✨ Schopnosti</h4><table class="help-table">${abilityRows}</table></div>
+          <div class="help-section"><h4>⚡ Minihry</h4>Některé kapitoly nejsou bitvy na mřížce, ale honička nebo nájezd. Nikdy nezabíjejí jednotky a vždy odemknou další kapitolu - výkon určuje jen výši odměny.</div>
+        `;
+        document.getElementById('modal-help').classList.remove('hidden');
+      },
+
+      closeModals() {
+        document.querySelectorAll('.modal-overlay').forEach(m => m.classList.add('hidden'));
+      },
+
+      showBattleResultModal(isVictory, desc, buttonLabel, buttonAction) {
+        document.getElementById('result-title').innerText = isVictory ? "Vítězství!" : "Porážka!";
+        document.getElementById('result-desc').innerText = desc;
+        const btn = document.getElementById('result-action-btn');
+        btn.innerText = buttonLabel || 'Návrat do Velitelství';
+        btn.onclick = buttonAction || (() => Game.finishBattleAndReturn());
+        document.getElementById('modal-battle-result').classList.remove('hidden');
+      },
+
+      finishBattleAndReturn() {
+        this.closeModals();
+        GameCampaign.renderHub();
+      }
+    };
+
+    // Initialize Game Engine on Page Load
+    window.addEventListener('load', () => {
+      window.gameEngine = new TacticalEngine('gameCanvas');
+      Game.refreshMenu();
+      GameCampaign.reportRecords(GameCampaign.readSave() || { nodes: {}, doctrines: {}, roster: [] });   // postup z dřívějška se ohlásí hned, ne až po dalším uložení
+    });
+  </script>
+</body>
+</html>

@@ -8,6 +8,8 @@ const LABELS = {
   golden_ball: 'Zlatá koule',
   discover: 'Nová koule objevena',
   record: 'Nový rekord',
+  victory: 'Vítězství',
+  wave: 'Poražená vlna',
 };
 
 export const DEFAULT_REWARD_LABEL = 'Odměna ze hry';

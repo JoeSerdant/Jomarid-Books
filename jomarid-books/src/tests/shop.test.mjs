@@ -30,7 +30,7 @@ test('katalog: unikátní id s předponou podle skupiny, ceny 100 až 400 mincí
     const labels = itemsOfKind(kind).map((i) => i.label);
     assert.equal(new Set(labels).size, labels.length, `názvy ve skupině ${kind}`);
   }
-  assert.equal(itemsOfKind(KIND_TITLE).length, 39);
+  assert.equal(itemsOfKind(KIND_TITLE).length, 44);
   assert.equal(itemsOfKind(KIND_GAMEFX).length, 6);
 });
 
