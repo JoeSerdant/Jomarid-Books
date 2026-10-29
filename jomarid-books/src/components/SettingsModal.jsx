@@ -29,6 +29,7 @@ import { APP_VERSION_LABEL } from '../appInfo';
 import PushSettings from '../push/PushSettings';
 import { cleanupOnLogout } from '../push/pushClient';
 import { createLoginCode, getLoginCodeInfo, revokeLoginCode } from '../offline/loginCode';
+import { OfflineBooksSection } from '../offline/OfflineBooksSection';
 import { useInstallState, promptInstall } from '../pwa/install';
 import { whenOfflineReady, resetApp } from '../pwa/register';
 
@@ -949,7 +950,7 @@ const AppTab = () => {
         {result && !installed && <Notice>{result}</Notice>}
       </Section>
 
-      <Section title="Offline a aktualizace" description="Obal aplikace se ukládá do zařízení, takže se otevře i bez připojení. Knihy, mince a postup ve čtení se ale vždy načítají z internetu, aby byly aktuální.">
+      <Section title="Offline a aktualizace" description="Obal aplikace se ukládá do zařízení, takže se otevře i bez připojení. Knihy, mince a postup ve čtení se vždy načítají z internetu, aby byly aktuální; ke čtení bez internetu si knihy stáhneš zvlášť (níže).">
         <Notice>
           {offlineReady === null ? 'Zjišťuji stav...' : offlineReady ? 'Offline kopie obalu aplikace je připravená.' : 'Offline kopie zatím není k dispozici (třeba při prvním otevření nebo v anonymním okně).'}
         </Notice>
@@ -959,6 +960,8 @@ const AppTab = () => {
           {resetMsg && <Notice type="error">{resetMsg}</Notice>}
         </div>
       </Section>
+
+      <OfflineBooksSection Section={Section} Notice={Notice} ActionButton={ActionButton} />
 
       <Section title="O aplikaci">
         <p className="text-sm font-bold m-0">Jomarid Books · {APP_VERSION_LABEL}</p>

@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { supabase, supabaseUrl, supabaseKey } from '../lib/supabase';
 import { loginWithCode as loginWithCodeApi } from '../offline/loginCode';
+import { confirmLogoutDiscard } from '../offline/index.js';
 import { clearCachedProfiles, clearStoredSession, isNetworkProblem, readCachedProfile, readStoredSession, runLogoutCleanups, writeCachedProfile } from '../offline/session';
 import { clearPersonalBrowseState } from '../browse/browseStore';
 import { cleanupOnLogout } from '../push/pushClient';
@@ -143,6 +144,7 @@ export function AuthProvider({ children }) {
  const loginWithCode = (code) => loginWithCodeApi(supabase, { url: supabaseUrl, key: supabaseKey }, code);
 
  const logout = async () => {
+   if (!(await confirmLogoutDiscard(user))) return; // neodeslané změny z offline čtení: odešlou se, nebo čtenář potvrdí, že o ně přijde
    clearPersonalBrowseState(); // hledání a filtry z knihovny nemají po odhlášení zůstat v kartě
    await runLogoutCleanups(); // stažené knihy a fronta změn nesmí po odhlášení zůstat na zařízení
    try { await cleanupOnLogout({ client: supabase, nav: navigator, win: window }); } catch (e) { console.error('Úklid oznámení při odhlášení selhal:', e); } // zařízení nemá dál dostávat oznámení odhlášeného účtu

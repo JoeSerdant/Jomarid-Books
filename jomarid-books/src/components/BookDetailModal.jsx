@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { BookOpen, Coins, Flag, Heart, Loader2, MessageCircle, Star, X } from 'lucide-react';
 import { fmtRating } from '../browse/libraryModel';
+import { OfflineDownloadButton } from '../offline/OfflineDownloadButton';
 
 // Prvky, mezi kterými se v okně přechází klávesou Tab.
 const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -216,6 +217,7 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
               )}
             </button>
           )}
+          {book.hasAccess && <OfflineDownloadButton bookId={book.id} />}
         </div>
 
         <div style={{ borderColor: 'var(--border-color)' }} className="border-t mt-6 pt-5">

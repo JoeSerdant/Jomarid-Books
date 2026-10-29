@@ -4,6 +4,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/friendlyError';
 import { fetchBookText } from '../bookText/bookText';
+import { offlineBooks, outbox } from '../offline/index.js';
+import { createReaderBackend } from '../offline/readerBackend.js';
+import { isTransientError } from '../offline/model.js';
 import {
   FONT_FAMILIES, LINE_HEIGHTS, TEXT_WIDTHS, ALIGNMENTS, PAGE_BREAKS, FONT_SIZE_RANGE, AUTO_ADVANCE_RANGE, READER_PREFS_EVENT,
   loadReaderPrefs, saveReaderPref, readerTypography,
@@ -315,6 +318,9 @@ export const ReaderPage = () => {
   const [focusMode, setFocusMode] = useState(() => loadReaderPrefs().startFocus);
   const [autoAdvance, setAutoAdvance] = useState(false);
 
+  // Zápisy čtečky (pozice, záložky, zvýraznění, hodnocení) jdou přes backend, který umí i offline (viz offline/readerBackend.js)
+  const backendRef = useRef(null);
+  const [missingReason, setMissingReason] = useState('');   // proč kniha není k dispozici: 'not_downloaded' | 'expired' | 'corrupt'
   const [bookmarks, setBookmarks] = useState([]);
   const [myRating, setMyRating] = useState(0);
   const [savingRating, setSavingRating] = useState(false);
@@ -343,7 +349,30 @@ export const ReaderPage = () => {
     const fetchBookData = async () => {
       if (!user || !id) return;
       setLoading(true);
+      setMissingReason('');
+      const hasCopy = await offlineBooks.has(user.id, id).catch(() => false);
+      const makeBackend = (mode) => { backendRef.current = createReaderBackend({ client: supabase, books: offlineBooks, outbox, userId: user.id, bookId: id, mode, hasCopy }); };
+      // Stažená kopie (šifrovaná v zařízení): čte se, když nejde internet, nebo když server právě nejde dosáhnout.
+      const openFromCopy = async () => {
+        let opened = null;
+        try { opened = await offlineBooks.open(user.id, id); } catch (e) { console.error('Staženou knihu se nepodařilo otevřít:', e); setMissingReason('corrupt'); return false; }
+        if (!opened) { setMissingReason('not_downloaded'); return false; }
+        if (opened.expired) { setMissingReason('expired'); return false; }
+        hasBeenMarkedReadRef.current = !!opened.meta.isRead;
+        hadExistingRowRef.current = !!opened.meta.hadRow;
+        makeBackend('offline');
+        setBook({ ...opened.book, content: opened.content });
+        setBookmarks(opened.notes.bookmarks || []);
+        setMyRating(opened.notes.rating || 0);
+        setHighlights(opened.notes.highlights || []);
+        if (opened.meta.percent) { setInitialScroll(opened.meta.percent); setLiveProgress(opened.meta.percent); }
+        return true;
+      };
       try {
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+          if (!hasCopy) setMissingReason('not_downloaded'); else await openFromCopy();
+          return;
+        }
         const { data: bookData, error: bookErr } = await supabase
           .from('books')
           .select('*')
@@ -352,12 +381,14 @@ export const ReaderPage = () => {
 
         if (bookErr) throw bookErr;
 
-        const { data: userBookData } = await supabase
+        const { data: userBookData, error: userBookErr } = await supabase
           .from('user_books')
           .select('scroll_position, status, is_read')
           .eq('user_id', user.id)
           .eq('book_id', id)
           .maybeSingle();
+        // Výpadek sítě není "nemáš licenci": předá se výš, kde se u stažené knihy čte z kopie
+        if (userBookErr && isTransientError(userBookErr)) throw userBookErr;
 
         hasBeenMarkedReadRef.current = !!userBookData?.is_read;
         hadExistingRowRef.current = !!userBookData;
@@ -378,10 +409,14 @@ export const ReaderPage = () => {
           supabase.from('book_highlights').select('id, start_offset, end_offset, color, note').eq('user_id', user.id).eq('book_id', id).order('start_offset', { ascending: true }),
         ]);
 
+        if (contentRow?.error && isTransientError(contentRow.error)) throw contentRow.error;   // text se kvůli síti nenačetl: ne prázdná kniha, ale kopie
+        makeBackend('online');
         setBook({ ...bookData, content: contentRow?.text || '' });
         setBookmarks(bookmarksData || []);
         setMyRating(ratingData?.rating || 0);
         setHighlights(highlightsData || []);
+        // Stažená kopie dostane čerstvé záložky, zvýraznění a pozici ze serveru (a prodlouží se jí platnost)
+        if (hasCopy) offlineBooks.syncFromServer(user.id, id, { bookmarks: bookmarksData || [], highlights: highlightsData || [], rating: ratingData?.rating || 0, userBook: userBookData, book: bookData, content: typeof contentRow?.text === 'string' ? contentRow.text : undefined }).catch(() => {});
 
         if (userBookData?.scroll_position) {
           setInitialScroll(userBookData.scroll_position);
@@ -389,6 +424,8 @@ export const ReaderPage = () => {
         }
       } catch (err) {
         console.error('Chyba při otevírání knihy:', err.message);
+        // Server nejde dosáhnout (výpadek sítě): u stažené knihy se čte z kopie v zařízení
+        if (hasCopy && isTransientError(err)) await openFromCopy();
       } finally {
         setLoading(false);
       }
@@ -562,13 +599,6 @@ export const ReaderPage = () => {
     clearTimeout(pendingSaveRef.current);
     pendingSaveRef.current = setTimeout(async () => {
       try {
-        const payload = {
-          user_id: user.id,
-          book_id: id,
-          scroll_position: percent,
-          is_read: isReadNow,
-          updated_at: new Date().toISOString()
-        };
         // 'status' se posílá VÝSLOVNĚ jen při úplně prvním uložení pro tuhle
         // dvojici uživatel+kniha (kdy žádný řádek ještě neexistoval - tedy
         // tenhle upsert bude INSERT, ne UPDATE). Přístup už byl ověřen výš
@@ -577,12 +607,8 @@ export const ReaderPage = () => {
         // upsert mohl tiše "obživit" i řádek, kterému mezitím admin práva
         // odebral (např. je pořád otevřená čtečka v jiné záložce) tím, že by
         // mu status při každém scrollu znovu přepsal zpátky na 'active'.
-        if (!hadExistingRowRef.current) {
-          payload.status = 'active';
-        }
-        await supabase
-          .from('user_books')
-          .upsert(payload, { onConflict: 'user_id,book_id' });
+        // Backend (offline/readerBackend.js) pozici pošle serveru, a bez internetu ji uloží do fronty.
+        await backendRef.current?.savePosition(percent, isReadNow, { needsStatus: !hadExistingRowRef.current });
         hadExistingRowRef.current = true;
       } catch (err) {
         console.error('Chyba synchronizace pozice:', err);
@@ -648,18 +674,13 @@ export const ReaderPage = () => {
     const label = prompt('Název záložky:', `Záložka na ${Math.round(progress)} %`);
     if (label === null) return;
     try {
-      const { data, error } = await supabase
-        .from('book_bookmarks')
-        .insert([{ user_id: user.id, book_id: id, label: label.trim() || 'Záložka', scroll_position: progress }])
-        .select('id, label, scroll_position, created_at')
-        .single();
-      if (error) throw error;
+      const data = await backendRef.current.addBookmark(label.trim() || 'Záložka', progress);
       setBookmarks(prev => [data, ...prev]);
     } catch (err) {
       console.error('Záložka:', err);
       alert(friendlyError(err, 'Záložku se nepodařilo uložit. Zkus to znovu.'));
     }
-  }, [user, id, currentScrollPercent]);
+  }, [user, currentScrollPercent]);
 
   const jumpToBookmark = (bm) => {
     goToPercent(bm.scroll_position);
@@ -675,7 +696,7 @@ export const ReaderPage = () => {
 
   const deleteBookmark = async (bmId) => {
     try {
-      await supabase.from('book_bookmarks').delete().eq('id', bmId);
+      await backendRef.current.deleteBookmark(bmId);
       setBookmarks(prev => prev.filter(b => b.id !== bmId));
     } catch (err) {
       console.error('Nepodařilo se smazat záložku:', err);
@@ -686,10 +707,7 @@ export const ReaderPage = () => {
     if (!user || savingRating) return;
     setSavingRating(true);
     try {
-      const { error } = await supabase
-        .from('book_ratings')
-        .upsert({ user_id: user.id, book_id: id, rating: stars, updated_at: new Date().toISOString() }, { onConflict: 'user_id,book_id' });
-      if (error) throw error;
+      await backendRef.current.setRating(stars);
       setMyRating(stars);
     } catch (err) {
       console.error('Hodnocení se nepodařilo uložit:', err);
@@ -732,12 +750,7 @@ export const ReaderPage = () => {
   const saveHighlight = async (color) => {
     if (!pendingSelection || !user) return;
     try {
-      const { data, error } = await supabase
-        .from('book_highlights')
-        .insert([{ user_id: user.id, book_id: id, start_offset: pendingSelection.start, end_offset: pendingSelection.end, color }])
-        .select('id, start_offset, end_offset, color, note')
-        .single();
-      if (error) throw error;
+      const data = await backendRef.current.addHighlight({ start: pendingSelection.start, end: pendingSelection.end, color });
       setHighlights(prev => [...prev, data].sort((a, b) => a.start_offset - b.start_offset));
       setPendingSelection(null);
       window.getSelection()?.removeAllRanges();
@@ -751,8 +764,7 @@ export const ReaderPage = () => {
     if (!activeHighlight) return;
     try {
       const trimmed = noteDraft.trim().slice(0, 500);
-      const { error } = await supabase.from('book_highlights').update({ note: trimmed || null }).eq('id', activeHighlight.id);
-      if (error) throw error;
+      await backendRef.current.setNote(activeHighlight.id, trimmed);
       setHighlights(prev => prev.map(h => h.id === activeHighlight.id ? { ...h, note: trimmed || null } : h));
       setActiveHighlight(null);
     } catch (err) {
@@ -763,7 +775,7 @@ export const ReaderPage = () => {
 
   const deleteHighlight = async (highlightId) => {
     try {
-      await supabase.from('book_highlights').delete().eq('id', highlightId);
+      await backendRef.current.deleteHighlight(highlightId);
       setHighlights(prev => prev.filter(h => h.id !== highlightId));
       setActiveHighlight(null);
     } catch (err) {
@@ -904,8 +916,11 @@ export const ReaderPage = () => {
   );
 
   if (!book) return (
-    <div className="text-center py-12">
-      <p className="font-bold uppercase text-sm">Kniha nebyla nalezena.</p>
+    <div className="text-center py-12" data-testid="reader-missing">
+      <p className="font-bold uppercase text-sm">{missingReason === 'not_downloaded' ? 'Tuhle knihu nemáš stažená pro čtení bez internetu.' : missingReason === 'expired' ? 'Platnost staženého čtení vypršela.' : missingReason === 'corrupt' ? 'Staženou knihu se nepodařilo otevřít.' : 'Kniha nebyla nalezena.'}</p>
+      {missingReason === 'not_downloaded' && <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-2 max-w-sm mx-auto">Knihu si stáhneš v knihovně v jejím detailu, když jsi online.</p>}
+      {missingReason === 'expired' && <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-2 max-w-sm mx-auto">Připoj se k internetu a otevři knihu: licence se ověří a čtení offline se obnoví.</p>}
+      {missingReason === 'corrupt' && <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-2 max-w-sm mx-auto">Smaž ji v Nastavení (Aplikace → Offline) a stáhni znovu, až budeš online.</p>}
       <Link to="/app" className="text-xs uppercase font-black text-[var(--bg-primary)] mt-4 block">Návrat do knihovny</Link>
     </div>
   );
