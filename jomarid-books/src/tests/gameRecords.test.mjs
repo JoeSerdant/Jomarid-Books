@@ -269,7 +269,7 @@ test('Games.jsx předává hlášení rekordů serveru, nový odznak potvrdí v 
   const g = read('pages', 'Games.jsx');
   assert.match(g, /event\.data\?\.type === 'record' && user/);
   assert.match(g, /normalizeRecord\(game\.id, event\.data\.stat, event\.data\.value\)/);
-  assert.match(g, /reportGameRecord\(supabase, rec\.game, rec\.stat, rec\.value\)/);
+  assert.match(g, /reportGameRecord\(supabase, rec\.game, rec\.stat, rec\.value, \{ onTransient: /);
   assert.match(g, /showFlash\(\{ text: `\+\$\{res\.xp\} XP`, label: `Odznak: /);
   assert.match(g, /rekordy i herní odznaky se ukládají k tvému účtu, takže je máš na všech zařízeních stejné \(rekordy a odznaky najdeš na stránce Odznaky, záložka Odznaky her\)/);
   assert.doesNotMatch(g, /Skóre a vylepšení ve hře jsou jen pro zábavu/);

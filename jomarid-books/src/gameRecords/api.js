@@ -1,6 +1,7 @@
 // Volání serveru pro herní rekordy a odznaky (db/game-records.sql). Klient (supabase) se předává zvenku, ať jde modul zkoušet bez prohlížeče.
 // Dokud SQL v databázi neběží (nebo když volání selže), vrací se prázdný postup a nic se nerozbije: úroveň čtenáře pak vychází bez herního XP.
 import { getBadge, getStat, normalizeRecord, sumGameBadgeXp } from './catalog.js';
+import { isTransientError } from '../offline/model.js';
 
 export const EMPTY_PROGRESS = Object.freeze({ records: Object.freeze({}), unlocked: Object.freeze([]), xp: 0 });
 
@@ -69,7 +70,8 @@ export async function loadGameLeaderboard(client, gameId, statKey, limit = 5) {
 }
 
 // Zapíše rekord z hry. Vrací { improved, unlocked: [odznak...], xp } nebo null (neplatné hlášení, server nepřijal, chyba).
-export async function reportGameRecord(client, gameId, statKey, value) {
+// Při výpadku spojení se zavolá onTransient(rekord) (appka ho uloží do fronty a odešle po připojení) a výsledek je { queued: true, ... }.
+export async function reportGameRecord(client, gameId, statKey, value, { onTransient } = {}) {
   const rec = normalizeRecord(gameId, statKey, value);
   if (!rec) return null;
   try {
@@ -79,6 +81,7 @@ export async function reportGameRecord(client, gameId, statKey, value) {
     const unlocked = (Array.isArray(data.unlocked) ? data.unlocked : []).map(getBadge).filter(Boolean);
     return { improved: data.improved === true, unlocked, xp: Math.max(0, Math.floor(Number(data.xp)) || 0) };
   } catch (err) {
+    if (onTransient && isTransientError(err)) { onTransient(rec); return { queued: true, improved: false, unlocked: [], xp: 0 }; }
     console.warn('Rekord se nepodařilo zapsat:', err?.message || err);
     return null;
   }

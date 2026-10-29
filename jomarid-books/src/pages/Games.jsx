@@ -10,12 +10,16 @@ import { useReaderSnapshot } from '../gameBar/useReaderSnapshot';
 import { rewardLabel, REWARD_LIMIT_NOTE } from '../gameBar/rewardLabels';
 import { normalizeRecord } from '../gameRecords/catalog';
 import { reportGameRecord } from '../gameRecords/api';
+import { gameSaves, activeGames, outbox } from '../offline/index.js';
+import { reconcileGameSave } from '../offline/gameMerge';
+import { requestCoins, queueRecord } from '../offline/gameQueue';
+import { useOnline } from '../offline/useOnline';
 import { useGameFilter } from '../shop/useGameFilter';
-import { createGameSync } from '../gameSave/sync';
+import { createGameSync, NoLocalSaveError } from '../gameSave/sync';
 import { withStorageShim } from '../gameSave/shim';
 import { saveGameStateKeepalive } from '../gameSave/api';
 import { readLegacyStorage, clearLegacyStorage } from '../gameSave/legacy';
-import { SAVE_MESSAGES, SAVE_LOAD_ERROR } from '../gameSave/messages';
+import { SAVE_MESSAGES, SAVE_LOAD_ERROR, SAVE_NO_LOCAL_COPY, SAVE_PLAY_FRESH } from '../gameSave/messages';
 
 // Každá hra je velký kus textu (stovky kB, šachy i s Reactem). Stahuje se až při spuštění (dynamický import), ne spolu
 // se stránkou Her - jinak by si hráč už při otevření seznamu stáhl všechny hry najednou.
@@ -74,6 +78,19 @@ const GAMES = [
   // Další hra se přidá jako další objekt v tomhle poli.
 ];
 
+// Stáhne všechny hry dopředu, ať jdou hrát bez internetu (service worker si soubory uloží při stažení). Volá se z Nastavení → Offline.
+// Vrací { total, failed: [id her, které se nepodařilo stáhnout] }.
+export async function preloadGames(onProgress = () => {}) {
+  const failed = [];
+  let done = 0;
+  for (const game of GAMES) {
+    try { await game.load(); } catch { failed.push(game.id); }
+    done += 1;
+    onProgress(done, GAMES.length);
+  }
+  return { total: GAMES.length, failed };
+}
+
 // Složky v seznamu her: hra s `folder: 'klíč'` se v seznamu neukazuje sama, ale uvnitř složky (karta složky otevře seznam her pod mřížkou).
 const FOLDERS = [
   { key: 'strategy', title: 'Strategie', tagline: 'Taktické hry: veď armády, frontu a zdroje.' },
@@ -98,6 +115,7 @@ function gameBonusSourceType(gameId) {
 
 export const GameLauncher = ({ game }) => {
   const { user } = useAuth();
+  const online = useOnline();
   const [coins, setCoins] = useState(0);
   const [coinsLoaded, setCoinsLoaded] = useState(false); // zůstatek z účtu už je načtený (do té doby ho hře neposíláme, ať neukáže nulu)
   const [claiming, setClaiming] = useState(false);
@@ -108,7 +126,7 @@ export const GameLauncher = ({ game }) => {
   const [hasPlayedEnough, setHasPlayedEnough] = useState(false);
   const [html, setHtml] = useState(null); // text hry; do stažení je null
   const [gameDoc, setGameDoc] = useState(null); // text hry s vloženým úložištěm a uloženým postupem; to, co běží v iframu
-  const [saveLoadError, setSaveLoadError] = useState(false); // uložený postup se nepodařilo načíst, hra se nespustila
+  const [saveLoadError, setSaveLoadError] = useState(false); // uložený postup se nepodařilo načíst, hra se nespustila (true), nebo je offline a nemá v zařízení kopii ('nocopy')
   const [saveStatus, setSaveStatus] = useState(null); // 'failing' | 'conflict' | 'rejected': postup se právě neukládá
   const [loadingGame, setLoadingGame] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -120,6 +138,7 @@ export const GameLauncher = ({ game }) => {
   const syncRef = useRef(null); // synchronizace postupu této hry se serverem
   const tokenRef = useRef(null); // přihlašovací token pro uložení při zavírání stránky (tam se na nové načtení čekat nedá)
   const limitShownRef = useRef(false);
+  const queuedShownRef = useRef(false); // poznámka „odměna čeká na připojení“ se ukáže jednou za otevření hry
   const reader = useReaderSnapshot(user?.id);
   const gameFx = useGameFilter(user?.id); // vzhled her z obchůdku
 
@@ -138,10 +157,11 @@ export const GameLauncher = ({ game }) => {
 
   // Postup hry žije na serveru (db/game-saves.sql). Hra si pořád "ukládá do localStorage", ale ten jí appka nahradí pamětí (gameSave/shim.js)
   // a změny posílá sem; o chybách ukládání se hráč dozví v liště nad hrou.
-  const handleSaveStatus = useCallback(({ state, recovered }) => {
+  const handleSaveStatus = useCallback(({ state, recovered, reason }) => {
     if (state === 'failing') { setSaveStatus('failing'); showFlash({ text: SAVE_MESSAGES.failing, warn: true }, 4000); }
+    else if (state === 'offline') { setSaveStatus('offline'); showFlash({ text: SAVE_MESSAGES.offline, warn: true }, 4000); }
     else if (state === 'ok' && recovered) { setSaveStatus(null); showFlash({ text: SAVE_MESSAGES.recovered, warn: true }); }
-    else if (state === 'conflict') { setSaveStatus('conflict'); showFlash({ text: SAVE_MESSAGES.conflict, warn: true }, 9000); }
+    else if (state === 'conflict') { setSaveStatus('conflict'); showFlash({ text: reason === 'server_won' ? SAVE_MESSAGES.server_won : SAVE_MESSAGES.conflict, warn: true }, 9000); }
     else if (state === 'rejected') { setSaveStatus('rejected'); showFlash({ text: SAVE_MESSAGES.rejected, warn: true }, 6000); }
   }, [showFlash]);
 
@@ -154,10 +174,17 @@ export const GameLauncher = ({ game }) => {
         clearLegacy: clearLegacyStorage,
         keepalive: (args) => saveGameStateKeepalive({ url: supabaseUrl, apiKey: supabaseKey, token: tokenRef.current, ...args }),
         onStatus: handleSaveStatus,
+        // Kopie postupu v zařízení: hra jde otevřít i bez internetu a změny z hraní offline se po připojení sloučí se serverem
+        offline: user ? {
+          read: () => gameSaves.get(user.id, game.id),
+          write: (rec) => gameSaves.put(user.id, game.id, rec),
+          reconcile: () => reconcileGameSave({ client: supabase, userId: user.id, gameId: game.id, gameSaves }),
+        } : null,
       });
+      activeGames.add(game.id); // pozadí ji pak neodesílá samo, hra si postup slučuje sama
     }
     return syncRef.current;
-  }, [game.id, handleSaveStatus]);
+  }, [game.id, handleSaveStatus, user]);
 
   // Token pro uložení při zavírání stránky: obyčejné načtení tokenu je asynchronní, tam už by se nestihlo.
   useEffect(() => {
@@ -175,20 +202,25 @@ export const GameLauncher = ({ game }) => {
     return () => { if (window.__jomaridGameSave === store) delete window.__jomaridGameSave; };
   }, [game.id]);
 
-  // Dohnat neuložené změny při skrytí stránky (přepnutí karty nebo aplikace), při odchodu ze stránky a při opuštění hry v appce.
+  // Dohnat neuložené změny při skrytí stránky (přepnutí karty nebo aplikace), při odchodu ze stránky a při opuštění hry v appce;
+  // po návratu spojení se uloží to, co se hrálo offline.
   useEffect(() => {
     const onHide = () => syncRef.current?.flushOnHide();
     const onVisibility = () => { if (document.visibilityState === 'hidden') syncRef.current?.flush(); };
+    const onOnline = () => { syncRef.current?.retryNow(); };
     window.addEventListener('pagehide', onHide);
+    window.addEventListener('online', onOnline);
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
       window.removeEventListener('pagehide', onHide);
+      window.removeEventListener('online', onOnline);
       document.removeEventListener('visibilitychange', onVisibility);
       const sync = syncRef.current;
       syncRef.current = null;
+      activeGames.delete(game.id);
       if (sync) sync.flush().finally(() => sync.dispose());
     };
-  }, []);
+  }, [game.id]);
 
   useEffect(() => {
     if (!user) return;
@@ -230,7 +262,8 @@ export const GameLauncher = ({ game }) => {
   }, [user, game]);
 
   // Hra se stáhne až teď (poprvé), další otevření je okamžité. Čas hraní se počítá až od chvíle, kdy se hra zobrazí.
-  const handleOpenGame = useCallback(async () => {
+  // allowEmpty === true: hráč offline bez uloženého postupu v zařízení chce hrát od začátku (po připojení se sloučí s účtem).
+  const handleOpenGame = useCallback(async (allowEmpty = false) => {
     if (loadingGame) return;
     setLoadError(false);
     setSaveLoadError(false);
@@ -252,10 +285,10 @@ export const GameLauncher = ({ game }) => {
     // které se ještě neodeslaly); jen po konfliktu (hrálo se jinde) se načte znovu.
     const sync = getSync();
     try {
-      if (!sync.isLoaded() || sync.state().stopped) await sync.load();
+      if (!sync.isLoaded() || sync.state().stopped) await sync.load({ allowEmpty: allowEmpty === true });
     } catch (err) {
       console.error('Nepodařilo se načíst uložený postup hry:', err?.message || err);
-      if (mountedRef.current) { setSaveLoadError(true); setLoadingGame(false); }
+      if (mountedRef.current) { setSaveLoadError(err instanceof NoLocalSaveError ? 'nocopy' : true); setLoadingGame(false); }
       return;
     }
     if (!mountedRef.current) return;
@@ -265,6 +298,7 @@ export const GameLauncher = ({ game }) => {
     setLoadingGame(false);
     gameOpenedAtRef.current = Date.now();
     limitShownRef.current = false;
+    queuedShownRef.current = false;
     setShowGame(true);
   }, [game, html, loadingGame, getSync]);
 
@@ -308,15 +342,22 @@ export const GameLauncher = ({ game }) => {
       } else if (event.data?.type === 'record' && user) {
         const rec = normalizeRecord(game.id, event.data.stat, event.data.value);
         if (!rec) return;
-        reportGameRecord(supabase, rec.game, rec.stat, rec.value).then((res) => {
+        // Bez spojení (nebo při výpadku) se rekord uloží do fronty a odešle po připojení; server dál rozhoduje o odznacích.
+        if (navigator.onLine === false) { queueRecord(outbox, user.id, rec).catch(() => {}); return; }
+        reportGameRecord(supabase, rec.game, rec.stat, rec.value, { onTransient: (r) => { queueRecord(outbox, user.id, r).catch(() => {}); } }).then((res) => {
           if (res?.unlocked?.length) showFlash({ text: `+${res.xp} XP`, label: `Odznak: ${res.unlocked.map((b) => b.title).join(', ')}` });
         });
       } else if (event.data?.type === 'coin' && user) {
         const amount = Math.floor(Number(event.data.amount));
         if (!Number.isFinite(amount) || amount < 1) return;
         const reason = String(event.data.reason || 'event').slice(0, 30);
-        supabase.rpc('award_game_coins', { p_game_id: game.id, p_amount: amount, p_reason: reason })
-          .then(({ data, error }) => {
+        requestCoins({ client: supabase, outbox, userId: user.id, gameId: game.id, amount, reason, offline: navigator.onLine === false })
+          .then(({ queued, data, error }) => {
+            if (queued) {
+              // Bez spojení žádost čeká ve frontě; o skutečné částce a stropu rozhodne server po připojení.
+              if (!queuedShownRef.current) { queuedShownRef.current = true; showFlash({ text: 'Offline', label: 'Odměny se připíšou po připojení', warn: true }); }
+              return;
+            }
             if (error) { console.error('Chyba při udílení herní odměny:', error.message); return; }
             if (data?.granted) { setCoins(data.balance ?? 0); setCoinsLoaded(true); } // zůstatek z odpovědi serveru platí i tehdy, když se úvodní načtení nepovedlo
             if (data?.granted > 0) showFlash({ text: `+${data.granted}`, label: rewardLabel(reason) });
@@ -329,7 +370,7 @@ export const GameLauncher = ({ game }) => {
     return () => window.removeEventListener('message', handleMessage);
   }, [handleCloseGame, user, game.id, showFlash]);
 
-  const canClaim = hasPlayedEnough && !checkingStatus && !claimedToday;
+  const canClaim = hasPlayedEnough && !checkingStatus && !claimedToday && online;
 
   const handleClaimBonus = async () => {
     if (!user || claiming || !canClaim) return;
@@ -402,7 +443,7 @@ export const GameLauncher = ({ game }) => {
         </div>
 
         <button
-          onClick={handleOpenGame}
+          onClick={() => handleOpenGame()}
           onPointerEnter={warmUp}
           onFocus={warmUp}
           aria-disabled={loadingGame}
@@ -415,15 +456,27 @@ export const GameLauncher = ({ game }) => {
         {saveLoadError && (
           <div role="alert" data-testid="save-load-error" className="-mt-3 flex flex-col items-center gap-2">
             <p style={{ color: 'var(--text-body)', borderColor: '#ef4444' }} className="text-xs m-0 border-l-2 pl-2 text-left max-w-sm">
-              {SAVE_LOAD_ERROR}
+              {saveLoadError === 'nocopy' ? SAVE_NO_LOCAL_COPY : SAVE_LOAD_ERROR}
             </p>
-            <button
-              onClick={handleOpenGame}
-              style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
-              className="px-4 py-2 rounded-lg text-[0.6875rem] font-black uppercase tracking-wider cursor-pointer border"
-            >
-              Zkusit znovu
-            </button>
+            <div className="flex flex-wrap justify-center gap-2">
+              {saveLoadError === 'nocopy' && (
+                <button
+                  onClick={() => handleOpenGame(true)}
+                  data-testid="play-fresh-offline"
+                  style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+                  className="px-4 py-2 rounded-lg text-[0.6875rem] font-black uppercase tracking-wider cursor-pointer border-none"
+                >
+                  {SAVE_PLAY_FRESH}
+                </button>
+              )}
+              <button
+                onClick={() => handleOpenGame()}
+                style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
+                className="px-4 py-2 rounded-lg text-[0.6875rem] font-black uppercase tracking-wider cursor-pointer border"
+              >
+                Zkusit znovu
+              </button>
+            </div>
           </div>
         )}
         {loadError && (
@@ -462,6 +515,8 @@ export const GameLauncher = ({ game }) => {
               <Loader2 size={14} className="animate-spin" />
             ) : claimedToday ? (
               <>Dnešní odměna vyzvednuta {claimedAmount ? `(+${claimedAmount})` : ''} <Coins size={12} /></>
+            ) : !online ? (
+              <>Odměna za hraní jde jen online <Lock size={12} /></>
             ) : !hasPlayedEnough ? (
               <>Nejdřív si zahraj <Lock size={12} /></>
             ) : (

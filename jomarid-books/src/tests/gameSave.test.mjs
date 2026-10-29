@@ -543,13 +543,13 @@ test('sync.dispose: zruší časovač i opakování, ale flush před tím dokon�
 /* ---------------------------------------------------------------- napojení */
 test('Games.jsx: hra se spustí až po načtení postupu, iframe dostává dokument s náhradou úložiště a zprávy ze hry se ukládají', () => {
   const g = read('pages', 'Games.jsx');
-  assert.match(g, /import \{ createGameSync \} from '\.\.\/gameSave\/sync';/);
+  assert.match(g, /import \{ createGameSync, NoLocalSaveError \} from '\.\.\/gameSave\/sync';/);
   assert.match(g, /srcDoc=\{gameDoc\}/);
   assert.ok(!/srcDoc=\{html\}/.test(g), 'iframe nesmí dostat dokument bez náhrady úložiště');
   assert.match(g, /setGameDoc\(withStorageShim\(src, game\.id, sync\.snapshot\(\)\.map\)\)/);
   const open = g.slice(g.indexOf('const handleOpenGame'), g.indexOf('// Při najetí myší'));
-  assert.ok(open.indexOf('await sync.load()') > -1 && open.indexOf('await sync.load()') < open.indexOf('setShowGame(true)'), 'postup se načte dřív, než se hra ukáže');
-  assert.match(open, /if \(mountedRef\.current\) \{ setSaveLoadError\(true\); setLoadingGame\(false\); \}\n\s+return;/, 'při chybě se hra nespustí');
+  assert.ok(open.indexOf('await sync.load({ allowEmpty: allowEmpty === true })') > -1 && open.indexOf('await sync.load({ allowEmpty: allowEmpty === true })') < open.indexOf('setShowGame(true)'), 'postup se načte dřív, než se hra ukáže');
+  assert.match(open, /if \(mountedRef\.current\) \{ setSaveLoadError\(err instanceof NoLocalSaveError \? 'nocopy' : true\); setLoadingGame\(false\); \}\n\s+return;/, 'při chybě se hra nespustí');
   assert.match(open, /!sync\.isLoaded\(\) \|\| sync\.state\(\)\.stopped/, 'načtený postup se znovu nenačítá, jen po konfliktu');
   assert.match(g, /event\.data\?\.type === 'storage'\) \{[^}]*syncRef\.current\?\.apply\(event\.data\);/);
   assert.match(g, /syncRef\.current\?\.flush\(\); \/\/ postup se uloží hned/);
@@ -574,7 +574,7 @@ test('lišta nad hrou ukáže štítek, když se postup neukládá, a hlášky j
   assert.match(bar, /saveStatus && SAVE_CHIPS\[saveStatus\]/);
   assert.match(bar, /data-testid="game-bar-save"/);
   for (const text of [...Object.values(SAVE_MESSAGES), ...Object.values(SAVE_CHIPS)]) assert.ok(text.length > 5 && !/[a-z]_[a-z]/.test(text), text);
-  assert.deepEqual(Object.keys(SAVE_CHIPS).sort(), ['conflict', 'failing', 'rejected']);
+  assert.deepEqual(Object.keys(SAVE_CHIPS).sort(), ['conflict', 'failing', 'offline', 'rejected']);
 });
 
 test('export dat účtu obsahuje uložený postup her (funkce nemusí v databázi být)', () => {

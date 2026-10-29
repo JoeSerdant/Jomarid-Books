@@ -65,7 +65,7 @@ export const OfflineBooksSection = ({ Section, Notice, ActionButton }) => {
         )}
         {supported && pending > 0 && (
           <div className="space-y-2" data-testid="offline-pending">
-            <Notice>Čeká na odeslání: {pending} {pending === 1 ? 'změna' : pending < 5 ? 'změny' : 'změn'} z čtení offline (pozice, záložky, zvýraznění).</Notice>
+            <Notice>Čeká na odeslání: {pending} {pending === 1 ? 'změna' : pending < 5 ? 'změny' : 'změn'} z offline režimu (čtení a hry).</Notice>
             <ActionButton busy={busy === 'sync'} disabled={!online} onClick={sendNow}>{busy === 'sync' && <Loader2 size={13} className="animate-spin" />} Odeslat teď</ActionButton>
           </div>
         )}

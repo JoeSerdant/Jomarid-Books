@@ -1,7 +1,10 @@
-// Fronta změn z offline čtení: pozice, záložky, zvýraznění, poznámky, hodnocení. Změny se ukládají do zařízení a po připojení se odešlou serveru
+// Fronta změn z offline režimu: čtení (pozice, záložky, zvýraznění, poznámky, hodnocení) a hry (rekordy a žádosti o herní Coiny). Změny se ukládají do zařízení a po připojení se odešlou serveru
 // pod skutečnou relací (server dál rozhoduje o všem: o dnešním dni čtení, o dočtení, o mincích). Stejné volání jako čtečka online.
 import { STORES } from './store.js';
 import { LOCAL_PREFIX, isLocalId, isTransientError, resolvePosition } from './model.js';
+
+// Nejvíc žádostí o herní Coiny čekajících ve frontě (víc nemá smysl, server má denní strop).
+export const MAX_QUEUED_COINS = 120;
 
 const seqKey = (n) => `${String(n).padStart(12, '0')}`;
 
@@ -26,6 +29,13 @@ export function createOutbox({ store, now = Date.now }) {
     if (op.type === 'position') {
       const prev = all.find((e) => same(e, 'position'));
       if (prev) { await store.put(STORES.queue, prev.key, { ...prev.value, ...entry, isRead: !!(prev.value.isRead || entry.isRead), tries: 0 }); return; }
+    } else if (op.type === 'game_record') {
+      // Rekord hry: pro jednu statistiku stačí nejvyšší hodnota (server si stejně pamatuje maximum).
+      const prev = all.find((e) => e.value.type === 'game_record' && e.value.gameId === op.gameId && e.value.stat === op.stat);
+      if (prev) { await store.put(STORES.queue, prev.key, { ...prev.value, value: Math.max(Number(prev.value.value) || 0, Number(op.value) || 0), tries: 0 }); return; }
+    } else if (op.type === 'game_coin') {
+      // Žádosti o herní Coiny: server stejně vyplatí nejvýš denní strop, takže se jich vedle sebe drží jen rozumný počet.
+      if (all.filter((e) => e.value.type === 'game_coin').length >= MAX_QUEUED_COINS) return;
     } else if (op.type === 'rating') {
       const prev = all.find((e) => same(e, 'rating'));
       if (prev) { await store.put(STORES.queue, prev.key, { ...prev.value, ...entry, tries: 0 }); return; }
@@ -122,6 +132,8 @@ async function runOp(client, userId, op, callbacks, remapId) {
     case 'highlight_note': need(await client.from('book_highlights').update({ note: op.note || null }).eq('id', op.id)); return true;
     case 'highlight_delete': need(await client.from('book_highlights').delete().eq('id', op.id)); return true;
     case 'rating': need(await client.from('book_ratings').upsert({ user_id: userId, book_id: op.bookId, rating: op.rating, updated_at: new Date(op.at).toISOString() }, { onConflict: 'user_id,book_id' })); return true;
+    case 'game_record': need(await client.rpc('report_game_record', { p_game_id: op.gameId, p_stat_key: op.stat, p_value: op.value })); return true;
+    case 'game_coin': need(await client.rpc('award_game_coins', { p_game_id: op.gameId, p_amount: op.amount, p_reason: op.reason })); return true;
     default: return 'dropped';
   }
 }
