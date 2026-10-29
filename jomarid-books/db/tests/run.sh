@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SQL testy na skutečném PostgreSQL: db/push-notifications.sql (oznámení), db/email-change.sql (změna e-mailu přes správce), db/game-records.sql (herní rekordy a odznaky)
-# db/shop.sql (obchůdek), db/game-saves.sql (uložený postup her), db/game-coins.sql (denní limity Coinů z her) a db/shorts.sql (shortB, krátké knihy ve feedu), db/help-bot.sql (denní limit pomocníka v appce)
+# db/shop.sql (obchůdek), db/game-saves.sql (uložený postup her), db/game-coins.sql (denní limity Coinů z her) a db/shorts.sql (shortB, krátké knihy ve feedu), db/help-bot.sql (denní limit pomocníka v appce), db/leaderboard-streaks.sql (série ostatních v žebříčku)
 # proti zjednodušenému schématu Supabase (mock_schema.sql).
 #   bash db/tests/run.sh        (nebo: npm run test:sql)
 # Potřebuje PostgreSQL 14+ (initdb, pg_ctl, psql v PATH nebo v /usr/lib/postgresql/*/bin). Vytvoří dočasný cluster mimo síť (jen unix socket),
@@ -15,6 +15,7 @@ SAVES_SQL="$HERE/../game-saves.sql"
 COINS_SQL="$HERE/../game-coins.sql"
 SHORTS_SQL="$HERE/../shorts.sql"
 HELP_SQL="$HERE/../help-bot.sql"
+STREAKS_SQL="$HERE/../leaderboard-streaks.sql"
 
 BIN=""
 for d in $(command -v initdb >/dev/null 2>&1 && dirname "$(command -v initdb)") /usr/lib/postgresql/*/bin; do
@@ -26,7 +27,7 @@ TMP="$(mktemp -d)"
 RUNAS=""
 if [ "$(id -u)" = "0" ]; then
   id postgres >/dev/null 2>&1 || { echo "Jako root je potřeba uživatel postgres." >&2; rm -rf "$TMP"; exit 77; }
-  chown postgres "$TMP"; chmod 755 "$HERE" "$HERE"/*.sql "$SQL" "$EMAIL_SQL" "$GAME_SQL" "$SHOP_SQL" "$SAVES_SQL" "$COINS_SQL" "$SHORTS_SQL" "$HELP_SQL" 2>/dev/null || true
+  chown postgres "$TMP"; chmod 755 "$HERE" "$HERE"/*.sql "$SQL" "$EMAIL_SQL" "$GAME_SQL" "$SHOP_SQL" "$SAVES_SQL" "$COINS_SQL" "$SHORTS_SQL" "$HELP_SQL" "$STREAKS_SQL" 2>/dev/null || true
   RUNAS="runuser -u postgres --"
 fi
 run() { $RUNAS "$@"; }
@@ -60,6 +61,8 @@ OUT="$TMP/out.txt"
   PSQLQ -f "$SHORTS_SQL" &&     # i shortB
   PSQLQ -f "$HELP_SQL" &&
   PSQLQ -f "$HELP_SQL" &&       # i limit pomocníka
+  PSQLQ -f "$STREAKS_SQL" &&
+  PSQLQ -f "$STREAKS_SQL" &&    # i série v žebříčku
   PSQLQ -f "$HERE/push_logic.test.sql" &&
   PSQLQ -f "$HERE/push_rpc.test.sql" &&
   PSQLQ -f "$HERE/email_change.test.sql" &&
@@ -68,7 +71,8 @@ OUT="$TMP/out.txt"
   PSQLQ -f "$HERE/game_saves.test.sql" &&
   PSQLQ -f "$HERE/game_coins.test.sql" &&
   PSQLQ -f "$HERE/shorts.test.sql" &&
-  PSQLQ -f "$HERE/help_bot.test.sql"
+  PSQLQ -f "$HERE/help_bot.test.sql" &&
+  PSQLQ -f "$HERE/leaderboard_streaks.test.sql"
 } >"$OUT" 2>&1
 STATUS=$?
 

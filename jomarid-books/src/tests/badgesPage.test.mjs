@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { EMPTY_LEADERBOARDS, EMPTY_STATS, loadLeaderboards, loadMyStats } from '../stats/loadStats.js';
+import { EMPTY_LEADERBOARDS, EMPTY_STATS, boardStreak, loadLeaderboards, loadMyStats } from '../stats/loadStats.js';
 import { BOOK_BADGES } from '../constants/badges.js';
 
 const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -203,4 +203,33 @@ test('loadLeaderboards: řádek přihlášeného se bere z jeho vlastních stati
   // stejný počet knih: výš je ten s víc XP, při úplné shodě podle jména
   const tie = await quiet(() => loadLeaderboards(pagingClient({ books: [], activity: [], profiles: [{ id: 'b', username: 'bara', fake_xp: 0 }, { id: 'a', username: 'adam', fake_xp: 500 }, { id: 'c', username: 'cyril', fake_xp: 500 }] }), { id: 'x' }));
   assert.deepEqual(tie.totalRead.map((r) => r.email), ['adam', 'cyril', 'bara']);
+});
+
+test('série v žebříčku: zmeškaný den zachráněný pojistkou sérii nepřeruší (čtenář s osmi dny nemá 0)', async () => {
+  const set = (...d) => new Set(d);
+  const [today, yest, before] = [dayStr(0), dayStr(1), dayStr(2)];
+  const base = (streak, ...frozen) => ({ streak, frozen: new Set(frozen) });
+  const s = (b, acts) => boardStreak({ base: b, acts, todayStr: today, yestStr: yest });
+  assert.equal(s(base(8, yest), set(before)), 8, 'včera pojistka, dnes ještě nečetl: série drží');
+  assert.equal(s(base(8, yest), set(before, today)), 9, 'a dnes četl: dnešek se připočte jako u vlastní série');
+  assert.equal(s(base(8), set(yest)), 8, 'včera četl, dnes ještě ne');
+  assert.equal(s(base(8), set(before)), 0, 'včera ani dnes nečetl a nemá pojistku: série skončila');
+  assert.equal(s(base(0), set(today)), 1, 'nová série dnešním čtením');
+  // bez dat ze serveru (SQL ještě neběží) se počítá jen z dnů čtení
+  assert.equal(s(null, set(today, yest, before)), 3);
+  assert.equal(s(null, set(yest, before)), 2);
+  assert.equal(s(null, set(before)), 0);
+});
+
+test('loadLeaderboards: série ostatních se bere ze serveru (leaderboard_streaks), bez něj ze dnů čtení', async () => {
+  const profiles = [{ id: 'alex', username: 'alex' }, { id: 'pavla', username: 'pavla' }, { id: 'u1', username: 'jana' }];
+  const activity = [{ user_id: 'pavla', activity_date: dayStr(0) }, { user_id: 'alex', activity_date: dayStr(2) }];
+  const withServer = await quiet(() => loadLeaderboards(pagingClient({ books: [], activity, profiles, rpc: {
+    leaderboard_streaks: async () => ({ data: [{ user_id: 'alex', current_streak: 8, frozen_dates: [dayStr(1)] }, { user_id: 'pavla', current_streak: 0, frozen_dates: [] }], error: null }),
+  } }), USER));
+  assert.equal(withServer.streak.find((r) => r.email === 'alex').streak, 8, 'pojistka včera: série drží');
+  assert.equal(withServer.streak.find((r) => r.email === 'pavla').streak, 1);
+  const withoutServer = await quiet(() => loadLeaderboards(pagingClient({ books: [], activity, profiles }), USER));
+  assert.equal(withoutServer.streak.find((r) => r.email === 'alex').streak, 0, 'bez SQL se pojistky neznají (původní chování)');
+  assert.equal(withoutServer.streak.find((r) => r.email === 'pavla').streak, 1);
 });

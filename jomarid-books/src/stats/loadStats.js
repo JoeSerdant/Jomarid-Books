@@ -266,6 +266,44 @@ const groupBy = (rows, key) => {
   return map;
 };
 
+// Série čtení všech čtenářů, jak je vyhodnotil server (db/leaderboard-streaks.sql): Map(id účtu -> {streak, frozen: Set dní zachráněných pojistkou}).
+// null, dokud SQL v databázi neběží (nebo když volání selže): žebříček pak počítá sérii jen ze dnů čtení.
+async function loadStreakBase(client) {
+  try {
+    const { data, error } = await client.rpc('leaderboard_streaks');
+    if (error) throw error;
+    const map = new Map();
+    for (const row of Array.isArray(data) ? data : []) {
+      if (!row?.user_id) continue;
+      map.set(row.user_id, { streak: Math.max(0, parseInt(row.current_streak, 10) || 0), frozen: new Set(Array.isArray(row.frozen_dates) ? row.frozen_dates : []) });
+    }
+    return map;
+  } catch (err) {
+    console.warn('Série čtenářů se z databáze nepodařilo načíst, počítají se jen ze dnů čtení:', err?.message || err);
+    return null;
+  }
+}
+
+// Série čtenáře do žebříčku stejně jako u vlastní série (loadMyStats): série vyhodnocená serverem (zmeškaný den zachráněný pojistkou ji nepřeruší)
+// plus dnešek, pokud se dnes četlo. Série, která nedosahuje do včerejška (ani čtením, ani pojistkou), už skončila.
+// Bez dat ze serveru (base null) se série počítá jen z po sobě jdoucích dnů čtení.
+export function boardStreak({ base, acts, todayStr, yestStr }) {
+  const readToday = acts.has(todayStr);
+  if (base) {
+    const alive = readToday || acts.has(yestStr) || base.frozen.has(yestStr) || base.frozen.has(todayStr);
+    return alive ? base.streak + (readToday ? 1 : 0) : 0;
+  }
+  let streak = 0;
+  if (readToday || acts.has(yestStr)) {
+    const chk = readToday ? new Date() : new Date(yestStr + 'T12:00:00');
+    while (acts.has(chk.toLocaleDateString('sv'))) {
+      streak++;
+      chk.setDate(chk.getDate() - 1);
+    }
+  }
+  return streak;
+}
+
 // Pořadí v kategorii: vyšší hodnota výš, při shodě víc XP, pak jméno (aby pořadí nezáleželo na tom, v jakém pořadí přišla data).
 const rankBy = (users, key) => [...users].sort((a, b) => b[key] - a[key] || b.xp - a.xp || a.email.localeCompare(b.email, 'cs'));
 
@@ -291,10 +329,11 @@ export async function loadLeaderboards(client, user, mine = null) {
   if (lbRes.error) console.error('Nepodařilo se načíst žebříček:', lbRes.error);
   else if (Array.isArray(lbRes.data)) allProfiles = lbRes.data;
   if (allProfiles && allProfiles.length > 0) {
-    const [allBooks, allActs, boardTitles] = await Promise.all([
+    const [allBooks, allActs, boardTitles, streakBase] = await Promise.all([
       fetchAllRows(() => client.from('user_books').select('user_id, updated_at, first_completed_at').eq('is_read', true).order('user_id').order('book_id')),
       fetchAllRows(() => client.from('user_daily_activity').select('user_id, activity_date').order('user_id').order('activity_date')),
-      loadEquippedTitles(client, allProfiles.map(p => p.id))
+      loadEquippedTitles(client, allProfiles.map(p => p.id)),
+      loadStreakBase(client)
     ]);
 
     const booksByUser = groupBy(allBooks, 'user_id');
@@ -307,14 +346,7 @@ export async function loadLeaderboards(client, user, mine = null) {
       const uBooks = booksByUser.get(p.id) || [];
       const uActs = new Set((actsByUser.get(p.id) || []).map(a => a.activity_date));
 
-      let uStreak = 0;
-      if (uActs.has(todayStr) || uActs.has(yestStr)) {
-        const chk = uActs.has(todayStr) ? new Date() : new Date(yest);
-        while (uActs.has(chk.toLocaleDateString('sv'))) {
-          uStreak++;
-          chk.setDate(chk.getDate() - 1);
-        }
-      }
+      const uStreak = boardStreak({ base: streakBase?.get(p.id) || null, acts: uActs, todayStr, yestStr });
 
       const uMRead = uBooks.filter(b => {
         if (!b.first_completed_at) return false;
