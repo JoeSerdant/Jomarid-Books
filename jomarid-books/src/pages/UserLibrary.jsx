@@ -11,6 +11,8 @@ import { isCancelledError, loadLibrary } from '../browse/libraryData';
 import { isInProgress } from '../browse/libraryModel';
 import { czCount } from '../browse/browseModel';
 import { plural } from '../lib/plural';
+import { useOnline } from '../offline/useOnline';
+import { OfflineLibrary } from '../offline/OfflineLibrary';
 import {
   BookOpen, Coins, Heart, Library, Loader2, LogOut, Sparkles, Star, ArrowLeft, Feather,
 } from 'lucide-react';
@@ -107,6 +109,10 @@ export const UserLibrary = () => {
 
   useEffect(() => { loadLibraryData(); }, [loadLibraryData]);
 
+  // Bez internetu se ukáže jen to, co je stažené v zařízení; po návratu připojení se knihovna načte znovu (kdyby předtím selhalo)
+  const online = useOnline();
+  useEffect(() => { if (online && loadError) loadLibraryData(); }, [online]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleBuyLicense = async (book) => {
     if (!user) return;
     setSubmittingId(book.id);
@@ -187,6 +193,8 @@ export const UserLibrary = () => {
     if (candidates.length === 0) return null;
     return candidates.reduce((latest, b) => (b.lastOpened > latest.lastOpened ? b : latest), candidates[0]);
   }, [books]);
+
+  if (!online) return <OfflineLibrary />;
 
   if (loading) return (
     <div role="status" className="flex flex-col items-center justify-center min-h-[60vh]">

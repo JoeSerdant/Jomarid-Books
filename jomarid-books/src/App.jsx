@@ -6,6 +6,7 @@ import { SETTINGS_APPLIED, notifySettingsChanged } from './settings/settingsEven
 import { ThemeContext, AuthProvider, ProtectedAdminRoute, ProtectedUserRoute, useAuth } from './contexts/AuthContext';
 import { Navbar } from './components/Navbar';
 import { OfflineBar } from './offline/OfflineBar';
+import { OfflineSyncRunner } from './offline/OfflineSyncRunner';
 import { SettingsPage } from './components/SettingsModal';
 import { TourProvider } from './tour/TourProvider';
 import { SearchModal } from './components/SearchModal';
@@ -125,6 +126,7 @@ export default function App() {
             <RecoveryRedirect />
             <Navbar onOpenSearch={() => setIsSearchOpen(true)} />
             <OfflineBar />
+            <OfflineSyncRunner />
 
             <main className="flex-1">
               <PageErrorBoundary>
