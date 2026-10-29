@@ -103,7 +103,7 @@ export const BackToTop = ({ threshold = 900, focusRef }) => {
       aria-label="Zpět nahoru"
       title="Zpět nahoru"
       style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', borderColor: 'var(--border-color)' }}
-      className="fixed bottom-4 right-4 z-30 w-12 h-12 rounded-full border shadow-lg cursor-pointer flex items-center justify-center hover:brightness-110 active:scale-95 transition-all"
+      className="fixed bottom-20 right-4 z-30 w-12 h-12 rounded-full border shadow-lg cursor-pointer flex items-center justify-center hover:brightness-110 active:scale-95 transition-all"
     >
       <ArrowUp size={20} />
     </button>
