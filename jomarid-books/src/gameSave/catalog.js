@@ -14,6 +14,7 @@ export const LEGACY_KEYS = Object.freeze({
   polygonarena: ['polygon-arena-v1'],
   chess: ['chessLeague.save.v1', 'chessLeague.game.v1'],
   koulovikamosi: ['koulovi-kamosi-v1'],
+  hannibal: ['hannibal_save_v1', 'hannibal_endless_best'],
 });
 
 export const SAVE_GAME_IDS = Object.freeze(Object.keys(LEGACY_KEYS));

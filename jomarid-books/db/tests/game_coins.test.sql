@@ -108,6 +108,11 @@ select tt.ok(tt.granted(4, 'koulovikamosi', 1) = 0, 'Kouloví Kámoši: další 
 select tt.ok(tt.granted(4, 'chess', 100) = 100, 'jiná hra vedle plných Kouloví Kámošů pořád dává');
 select tt.ok(tt.earned(4, 'koulovikamosi') = 100 and tt.earned(4, 'chess') = 100, 'každá z obou her má svých 100');
 
+-- ===== Hannibal: Barca (složka Strategie) =====
+select tt.cmk(10);
+with r as (select tt.aw(10, 'hannibal', 150) j) select tt.ok(r.j->>'granted' = '100' and tt.capped(r.j), 'Hannibal: Barca: žádost na 150 se ořízne na 100') from r;
+select tt.ok(tt.granted(10, 'hannibal', 1) = 0 and tt.granted(10, 'warroom', 100) = 100, 'Hannibal drží vlastní strop a ostatní hry vedle něj dál dávají');
+
 -- ===== hranice stropu =====
 with r as (select tt.aw(6, 'rocket', 100) j) select tt.ok(r.j->>'granted' = '100' and not tt.capped(r.j), 'přesně 100 najednou projde celé a není capped') from r;
 with r as (select tt.aw(6, 'rocket', 1) j) select tt.ok(r.j->>'granted' = '0' and tt.capped(r.j), 'o jedna víc už ne') from r;

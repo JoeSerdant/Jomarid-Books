@@ -33,6 +33,7 @@ const GAME_SOURCES = {
   polygonarena: ['polygonArena/index.html', 'polygonArena/core.js'],
   chess: ['chess/index.html', 'chess/league.js', 'chess/ui.js'],
   koulovikamosi: ['koulovi/index.html', 'koulovi/game.js'],
+  hannibal: ['hannibal/index.html'],
 };
 
 /* ---------------------------------------------------------------- katalog a shoda se SQL */
