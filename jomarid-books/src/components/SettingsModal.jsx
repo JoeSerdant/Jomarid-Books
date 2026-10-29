@@ -28,6 +28,7 @@ import { SETTINGS_TABLE, isMissingTable } from '../settings/settingsSync';
 import { APP_VERSION_LABEL } from '../appInfo';
 import PushSettings from '../push/PushSettings';
 import { cleanupOnLogout } from '../push/pushClient';
+import { createLoginCode, getLoginCodeInfo, revokeLoginCode } from '../offline/loginCode';
 import { useInstallState, promptInstall } from '../pwa/install';
 import { whenOfflineReady, resetApp } from '../pwa/register';
 
@@ -307,6 +308,112 @@ const ProfileTab = ({ user, role }) => {
 // ---- Záložka: Zabezpečení ----
 const isMissingRpc = (err) => !!err && (err.code === 'PGRST202' || /could not find the function/i.test(String(err.message || '')));
 
+// Přihlašovací kód (db/login-code.sql): druhý způsob přihlášení místo hesla. Kód se ukáže jen jednou při vytvoření, server si pamatuje jen jeho otisk.
+const LoginCodeSection = () => {
+  const [info, setInfo] = useState(undefined);   // undefined: načítá se; null: funkce v databázi chybí; jinak { exists, createdAt, lastUsedAt, useCount }
+  const [fresh, setFresh] = useState('');        // právě vytvořený kód (jediná chvíle, kdy je vidět)
+  const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState(null);  // 'new' | 'revoke'
+  const [msg, setMsg] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+
+  const load = async () => {
+    try { const next = await getLoginCodeInfo(supabase); if (alive.current) setInfo(next); }
+    catch { if (alive.current) setInfo(null); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const fmt = (v) => (v ? new Date(v).toLocaleString('cs-CZ', { dateStyle: 'medium', timeStyle: 'short' }) : null);
+
+  const create = async () => {
+    setBusy(true); setMsg(null); setCopied(false); setConfirm(null);
+    try {
+      const code = await createLoginCode(supabase);
+      if (!code) throw new Error('empty');
+      if (!alive.current) return;
+      setFresh(code);
+      await load();
+    } catch {
+      if (alive.current) setMsg({ type: 'error', text: 'Kód se nepodařilo vytvořit. Zkus to znovu za chvíli.' });
+    } finally { if (alive.current) setBusy(false); }
+  };
+
+  const revoke = async () => {
+    setBusy(true); setMsg(null); setConfirm(null);
+    try {
+      await revokeLoginCode(supabase);
+      if (!alive.current) return;
+      setFresh('');
+      setMsg({ type: 'success', text: 'Kód je zneplatněný. Přihlášení kódem už nefunguje, dokud si nevytvoříš nový.' });
+      await load();
+    } catch {
+      if (alive.current) setMsg({ type: 'error', text: 'Kód se nepodařilo zneplatnit. Zkus to znovu.' });
+    } finally { if (alive.current) setBusy(false); }
+  };
+
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(fresh); setCopied(true); }
+    catch { setMsg({ type: 'error', text: 'Kopírování nevyšlo. Kód si opiš ručně.' }); }
+  };
+
+  return (
+    <Section title="Přihlašovací kód" description="Dlouhý tajný kód, kterým se můžeš přihlásit místo hesla. Na zařízení, kde se jím přihlásíš, zůstaneš přihlášený i bez internetu, dokud se sám neodhlásíš. Ulož si ho na bezpečné místo (správce hesel) a nikomu ho neposílej: kdo kód zná, dostane se do tvého účtu.">
+      <div data-testid="login-code-section" className="space-y-3">
+        {info === undefined && <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0">Načítám…</p>}
+        {info === null && <Notice type="info">Přihlašovací kód zatím není na serveru zapnutý. Až bude, najdeš ho tady.</Notice>}
+
+        {fresh && (
+          <div className="space-y-2" data-testid="login-code-fresh">
+            <p style={{ color: 'var(--text-body)' }} className="text-xs font-black m-0">Tvůj nový kód. Server ho už nikdy neukáže, ulož si ho teď:</p>
+            <code data-testid="login-code-value" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="block border rounded-lg px-3 py-3 text-sm font-black tracking-wider break-all select-all leading-relaxed">{fresh}</code>
+            <div className="flex flex-wrap gap-2">
+              <ActionButton onClick={copy}>{copied ? 'Zkopírováno' : 'Zkopírovat'}</ActionButton>
+              <ActionButton variant="ghost" onClick={() => { setFresh(''); setCopied(false); }}>Mám uložený, skrýt</ActionButton>
+            </div>
+          </div>
+        )}
+
+        {info && !fresh && (
+          <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0" data-testid="login-code-info">
+            {info.exists
+              ? `Kód je vytvořený ${fmt(info.createdAt) || ''}${info.lastUsedAt ? `, naposledy použitý ${fmt(info.lastUsedAt)}` : ', zatím nepoužitý'}.`
+              : 'Zatím žádný kód nemáš.'}
+          </p>
+        )}
+
+        {info && (
+          <div className="flex flex-wrap gap-2">
+            {!info.exists && !fresh && <ActionButton busy={busy} onClick={create}>Vytvořit přihlašovací kód</ActionButton>}
+            {info.exists && confirm !== 'new' && confirm !== 'revoke' && (
+              <>
+                <ActionButton variant="ghost" disabled={busy} onClick={() => setConfirm('new')}>Vygenerovat nový kód</ActionButton>
+                <ActionButton variant="ghost" disabled={busy} onClick={() => setConfirm('revoke')}>Zrušit kód</ActionButton>
+              </>
+            )}
+            {confirm === 'new' && (
+              <>
+                <span className="text-xs font-bold self-center">Starý kód přestane platit. Pokračovat?</span>
+                <ActionButton busy={busy} onClick={create}>Ano, vytvořit nový</ActionButton>
+                <ActionButton variant="ghost" disabled={busy} onClick={() => setConfirm(null)}>Zrušit</ActionButton>
+              </>
+            )}
+            {confirm === 'revoke' && (
+              <>
+                <span className="text-xs font-bold self-center">Přihlášení kódem přestane fungovat. Pokračovat?</span>
+                <ActionButton variant="danger" busy={busy} onClick={revoke}>Ano, zrušit kód</ActionButton>
+                <ActionButton variant="ghost" disabled={busy} onClick={() => setConfirm(null)}>Zpět</ActionButton>
+              </>
+            )}
+          </div>
+        )}
+        {msg && <Notice type={msg.type}>{msg.text}</Notice>}
+      </div>
+    </Section>
+  );
+};
+
 const SecurityTab = ({ user }) => {
   const { username: accountName, refreshProfile } = useAuth();
   const navigate = useNavigate();
@@ -454,6 +561,7 @@ const SecurityTab = ({ user }) => {
     setSignOutMsg(null);
     setSignOutBusy(true);
     await cleanupOnLogout({ client: supabase, nav: navigator, win: window }); // zařízení nemá dál dostávat oznámení odhlášeného účtu
+    try { await revokeLoginCode(supabase); } catch { /* přihlašovací kód v databázi nemusí být zapnutý */ } // odhlášení všude platí i pro kód, jinak by se jím dal přihlásit zpátky
     const { error } = await supabase.auth.signOut({ scope: 'global' });
     setSignOutBusy(false);
     if (error) return setSignOutMsg({ type: 'error', text: mapAuthError(error) });
@@ -477,6 +585,8 @@ const SecurityTab = ({ user }) => {
           {resetMsg && <Notice type={resetMsg.type}>{resetMsg.text}</Notice>}
         </form>
       </Section>
+
+      <LoginCodeSection />
 
       <Section title="Změna e-mailu" description={`Teď se přihlašuješ přes ${user.email}. E-mail ti změní správce, stejně jako dočasné heslo: pošli mu žádost.`}>
         {emailLoadFailed ? (
@@ -515,7 +625,7 @@ const SecurityTab = ({ user }) => {
         {emailMsg && <Notice type={emailMsg.type}>{emailMsg.text}</Notice>}
       </Section>
 
-      <Section title="Přihlášená zařízení" description="Odhlásí tě všude - na telefonu, v jiných prohlížečích i tady. Hodí se, když je tvůj účet přihlášený na cizím zařízení.">
+      <Section title="Přihlášená zařízení" description="Odhlásí tě všude - na telefonu, v jiných prohlížečích i tady - a zneplatní přihlašovací kód. Hodí se, když je tvůj účet přihlášený na cizím zařízení.">
         {!confirmSignOut ? (
           <ActionButton variant="ghost" onClick={() => setConfirmSignOut(true)}>Odhlásit ze všech zařízení</ActionButton>
         ) : (
