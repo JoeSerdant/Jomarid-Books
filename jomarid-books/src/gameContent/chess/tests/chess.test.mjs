@@ -212,6 +212,90 @@ describe('Elo, XP a uložený postup', () => {
       assert.ok(!('xpGained' in o.save.recentGames[0]));
     }
   });
+  // ---------- statistiky pro odznaky ----------
+  const mv = (color, extra = {}) => ({ color, capture: null, flag: null, promotion: null, check: false, ...extra });
+  const base = { botIdx: 0, result: 'win', reason: 'checkmate', color: 'w', plies: 30, tc: 'none', rated: true, moves: [] };
+  const fin = (save, g, day = '2026-10-03') => L.finishGame(save, { ...base, ...g }, bots, day).save;
+
+  test('summarizeMoves: počítá jen tahy hráče (rošády, proměny, braní mimochodem, šachy, sebrané figury a dámy)', () => {
+    const moves = [mv('w', { flag: 'castleK' }), mv('b', { check: true, capture: 'q' }), mv('w', { check: true, capture: 'q' }), mv('w', { promotion: 'q' }), mv('w', { promotion: 'n', check: true }),
+      mv('w', { flag: 'ep', capture: 'p' }), mv('w', { flag: 'castleQ' }), mv('b', { promotion: 'q', flag: 'castleK' })];
+    assert.deepEqual(plain(L.summarizeMoves(moves, 'w')), { checks: 2, castles: 2, promotions: 1, underpromotions: 1, enPassants: 1, captures: 2, queensCaptured: 1 });
+    assert.deepEqual(plain(L.summarizeMoves(moves, 'b')), { checks: 1, castles: 1, promotions: 1, underpromotions: 0, enPassants: 0, captures: 1, queensCaptured: 1 });
+    assert.deepEqual(plain(L.summarizeMoves(null, 'w')), { checks: 0, castles: 0, promotions: 0, underpromotions: 0, enPassants: 0, captures: 0, queensCaptured: 0 });
+  });
+  test('statistiky: hodnocená výhra matem za bílé, rychlá, v minutovce, nad silnějším soupeřem', () => {
+    const d = { checks: 3, castles: 1, promotions: 1, underpromotions: 0, enPassants: 1, captures: 9, queensCaptured: 1 };
+    const s = fin(L.defaultSave(), { botIdx: 2, tc: 'bullet1', plies: 36, details: d, hints: 0, undos: 2 });
+    const st = plain(s.stats);
+    assert.deepEqual([st.games_total, st.wins_white, st.wins_black, st.mate_wins, st.quick_wins, st.bullet_wins, st.upsets], [1, 1, 0, 1, 1, 1, 1]);
+    assert.equal(st.biggest_upset, bots[2].rating - 800);
+    assert.ok(st.best_rating_gain >= 20);
+    assert.deepEqual([st.checks_given, st.castlings, st.promotions, st.en_passants, st.pieces_captured, st.queens_captured, st.undos_used, st.longest_game_moves], [3, 1, 1, 1, 9, 1, 2, 18]);
+    assert.equal(plain(s.statDays).join(), '2026-10-03');
+  });
+  test('statistiky: výhra za černé, na čas, v blesku a rapidu; slabší soupeř není překvapení', () => {
+    let s = fin(L.defaultSave(), { botIdx: 0, color: 'b', reason: 'timeout', tc: 'blitz5', plies: 61 });
+    s = fin(s, { botIdx: 0, tc: 'blitz3', plies: 50 });
+    s = fin(s, { botIdx: 0, tc: 'rapid10', plies: 50 });
+    const st = plain(s.stats);
+    assert.deepEqual([st.wins_black, st.wins_white, st.time_wins, st.mate_wins, st.blitz_wins, st.rapid_wins, st.quick_wins, st.upsets, st.biggest_upset], [1, 2, 1, 2, 2, 1, 0, 0, 0]);
+    assert.equal(st.longest_game_moves, 31);
+  });
+  test('statistiky: nehodnocená partie (s nápovědou) nedává výhry ani rating, ale počítá se do her, nápověd a nebezpečných zásahů', () => {
+    const s = fin(L.defaultSave(), { rated: false, hints: 3, undos: 1, details: { checks: 2, castles: 0, promotions: 0, underpromotions: 0, enPassants: 0, captures: 4, queensCaptured: 0 } });
+    const st = plain(s.stats);
+    assert.deepEqual([st.games_total, st.wins_white, st.mate_wins, st.quick_wins, st.best_rating_gain, st.hints_used, st.undos_used, st.checks_given, st.pieces_captured], [1, 0, 0, 0, 0, 3, 1, 2, 4]);
+  });
+  test('statistiky: remízy podle důvodu, prohry (vzdání, čas), vzdání soupeře', () => {
+    let s = L.defaultSave();
+    for (const reason of ['stalemate', 'repetition', 'fiftymove', 'agreement']) s = fin(s, { result: 'draw', reason });
+    s = fin(s, { result: 'loss', reason: 'resign' }); s = fin(s, { result: 'loss', reason: 'timeout' }); s = fin(s, { result: 'loss', reason: 'checkmate' });
+    s = fin(s, { reason: 'botresign' });
+    const st = plain(s.stats);
+    assert.deepEqual([st.draws_total, st.stalemates, st.repetitions, st.fifty_move_draws, st.losses_total, st.resigns, st.flagged, st.bot_resigns, st.games_total], [4, 1, 1, 1, 3, 1, 1, 1, 8]);
+  });
+  test('statistiky: dny hraní se neopakují a mají strop', () => {
+    let s = L.defaultSave();
+    s = fin(s, {}, '2026-10-03'); s = fin(s, {}, '2026-10-03'); s = fin(s, {}, '2026-10-04');
+    assert.equal(plain(s.statDays).length, 2);
+    for (let i = 0; i < 450; i += 1) s.statDays.push('d' + i), s.statDays = s.statDays.slice(-400);
+    s = fin(s, {}, '2027-01-01');
+    assert.equal(s.statDays.length, 400);
+  });
+  test('recordAccuracy: nejvyšší přesnost, čisté a bezchybné partie jen u dost dlouhých partií, žádné opakování stejného', () => {
+    let s = L.defaultSave();
+    s = L.recordAccuracy(s, 87.4, { blunder: 0, mistake: 0, inaccuracy: 2 }, 40);
+    assert.deepEqual([s.stats.best_accuracy, s.stats.clean_games, s.stats.flawless_games], [87, 1, 0]);
+    s = L.recordAccuracy(s, 96, { blunder: 0, mistake: 0, inaccuracy: 0 }, 60);
+    assert.deepEqual([s.stats.best_accuracy, s.stats.clean_games, s.stats.flawless_games], [96, 2, 1]);
+    s = L.recordAccuracy(s, 60, { blunder: 1, mistake: 0, inaccuracy: 0 }, 60);
+    assert.deepEqual([s.stats.best_accuracy, s.stats.clean_games], [96, 2], 'hrubka partii z čistých vyřadí, přesnost se nesnižuje');
+    s = L.recordAccuracy(s, 99, { blunder: 0, mistake: 0, inaccuracy: 0 }, 10);
+    assert.deepEqual([s.stats.best_accuracy, s.stats.clean_games, s.stats.flawless_games], [99, 2, 1], 'krátká partie není čistá');
+    assert.equal(L.recordAccuracy(s, 130, null, 0).stats.best_accuracy, 100, 'přesnost nad 100 se ořízne');
+  });
+  test('migrace doplní statistiky a zahodí nesmysly; idempotentní', () => {
+    const old = plain(L.migrate({ v: 2, unlockedIndex: 1, stats: { games_total: 'x', checks_given: 7.9, nesmysl: 5, castlings: -3 }, statDays: ['2026-01-01', 5, null] }, bots.map((b) => b.rating)));
+    assert.equal(old.stats.games_total, 0); assert.equal(old.stats.checks_given, 7); assert.equal(old.stats.castlings, 0); assert.ok(!('nesmysl' in old.stats));
+    assert.deepEqual(old.statDays, ['2026-01-01']);
+    assert.deepEqual(plain(L.migrate(old, bots.map((b) => b.rating))), old);
+    assert.deepEqual(Object.keys(plain(L.migrate(null, [])).stats), [...L.STAT_KEYS]);
+  });
+  test('recordStats hlásí všechny statistiky z katalogu odznaků, cheat Všechny odznaky je dotáhne na prahy a nic nesnižuje', async () => {
+    const { GAME_CATALOG, GAME_BADGES } = await import('../../../gameRecords/catalog.js');
+    const want = GAME_CATALOG.find((g) => g.id === 'chess').stats.map((x) => x.key).sort();
+    assert.deepEqual(Object.keys(L.recordStats(L.defaultSave())).sort(), want, 'hra hlásí přesně statistiky z katalogu');
+    const hi = L.finishGame(L.defaultSave(), { ...base, details: { checks: 5000, castles: 0, promotions: 0, underpromotions: 0, enPassants: 0, captures: 0, queensCaptured: 0 } }, bots, '2026-10-03').save;
+    const cheated = L.cheatAllBadges(hi);
+    const rec = L.recordStats(cheated);
+    for (const key of want) {
+      const need = Math.max(...GAME_BADGES.filter((b) => b.game === 'chess' && b.stat === key).map((b) => b.threshold));
+      assert.ok(rec[key] >= need, `${key}: cheat dá ${rec[key]}, odznak chce ${need}`);
+    }
+    assert.equal(cheated.stats.checks_given, 5000, 'vyšší skutečná hodnota zůstane');
+    assert.equal(cheated.rating, hi.rating, 'rating se necheatuje');
+  });
   test('cvičná partie nemění rating', () => {
     const u = L.finishGame(L.defaultSave(), { botIdx: 0, result: 'win', reason: 'checkmate', color: 'w', plies: 40, tc: 'none', rated: false, moves: [] }, bots, '2026-10-03');
     assert.equal(u.save.rating, 800); assert.equal(u.save.ratedGames, 0); assert.equal(u.save.ratingHistory.length, 0);
@@ -527,7 +611,7 @@ describe('cheat kód v rozhraní', () => {
 
   test('menu: akce do partie jsou jen za rozehrané partie, vizuální kdykoli; menu se zavře Esc i klepnutím mimo', () => {
     const menu = fn('CheatMenu');
-    for (const id of ['win', 'draw', 'blind', 'auto', 'scare', 'confetti', 'disco', 'fanfare']) assert.ok(menu.includes(`id: "${id}"`), id);
+    for (const id of ['win', 'draw', 'blind', 'auto', 'scare', 'badges', 'confetti', 'disco', 'fanfare']) assert.ok(menu.includes(`id: "${id}"`), id);
     assert.match(menu, /const live = !!session && !session\.over;/);
     assert.match(menu, /disabled: off/);
     assert.match(menu, /e\.key === "Escape"/);
@@ -538,7 +622,7 @@ describe('cheat kód v rozhraní', () => {
   });
 
   test('výsledek cheat partie se do postupu zapíše jako každý jiný: rozhraní žádné označení cheat nepředává ani nezobrazuje', () => {
-    assert.match(ui, /rated, moves: coords \}, BOT_LIST/);
+    assert.match(ui, /rated, moves: coords,\n\s+details: League\.summarizeMoves\(sess\.moves, sess\.playerColor\), hints: sess\.hintsUsed, undos: sess\.undosUsed \}, BOT_LIST/);
     assert.match(ui, /rated: !saved\.assisted, moves: saved\.moves \}/);
     assert.match(ui, /cheat: "cheat kódem"/, 'konec partie říká, jak skončila');
     assert.doesNotMatch(ui, /cheated/);
