@@ -6,11 +6,12 @@ import { friendlyError } from '../lib/friendlyError';
 import { BOOK_BADGES } from '../constants/badges';
 import { countGameBadges } from '../gameRecords/catalog';
 import { EMPTY_LEADERBOARDS, EMPTY_STATS, loadLeaderboards, loadMyStats } from '../stats/loadStats';
+import { FROZEN_ICON_COLOR, FROZEN_LABEL, boardRowStyle, isFrozenRow } from '../stats/boardRow';
 import { calculateGoalMultiplier, DEFAULT_MONTHLY_GOAL } from '../constants/leveling';
 import { STREAK_FREEZE_PRICE } from '../constants/economy';
 import { plural } from '../lib/plural';
 import { titleLabel } from '../shop/catalog';
-import { Award, Calendar, CheckCircle, ChevronRight, Coins, Flame, Loader2, Lock, Shield, ShieldCheck, ShieldOff, Sparkles, TrendingUp, Trophy, Users } from 'lucide-react';
+import { Award, Calendar, CheckCircle, ChevronRight, Coins, Flame, Loader2, Lock, Shield, ShieldCheck, ShieldOff, Snowflake, Sparkles, TrendingUp, Trophy, Users } from 'lucide-react';
 
 export const UserStats = () => {
   const { user } = useAuth();
@@ -394,8 +395,9 @@ export const UserStats = () => {
               const featuredBadgeDef = row.featuredBadge ? BOOK_BADGES.find(b => b.id === row.featuredBadge) : null;
               const FeaturedIcon = featuredBadgeDef?.icon;
               const rowTitle = row.isMe ? myTitle : row.title;
+              const frozenRow = isFrozenRow(row, activeTab);
               return (
-                <div key={index} data-testid={row.isMe ? 'lb-me' : undefined} style={{ marginTop: index === 10 ? '1rem' : undefined, backgroundColor: row.isMe ? 'var(--bg-badge)' : 'rgba(0,0,0,0.02)', borderColor: row.isMe ? 'var(--bg-primary)' : 'transparent' }} className={`flex items-center justify-between p-3 rounded-xl border transition-all ${row.isMe && 'font-bold shadow-sm'}`}>
+                <div key={index} data-testid={row.isMe ? 'lb-me' : undefined} data-frozen={frozenRow ? 'true' : undefined} style={{ marginTop: index === 10 ? '1rem' : undefined, ...boardRowStyle(row, activeTab) }} className={`flex items-center justify-between p-3 rounded-xl border transition-all ${row.isMe && 'font-bold shadow-sm'}`}>
                   <div className="flex items-center gap-4 text-left">
                     <span className={medalStyle}>{rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}.`}</span>
                     {FeaturedIcon && (
@@ -407,6 +409,7 @@ export const UserStats = () => {
                     {rowTitle && <span data-testid="lb-title" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }} className="text-[0.625rem] font-black uppercase tracking-wide border rounded px-1.5 py-0.5 shrink-0">{rowTitle}</span>}
                   </div>
                   <div className="text-right font-black text-sm flex items-center gap-1">
+                    {frozenRow && <Snowflake size={14} role="img" aria-label={FROZEN_LABEL} data-testid="lb-frozen" style={{ color: FROZEN_ICON_COLOR }} className="shrink-0"><title>{FROZEN_LABEL}</title></Snowflake>}
                     <span>{row[activeTab].toLocaleString()}</span>
                     <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase opacity-60">{typeof cat?.suffix === 'function' ? cat.suffix(row[activeTab]) : cat?.suffix}</span>
                   </div>
@@ -415,6 +418,12 @@ export const UserStats = () => {
             })
           )}
         </div>
+        {activeTab === 'streak' && leaderboards.streak?.some(r => isFrozenRow(r, 'streak')) && (
+          <p data-testid="lb-frozen-legend" style={{ color: 'var(--text-muted)' }} className="text-xs m-0 mt-3 flex items-center gap-1.5">
+            <Snowflake size={12} aria-hidden="true" style={{ color: FROZEN_ICON_COLOR }} className="shrink-0" />
+            Modrý řádek: sérii drží pojistka (Streak Freeze), takže neskončila.
+          </p>
+        )}
       </div>
 
       {/* ODKAZ NA ODZNAKY, TITULY A VZHLED HER (mají vlastní stránku) */}

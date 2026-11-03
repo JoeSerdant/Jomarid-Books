@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { EMPTY_LEADERBOARDS, EMPTY_STATS, boardStreak, loadLeaderboards, loadMyStats } from '../stats/loadStats.js';
+import { EMPTY_LEADERBOARDS, EMPTY_STATS, boardStreak, boardStreakInfo, loadLeaderboards, loadMyStats } from '../stats/loadStats.js';
+import { FROZEN_ROW_IMAGE, FROZEN_ROW_BORDER, boardRowStyle, isFrozenRow } from '../stats/boardRow.js';
 import { BOOK_BADGES } from '../constants/badges.js';
 
 const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -232,4 +233,119 @@ test('loadLeaderboards: série ostatních se bere ze serveru (leaderboard_streak
   const withoutServer = await quiet(() => loadLeaderboards(pagingClient({ books: [], activity, profiles }), USER));
   assert.equal(withoutServer.streak.find((r) => r.email === 'alex').streak, 0, 'bez SQL se pojistky neznají (původní chování)');
   assert.equal(withoutServer.streak.find((r) => r.email === 'pavla').streak, 1);
+});
+
+// ---- zmrzlá série v žebříčku: řádek je modrý, ne nula ----
+test('boardStreakInfo: série drží pojistka (včera zachráněný den, dnes se nečetlo) → zmrzlá, ne nula', () => {
+  const set = (...d) => new Set(d);
+  const [today, yest, before, older] = [dayStr(0), dayStr(1), dayStr(2), dayStr(3)];
+  const info = (base, acts) => boardStreakInfo({ base, acts, todayStr: today, yestStr: yest });
+  const base = (streak, frozen = [], freezes = 0) => ({ streak, frozen: new Set(frozen), freezes });
+  assert.deepEqual(info(base(8, [yest]), set(before)), { streak: 8, frozen: true }, 'včera pojistka, dnes ještě nečetl');
+  assert.deepEqual(info(base(8, [today]), set(before)), { streak: 8, frozen: true }, 'pojistka zachránila i dnešek');
+  assert.deepEqual(info(base(8, [yest]), set(before, today)), { streak: 9, frozen: false }, 'dnes zase četl: už není zmrzlá, dnešek se připočte');
+  assert.deepEqual(info(base(8), set(yest)), { streak: 8, frozen: false }, 'včera četl: obyčejná série, žádná pojistka');
+  assert.deepEqual(info(base(0, [yest]), set()), { streak: 0, frozen: false }, 'není co držet: nula bez modré');
+  assert.deepEqual(info(base(8), set(before)), { streak: 0, frozen: false }, 'bez pojistky a bez čtení série skončila');
+  assert.deepEqual(info(null, set(today, yest)), { streak: 2, frozen: false }, 'bez dat ze serveru se nic nepředpokládá');
+  assert.equal(boardStreak({ base: base(8, [yest]), acts: set(before), todayStr: today, yestStr: yest }), 8, 'boardStreak vrací jen číslo jako dřív');
+  void older;
+});
+
+test('boardStreakInfo: čtenář, který zmeškal den a appku ještě neotevřel (pojistky v zásobě, server je zatím nespotřeboval)', () => {
+  const set = (...d) => new Set(d);
+  const [today, yest, before, older, oldest] = [dayStr(0), dayStr(1), dayStr(2), dayStr(3), dayStr(4)];
+  const info = (base, acts) => boardStreakInfo({ base, acts, todayStr: today, yestStr: yest });
+  const base = (streak, freezes, frozen = []) => ({ streak, frozen: new Set(frozen), freezes });
+  assert.deepEqual(info(base(8, 1), set(before)), { streak: 8, frozen: true }, 'jeden zmeškaný den, jedna pojistka');
+  assert.deepEqual(info(base(8, 2), set(older)), { streak: 8, frozen: true }, 'dva zmeškané dny, dvě pojistky');
+  assert.deepEqual(info(base(8, 1), set(older)), { streak: 0, frozen: false }, 'dva zmeškané dny, ale jen jedna pojistka: série skončila');
+  assert.deepEqual(info(base(8, 3), set(oldest)), { streak: 8, frozen: true }, 'tři dny, tři pojistky');
+  assert.deepEqual(info(base(8, 0), set(before)), { streak: 0, frozen: false }, 'bez pojistky se nic nepředpokládá');
+  assert.deepEqual(info(base(8, 1, [before]), set(older)), { streak: 8, frozen: true }, 'dřívější den už zachráněn serverem, včerejšek pokryje zásoba');
+  assert.deepEqual(info(base(8, 5), set()), { streak: 0, frozen: false }, 'bez jediného dne čtení a bez zachráněného dne není na co navázat');
+  assert.deepEqual(info(base(0, 2), set(before)), { streak: 0, frozen: false }, 'nulová série se nezmrazuje');
+  assert.deepEqual(info({ streak: 8, frozen: new Set() }, set(before)), { streak: 0, frozen: false }, 'starší funkce bez počtu pojistek: chování jako dřív');
+});
+
+test('boardStreakInfo: přechod měsíce, roku a letního času nezmění počítání dní', () => {
+  const info = (base, acts, today, yest) => boardStreakInfo({ base, acts, todayStr: today, yestStr: yest });
+  const base = { streak: 5, frozen: new Set(), freezes: 2 };
+  assert.deepEqual(info(base, new Set(['2026-02-28']), '2026-03-02', '2026-03-01'), { streak: 5, frozen: true }, 'únor → březen');
+  assert.deepEqual(info(base, new Set(['2025-12-30']), '2026-01-02', '2026-01-01'), { streak: 5, frozen: true }, 'konec roku');
+  assert.deepEqual(info(base, new Set(['2026-03-28']), '2026-03-30', '2026-03-29'), { streak: 5, frozen: true }, 'přechod na letní čas (29. 3. 2026)');
+  assert.deepEqual(info(base, new Set(['2026-10-24']), '2026-10-26', '2026-10-25'), { streak: 5, frozen: true }, 'přechod na zimní čas (25. 10. 2026)');
+});
+
+test('loadLeaderboards: zmrzlá série (pojistka včera nebo v zásobě) není nula a řádek je označený; ostatní ne', async () => {
+  const profiles = [{ id: 'alex', username: 'alex' }, { id: 'pavla', username: 'pavla' }, { id: 'ivo', username: 'ivo' }, { id: 'dana', username: 'dana' }, { id: 'u1', username: 'jana' }];
+  const activity = [
+    { user_id: 'alex', activity_date: dayStr(2) },   // včera pojistka
+    { user_id: 'pavla', activity_date: dayStr(0) },  // dnes četla
+    { user_id: 'ivo', activity_date: dayStr(2) },    // zmeškal včerejšek, má pojistku v zásobě, appku neotevřel
+    { user_id: 'dana', activity_date: dayStr(3) },   // zmeškal dva dny a jen jedna pojistka
+  ];
+  const rpc = { leaderboard_streaks: async () => ({ data: [
+    { user_id: 'alex', current_streak: 8, frozen_dates: [dayStr(1)], streak_freezes: 0 },
+    { user_id: 'pavla', current_streak: 3, frozen_dates: [], streak_freezes: 1 },
+    { user_id: 'ivo', current_streak: 6, frozen_dates: [], streak_freezes: 1 },
+    { user_id: 'dana', current_streak: 4, frozen_dates: [], streak_freezes: 1 },
+  ], error: null }) };
+  const lb = await quiet(() => loadLeaderboards(pagingClient({ books: [], activity, profiles, rpc }), USER));
+  const row = (name) => lb.streak.find((r) => r.email === name);
+  assert.deepEqual([row('alex').streak, row('alex').streakFrozen], [8, true], 'pojistka včera');
+  assert.deepEqual([row('ivo').streak, row('ivo').streakFrozen], [6, true], 'pojistka v zásobě pokryje zmeškaný včerejšek');
+  assert.deepEqual([row('pavla').streak, row('pavla').streakFrozen], [4, false], 'dnes četla: obyčejný řádek');
+  assert.deepEqual([row('dana').streak, row('dana').streakFrozen], [0, false], 'pojistek je míň než zmeškaných dní');
+  assert.equal(row('jana').streakFrozen, false);
+  assert.ok(lb.streak.findIndex((r) => r.email === 'alex') < lb.streak.findIndex((r) => r.email === 'pavla'), 'zmrzlá série se řadí podle své hodnoty, ne jako nula');
+  for (const key of ['level', 'totalRead', 'monthlyRead', 'xp']) assert.ok(lb[key].every((r) => 'streakFrozen' in r), 'příznak je u každého řádku');
+});
+
+test('loadLeaderboards: bez nového SQL (chybí streak_freezes) i bez SQL vůbec nic nespadne a nic se nezmrazí domýšlením', async () => {
+  const profiles = [{ id: 'alex', username: 'alex' }, { id: 'pavla', username: 'pavla' }];
+  const activity = [{ user_id: 'alex', activity_date: dayStr(2) }, { user_id: 'pavla', activity_date: dayStr(2) }];
+  const oldSql = await quiet(() => loadLeaderboards(pagingClient({ books: [], activity, profiles, rpc: {
+    leaderboard_streaks: async () => ({ data: [{ user_id: 'alex', current_streak: 8, frozen_dates: [dayStr(1)] }, { user_id: 'pavla', current_streak: 5, frozen_dates: [] }], error: null }),
+  } }), USER));
+  const get = (lb, n) => lb.streak.find((r) => r.email === n);
+  assert.deepEqual([get(oldSql, 'alex').streak, get(oldSql, 'alex').streakFrozen], [8, true], 'starší funkce: zachráněný včerejšek pozná dál');
+  assert.deepEqual([get(oldSql, 'pavla').streak, get(oldSql, 'pavla').streakFrozen], [0, false]);
+  const noSql = await quiet(() => loadLeaderboards(pagingClient({ books: [], activity, profiles }), USER));
+  assert.ok(noSql.streak.every((r) => r.streakFrozen === false));
+});
+
+test('loadLeaderboards: vlastní řádek bere sérii a pojistky z vlastních statistik (zmrzlá série i u tebe)', async () => {
+  const profiles = [{ id: USER.id, username: 'ja' }, { id: 'pavla', username: 'pavla' }];
+  const activity = [{ user_id: USER.id, activity_date: dayStr(2) }];
+  const lb = await quiet(() => loadLeaderboards(pagingClient({ books: [], activity, profiles }), USER, { ...EMPTY_STATS, streak: 6, frozenDates: [dayStr(1)], streakFreezes: 0, level: 1, totalRead: 0, monthlyRead: 0, totalXp: 0 }));
+  const me = lb.streak.find((r) => r.isMe);
+  assert.deepEqual([me.streak, me.streakFrozen], [6, true]);
+  const read = await quiet(() => loadLeaderboards(pagingClient({ books: [], activity: [{ user_id: USER.id, activity_date: dayStr(0) }, { user_id: USER.id, activity_date: dayStr(2) }], profiles }), USER, { ...EMPTY_STATS, streak: 7, frozenDates: [dayStr(1)], streakFreezes: 0, level: 1, totalRead: 0, monthlyRead: 0, totalXp: 0 }));
+  assert.deepEqual([read.streak.find((r) => r.isMe).streak, read.streak.find((r) => r.isMe).streakFrozen], [7, false], 'dnes četl: už nezmrzlá');
+});
+
+test('styl řádku: zmrzlý jen na záložce Plamínky, modrý přechod bez zbytečné změny ostatních řádků', () => {
+  const frozen = { email: 'alex', streak: 8, streakFrozen: true };
+  assert.equal(isFrozenRow(frozen, 'streak'), true);
+  for (const tab of ['level', 'totalRead', 'monthlyRead', 'xp']) assert.equal(isFrozenRow(frozen, tab), false, tab);
+  assert.equal(isFrozenRow({ streak: 8 }, 'streak'), false);
+  assert.equal(isFrozenRow(null, 'streak'), false);
+  const s = boardRowStyle(frozen, 'streak');
+  assert.equal(s.backgroundImage, FROZEN_ROW_IMAGE);
+  assert.equal(s.borderColor, FROZEN_ROW_BORDER);
+  assert.match(FROZEN_ROW_IMAGE, /^linear-gradient\(90deg, rgba\(56, 189, 248/, 'modrý přechod');
+  assert.deepEqual(boardRowStyle({ email: 'x', streak: 3 }, 'streak'), { backgroundColor: 'rgba(0,0,0,0.02)', backgroundImage: undefined, borderColor: 'transparent' });
+  assert.deepEqual(boardRowStyle({ email: 'me', isMe: true, streak: 3 }, 'streak'), { backgroundColor: 'var(--bg-badge)', backgroundImage: undefined, borderColor: 'var(--bg-primary)' });
+  assert.equal(boardRowStyle({ ...frozen, isMe: true }, 'streak').backgroundColor, 'var(--bg-badge)', 'svůj zmrzlý řádek zůstane svůj (štítek Ty)');
+  assert.equal(boardRowStyle(frozen, 'xp').backgroundImage, undefined, 'na jiné záložce se nezbarví');
+});
+
+test('UserStats: zmrzlý řádek ukazuje sněhovou vločku a hodnotu (ne nulu), legenda jen když nějaký je', () => {
+  const src = fs.readFileSync(new URL('../pages/UserStats.jsx', import.meta.url), 'utf8');
+  assert.match(src, /boardRowStyle\(row, activeTab\)/);
+  assert.match(src, /data-testid="lb-frozen"/);
+  assert.match(src, /\{row\[activeTab\]\.toLocaleString\(\)\}/, 'hodnota se ukazuje vždy');
+  assert.match(src, /data-testid="lb-frozen-legend"/);
+  assert.match(src, /activeTab === 'streak' && leaderboards\.streak\?\.some\(r => isFrozenRow\(r, 'streak'\)\)/);
 });
