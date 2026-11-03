@@ -363,6 +363,7 @@ function killTank(t) {
   if (t.isPlayer) {
     state = 'dead'; ui.deadT = 1.15; ui.spec = k && k.alive ? k : null; ui.specT = 0;
     Object.assign(deathInfo, { by: k ? k.name : '', level: t.level, score: Math.round(t.score), kills: t.kills, time: time - t.born });
+    trackLife(deathInfo, t.bosses);
     save.st.deaths++; save.st.secs += Math.round(time - t.born);
     beep('die'); buzz(70);
     if (M().solo) soloOver(k);

@@ -16,7 +16,24 @@ function cheatSay(text) {
 }
 
 const CHEAT_BOSSES = 5, CHEAT_WAVE = 10, CHEAT_CLASSES = 400, CHEAT_HELL_LEVEL = 25;   // aspoň tolik, aby šly vyzkoušet odznaky z catalog.js
+// Všechny statistiky na prahy odznaků (tlačítko Všechny odznaky): jen na zkoušení, ukládá se jako skutečný postup.
+const CHEAT_STATS = {best_level:58,bosses_defeated:100,wins:50,best_tier:5,boss_kinds:12,classes_discovered:400,best_wave:35,hill_wins:10,royale_wins:10,rush_wins:1,hell_best_level:58,modes_played:8,surv_wins:10,gold_wins:10,best_gold:500,rush_best:6,games_played:150,kills_total:5000,shapes_destroyed:20000,play_min:600,maps_seen:5,skins_unlocked:10,best_score:150000,best_kills:80,bosses_life:8,longest_life_min:30,points_spent:500,tier_ups:25,stats_maxed:8,wins_hard:25,wins_hell:10};
+const CHEAT_ST_FIELDS = { bosses_defeated: 'bosses', wins: 'wins', best_level: 'bestLevel', best_tier: 'bestTier', best_wave: 'bestWave', hill_wins: 'hillWins', royale_wins: 'royaleWins',
+  rush_wins: 'rushWins', hell_best_level: 'hellBest', surv_wins: 'survWins', gold_wins: 'goldWins', best_gold: 'bestGold', rush_best: 'rushBest', games_played: 'games',
+  kills_total: 'kills', shapes_destroyed: 'shapes', best_score: 'bestScore', best_kills: 'bestKills', bosses_life: 'bestBossLife', points_spent: 'pts', tier_ups: 'tierUps',
+  stats_maxed: 'statsMaxed', wins_hard: 'winsHard', wins_hell: 'winsHell' };
 const CHEATS = {
+  badges: () => {
+    const st = save.st;
+    for (const k in CHEAT_ST_FIELDS) st[CHEAT_ST_FIELDS[k]] = Math.max(st[CHEAT_ST_FIELDS[k]] || 0, CHEAT_STATS[k]);
+    st.secs = Math.max(st.secs || 0, CHEAT_STATS.play_min * 60);
+    st.longestLife = Math.max(st.longestLife || 0, CHEAT_STATS.longest_life_min * 60);
+    for (const id of BOSS_IDS) st.bossKinds[id] = true;
+    for (const id of CLASS_IDS.slice(0, CHEAT_STATS.classes_discovered)) save.codex[id] = true;
+    for (const m of MODE_IDS) st.modesPlayed[m] = true;
+    for (const p of MAP_PRESETS) st.mapsSeen[p.name] = true;
+    return 'Všechny statistiky jsou na hodnotách pro odznaky.';
+  },
   level: () => { save.st.bestLevel = Math.max(save.st.bestLevel || 1, MAX_LEVEL); return 'Nejvyšší dosažená úroveň je ' + MAX_LEVEL + '.'; },
   boss: () => { save.st.bosses = (save.st.bosses || 0) + CHEAT_BOSSES; return 'Poražených bossů: ' + save.st.bosses + '.'; },
   win: () => { save.st.wins = (save.st.wins || 0) + 1; return 'Vyhraných zápasů: ' + save.st.wins + '.'; },
