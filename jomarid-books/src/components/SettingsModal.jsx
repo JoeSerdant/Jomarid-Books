@@ -751,7 +751,7 @@ const VIEW_OPTIONS = { grid: { label: 'Mřížka' }, list: { label: 'Seznam' } }
 const STATUS_OPTIONS = toOptions(STATUS_FILTERS);
 
 const AppearanceTab = () => {
-  const { currentTheme, changeTheme, customColors, changeCustomColors, accent, changeAccent } = useTheme();
+  const { currentTheme, changeTheme, customColors, changeCustomColors, accent, changeAccent, lively, changeLively } = useTheme();
   const [motion, setMotion] = useState(loadMotionPref);
   const [scale, setScale] = useState(loadUiScale);
   const [density, setDensity] = useState(loadUiDensity);
@@ -852,6 +852,19 @@ const AppearanceTab = () => {
               );
             })}
           </div>
+        )}
+      </Section>
+
+      <Section title="Živý režim" description="Experimentální. Appka je hravější a méně prázdná: pohyblivé pozadí, jiskřičky po kliknutí, pružnější tlačítka a karty, pruh průběhu stránky a na širokých obrazovkách i ozdoby po stranách.">
+        <ToggleRow
+          title="Zapnout živý režim"
+          description="Čtečka, hry a krátké knihy zůstávají klidné. Barvy se berou z motivu, takže se hodí ke všem, i k Vlastnímu."
+          checked={!!lively} onChange={changeLively}
+        />
+        {lively && (typeof document !== 'undefined' && document.documentElement.dataset.reduceMotion === '1') && (
+          <p data-testid="lively-motion-note" style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">
+            Máš omezený pohyb (níže v sekci Pohyb a animace), takže ozdoby jen stojí a jiskřičky se nespouštějí.
+          </p>
         )}
       </Section>
 

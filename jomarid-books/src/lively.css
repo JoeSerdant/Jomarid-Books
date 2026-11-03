@@ -1,0 +1,79 @@
+/* Živý režim (Nastavení -> Vzhled): pohyblivé pozadí, ozdoby po stranách na širokých obrazovkách, jiskřičky po kliknutí,
+   pružnější tlačítka a karty, pruh průběhu stránky. Zapíná ho data-lively="1" na <html> (src/theme.js) a komponenta
+   src/lively/LivelyScenery.jsx. Barvy se berou z motivu. „Omezit pohyb“ (data-reduce-motion="1", index.html) vypne všechny
+   animace, ozdoby pak jen stojí. Záměrně se nepoužívá transform na kartách s dětmi s position: fixed. */
+
+/* ---- pozadí: tři měkké barevné skvrny, stoupající tečky a občas padající hvězda (pod obsahem, nad pozadím stránky) ---- */
+.lv-bg { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.lv-blob { position: absolute; display: block; border-radius: 50%; background: radial-gradient(circle at center, var(--bg-primary) 0%, transparent 68%); opacity: 0.18; will-change: transform; }
+.lv-blob-a { width: 52vmax; height: 52vmax; left: -14vmax; top: -16vmax; animation: lvBlobA 38s ease-in-out infinite alternate; }
+.lv-blob-b { width: 44vmax; height: 44vmax; right: -12vmax; top: 18vh; animation: lvBlobB 46s ease-in-out infinite alternate; opacity: 0.14; }
+.lv-blob-c { width: 40vmax; height: 40vmax; left: 22vw; bottom: -22vmax; animation: lvBlobC 52s ease-in-out infinite alternate; opacity: 0.12; }
+@keyframes lvBlobA { from { transform: translate(0, 0) scale(1); } to { transform: translate(9vmax, 7vmax) scale(1.15); } }
+@keyframes lvBlobB { from { transform: translate(0, 0) scale(1.1); } to { transform: translate(-8vmax, 9vmax) scale(0.9); } }
+@keyframes lvBlobC { from { transform: translate(0, 0) scale(0.95); } to { transform: translate(10vmax, -6vmax) scale(1.12); } }
+
+.lv-dot { position: absolute; display: block; left: var(--x); bottom: -12px; width: var(--s); height: var(--s); border-radius: 50%; background: var(--bg-primary); opacity: 0; animation: lvRise var(--dur) linear var(--del) infinite; }
+@keyframes lvRise { 0% { transform: translate(0, 0); opacity: 0; } 10% { opacity: 0.5; } 50% { transform: translate(14px, -55vh); } 90% { opacity: 0.4; } 100% { transform: translate(-10px, -112vh); opacity: 0; } }
+@media (max-width: 639px) { .lv-dot:nth-child(n + 11) { display: none; } } /* na telefonu méně teček (baterie, přehlednost) */
+
+.lv-shoot { position: absolute; display: block; top: 9%; right: 8%; width: 90px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--bg-primary)); opacity: 0; animation: lvShoot 19s ease-out 4s infinite; }
+@keyframes lvShoot { 0% { opacity: 0; transform: translate(0, 0) rotate(28deg); } 1.5% { opacity: 0.85; } 6% { opacity: 0; transform: translate(-46vw, 24vw) rotate(28deg); } 100% { opacity: 0; transform: translate(-46vw, 24vw) rotate(28deg); } }
+
+/* ---- ozdoby po stranách: jen když je vedle obsahu (max-w-6xl = 72rem) místo ---- */
+.lv-sides { display: none; position: fixed; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; }
+@media (min-width: 1280px) { .lv-sides { display: block; } }
+.lv-sides { --k: 0.8; } /* velikost ozdob podle šířky pruhu: u 1280 px je pruh jen ~64 px */
+@media (min-width: 1440px) { .lv-sides { --k: 1; } }
+@media (min-width: 1760px) { .lv-sides { --k: 1.3; } }
+.lv-side { position: absolute; top: 0; bottom: 0; width: calc((100% - 72rem) / 2); }
+.lv-side-left { left: 0; }
+.lv-side-right { right: 0; }
+.lv-item { position: absolute; left: var(--x); top: var(--y); display: block; width: 0; height: 0; translate: 0 calc(sin(calc(var(--lv-scroll, 0) * var(--f, 0.002) * 1rad)) * 28px); }
+.lv-icon { position: absolute; left: 0; top: 0; width: calc(var(--sz) * var(--k)); height: calc(var(--sz) * var(--k)); translate: -50% -50%; color: var(--bg-primary); opacity: 0.62; filter: drop-shadow(0 0 10px var(--bg-primary)); animation-duration: var(--dur); animation-delay: var(--del); animation-iteration-count: infinite; animation-timing-function: ease-in-out; }
+.lv-bob { animation-name: lvBob; }
+.lv-drift { animation-name: lvDrift; }
+.lv-twinkle { animation-name: lvTwinkle; }
+.lv-flicker { animation-name: lvFlicker; }
+@keyframes lvBob { 0%, 100% { transform: translateY(0) rotate(-5deg); } 50% { transform: translateY(-16px) rotate(5deg); } }
+@keyframes lvDrift { 0%, 100% { transform: translate(0, 0) rotate(-8deg); } 33% { transform: translate(12px, -18px) rotate(6deg); } 66% { transform: translate(-10px, -8px) rotate(-3deg); } }
+@keyframes lvTwinkle { 0%, 100% { transform: scale(0.8) rotate(0deg); opacity: 0.3; } 50% { transform: scale(1.15) rotate(14deg); opacity: 0.85; } }
+@keyframes lvFlicker { 0%, 100% { transform: scale(1); opacity: 0.45; } 20% { transform: scale(1.08, 1.14); opacity: 0.8; } 45% { transform: scale(0.96); opacity: 0.55; } 70% { transform: scale(1.05, 1.1); opacity: 0.75; } }
+
+/* ---- pruh průběhu stránky ---- */
+.lv-progress { position: fixed; left: 0; right: 0; top: 0; height: 3px; z-index: 45; transform: scaleX(0); transform-origin: 0 50%; background: linear-gradient(90deg, var(--bg-primary), #fbbf24, #38bdf8); pointer-events: none; }
+
+/* ---- hravější prvky ---- */
+/* stránka se při otevření jemně rozsvítí (jen průhlednost: transform by na chvíli změnil polohu prvků s position: fixed) */
+html[data-lively="1"] main > * { animation: lvFadeIn 0.45s ease-out backwards; }
+@keyframes lvFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* tlačítka: pružný zdvih a stisknutí */
+html[data-lively="1"] button:is(.rounded-lg, .rounded-xl, .rounded-full):not(:disabled) {
+  transition-property: translate, scale, rotate, transform, box-shadow, background-color, color, border-color, opacity;
+  transition-duration: 0.18s;
+  transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+html[data-lively="1"] button:is(.rounded-lg, .rounded-xl, .rounded-full):hover:not(:disabled) { translate: 0 -2px; }
+html[data-lively="1"] button:is(.rounded-lg, .rounded-xl, .rounded-full):active:not(:disabled) { translate: 0 1px; scale: 0.96; }
+
+/* karty knih: při najetí se zvednou a obálka se přiblíží */
+html[data-lively="1"] [data-testid="library-card"] { transition: translate 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease; }
+html[data-lively="1"] [data-testid="library-card"]:hover { translate: 0 -5px; box-shadow: 0 14px 30px -14px var(--bg-primary); }
+html[data-lively="1"] [data-testid="library-card"] .aspect-\[3\/4\] { transition: scale 0.35s ease; }
+html[data-lively="1"] [data-testid="library-card"]:hover .aspect-\[3\/4\] { scale: 1.05; }
+
+/* ostatní karty: při najetí se ozve barva motivu (kreslený styl má vlastní odsazený stín) */
+html[data-lively="1"]:not([data-style="sketchy"]) :is(.rounded-2xl, .rounded-3xl).border:not([data-testid="library-card"]) { transition: box-shadow 0.25s ease, border-color 0.25s ease; }
+html[data-lively="1"]:not([data-style="sketchy"]) :is(a, button, [role="button"], [tabindex="0"]).rounded-2xl.border:hover { box-shadow: 0 10px 26px -14px var(--bg-primary); border-color: var(--bg-primary); }
+
+/* logo: při najetí zakývá */
+html[data-lively="1"] .app-logo:hover { animation: lvWiggle 0.6s ease-in-out; }
+@keyframes lvWiggle { 0%, 100% { transform: rotate(0deg); } 20% { transform: rotate(-12deg) scale(1.08); } 45% { transform: rotate(10deg) scale(1.08); } 70% { transform: rotate(-6deg); } }
+
+/* Omezení pohybu: ozdoby jen stojí (animace jsou vypnuté obecným pravidlem v index.html), jiskřičky se vůbec nespustí.
+   Pruh průběhu zůstává, je to informace, ne pohyb. */
+html[data-reduce-motion="1"] .lv-dot, html[data-reduce-motion="1"] .lv-shoot { display: none; }
+
+/* Vynucené barvy Windows a tisk: ozdoby by jen překážely */
+@media (forced-colors: active), print { .lv-bg, .lv-sides, .lv-progress { display: none !important; } }

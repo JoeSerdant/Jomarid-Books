@@ -42,6 +42,8 @@
           if (sc) document.documentElement.style.setProperty("font-size", sc + "%");
           if (dn) document.documentElement.style.setProperty("--d", String(dn));
         } catch (e) {}
+        /* Živý režim (Nastavení -> Vzhled): zapne se hned, ať se stránka po načtení nerozsvěcí podruhé. Pravidla jsou v src/lively.css. */
+        try { if (localStorage.getItem("jomarid-lively") === "1") document.documentElement.setAttribute("data-lively", "1"); } catch (e) {}
       })();
     </script>
     <title>Jomarid Books|Knihovna v Kapse</title>

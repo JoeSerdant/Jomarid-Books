@@ -198,8 +198,8 @@ describe('synchronizace nastavení: snímek a použití', () => {
     assert.deepEqual(S.collectSettings(st), { v: 1, items: { 'jomarid-books-theme': 'dark', reader_font_size: '20' } });
     assert.deepEqual(S.collectSettings(makeStorage()), { v: 1, items: {} });
   });
-  test('synchronizuje se motiv, akcent, velikost, hustota, pohyb, všechna nastavení čtečky i knihovny', () => {
-    for (const k of ['jomarid-books-theme', 'jomarid-books-theme-custom', 'jomarid-accent', 'jomarid-ui-scale', 'jomarid-ui-density', 'jomarid-motion', 'reader_font_size', 'reader_start_focus', 'jomarid.library.view', 'jomarid.library.sort', 'jomarid.library.status', 'jomarid.library.remember']) assert.ok(S.SYNC_KEYS.includes(k), k);
+  test('synchronizuje se motiv, akcent, velikost, hustota, pohyb, živý režim, všechna nastavení čtečky i knihovny', () => {
+    for (const k of ['jomarid-books-theme', 'jomarid-books-theme-custom', 'jomarid-accent', 'jomarid-ui-scale', 'jomarid-ui-density', 'jomarid-motion', 'jomarid-lively', 'reader_font_size', 'reader_start_focus', 'jomarid.library.view', 'jomarid.library.sort', 'jomarid.library.status', 'jomarid.library.remember']) assert.ok(S.SYNC_KEYS.includes(k), k);
     for (const k of Object.values(T.READER_STORAGE)) assert.ok(S.SYNC_KEYS.includes(k), k);
     assert.ok(!S.SYNC_KEYS.includes('jomarid-books-theme-vars'), 'odvozená kopie pro index.html se nesynchronizuje');
     assert.ok(!S.SYNC_KEYS.some((k) => /state|seen|recent|sync/.test(k)), 'stav knihovny, prohlídka a poslední hledání jsou osobní a zůstávají v zařízení');

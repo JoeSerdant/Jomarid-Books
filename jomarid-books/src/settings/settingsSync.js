@@ -6,7 +6,7 @@
 // Čistá logika je tady a jde testovat v Node (src/tests/settings.test.mjs); React je jen v SettingsSyncRunner.jsx.
 
 import {
-  ACCENT_KEY, CUSTOM_THEME_STORAGE, CUSTOM_VARS_STORAGE, MOTION_KEY, READER_STORAGE, THEME_KEY, UI_DENSITY_KEY, UI_SCALE_KEY,
+  ACCENT_KEY, CUSTOM_THEME_STORAGE, CUSTOM_VARS_STORAGE, LIVELY_KEY, MOTION_KEY, READER_STORAGE, THEME_KEY, UI_DENSITY_KEY, UI_SCALE_KEY,
   completeHex, notifyReaderPrefs, saveCustomColors,
 } from '../theme.js';
 import { REMEMBER_PREF_KEY, SORT_PREF_KEY, STATUS_PREF_KEY, VIEW_KEY } from '../browse/browseStore.js';
@@ -20,7 +20,7 @@ const MAX_VALUE_LENGTH = 2000;
 
 /** Klíče localStorage, které se synchronizují. Odvozené kopie (barvy motivu pro index.html) se po stažení dopočítají. */
 export const SYNC_KEYS = [
-  THEME_KEY, CUSTOM_THEME_STORAGE, ACCENT_KEY, UI_SCALE_KEY, UI_DENSITY_KEY, MOTION_KEY,
+  THEME_KEY, CUSTOM_THEME_STORAGE, ACCENT_KEY, UI_SCALE_KEY, UI_DENSITY_KEY, MOTION_KEY, LIVELY_KEY,
   ...Object.values(READER_STORAGE),
   VIEW_KEY, SORT_PREF_KEY, STATUS_PREF_KEY, REMEMBER_PREF_KEY, SEARCH_PREFS_KEY,
 ];
