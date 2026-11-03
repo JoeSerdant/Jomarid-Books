@@ -161,3 +161,13 @@ export const BADGES = [
   badge('rocket_day3', 'days_played', 3, 3, 'Vracím se k hvězdám', 'Zahraj si ve třech různých dnech.'),
   badge('rocket_day14', 'days_played', 14, 8, 'Dva týdny ve vesmíru', 'Zahraj si ve čtrnácti různých dnech.'),
 ];
+
+// Skrytý příběh Rocketu (sekce STŘEPY v src/gameContent/rocket/index.html). Server tuhle statistiku a odznak zná jako ostatní, ale appka je nikde
+// neukazuje, dokud je hráč nezíská: nejsou v seznamu statistik, nepočítají se do „X z Y“ a žebříček pro ně neexistuje. Statistiku hra ohlásí až po finále.
+export const SECRET_STATS = [
+  stat('story_end', 'Příběh', 1),
+];
+
+export const SECRET_BADGES = [
+  badge('rocket_beacon', 'story_end', 1, 16, 'Vlaštovky jsou doma', 'Poskládal jsi střepy Zrcadla, odpověděl jsi Majáku a třináct Vlaštovek přistálo doma. Titul Majákář je tvůj.'),
+];

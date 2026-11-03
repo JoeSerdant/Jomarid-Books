@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Coins, Check, Lock, Loader2, Store } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { SHOP_KINDS, KIND_GAMEFX, groupsOfKind, itemState, missingCoins, requirementText, shopErrorText } from '../shop/catalog';
+import { SHOP_KINDS, KIND_GAMEFX, KIND_TITLE, groupsOfKind, itemState, missingCoins, ownedSecretItems, requirementText, shopErrorText } from '../shop/catalog';
 import { buyCosmetic, equipCosmetic, loadMyCosmetics } from '../shop/api';
 
 const fmt = (n) => Number(n || 0).toLocaleString('cs-CZ');
@@ -47,9 +47,13 @@ const ItemCard = ({ item, state, coins, busy, onBuy, onEquip, onUnequip }) => {
       )}
 
       <div className="mt-auto flex items-center justify-between gap-2">
-        <span style={{ color: owned ? 'var(--text-muted)' : 'var(--text-body)' }} className="text-xs font-black inline-flex items-center gap-1">
-          <Coins size={12} className="text-amber-500" aria-hidden="true" /> {fmt(item.price)}
-        </span>
+        {item.secret ? (
+          <span style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] font-bold">Získáno za skrytý odznak</span>
+        ) : (
+          <span style={{ color: owned ? 'var(--text-muted)' : 'var(--text-body)' }} className="text-xs font-black inline-flex items-center gap-1">
+            <Coins size={12} className="text-amber-500" aria-hidden="true" /> {fmt(item.price)}
+          </span>
+        )}
         {owned ? (
           <button
             type="button"
@@ -179,6 +183,17 @@ export const Shop = ({ cosmetics, coins, unlocked, onCosmetics, onBalance }) => 
           </ul>
         </section>
       ))}
+
+      {kind === KIND_TITLE && ownedSecretItems(cosmetics.owned).length > 0 && (
+        <section data-testid="shop-group-secret" aria-label="Skryté" className="mt-5">
+          <h4 style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider m-0 mb-2">Skryté</h4>
+          <ul className="list-none m-0 p-0 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {ownedSecretItems(cosmetics.owned).map((item) => (
+              <ItemCard key={item.id} item={item} state={itemState(item, state)} coins={coins} busy={busyId === item.id} onBuy={buy} onEquip={equip} onUnequip={unequip} />
+            ))}
+          </ul>
+        </section>
+      )}
 
       <p
         role="status"

@@ -55,13 +55,17 @@ select tt.smk(5, 'Skrytý', 1000, false);
 select tt.smk(6, null, 1000);          -- bez uživatelského jména
 select tt.smk(7, 'Pavel', 100);        -- přesně na nejlevnější zboží
 select tt.smk(8, 'Karel', 1000);       -- dostane odznak za Warroom (nové tituly za odznaky dalších her)
+select tt.smk(9, 'Majákář', 0);        -- dostane skrytý odznak a s ním skrytý titul zdarma
+select tt.smk(10, 'Eva2', 500);        -- skrytý titul dostane, ale už má nasazený jiný
 
 -- ===== zboží =====
-select tt.ok((select count(*) from public.shop_items) = 50 and (select count(*) from public.shop_items where kind = 'title') = 44 and (select count(*) from public.shop_items where kind = 'gamefx') = 6, 'v obchůdku je 44 titulů a 6 vzhledů her');
-select tt.ok((select count(*) from public.shop_items where active) = 50, 'všechno zboží se prodává');
+select tt.ok((select count(*) from public.shop_items) = 51 and (select count(*) from public.shop_items where kind = 'title') = 45 and (select count(*) from public.shop_items where kind = 'gamefx') = 6, 'v obchůdku je 44 titulů k prodeji, jeden skrytý a 6 vzhledů her');
+select tt.ok((select count(*) from public.shop_items where active) = 51 and (select count(*) from public.shop_items where active and grant_badge is null) = 50, 'všechno zboží se prodává a jeden skrytý kus se nekupuje');
 select tt.ok(not exists (select 1 from public.shop_items where requires_badge is not null and requires_badge not in (select badge_id from public.game_badge_defs)), 'každý požadovaný odznak opravdu existuje mezi herními odznaky');
 select tt.ok(not exists (select 1 from public.shop_items where kind = 'gamefx' and requires_badge is not null), 'vzhledy her se nekoupí za odznak, jen za mince');
-select tt.ok(not exists (select 1 from public.shop_items where price < 100 or price > 400), 'ceny jsou od 100 do 400 mincí (jako kniha nebo Streak Freeze)');
+select tt.ok(not exists (select 1 from public.shop_items where grant_badge is null and (price < 100 or price > 400)), 'ceny zboží jsou od 100 do 400 mincí (jako kniha nebo Streak Freeze)');
+select tt.ok((select price from public.shop_items where item_id = 'title_majakar') = 0 and (select grant_badge from public.shop_items where item_id = 'title_majakar') = 'rocket_beacon', 'skrytý titul má cenu 0 a patří k odznaku rocket_beacon');
+select tt.ok((select grant_badge from public.shop_items where item_id = 'title_majakar') in (select badge_id from public.game_badge_defs), 'odznak, za který se skrytý titul dává, opravdu existuje');
 
 -- ===== bez přihlášení =====
 select tt.no_user();
@@ -152,6 +156,22 @@ select tt.equip(1, 'title', null);
 select tt.ok(tt.titles(2, array[tt.su(1)]) = '{}'::jsonb, 'sundaný titul se v žebříčku neukáže');
 select tt.sfails($$select * from public.equipped_titles((select array_agg(gen_random_uuid()) from generate_series(1, 1001)))$$, 'too_many', 'víc než 1000 lidí najednou se odmítne');
 
+-- ===== skrytý titul za skrytý odznak =====
+select tt.ok(tt.mine(9) = '{"owned": [], "equipped": {}}'::jsonb, 'bez odznaku čtenář skrytý titul nemá a nic se mu nepředá');
+select tt.sfails($$select tt.buy(9, 'title_majakar')$$, 'locked', 'skrytý titul se nekupuje (bez odznaku)');
+select tt.ok(tt.srep(9, 'rocket', 'story_end', 1)->'unlocked' = '["rocket_beacon"]'::jsonb, 'čtenář dokončí příběh a získá skrytý odznak');
+select tt.sfails($$select tt.buy(9, 'title_majakar')$$, 'locked', 'ani s odznakem se skrytý titul nekupuje (dostane se zdarma)');
+select tt.ok(tt.mine(9) = '{"owned": ["title_majakar"], "equipped": {"title": "title_majakar"}}'::jsonb, 'výpis zboží předá skrytý titul a nasadí ho (nic jiného nasazeného nebylo)');
+select tt.ok((select price_paid from public.user_cosmetics where user_id = tt.su(9) and item_id = 'title_majakar') = 0 and tt.coins(9) = 0 and tt.ledger(9) = '[]'::jsonb, 'titul nestál nic: mince ani deník se nezměnily');
+select tt.ok(tt.mine(9) = '{"owned": ["title_majakar"], "equipped": {"title": "title_majakar"}}'::jsonb and (select count(*) from public.user_cosmetics where user_id = tt.su(9)) = 1, 'další výpis nic nezdvojí');
+select tt.ok(tt.titles(2, array[tt.su(9)]) = jsonb_build_object(tt.su(9)::text, 'title_majakar'), 'skrytý titul je v žebříčku vidět jako každý jiný');
+select tt.ok(tt.equip(9, 'title', null)->>'ok' = 'true' and tt.mine(9) = '{"owned": ["title_majakar"], "equipped": {}}'::jsonb, 'sundaný skrytý titul se po dalším výpisu sám nevrátí');
+select tt.ok(tt.equip(9, 'title', 'title_majakar')->>'ok' = 'true' and tt.mine(9)->'equipped'->>'title' = 'title_majakar', 'a jde ručně nasadit zase');
+select tt.ok(tt.mine(2)->'owned' = '[]'::jsonb or not (tt.mine(2)->'owned' ? 'title_majakar'), 'kdo odznak nemá (Petr), skrytý titul nedostane');
+-- kdo má jiný titul nasazený, ten si ho nechá
+select tt.ok(tt.buy(10, 'title_bookworm')->>'ok' = 'true' and tt.srep(10, 'rocket', 'story_end', 1)->'unlocked' = '["rocket_beacon"]'::jsonb, 'Eva2 má nasazený Knihomola a získá skrytý odznak');
+select tt.ok(tt.mine(10) = '{"owned": ["title_bookworm", "title_majakar"], "equipped": {"title": "title_bookworm"}}'::jsonb, 'skrytý titul dostane, ale nasazený jí zůstane Knihomol');
+
 -- ===== oprávnění =====
 select tt.ok(not has_function_privilege('anon', 'public.buy_cosmetic(text)', 'execute')
   and not has_function_privilege('anon', 'public.equip_cosmetic(text, text)', 'execute')
@@ -175,7 +195,8 @@ create temp table before_rerun as select (select coins from public.profiles wher
 \ir ../shop.sql
 select tt.ok((select price from public.shop_items where item_id = 'title_hellrider') = 250 and (select requires_badge from public.shop_items where item_id = 'title_hellrider') = 'rocket_hell'
   and (select label from public.shop_items where item_id = 'title_hellrider') = 'Pán pekel', 'po novém spuštění se cena, název i požadovaný odznak zboží srovnají se seznamem');
-select tt.ok((select count(*) from public.shop_items where active) = 50, 'zboží ze seznamu se prodává dál');
+select tt.ok((select count(*) from public.shop_items where active) = 51 and (select active from public.shop_items where item_id = 'title_majakar'), 'zboží ze seznamu se prodává dál a skrytý titul zůstává aktivní');
+select tt.ok(tt.mine(9) = '{"owned": ["title_majakar"], "equipped": {"title": "title_majakar"}}'::jsonb, 'skrytý titul zůstal tomu, kdo ho dostal');
 select tt.ok((select active from public.shop_items where item_id = 'title_old') = false, 'zboží, které ze seznamu zmizelo, se přestalo prodávat, ale nesmazalo se');
 select tt.sfails($$select tt.buy(7, 'title_old')$$, 'unknown_item', 'staré zboží už nikdo další nekoupí');
 select tt.ok(tt.mine(6)->'owned' = '["title_bookworm", "title_old"]'::jsonb and tt.mine(6)->'equipped'->>'title' = 'title_old', 'kdo ho koupil, ho má dál (i nasazené)');

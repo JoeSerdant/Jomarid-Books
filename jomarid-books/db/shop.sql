@@ -72,6 +72,25 @@ create table if not exists public.user_equipped (
   foreign key (user_id, item_id) references public.user_cosmetics (user_id, item_id) on delete cascade
 );
 
+-- Skryté zboží (titul, který se nekupuje, ale dostane se za skrytý herní odznak) má cenu 0 a nikdo za něj nic nezaplatil, proto smí být cena i zaplacená
+-- částka nula. grant_badge je odznak, za který kus dostane každý zdarma; u zboží v obchůdku je prázdný. Úprava jde spustit víckrát.
+alter table public.shop_items add column if not exists grant_badge text;
+do $$
+declare c record;
+begin
+  for c in
+    select conrelid::regclass::text as tbl, conname from pg_constraint
+    where contype = 'c' and conrelid in ('public.shop_items'::regclass, 'public.user_cosmetics'::regclass)
+      and pg_get_constraintdef(oid) ~ '^CHECK \(+(price|price_paid) > 0\)+$'
+  loop
+    execute format('alter table %s drop constraint %I', c.tbl, c.conname);
+  end loop;
+end $$;
+alter table public.shop_items drop constraint if exists shop_items_price_nonneg;
+alter table public.shop_items add constraint shop_items_price_nonneg check (price >= 0);
+alter table public.user_cosmetics drop constraint if exists user_cosmetics_price_paid_nonneg;
+alter table public.user_cosmetics add constraint user_cosmetics_price_paid_nonneg check (price_paid >= 0);
+
 -- Klienti do tabulek nesahají vůbec: čtou a zapisují jen přes funkce níže.
 alter table public.shop_items enable row level security;
 alter table public.user_cosmetics enable row level security;
@@ -137,12 +156,25 @@ with seed (item_id, kind, label, price, requires_badge) as (values
     set kind = excluded.kind, label = excluded.label, price = excluded.price, requires_badge = excluded.requires_badge, active = true
   returning item_id
 )
-update public.shop_items i set active = false where i.active and not exists (select 1 from seed s where s.item_id = i.item_id);
+update public.shop_items i set active = false where i.active and i.grant_badge is null and not exists (select 1 from seed s where s.item_id = i.item_id);
+
+-- Skryté zboží: nekupuje se a v obchůdku není vidět, dokud ho čtenář nemá. Každý, kdo má odznak grant_badge, ho dostane zdarma (my_cosmetics níž).
+-- Seznam je i v appce (SECRET_ITEMS v src/shop/catalog.js), test src/tests/shop.test.mjs hlídá, že si odpovídají.
+with seed (item_id, kind, label, grant_badge) as (values
+  ('title_majakar', 'title', 'Majákář', 'rocket_beacon')
+), upserted as (
+  insert into public.shop_items (item_id, kind, label, price, requires_badge, grant_badge, active)
+  select item_id, kind, label, 0, null, grant_badge, true from seed
+  on conflict (item_id) do update
+    set kind = excluded.kind, label = excluded.label, price = 0, requires_badge = null, grant_badge = excluded.grant_badge, active = true
+  returning item_id
+)
+update public.shop_items i set active = false where i.active and i.grant_badge is not null and not exists (select 1 from seed s where s.item_id = i.item_id);
 
 -- ---------- Nákup ----------
 -- Koupí zboží za mince a rovnou ho nasadí. Vrací {ok, item_id, kind, new_balance}.
 -- Chyby: not_authenticated, unknown_item (neexistuje nebo se už neprodává), profile_not_found, already_owned,
--- locked (chybí požadovaný herní odznak), insufficient_coins.
+-- locked (chybí požadovaný herní odznak, nebo je to skryté zboží, které se nekupuje), insufficient_coins.
 create or replace function public.buy_cosmetic(p_item_id text)
 returns jsonb language plpgsql security definer set search_path to 'public' as $$
 declare
@@ -159,6 +191,7 @@ begin
   if not found then raise exception 'profile_not_found'; end if;
 
   if exists (select 1 from public.user_cosmetics where user_id = v_uid and item_id = v_item.item_id) then raise exception 'already_owned'; end if;
+  if v_item.grant_badge is not null then raise exception 'locked'; end if;   -- skryté zboží se nekupuje, dostane se za odznak
   if v_item.requires_badge is not null
      and not exists (select 1 from public.game_badge_unlocks where user_id = v_uid and badge_id = v_item.requires_badge) then
     raise exception 'locked';
@@ -201,11 +234,28 @@ end $$;
 
 -- ---------- Čtenář ----------
 -- Vlastní zboží a nasazené kusy: {owned: [id...], equipped: {title: id, gamefx: id}} (u nenasazené skupiny klíč chybí).
+-- Zároveň předá skryté zboží za odemčený herní odznak (grant_badge): kdo odznak má a kus ještě ne, dostane ho zdarma a titul se mu rovnou nasadí,
+-- ale jen když žádný jiný titul nasazený nemá (kdo si ho později sundá, dostane ho zpátky jen ručně). Proto funkce není stable.
 create or replace function public.my_cosmetics()
-returns jsonb language plpgsql stable security definer set search_path to 'public' as $$
+returns jsonb language plpgsql security definer set search_path to 'public' as $$
 declare v_uid uuid := auth.uid();
 begin
   if v_uid is null then raise exception 'not_authenticated'; end if;
+  with granted as (
+    insert into public.user_cosmetics (user_id, item_id, price_paid)
+    select v_uid, i.item_id, 0
+    from public.shop_items i
+    join public.game_badge_unlocks u on u.badge_id = i.grant_badge and u.user_id = v_uid
+    where i.active and i.grant_badge is not null
+    on conflict (user_id, item_id) do nothing
+    returning item_id
+  )
+  insert into public.user_equipped (user_id, kind, item_id)
+  select v_uid, i.kind, g.item_id
+  from granted g
+  join public.shop_items i on i.item_id = g.item_id
+  where not exists (select 1 from public.user_equipped e where e.user_id = v_uid and e.kind = i.kind)
+  on conflict (user_id, kind) do nothing;
   return jsonb_build_object(
     'owned', coalesce((select jsonb_agg(item_id order by bought_at, item_id) from public.user_cosmetics where user_id = v_uid), '[]'::jsonb),
     'equipped', coalesce((select jsonb_object_agg(kind, item_id) from public.user_equipped where user_id = v_uid), '{}'::jsonb));

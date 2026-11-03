@@ -6,7 +6,7 @@
 --
 -- Důvěra: hry běží v prohlížeči, takže hlášená hodnota jde podvrhnout (stejně jako uložený postup ve hře). Server proto přijme jen
 -- známé statistiky, celá nezáporná čísla do věrohodné meze a nikdy hodnotu nesníží. Odznaky za hry dávají jen XP (ne mince), dohromady
--- 47020 XP: čím těžší odznak ve stejné statistice, tím víc XP. XP se přičítá k úrovni čtenáře, ale odznaky za úroveň (a s nimi mince)
+-- 47620 XP: čím těžší odznak ve stejné statistice, tím víc XP. XP se přičítá k úrovni čtenáře, ale odznaky za úroveň (a s nimi mince)
 -- se z něj nevyhodnocují. Seznam statistik a odznaků je i v appce (src/gameRecords/catalog.js);
 -- test src/tests/gameRecords.test.mjs hlídá, že si odpovídají.
 
@@ -107,6 +107,7 @@ insert into public.game_stat_limits (game_id, stat_key, max_value) values
   ('rocket', 'prestige_levels', 100000),
   ('rocket', 'relics_owned', 6),
   ('rocket', 'upgrades_bought', 100000000),
+  ('rocket', 'story_end', 1),
   ('warroom', 'best_sector', 10000),
   ('warroom', 'scenarios_unlocked', 100),
   ('warroom', 'scenarios_cleared', 100),
@@ -422,6 +423,7 @@ with seed (badge_id, game_id, stat_key, threshold, xp) as (values
   ('rocket_play3000', 'rocket', 'playtime_min', 3000, 200),
   ('rocket_day3', 'rocket', 'days_played', 3, 40),
   ('rocket_day14', 'rocket', 'days_played', 14, 100),
+  ('rocket_beacon', 'rocket', 'story_end', 1, 600),
   ('war_sector5', 'warroom', 'best_sector', 5, 50),
   ('war_sector10', 'warroom', 'best_sector', 10, 70),
   ('war_sector15', 'warroom', 'best_sector', 15, 100),

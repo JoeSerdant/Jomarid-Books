@@ -64,7 +64,16 @@ export const SHOP_ITEMS = [
   { id: 'gamefx_dusk', kind: KIND_GAMEFX, label: 'Soumrak', price: 300, requires: null, description: 'Fialový soumrak, o něco tlumenější.', filter: 'hue-rotate(250deg) saturate(1.2) brightness(0.95)' },
 ];
 
-const ITEM_BY_ID = new Map(SHOP_ITEMS.map((item) => [item.id, item]));
+// Skryté zboží: nekupuje se, v obchůdku není vidět a na stránce Odznaky se ukáže, až ho čtenář má. Dostane ho zdarma za herní odznak (grantedBy),
+// který se také nikde neukazuje, dokud ho čtenář nezíská (src/gameRecords/defs/rocket.js, skrytý příběh). Titul se ale ukazuje u jména jako každý jiný.
+// Stejný seznam je v db/shop.sql (druhý seznam zboží, ten s grant_badge).
+export const SECRET_ITEMS = [
+  { id: 'title_majakar', kind: KIND_TITLE, label: 'Majákář', price: 0, requires: null, grantedBy: 'rocket_beacon', secret: true },
+];
+
+const ITEM_BY_ID = new Map([...SHOP_ITEMS, ...SECRET_ITEMS].map((item) => [item.id, item]));
+// Skryté zboží, které čtenář už má (jen to se mu ukáže).
+export const ownedSecretItems = (owned) => (Array.isArray(owned) ? SECRET_ITEMS.filter((item) => owned.includes(item.id)) : []);
 
 export const getShopItem = (id) => ITEM_BY_ID.get(id) || null;
 export const itemsOfKind = (kind) => SHOP_ITEMS.filter((item) => item.kind === kind);
