@@ -449,16 +449,110 @@ test('zlatá koule je vidět: zář kolem koule a 🔶 v ruce, v dalším poli i
 
 test('rekordy se hlásí appce: skóre režimů a objevené koule při startu i při uložení, režimy bez skóre se neposílají', () => {
   const a = makeEnv();
-  assert.deepEqual(a.records.filter(([k]) => k !== 'balls_discovered'), [['score_classic', undefined], ['score_time', undefined], ['score_drops', undefined], ['score_chaos', undefined]], 'bez rekordů se posílá jen undefined, které most zahodí');
+  const scores = a.records.filter(([k]) => k.startsWith('score_'));
+  assert.deepEqual(scores, [['score_classic', undefined], ['score_time', undefined], ['score_drops', undefined], ['score_chaos', undefined], ['score_zen', undefined]], 'bez rekordů se posílá jen undefined, které most zahodí');
   assert.deepEqual(a.records.find(([k]) => k === 'balls_discovered'), ['balls_discovered', 1], 'jedna koule je odemčená vždy');
   const b = makeEnv();
   b.records.length = 0;
   b.run("start('classic')"); b.run('g.score = 150; finish(1);');
   assert.ok(b.records.some(([k, v]) => k === 'score_classic' && v === 150), 'konec hry nahlásí skóre Klasiky');
-  assert.ok(!b.records.some(([k]) => k === 'score_zen'), 'Zen se nehlásí');
+  assert.ok(!b.records.some(([k, v]) => k === 'score_zen' && v), 'Zen bez skóre se nehlásí');
+  b.run("start('zen')"); b.run('g.score = 700; finish(1);');
+  assert.ok(b.records.some(([k, v]) => k === 'score_zen' && v === 700), 'Zen se hlásí jako vlastní statistika');
   b.records.length = 0;
   b.run('g.balls = [mk(270, 600, 4), mk(270, 600, 4)]; S.disc = 3; step();');
   assert.ok(b.records.some(([k, v]) => k === 'balls_discovered' && v === 6), 'objevení nové koule (typ 5) nahlásí 6 objevených');
+});
+
+/* ---------------------------------------------------------------- čítače pro odznaky (src/gameRecords/defs/koulovi.js) */
+const stOf = (env) => JSON.parse(env.run('JSON.stringify(S.st)'));
+
+test('čítače: hody, sloučení, combo, body za sloučení a velké koule', () => {
+  const e = makeEnv();
+  e.run("start('classic')");
+  e.run('g.aimX = 270; g.cool = 0; drop();');
+  assert.deepEqual([stOf(e).drops_total, stOf(e).max_balls_bowl], [1, 1]);
+  e.run('g.balls = [mk(270, 600, 4), mk(270, 600, 4)]; step();');
+  assert.deepEqual([stOf(e).total_merges, stOf(e).best_merge_points, stOf(e).best_combo, stOf(e).best_merges_game, stOf(e).big_merges], [1, 160, 1, 1, undefined], 'koule typu 5 není velká');
+  e.run('g.balls = [mk(270, 600, 6), mk(270, 600, 6)]; step();');
+  assert.equal(stOf(e).big_merges, 1, 'sloučení do typu 7 je velké');
+  assert.equal(stOf(e).total_merges, 2);
+  assert.equal(stOf(e).best_merges_game, 2);
+});
+
+test('čítače: zlatá koule se počítá a v jedné hře nejvýš třikrát', () => {
+  const e = makeEnv();
+  e.run("start('classic')");
+  for (let i = 0; i < 4; i += 1) e.run('g.balls = [mk(270, 600, 3), mk(270, 600, 3)]; g.balls[0].gold = 1; step();');
+  assert.deepEqual([stOf(e).gold_merges, stOf(e).best_gold_game], [3, 3], 'čtvrtá zlatá už nic nedá (GOLD.max)');
+  e.run("start('zen')"); e.run('g.balls = [mk(270, 600, 3), mk(270, 600, 3)]; g.balls[0].gold = 1; step();');
+  assert.equal(stOf(e).gold_merges, 3, 'v Zenu zlaté koule nic nedávají');
+});
+
+test('čítače: vylepšení, obchod, Cash Out a mince', () => {
+  const e = makeEnv();
+  e.run("start('classic')");
+  e.run('g.aimX = 270; g.cool = 0; drop(); ability("undo"); ability("shake"); ability("pop");');
+  assert.deepEqual([stOf(e).undo_used, stOf(e).shake_used, stOf(e).pop_used], [1, 1, 1]);
+  e.run('g.tgt = true; g.balls = [mk(270, 600, 2)]; S.inv.hit = 1; cv.listeners.pointerdown[0]({ clientX: 270, clientY: 600, pointerId: 1 });');
+  assert.equal(stOf(e).hit_used, 1, 'Zásah na kouli');
+  e.run('S.coins = 500; $("items").onclick({ target: { dataset: { k: "undo", p: "50" } } });');
+  assert.deepEqual([stOf(e).items_bought, stOf(e).coins_spent, stOf(e).hoard], [1, 50, 1], 'po použití všech čtyř a jednom nákupu je v zásobě jedno vylepšení');
+  e.run("start('classic')");
+  e.run('g.balls = [mk(270, 600, 5)]; cashOut(); cashOut();');
+  assert.deepEqual([stOf(e).cash_outs, stOf(e).best_cash_out], [1, 40]);
+  assert.equal(stOf(e).coins_earned, 40, 'výběr jsou vydělané mince');
+});
+
+test('čítače: konec hry, dohrané režimy, nejdelší hra, hra bez vylepšení, odchod do menu', () => {
+  const e = makeEnv();
+  e.run("start('time')"); e.run('g.score = 1200; g.f = 3 * 3600 + 10; finish(1);');
+  e.run("start('drops')"); e.run('g.score = 800; finish(1);');
+  e.run("start('classic')"); e.run('g.score = 2100; g.used = 1; finish();');
+  assert.deepEqual([stOf(e).games_played, stOf(e).time_runs_completed, stOf(e).drops_runs_completed, stOf(e).longest_game_min], [3, 1, 1, 3]);
+  assert.equal(stOf(e).no_item_score, 1200, 'nejvyšší skóre z her bez vylepšení (hra s vylepšením se nepočítá)');
+  e.run("start('classic')"); e.run('g.score = 5; toMenu();');
+  assert.equal(stOf(e).quits, 1);
+  e.run("start('zen')"); e.run('g.score = 99999; finish(1);');
+  assert.equal(stOf(e).no_item_score, 1200, 'Zen se do hry bez vylepšení nepočítá');
+});
+
+test('čítače: zemětřesení, zachráněné koule, čas, dny a režimy', () => {
+  const e = makeEnv();
+  e.run("start('chaos')"); e.run('g.f = 599; step();');
+  assert.equal(stOf(e).quakes_survived, 1);
+  e.run("start('classic')");
+  e.run('g.balls = [mk(270, 800, 3)]; g.balls[0].y = 900; for (let i = 0; i < 25; i += 1) { g.balls[0].y = 900; g.overT = Math.max(g.overT, i); g.overT++; }');
+  e.run('g.overT = 30; g.balls = []; step();');
+  assert.equal(stOf(e).close_calls, 1, 'koule, která se přelévala přes okraj a zmizela, se počítá jako zachráněná');
+  e.run("start('classic')"); e.run('S.ps = 0; g.f = 0; for (let i = 0; i < 125; i += 1) step();');
+  assert.equal(e.run('S.ps'), 2, 'po 120 snímcích dvě sekundy');
+  assert.deepEqual([e.run('S.days.length'), e.run('Object.keys(S.modes).sort().join()')], [1, 'chaos,classic']);
+  e.records.length = 0; e.run('save()');
+  assert.deepEqual([e.records.find(([k]) => k === 'days_played'), e.records.find(([k]) => k === 'modes_played')], [['days_played', 1], ['modes_played', 2]]);
+});
+
+test('čítače se ukládají s postupem do uloženého klíče', () => {
+  const a = makeEnv();
+  a.run("start('classic')"); a.run('g.score = 300; g.balls = [mk(270, 600, 4), mk(270, 600, 4)]; step(); finish();');
+  const saved = JSON.parse(a.store['koulovi-kamosi-v1']);
+  assert.ok(saved.st.total_merges >= 1 && saved.st.games_played === 1, 'čítače jsou v uloženém postupu');
+  assert.ok(Array.isArray(saved.days) && saved.days.length === 1 && saved.modes.classic === 1 && saved.ps >= 0);
+});
+
+test('cheat Všechny odznaky zvedne všechny statistiky z katalogu na prahy odznaků a hra je hlásí', async () => {
+  const { GAME_CATALOG, GAME_BADGES } = await import('../../../gameRecords/catalog.js');
+  const e = makeEnv();
+  e.records.length = 0;
+  e.run('CHEATS.all(); save();');
+  const reported = new Map();
+  for (const [k, v] of e.records) reported.set(k, Math.max(reported.get(k) || 0, Number(v) || 0));
+  const stats = GAME_CATALOG.find((g) => g.id === 'koulovikamosi').stats.map((x) => x.key);
+  for (const key of stats) {
+    const need = Math.max(...GAME_BADGES.filter((x) => x.game === 'koulovikamosi' && x.stat === key).map((x) => x.threshold));
+    assert.ok(reported.get(key) >= need, `${key}: hra hlásí ${reported.get(key)}, odznak chce ${need}`);
+  }
+  assert.deepEqual([...reported.keys()].filter((k) => !stats.includes(k)), [], 'hra hlásí jen statistiky z katalogu');
 });
 
 test('grafika: koule mají stínování a lesk, mísa vnitřek, částice konfety a kruh a celé kreslení proběhne ve všech stavech bez chyby', () => {

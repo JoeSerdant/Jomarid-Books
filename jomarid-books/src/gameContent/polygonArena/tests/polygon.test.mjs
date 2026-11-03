@@ -367,9 +367,10 @@ const withBridge = (opts) => { const g = fresh(opts); g.run('globalThis.__rec = 
 test('rekordy: hra hlásí přesně statistiky ze své karty v katalogu a meze sedí na obsah hry', () => {
   const { arena, run, G } = withBridge();
   run('reportRecords()');
-  assert.deepEqual(recorded(run), { best_level: 1 }, 'čerstvý postup hlásí jen nejnižší úroveň');
+  assert.deepEqual(recorded(run), { best_level: 1, maps_seen: 1, skins_unlocked: 3 }, 'čerstvý postup hlásí nejnižší úroveň, mapu pozadí menu a tři základní vzhledy');
   const st = arena.save.st;
-  Object.assign(st, { bestLevel: 7, bosses: 3, wins: 2, bestTier: 2, bestWave: 4, hillWins: 1, royaleWins: 2, rushWins: 3, hellBest: 9 });
+  Object.assign(st, { bestLevel: 7, bosses: 3, wins: 2, bestTier: 2, bestWave: 4, hillWins: 1, royaleWins: 2, rushWins: 3, hellBest: 9,
+    survWins: 1, goldWins: 1, bestGold: 5, rushBest: 2, games: 4, kills: 6, shapes: 70, secs: 600, bestScore: 900, bestKills: 3, bestBossLife: 1, longestLife: 120, pts: 8, tierUps: 2, statsMaxed: 1, winsHard: 1, winsHell: 1, mapsSeen: { a: true, b: true } });
   st.bossKinds = { boss_guard: true, neznamy: true }; st.modesPlayed = { ffa: true, hill: true, stary_rezim: true };
   arena.save.codex = { basic: true, boss_guard: true }; for (const id of Array.from(arena.CLASS_IDS).slice(0, 4)) arena.save.codex[id] = true;
   run('reportRecords()');
@@ -379,6 +380,7 @@ test('rekordy: hra hlásí přesně statistiky ze své karty v katalogu a meze s
   assert.equal(rec.modes_played, 2, 'počítají se jen režimy, které hra zná');
   assert.equal(rec.classes_discovered, 4, 'boss do objevených tříd nepatří');
   assert.equal(rec.hell_best_level, 9); assert.equal(rec.best_tier, 2); assert.equal(rec.best_wave, 4);
+  assert.deepEqual([rec.play_min, rec.longest_life_min, rec.maps_seen, rec.games_played, rec.kills_total, rec.shapes_destroyed], [10, 2, 2, 4, 6, 70], 'minuty z vteřin, mapy podle počtu');
   const max = (key) => POLY.stats.find((x) => x.key === key).max;
   assert.equal(max('boss_kinds'), arena.BOSS_IDS.length, 'strop druhů bossů = počet bossů ve hře');
   assert.equal(max('classes_discovered'), arena.CLASS_IDS.length, 'strop objevených tříd = počet tříd ve hře');
@@ -395,6 +397,64 @@ test('odznaky Polygon arény mají prahy, které ve hře jde splnit, a sedí na 
   assert.equal(by.polygon_tier5.threshold, G('TIER_LEVELS').length, 'nejvyšší stupeň třídy');
   assert.ok(by.polygon_cdx400.threshold <= arena.CLASS_IDS.length, 'objevit jde aspoň tolik tříd, kolik odznak chce');
   for (const b of Object.values(by)) assert.ok(POLY.stats.some((x) => x.key === b.stat && b.threshold <= x.max), b.id);
+});
+/* ---------- nové statistiky: nejlepší život, body, třídy, výhry na obtížnostech, cheat ---------- */
+test('trackLife: nejlepší skóre, zničené tanky, bossové a délka jednoho života; nižší hodnoty nic nesníží, cvičiště a zvýšený start se nepočítají', () => {
+  const { arena, run } = withBridge({ seed: 21 });
+  arena.setDiff('normal'); arena.mode = 'ffa'; arena.startGame(true);
+  run('trackLife({ score: 5000, kills: 12, time: 125 }, 2)');
+  run('trackLife({ score: 300, kills: 1, time: 20 }, 0)');
+  assert.deepEqual(['bestScore', 'bestKills', 'bestBossLife', 'longestLife'].map((k) => arena.save.st[k]), [5000, 12, 2, 125]);
+  run('persist()');
+  const rec = recorded(run);
+  assert.deepEqual([rec.best_score, rec.best_kills, rec.bosses_life, rec.longest_life_min], [5000, 12, 2, 2]);
+  arena.mode = 'sandbox'; run('trackLife({ score: 999999, kills: 999, time: 9999 }, 9)');
+  assert.equal(arena.save.st.bestScore, 5000, 'cvičiště se nepočítá');
+  arena.mode = 'ffa'; arena.world.boost = 5; run('trackLife({ score: 999999, kills: 999, time: 9999 }, 9)');
+  assert.equal(arena.save.st.bestScore, 5000, 'zápas se zvýšenou startovní úrovní se nepočítá');
+});
+test('bossové za život: počítá je hráč, který bosse porazil, a nová hra začíná od nuly', () => {
+  const { arena, run } = withBridge({ seed: 22 });
+  arena.setDiff('normal'); arena.mode = 'ffa'; arena.startGame(true);
+  assert.equal(arena.player.bosses, 0);
+  run("bossDown({ cls: 'boss_guard', name: 'Strážce', x: 0, y: 0, r: 20 }, player)");
+  run("bossDown({ cls: 'boss_crusher', name: 'Drtič', x: 0, y: 0, r: 20 }, player)");
+  assert.equal(arena.player.bosses, 2);
+  assert.equal(arena.save.st.bosses, 2);
+});
+test('vylepšení a třídy: body se počítají, maximum se hlídá, boti a cvičiště se nepočítají', () => {
+  const { arena, run } = withBridge({ seed: 23 });
+  arena.setDiff('normal'); arena.mode = 'ffa'; arena.startGame(true);
+  const p = arena.player; p.points = 100; p.stats = new Array(8).fill(0);
+  for (let i = 0; i < 12; i += 1) run('buyStat(player, 0)');
+  run('buyStat(player, 0)');   // nad maximem se už nic neprodá
+  for (let i = 0; i < 12; i += 1) run('buyStat(player, 1)');
+  assert.deepEqual([arena.save.st.pts, arena.save.st.statsMaxed], [24, 2], 'dvě vlastnosti na maximu');
+  const bot = Array.from(arena.tanks).find((t) => !t.isPlayer && !t.boss); bot.points = 5; run('buyStat(__bot, 0)'.replace('__bot', 'tanks.find(t => !t.isPlayer && !t.boss)'));
+  assert.equal(arena.save.st.pts, 24, 'bot body nepočítá');
+  run("chooseClass(player, Object.keys(TREE)[0] && TREE[Object.keys(TREE)[0]][0] || 'basic')");
+  assert.equal(arena.save.st.tierUps, 1);
+  arena.mode = 'sandbox'; p.points = 10; run('buyStat(player, 2)'); run("chooseClass(player, 'basic')");
+  assert.deepEqual([arena.save.st.pts, arena.save.st.tierUps], [24, 1], 'cvičiště se nepočítá');
+});
+test('výhry na těžších obtížnostech: Těžká dává winsHard, Peklo winsHard i winsHell, lehčí obtížnost nic, zvýšený start se nepočítá', () => {
+  const win = (diff, boost) => { const { arena, run } = withBridge({ seed: 24 }); arena.setDiff(diff); arena.mode = 'ffa'; arena.startGame(true); arena.world.boost = boost || 0; run("finishMatch(true, { title: 'x' })"); return arena.save.st; };
+  let st = win('hell'); assert.deepEqual([st.winsHard, st.winsHell], [1, 1]);
+  st = win('hard'); assert.deepEqual([st.winsHard, st.winsHell], [1, undefined]);
+  st = win('normal'); assert.deepEqual([st.winsHard, st.winsHell], [undefined, undefined]);
+  st = win('hell', 5); assert.equal(st.winsHell, undefined);
+});
+test('cheat Všechny odznaky zvedne všechny statistiky z katalogu na prahy odznaků a nic nesníží', () => {
+  const { arena, run } = withBridge({ seed: 25 });
+  arena.save.st.bestScore = 9999999;
+  run('CHEATS.badges(); persist();');
+  const rec = recorded(run);
+  for (const stat of POLY.stats) {
+    const need = Math.max(...GAME_BADGES.filter((b) => b.game === 'polygonarena' && b.stat === stat.key).map((b) => b.threshold));
+    assert.ok(rec[stat.key] >= need, `${stat.key}: cheat dá ${rec[stat.key]}, odznak chce ${need}`);
+  }
+  assert.equal(arena.save.st.bestScore, 9999999, 'vyšší skutečná hodnota zůstane');
+  assert.deepEqual(Object.keys(rec).sort(), POLY.stats.map((x) => x.key).sort());
 });
 test('trackProgress: zapíše třídu, nejvyšší úroveň, stupeň třídy i úroveň na Pekle a hned to ohlásí', () => {
   const { arena, run } = withBridge({ seed: 14 });

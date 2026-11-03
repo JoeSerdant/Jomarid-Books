@@ -65,6 +65,11 @@ function finishMatch(win, res) {
   for (const b of bullets) if ((b.drone || b.trap) && b.owner === player) b.dead = true;
   state = 'dead'; ui.deadT = 0.8; ui.spec = null; ui.specT = 0;
   Object.assign(deathInfo, { by: '', level: player.level, score: Math.round(player.score), kills: player.kills, time: time - player.born });
+  trackLife(deathInfo, player.bosses);
+  if (win && mode !== 'sandbox' && !(world.boost > 0)) {            // výhry na vyšších obtížnostech
+    if (diffKey === 'hard' || diffKey === 'hell') save.st.winsHard = (save.st.winsHard || 0) + 1;
+    if (diffKey === 'hell') save.st.winsHell = (save.st.winsHell || 0) + 1;
+  }
   beep(win ? 'ach' : 'die');
   trackProgress(true);                                                      // výhra se započítá hned, ne až v dalším zápase
 }

@@ -105,3 +105,53 @@ test('Temná hmota: pasivní těžba roste s počtem budov a zlatými povolením
   assert.match(gameJs, /var power = getDarkMatterPower\(\);\s*var reward = Math\.round\(Math\.max\(power \* 2, state\.endgame\.darkMatter \* 0\.01 \+ power \* 2\)\)/);
   assert.match(gameJs, /peakIncome: 0,/);
 });
+
+/* ---------------------------------------------------------------- čítače pro odznaky (src/gameRecords/defs/cityClicker.js) */
+// Funkce čítačů se spustí s atrapou stavu; hra jako celek potřebuje DOM.
+const run = (code, scope = {}) => { const ctx = vm.createContext({ Math, Object, JSON, Array, ...scope }); vm.runInContext(code, ctx); return ctx; };
+
+test('čítače: trk přičítá, trkMax drží nejvyšší hodnotu, trkSeen si pamatuje jen různé klíče', () => {
+  const ctx = run(`${fnSrc('trk')}\n${fnSrc('trkMax')}\n${fnSrc('trkSeen')}\nvar state = { stats: {} };\ntrk('a'); trk('a', 4); trkMax('b', 3); trkMax('b', 2); trkMax('b', 9); trkSeen('themes', 'mars'); trkSeen('themes', 'mars'); trkSeen('themes', 'classic');`);
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.state.stats)), { a: 5, b: 9, themes: { mars: 1, classic: 1 } });
+});
+
+test('čítače: řád čísla a vrcholy výdělků, příjmu, populace a Temné hmoty (zapisují se i před přestavbou)', () => {
+  const ctx = run(`${fnSrc('trkMax')}\n${fnSrc('magnitude')}\n${fnSrc('updatePeaks')}\nvar state = { stats: {}, lifetimeEarnings: 2.5e12, endgame: { darkMatter: 4000 } };\nfunction computePassiveIncome(){ return 150; }\nfunction computePopulation(){ return 0.5; }\nupdatePeaks();`);
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.state.stats)), { wealth_exp: 12, income_exp: 2, dark_matter_exp: 3 });
+  ctx.state.lifetimeEarnings = 10; ctx.updatePeaks();
+  assert.equal(ctx.state.stats.wealth_exp, 12, 'nižší hodnota rekord nesníží');
+});
+
+test('čítače: každý z nich má ve hře své místo (trk / trkMax) a prestiž i skok je přenášejí', () => {
+  const tracked = JSON.parse(gameJs.match(/var TRACKED_STATS = (\[[^\]]*\])/s)[1].replace(/'/g, '"').replace(/\s+/g, ' '));
+  assert.ok(tracked.length >= 25);
+  for (const key of tracked) assert.match(gameJs, new RegExp(`(?:trk(?:Max)?\\([^;]*|BUILD_STAT = [^;]*)'${key}'`), key);
+  assert.equal((gameJs.match(/state\.stats = keepStats;/g) || []).length, 2, 'prestiž i skok');
+  assert.equal((gameJs.match(/var keepStats = JSON\.parse\(JSON\.stringify\(state\.stats\)\);/g) || []).length, 2);
+  assert.match(gameJs, /function doPrestige\(\)[\s\S]*?updatePeaks\(\);[\s\S]*?var keepStats/, 'vrcholy se zapíšou dřív, než se stav vynuluje');
+  assert.match(gameJs, /defaultState\(\)\{[\s\S]*?stats: \{\}/);
+});
+
+test('hra hlásí přesně statistiky z katalogu a cheat Všechny odznaky je dotáhne na prahy odznaků', async () => {
+  const { GAME_CATALOG, GAME_BADGES } = await import('../gameRecords/catalog.js');
+  const want = GAME_CATALOG.find((g) => g.id === 'cityclicker').stats.map((s) => s.key).sort();
+  const reported = new Map();
+  const relics = [...gameJs.matchAll(/var RELIC_ORDER = \[([^\]]*)\]/g)][0][1].split(',').map((x) => x.trim().replace(/'/g, ''));
+  const achBlock = gameJs.slice(gameJs.indexOf('var ACHIEVEMENT_DEFS = ['), gameJs.indexOf('var buildingOrder'));
+  const ach = [...achBlock.matchAll(/\{ key:'(\w+)'/g)].map((m) => ({ key: m[1] }));
+  const tracked = gameJs.match(/var TRACKED_STATS = \[[^\]]*\];/s)[0];
+  const cheatLit = gameJs.match(/var CHEAT_STATS = (\{[^}]*\});/)[1];
+  const ctx = run(`${fnSrc('trk')}\n${fnSrc('trkMax')}\n${fnSrc('trkSeen')}\n${fnSrc('magnitude')}\n${fnSrc('updatePeaks')}\n${tracked}\n${fnSrc('reportRecords')}\nvar CHEAT_STATS = ${cheatLit};\n${fnSrc('cheatAllBadges')}`, {
+    state: { stats: {}, prestigeCount: 1, totalClicks: 5, jumpCount: 0, goldenPermits: 0, totalPlaytimeSeconds: 0, relics: [], achievements: [], lifetimeEarnings: 0, endgame: { darkMatter: 0 }, theme: 'classic', dimension: null },
+    RELIC_ORDER: relics, ACHIEVEMENT_DEFS: ach, themeOrder: ['classic', 'steampunk', 'cyberpunk', 'mars'], MUTATOR_DEFS: { carefree: 1, volatile: 1, boomtown: 1, serene: 1 },
+    showToast() {}, saveGame() {}, renderAll() {}, computePassiveIncome: () => 0, computePopulation: () => 0,
+    jomaridRecord: (k, v) => { reported.set(k, Math.max(reported.get(k) || 0, Math.floor(Number(v)) || 0)); },
+  });
+  ctx.cheatAllBadges();
+  ctx.reportRecords();
+  assert.deepEqual([...reported.keys()].sort(), want, 'hra hlásí přesně statistiky z katalogu');
+  for (const key of want) {
+    const need = Math.max(...GAME_BADGES.filter((b) => b.game === 'cityclicker' && b.stat === key).map((b) => b.threshold));
+    assert.ok(reported.get(key) >= need, `${key}: cheat dá ${reported.get(key)}, odznak chce ${need}`);
+  }
+});

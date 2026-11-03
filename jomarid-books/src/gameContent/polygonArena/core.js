@@ -47,6 +47,35 @@ function reportRecords() {
   jomaridRecord('rush_wins', st.rushWins);
   jomaridRecord('hell_best_level', st.hellBest);
   jomaridRecord('modes_played', MODE_IDS.filter(m => st.modesPlayed[m]).length);
+  // Dál statistiky z postupu a z nejlepších výsledků jednoho života (trackLife); názvy jsou stejné jako v src/gameRecords/defs/polygonArena.js.
+  jomaridRecord('surv_wins', st.survWins);
+  jomaridRecord('gold_wins', st.goldWins);
+  jomaridRecord('best_gold', st.bestGold);
+  jomaridRecord('rush_best', st.rushBest);
+  jomaridRecord('games_played', st.games);
+  jomaridRecord('kills_total', st.kills);
+  jomaridRecord('shapes_destroyed', st.shapes);
+  jomaridRecord('play_min', st.secs / 60);
+  jomaridRecord('maps_seen', Object.keys(st.mapsSeen).length);
+  jomaridRecord('skins_unlocked', SKINS.filter(skinOpen).length);
+  jomaridRecord('best_score', st.bestScore);
+  jomaridRecord('best_kills', st.bestKills);
+  jomaridRecord('bosses_life', st.bestBossLife);
+  jomaridRecord('longest_life_min', (st.longestLife || 0) / 60);
+  jomaridRecord('points_spent', st.pts);
+  jomaridRecord('tier_ups', st.tierUps);
+  jomaridRecord('stats_maxed', st.statsMaxed);
+  jomaridRecord('wins_hard', st.winsHard);
+  jomaridRecord('wins_hell', st.winsHell);
+}
+// Nejlepší výsledky jednoho života (skóre, zničené tanky, bossové, délka). Počítají se jen v běžných zápasech, ne na cvičišti ani při zvýšené startovní úrovni.
+function trackLife(d, bosses) {
+  if (mode === 'sandbox' || world.boost > 0) return;
+  const st = save.st;
+  st.bestScore = Math.max(st.bestScore || 0, d.score || 0);
+  st.bestKills = Math.max(st.bestKills || 0, d.kills || 0);
+  st.bestBossLife = Math.max(st.bestBossLife || 0, bosses || 0);
+  st.longestLife = Math.max(st.longestLife || 0, Math.round(d.time || 0));
 }
 
 /* ---------- theme (čte CSS tokeny) ---------- */

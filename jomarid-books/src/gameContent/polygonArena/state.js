@@ -75,12 +75,18 @@ function chooseClass(t, id) {
   t.bt = new Array(cls.barrels.length).fill(0); t.rec = new Array(cls.barrels.length).fill(0); t.tur = new Array(cls.barrels.length).fill(t.angle || 0);
   for (const b of bullets) if ((b.drone || b.trap) && b.owner === t) b.dead = true;
   recalc(t);
-  if (t.isPlayer) { ui.statsDirty = true; beep('level'); }
+  if (t.isPlayer) {
+    ui.statsDirty = true; beep('level');
+    if (mode !== 'sandbox') save.st.tierUps = (save.st.tierUps || 0) + 1;
+  }
 }
 function buyStat(t, i) {
   if (!t.alive || t.points <= 0 || t.stats[i] >= STAT_CAP) return false;
   t.stats[i]++; t.points--; recalc(t);
-  if (t.isPlayer) { ui.statsDirty = true; beep('click'); }
+  if (t.isPlayer) {
+    ui.statsDirty = true; beep('click');
+    if (mode !== 'sandbox') { const st = save.st; st.pts = (st.pts || 0) + 1; st.statsMaxed = Math.max(st.statsMaxed || 0, t.stats.filter(v => v >= STAT_CAP).length); }
+  }
   return true;
 }
 function addScore(t, amt) {

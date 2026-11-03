@@ -43,7 +43,7 @@ test('postup se ukládá jen pod klíči, které appka přenáší na server', (
 test('Jomarid Coins: hra jen žádá (vítězství v kampani 10, v minihře 5, poražená vlna nekonečného tažení 2), o částce rozhoduje server', () => {
   assert.match(html, /rewardCoins\(reason, amount\) \{\s*try \{ if \(typeof jomaridReward === 'function'\) jomaridReward\(reason, amount\); \}/);
   assert.match(html, /if \(node\) this\.rewardCoins\('victory', 10\);/);
-  assert.match(html, /if \(result\.success !== false\) this\.rewardCoins\('victory', 5\);/);
+  assert.match(html, /if \(result\.success !== false\) \{ this\.rewardCoins\('victory', 5\); this\.track\(/);
   assert.match(html, /this\.rewardCoins\('wave', 2\);/);
   const rewards = [...html.matchAll(/rewardCoins\('(\w+)', (\d+)\)/g)];
   assert.ok(rewards.reduce((sum, m) => sum + Number(m[2]), 0) <= 20, 'jedna událost dává málo, denní strop 100 hlídá server');
@@ -67,10 +67,12 @@ test('SQL: server pozná hru hannibal pro uložený postup i Coiny', () => {
   for (const f of ['game-saves.sql', 'game-coins.sql']) assert.match(noComments(f), /p_game_id not in \([^)]*'hannibal'[^)]*\)/, f);
 });
 
-test('rekordy: hra hlásí všechny čtyři statistiky z katalogu při každém uložení i při spuštění a prahy odznaků sedí na obsah hry', async () => {
+test('rekordy: hra hlásí všechny statistiky z katalogu při každém uložení i při spuštění a prahy odznaků sedí na obsah hry', async () => {
   const { GAME_CATALOG, GAME_BADGES, getStat } = await import('../../../gameRecords/catalog.js');
-  const reported = [...html.matchAll(/jomaridRecord\('([a-z_]+)',/g)].map((m) => m[1]).sort();
-  assert.deepEqual(reported, GAME_CATALOG.find((g) => g.id === 'hannibal').stats.map((s) => s.key).sort());
+  const literal = [...html.matchAll(/jomaridRecord\('([a-z_]+)',/g)].map((m) => m[1]);
+  const tracked = JSON.parse(html.match(/TRACKED_STATS: (\[[^\]]*\])/s)[1].replace(/'/g, '"').replace(/\s+/g, ' '));
+  assert.deepEqual([...literal, ...tracked].sort(), GAME_CATALOG.find((g) => g.id === 'hannibal').stats.map((s) => s.key).sort(), 'hra hlásí přesně statistiky z katalogu');
+  assert.match(html, /this\.TRACKED_STATS\.forEach\(k => jomaridRecord\(k, st\[k\]\)\);/);
   assert.match(html, /saveGame\(\) \{[\s\S]*?this\.reportRecords\(data\);\s*\},/, 'po každém uložení');
   assert.match(html, /GameCampaign\.reportRecords\(GameCampaign\.readSave\(\) \|\| \{ nodes: \{\}, doctrines: \{\}, roster: \[\] \}\);/, 'při spuštění (postup z dřívějška)');
   const map = html.slice(html.indexOf('const CAMPAIGN_MAP'));
@@ -83,5 +85,22 @@ test('rekordy: hra hlásí všechny čtyři statistiky z katalogu při každém 
   assert.equal(getStat('hannibal', 'doctrines_unlocked').max, doctrines, 'všechny doktríny ve hře');
   assert.equal(badge('han_doc6').threshold, doctrines);
   assert.ok(badge('han_ch11').description.includes('všech 11 '));
-  assert.equal(GAME_BADGES.filter((b) => b.game === 'hannibal').length, 12);
+  assert.ok(GAME_BADGES.filter((b) => b.game === 'hannibal').length >= 50);
+});
+
+test('čítače: track přičítá a drží nejvyšší hodnoty, loadStats bere z postupu jen vyšší, a každý čítač má ve hře své místo', () => {
+  const src = html.match(/track\(inc, max\) \{[\s\S]*?\n      \},\n      \/\/ Čítače z uloženého postupu[^\n]*\n      loadStats\(d\) \{[\s\S]*?\n      \},/)[0];
+  const camp = vm.runInNewContext(`({ stats: {}, ${src.replace(/,\s*$/, '')} })`);
+  camp.track({ kills: 2, crits: 0, attacks: 1 }, { best_hit: 40 });
+  camp.track({ kills: 3 }, { best_hit: 25, gold_peak: 900 });
+  assert.deepEqual(JSON.parse(JSON.stringify(camp.stats)), { kills: 5, attacks: 1, best_hit: 40, gold_peak: 900 }, 'nuly se nezapisují, maximum se nesnižuje');
+  camp.loadStats({ stats: { kills: 4, attacks: 10, best_hit: 'x', crits: 7 } });
+  assert.deepEqual(JSON.parse(JSON.stringify(camp.stats)), { kills: 5, attacks: 10, best_hit: 40, gold_peak: 900, crits: 7 });
+  camp.loadStats(null); camp.loadStats({ stats: 5 });
+  assert.equal(camp.stats.kills, 5);
+  const tracked = JSON.parse(html.match(/TRACKED_STATS: (\[[^\]]*\])/s)[1].replace(/'/g, '"').replace(/\s+/g, ' '));
+  for (const key of tracked) assert.match(html, new RegExp(`track\\([^;]*\\b${key}\\b`), key);
+  assert.match(html, /nodes, stats: this\.stats \};/, 'čítače jsou v uloženém postupu');
+  assert.match(html, /this\.loadStats\(d\);\s+this\.started = true;/, 'načtení postupu čítače nesmaže');
+  assert.doesNotMatch(html.slice(html.indexOf('resetState() {'), html.indexOf('nextNode() {')), /stats/, 'nová kampaň čítače nemaže (nejsou v meta)');
 });

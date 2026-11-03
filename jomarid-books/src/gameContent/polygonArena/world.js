@@ -235,7 +235,7 @@ function bossDown(t, k) {
   world.boss = null; world.bossT = DIFFS[diffKey].bossT;
   banner((k ? k.name : 'Někdo') + ' porazil bosse ' + t.name + '!', 'good'); beep('boom');
   dropPickup(t.x, t.y, 6);
-  if (k && k.isPlayer) { save.st.bosses++; save.st.bossKinds[t.cls] = true; }
+  if (k && k.isPlayer) { save.st.bosses++; save.st.bossKinds[t.cls] = true; k.bosses = (k.bosses || 0) + 1; }
   if (M().onBossDown && matchLive()) M().onBossDown(t, k);
 }
 function runEvent() {

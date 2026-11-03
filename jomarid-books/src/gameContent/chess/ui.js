@@ -20,10 +20,8 @@
   // Rekordy se hlásí appce (jomaridRecord v mostu v index.html; mimo appku funkce není a nic se neděje).
   function reportRecords(s) {
     if (typeof jomaridRecord !== "function" || !s) return;
-    jomaridRecord("rating_peak", s.peak);
-    jomaridRecord("wins_total", s.record && s.record.w);
-    jomaridRecord("expert_wins", s.botStats && s.botStats.expert && s.botStats.expert.w);
-    jomaridRecord("bots_unlocked", (s.unlockedIndex || 0) + 1);
+    const stats = League.recordStats(s);
+    Object.keys(stats).forEach((k) => jomaridRecord(k, stats[k]));
   }
   function fmtClock(ms) {
     if (ms == null) return "";
@@ -495,7 +493,7 @@
     }, []);
   }
 
-  function CheatMenu({ session, disco, onDisco, onConfetti, onClose, soundOn }) {
+  function CheatMenu({ session, disco, onDisco, onConfetti, onBadges, onClose, soundOn }) {
     const [, bump] = useReducer((x) => x + 1, 0);
     useEffect(() => {
       const onKey = (e) => { if (e.key === "Escape") onClose(); };
@@ -509,6 +507,7 @@
       { id: "blind", icon: "🙈", label: "Soupeř hraje naslepo", note: "Táhne náhodně a rychle.", game: true, on: live && session.cheatBlind, run: () => { session.setBlindBot(!session.cheatBlind); bump(); } },
       { id: "auto", icon: "🤖", label: "Autopilot", note: "Engine hraje tvoje tahy za tebe.", game: true, on: live && session.cheatAuto, run: () => { session.setAutopilot(!session.cheatAuto); bump(); } },
       { id: "scare", icon: "😱", label: "Vyděsit soupeře", note: "Soupeř zpanikaří (když má zapnuté hlášky).", game: true, run: () => { session.cheatScare(); onClose(); } },
+      { id: "badges", icon: "🎖️", label: "Všechny odznaky", note: "Všechny statistiky na hodnoty pro odznaky.", run: () => { onBadges(); onClose(); } },
       { id: "confetti", icon: "🎉", label: "Konfety", note: "Jen tak, bez vlivu na partii.", run: () => { onConfetti(); } },
       { id: "disco", icon: "🪩", label: "Disco šachovnice", note: "Duhová šachovnice, zapnout i vypnout.", on: disco, run: () => { onDisco(); } },
       { id: "fanfare", icon: "🎺", label: "Fanfára", note: "Zahraje fanfáru.", run: () => { SoundFX.win(); } }
@@ -1172,7 +1171,8 @@
       processedRef.current = sess;
       const { result, reason } = sess.result;
       const botIdx = sess.botIdx, rated = sess.rated, coords = sess.coords();
-      const r = League.finishGame(saveRef.current, { botIdx, result, reason, color: sess.playerColor, plies: coords.length, tc: sess.tcKey, rated, moves: coords }, BOT_LIST, todayStr());
+      const r = League.finishGame(saveRef.current, { botIdx, result, reason, color: sess.playerColor, plies: coords.length, tc: sess.tcKey, rated, moves: coords,
+        details: League.summarizeMoves(sess.moves, sess.playerColor), hints: sess.hintsUsed, undos: sess.undosUsed }, BOT_LIST, todayStr());
       setSaveFull(r.save);
       League.persistGame(storage, null); setSavedGame(null);
       // Odměna v Coinech jen za výhru v hodnocené partii; o skutečné částce rozhoduje server (denní strop).
@@ -1205,7 +1205,7 @@
           if (cur.recentGames.length && cur.recentGames[0].moves === coords.join(" ")) {
             const copy = JSON.parse(JSON.stringify(cur));
             copy.recentGames[0].acc = Math.round(mine);
-            setSaveFull(copy);
+            setSaveFull(League.recordAccuracy(copy, mine, summary.counts[color], coords.length));
           }
         }
       });
@@ -1252,7 +1252,7 @@
       content,
       h(CheatField, { open: cheatOpen, withNav: view === "menu", onOpen: () => setCheatOpen(true) }),
       confettiKey > 0 && h("canvas", { key: confettiKey, ref: confettiRef, className: "confetti-canvas", "aria-hidden": "true" }),
-      cheatOpen && h(CheatMenu, { session: view === "game" ? session : null, disco, soundOn: save.sound, onDisco: () => setDisco((d) => !d), onConfetti: () => { setConfettiKey((k) => k + 1); }, onClose: () => setCheatOpen(false) }),
+      cheatOpen && h(CheatMenu, { session: view === "game" ? session : null, disco, soundOn: save.sound, onDisco: () => setDisco((d) => !d), onConfetti: () => { setConfettiKey((k) => k + 1); }, onBadges: () => setSaveFull(League.cheatAllBadges(saveRef.current)), onClose: () => setCheatOpen(false) }),
       confirm && confirm.abandon && h(ConfirmModal, { title: "Vzdát rozehranou partii?", text: "Zápas se započítá jako prohra.", confirmLabel: "Vzdát", danger: true, onConfirm: () => { setConfirm(null); doAbandon(); }, onCancel: () => setConfirm(null) }),
       confirm && confirm.reset && h(ConfirmModal, { title: "Resetovat veškerý postup?", text: "Smaže se rating, rekordy, výhry i odemčení soupeři. Tohle nejde vrátit.", confirmLabel: "Resetovat", danger: true, onConfirm: () => { setConfirm(null); doReset(); }, onCancel: () => setConfirm(null) }),
       confirm && confirm.start && h(ConfirmModal, { title: "Máš rozehranou partii", text: "Když začneš novou, rozehraná partie se započítá jako prohra.", confirmLabel: "Začít novou", danger: true, onConfirm: () => { const c = confirm.start; setConfirm(null); doAbandon(); reallyStart(c.botIdx, c.color, c.tc, c.colorChoice); }, onCancel: () => setConfirm(null) }));

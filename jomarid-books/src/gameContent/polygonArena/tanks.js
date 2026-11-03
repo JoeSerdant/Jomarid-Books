@@ -72,7 +72,7 @@ function resetTank(t) {
   t.perks = {}; t.perkN = 0; t.perkOffer = null; t.buff = { speed: 0, dmg: 0 }; t.shield = 0; t.dashCd = 0; t.dashT = 0; t.slowT = 0; t.burnT = 0; t.burnDps = 0; t.burnSrc = null; t.boss = false; t.adr = false; t.onIce = false; t.inOasis = false; t.combo = 0;
   t.maxHp = 0; t.hp = 0; recalc(t);
   t.alive = true; t.invuln = t.isPlayer ? DIFFS[diffKey].inv : 3; t.dmgT = 99; t.kills = 0; t.lastAttacker = null; t.lastAtkT = -99;
-  t.born = time; t.wantFire = false; t.wasFiring = false; t.hit = 0; t.moveX = 0; t.moveY = 0;
+  t.born = time; t.bosses = 0; t.wantFire = false; t.wasFiring = false; t.hit = 0; t.moveX = 0; t.moveY = 0;
   t.tx = t.x; t.ty = t.y; t.autoT = null; t.autoTimer = 0; t.respawnT = 0;
   if (!t.isPlayer) { t.name = uniqueName(); t.color = t.team ? TEAM_COLORS[t.team] : pick(BOT_COLORS); newPersona(t); }
 }

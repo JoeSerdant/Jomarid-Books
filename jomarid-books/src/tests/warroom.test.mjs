@@ -50,3 +50,67 @@ test('grafika: HUD vrstva (rohové značky, ukazatele, fronta, radar, terminál)
   // tlačítka zvuk a nápověda stojí vedle odkazu zpět
   assert.match(css, /#sound-toggle \{ top: 8px; left: 148px; \}/);
 });
+
+/* ---------------------------------------------------------------- čítače pro odznaky (src/gameRecords/defs/warroom.js) */
+const fnSrc = (name) => { const i = game.indexOf(`    function ${name}(`); assert.ok(i >= 0, name); const j = game.indexOf('\n    function ', i + 10); return game.slice(i, j < 0 ? undefined : j); };
+const ids = (marker, re) => [...game.slice(game.indexOf(marker)).matchAll(re)].map((m) => m[1]);
+const makeStorage = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k), m }; };
+
+function makeEnv() {
+  const records = new Map();
+  const storage = makeStorage();
+  const cheatLit = game.match(/const CHEAT_STATS = (\{[^}]*\});/)[1];
+  const scenarios = ids('const RAW_SCENARIOS', /\{ id: '([a-z0-9_]+)', tag:/g).slice(0, 24);
+  const doctrines = ids('const DOCTRINES', /\{ id: '([a-z_]+)', name:/g);
+  const toasts = [];
+  const ctx = vm.createContext({
+    Math, Object, JSON, Array, console, localStorage: storage, setTimeout: () => 0, location: { reload() {} }, toasts,
+    jomaridRecord: (k, v) => { records.set(k, Math.max(records.get(k) || 0, Math.floor(Number(v)) || 0)); },
+    SCENARIOS: scenarios.map((id) => ({ id })), DOCTRINES: doctrines.map((id) => ({ id })),
+    Sound: { buy() {} }, el: () => ({ style: { display: 'none' }, innerText: '' }), showUnlockNotification: (t) => toasts.push(t), updateUI() {}, checkWinLoss() {},
+    state: {},
+  });
+  vm.runInContext(`${fnSrc('loadProgress')}\n${fnSrc('reportRecords')}\n${fnSrc('saveProgress')}\n${fnSrc('warTrack')}\nconst CHEAT_STATS = ${cheatLit};\n${fnSrc('cheatAction')}`, ctx);
+  return { ctx, records, storage, scenarios, doctrines, run: (code) => vm.runInContext(code, ctx) };
+}
+
+test('čítače: warTrack přičítá, drží nejvyšší hodnoty a pamatuje si vyzkoušené scénáře a doktríny', () => {
+  const e = makeEnv();
+  e.run("warTrack({ attacks: 1, crits: 0 }); warTrack({ attacks: 2 }, { best_day: 10, cp_peak: 50 }); warTrack(null, { best_day: 4, cp_peak: 900 }, { scen: 'zombie' }); warTrack(null, null, { scen: 'zombie' }); warTrack(null, null, { docts: 'blitz' });");
+  const st = JSON.parse(e.storage.getItem('warroom_frontlines_save_v1')).stats;
+  assert.deepEqual(st, { attacks: 3, crits: 0, best_day: 10, cp_peak: 900, scen: { zombie: 1 }, docts: { blitz: 1 } });
+  assert.equal(e.records.get('attacks'), 3);
+  assert.equal(e.records.get('scenarios_started'), 1);
+  assert.equal(e.records.get('doctrines_used'), 1);
+});
+
+test('čítače: starý uložený postup bez statistik se načte a nic se neztratí', () => {
+  const e = makeEnv();
+  e.storage.setItem('warroom_frontlines_save_v1', JSON.stringify({ unlockedScenarios: ['default', 'korea'], unlockedDoctrines: ['blitz'], highScores: { default: 12 } }));
+  e.run('warTrack({ sectors_cleared: 1 });');
+  const p = JSON.parse(e.storage.getItem('warroom_frontlines_save_v1'));
+  assert.deepEqual([p.unlockedScenarios, p.highScores.default, p.stats.sectors_cleared], [['default', 'korea'], 12, 1]);
+});
+
+test('čítače: každý z nich má ve hře své místo a unlockall čítače nesmaže', () => {
+  const tracked = JSON.parse(game.match(/const TRACKED_STATS = (\[[^\]]*\])/s)[1].replace(/'/g, '"').replace(/\s+/g, ' '));
+  assert.ok(tracked.length >= 20);
+  for (const key of tracked) assert.match(game, new RegExp(`warTrack\\([^;]*\\b${key}\\b`), key);
+  assert.match(game, /saveProgress\(\{ unlockedScenarios: allScen, unlockedDoctrines: allDoc, highScores: \{\}, stats: loadProgress\(\)\.stats \}\)/);
+  assert.match(game, /if \(typeof msg === 'string' && msg\.indexOf\('SKILL:'\) === 0\) warTrack\(\{ skills_used: 1 \}\);/);
+  assert.match(html, /cheatAction\('badges'\)/);
+});
+
+test('hra hlásí přesně statistiky z katalogu a cheat Všechny odznaky je dotáhne na prahy odznaků', async () => {
+  const { GAME_CATALOG, GAME_BADGES } = await import('../gameRecords/catalog.js');
+  const want = GAME_CATALOG.find((g) => g.id === 'warroom').stats.map((s) => s.key).sort();
+  const e = makeEnv();
+  e.run("cheatAction('badges');");
+  e.run('reportRecords(loadProgress());');
+  assert.deepEqual([...e.records.keys()].sort(), want, 'hra hlásí přesně statistiky z katalogu');
+  for (const key of want) {
+    const need = Math.max(...GAME_BADGES.filter((b) => b.game === 'warroom' && b.stat === key).map((b) => b.threshold));
+    assert.ok(e.records.get(key) >= need, `${key}: cheat dá ${e.records.get(key)}, odznak chce ${need}`);
+  }
+  assert.ok(e.records.get('scenarios_unlocked') === e.scenarios.length, 'odemknuty všechny scénáře');
+});

@@ -48,6 +48,8 @@ const GameCard = ({ game, progress, userId, open, onToggle }) => {
   const unlocked = new Set(progress.unlocked);
   const badges = GAME_BADGES.filter((b) => b.game === game.id);
   const earned = badges.filter((b) => unlocked.has(b.id)).length;
+  const [filter, setFilter] = useState('all');   // all | open | done: her je mnoho odznaků, ať jde zobrazit jen to, co ještě chybí
+  const shown = badges.filter((b) => filter === 'all' || (filter === 'done') === unlocked.has(b.id));
   const headStat = game.stats.find((s) => s.key === game.headline);
   const head = records[game.headline];
 
@@ -85,9 +87,25 @@ const GameCard = ({ game, progress, userId, open, onToggle }) => {
           </div>
 
           <div>
-            <p style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider m-0 mb-2">Odznaky ({earned}/{badges.length})</p>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <p style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider m-0">Odznaky ({earned}/{badges.length})</p>
+              <div role="group" aria-label="Filtr odznaků" className="flex gap-1">
+                {[['all', 'Vše'], ['open', 'Chybí'], ['done', 'Mám']].map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setFilter(id)}
+                    aria-pressed={filter === id}
+                    data-testid={`game-filter-${game.id}-${id}`}
+                    style={{ backgroundColor: filter === id ? 'var(--bg-primary)' : 'var(--bg-card)', color: filter === id ? 'var(--text-primary)' : 'var(--text-muted)', borderColor: 'var(--border-color)' }}
+                    className="border rounded-full px-2.5 py-0.5 text-[0.6875rem] font-black cursor-pointer"
+                  >{label}</button>
+                ))}
+              </div>
+            </div>
+            {shown.length === 0 && <p style={{ color: 'var(--text-muted)' }} className="text-xs font-bold m-0">{filter === 'done' ? 'Zatím žádný odznak.' : 'Máš všechny odznaky této hry!'}</p>}
             <ul className="list-none m-0 p-0 grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {badges.map((b) => {
+              {shown.map((b) => {
                 const on = unlocked.has(b.id);
                 return (
                   <li
