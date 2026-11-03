@@ -1,7 +1,8 @@
 import { Component, lazy, Suspense, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { resolveTheme, withAccent, loadAccent, saveAccent, applyUiPrefs, applyMotionPref, isDarkTheme, saveCustomColors, loadCustomColors, seedCustomColors, CUSTOM_THEME_KEY, EXPERIMENTAL_THEME_KEY, usesCustomColors, applyThemeStyle, THEME_KEY, initMotionPref } from './theme';
+import { resolveTheme, withAccent, loadAccent, saveAccent, applyUiPrefs, applyMotionPref, isDarkTheme, saveCustomColors, loadCustomColors, seedCustomColors, CUSTOM_THEME_KEY, EXPERIMENTAL_THEME_KEY, usesCustomColors, applyThemeStyle, THEME_KEY, initMotionPref, loadLively, saveLively, applyLively } from './theme';
 import { SettingsSyncRunner } from './settings/SettingsSyncRunner';
+import { LivelyScenery } from './lively/LivelyScenery';
 import { SETTINGS_APPLIED, notifySettingsChanged } from './settings/settingsEvents';
 import { ThemeContext, AuthProvider, ProtectedAdminRoute, ProtectedUserRoute, useAuth } from './contexts/AuthContext';
 import { Navbar } from './components/Navbar';
@@ -77,9 +78,11 @@ export default function App() {
   const [currentTheme, setCurrentTheme] = useState(() => readStored(THEME_KEY) || 'saas');
   const [customColors, setCustomColors] = useState(loadCustomColors); // jen pro motiv „Vlastní“
   const [accent, setAccent] = useState(loadAccent); // akcentní barva hotových motivů
+  const [lively, setLively] = useState(loadLively); // Živý režim (Nastavení -> Vzhled)
 
   useEffect(() => initMotionPref(), []); // omezení pohybu (Nastavení -> Vzhled, nebo nastavení zařízení)
   useEffect(() => { applyUiPrefs(); }, []); // velikost a hustota rozhraní (index.html je použije ještě před vykreslením)
+  useEffect(() => { applyLively(); }, []); // Živý režim (index.html ho zapíná už před vykreslením)
 
   // Po stažení nastavení z účtu (nové zařízení, změna na jiném zařízení) si appka všechno přečte znovu.
   useEffect(() => {
@@ -89,6 +92,8 @@ export default function App() {
       setAccent(loadAccent());
       applyUiPrefs();
       applyMotionPref();
+      setLively(loadLively());
+      applyLively();
     };
     window.addEventListener(SETTINGS_APPLIED, reread);
     return () => window.removeEventListener(SETTINGS_APPLIED, reread);
@@ -109,7 +114,8 @@ export default function App() {
   return (
     <AuthProvider>
       <ThemeContext.Provider value={{
-        currentTheme, customColors, accent,
+        currentTheme, customColors, accent, lively,
+        changeLively: (on) => { saveLively(on); setLively(loadLively()); },
         changeAccent: (a) => { saveAccent(a); setAccent(loadAccent()); },
         changeTheme: (t) => {
           // První přepnutí na „Vlastní“ začne od barev, které uživatel právě vidí, ne od výchozí tyrkysové.
@@ -122,7 +128,8 @@ export default function App() {
         <SettingsSyncRunner />
         <Router>
           <TourProvider blocked={isSearchOpen}>
-          <div style={{ background: 'var(--bg-body)', color: 'var(--text-body)' }} className="min-h-screen flex flex-col font-sans antialiased transition-all duration-200">
+          <div style={{ background: 'var(--bg-body)', color: 'var(--text-body)' }} className={`min-h-screen flex flex-col font-sans antialiased transition-all duration-200 ${lively ? 'isolate' : ''}`}>
+            <LivelyScenery enabled={lively} />
             <RecoveryRedirect />
             <Navbar onOpenSearch={() => setIsSearchOpen(true)} />
             <OfflineBar />

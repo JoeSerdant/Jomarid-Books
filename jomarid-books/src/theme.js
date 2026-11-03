@@ -392,3 +392,15 @@ export const initMotionPref = () => {
   if (mq && mq.addEventListener) mq.addEventListener('change', handler);
   return () => { if (mq && mq.removeEventListener) mq.removeEventListener('change', handler); };
 };
+
+// --- Živý režim (Nastavení -> Vzhled): pohyblivé pozadí, ozdoby po stranách, jiskřičky, hravější tlačítka a karty ---
+// Je to jen vzhled, ukládá se jako ostatní nastavení vzhledu (v zařízení + v účtu). Ve výchozím stavu je vypnutý.
+// Zapíná se atributem data-lively="1" na <html> (pravidla v src/lively.css); ozdoby kreslí src/lively/LivelyScenery.jsx.
+export const LIVELY_KEY = 'jomarid-lively';
+export const loadLively = () => { try { return localStorage.getItem(LIVELY_KEY) === '1'; } catch { return false; } };
+export const applyLively = () => {
+  const on = loadLively();
+  if (typeof document !== 'undefined') document.documentElement.dataset.lively = on ? '1' : '0';
+  return on;
+};
+export const saveLively = (on) => { try { localStorage.setItem(LIVELY_KEY, on ? '1' : '0'); } catch { /* nevadí, platí aspoň do zavření stránky */ } applyLively(); notifySettingsChanged(); };
