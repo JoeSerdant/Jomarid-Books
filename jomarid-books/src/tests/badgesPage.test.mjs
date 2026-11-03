@@ -45,7 +45,7 @@ test('Statistiky už odznaky ani obchůdek nenesou, jen odkaz na stránku Odznak
   const stats = read('pages', 'UserStats.jsx');
   assert.doesNotMatch(stats, /BadgesSection|GamesProgress|<Shop/);
   assert.match(stats, /<Link\s+to="\/badges"\s+data-testid="badges-link"/);
-  assert.match(stats, /Odznaky knih: \{stats\.unlockedBadges\.length\} z \{BOOK_BADGES\.length\}\. Odznaky her: \{stats\.gameProgress\?\.unlocked\?\.length \|\| 0\} z \{GAME_BADGES\.length\}\./);
+  assert.match(stats, /Odznaky knih: \{stats\.unlockedBadges\.length\} z \{BOOK_BADGES\.length\}\. Odznaky her: \{countGameBadges\(stats\.gameProgress\?\.unlocked\)\.unlocked\} z \{countGameBadges\(stats\.gameProgress\?\.unlocked\)\.total\}\./);
   assert.match(stats, /loadMyStats\(supabase, user\)/);
   assert.match(stats, /loadLeaderboards\(supabase, user, mine\.stats\)/);
 });

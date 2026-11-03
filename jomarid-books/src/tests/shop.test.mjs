@@ -6,11 +6,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  SHOP_ITEMS, SHOP_KINDS, SHOP_ERRORS, SHOP_FALLBACK_ERROR, KIND_TITLE, KIND_GAMEFX,
+  SHOP_ITEMS, SECRET_ITEMS, ownedSecretItems, SHOP_KINDS, SHOP_ERRORS, SHOP_FALLBACK_ERROR, KIND_TITLE, KIND_GAMEFX,
   getShopItem, itemsOfKind, groupsOfKind, titleLabel, gameFilter, requirementText, missingCoins, itemState, shopErrorText,
 } from '../shop/catalog.js';
 import { EMPTY_COSMETICS, normalizeCosmetics, loadMyCosmetics, buyCosmetic, equipCosmetic, loadEquippedTitles, errorReason } from '../shop/api.js';
-import { GAME_BADGES, GAME_CATALOG } from '../gameRecords/catalog.js';
+import { GAME_BADGES, GAME_CATALOG, ALL_GAME_BADGES } from '../gameRecords/catalog.js';
 
 const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DB = path.join(SRC, '..', 'db');
@@ -70,6 +70,33 @@ test('groupsOfKind: tituly po skupinách (obecné, pak hry v pořadí katalogu),
   for (const g of groups.slice(1)) assert.ok(g.items.every((i) => badgeGame.get(i.requires) === g.id), `${g.id}: tituly patří hře`);
   const fx = groupsOfKind(KIND_GAMEFX);
   assert.equal(fx.length, 1); assert.equal(fx[0].label, null); assert.equal(fx[0].items.length, 6);
+});
+
+test('skryté zboží: titul za skrytý odznak se nekupuje, v nabídce není a ukáže se jen tomu, kdo ho má', () => {
+  assert.equal(SECRET_ITEMS.length, 1);
+  const item = SECRET_ITEMS[0];
+  assert.deepEqual([item.id, item.kind, item.label, item.price, item.secret], ['title_majakar', KIND_TITLE, 'Majákář', 0, true]);
+  const badge = ALL_GAME_BADGES.find((b) => b.id === item.grantedBy);
+  assert.ok(badge && badge.secret, 'za skrytý odznak ze hry');
+  // v nabídce, ve skupinách ani v seznamu kusů pro nákup není
+  assert.ok(!SHOP_ITEMS.some((i) => i.id === item.id) && !itemsOfKind(KIND_TITLE).some((i) => i.id === item.id));
+  assert.ok(!groupsOfKind(KIND_TITLE).some((g) => g.items.some((i) => i.id === item.id)));
+  // ale appka ho zná: titul u jména, normalizace nasazeného zboží i skupina Skryté v obchůdku
+  assert.equal(getShopItem(item.id), item);
+  assert.equal(titleLabel(item.id), 'Majákář');
+  assert.deepEqual(normalizeCosmetics({ owned: [item.id], equipped: { title: item.id } }), { owned: [item.id], equipped: { title: item.id } });
+  assert.deepEqual(ownedSecretItems(['title_pilot']), []);
+  assert.deepEqual(ownedSecretItems([item.id, 'title_pilot']), [item]);
+  assert.deepEqual(ownedSecretItems(undefined), []);
+  assert.equal(itemState(item, { owned: [item.id], equipped: { title: item.id } }), 'equipped');
+  assert.equal(itemState(item, { owned: [item.id], equipped: {} }), 'owned');
+  const shop = read('components', 'Shop.jsx');
+  assert.match(shop, /kind === KIND_TITLE && ownedSecretItems\(cosmetics\.owned\)\.length > 0/, 'skupina Skryté jen pro majitele');
+  assert.match(shop, /data-testid="shop-group-secret"/);
+  assert.match(shop, /Získáno za skrytý odznak/);
+  // SQL: druhý seznam zboží (s odznakem, za který se dává) a nákup se skrytým zbožím vrátí „locked“
+  assert.match(sql, new RegExp(`\\('${item.id}', '${item.kind}', '${item.label}', '${item.grantedBy}'\\)`));
+  assert.match(sql, /if v_item\.grant_badge is not null then raise exception 'locked'; end if;/);
 });
 
 test('Shop.jsx kreslí zboží po skupinách s nadpisem (u vzhledů her bez nadpisu)', () => {

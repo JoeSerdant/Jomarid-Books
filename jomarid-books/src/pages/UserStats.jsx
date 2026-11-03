@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/friendlyError';
 import { BOOK_BADGES } from '../constants/badges';
-import { GAME_BADGES } from '../gameRecords/catalog';
+import { countGameBadges } from '../gameRecords/catalog';
 import { EMPTY_LEADERBOARDS, EMPTY_STATS, loadLeaderboards, loadMyStats } from '../stats/loadStats';
 import { calculateGoalMultiplier, DEFAULT_MONTHLY_GOAL } from '../constants/leveling';
 import { STREAK_FREEZE_PRICE } from '../constants/economy';
@@ -428,7 +428,7 @@ export const UserStats = () => {
         <span className="min-w-0 flex-1">
           <span style={{ color: 'var(--text-muted)' }} className="block text-xs font-black uppercase tracking-wider">Odznaky, tituly a vzhled her</span>
           <span style={{ color: 'var(--text-muted)' }} className="block text-xs mt-1 opacity-70">
-            Odznaky knih: {stats.unlockedBadges.length} z {BOOK_BADGES.length}. Odznaky her: {stats.gameProgress?.unlocked?.length || 0} z {GAME_BADGES.length}.
+            Odznaky knih: {stats.unlockedBadges.length} z {BOOK_BADGES.length}. Odznaky her: {countGameBadges(stats.gameProgress?.unlocked).unlocked} z {countGameBadges(stats.gameProgress?.unlocked).total}.
           </span>
         </span>
         <ChevronRight size={18} style={{ color: 'var(--text-muted)' }} aria-hidden="true" />

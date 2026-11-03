@@ -50,10 +50,10 @@ select tt.gmk(6, '   ');
 select tt.gmk(7, 'nový');
 
 -- ===== seznam statistik a odznaků =====
-select tt.ok((select count(*) from public.game_stat_limits) = 261, 'v seznamu je 261 statistik u sedmi her');
+select tt.ok((select count(*) from public.game_stat_limits) = 262, 'v seznamu je 262 statistik u sedmi her');
 select tt.ok((select count(distinct game_id) from public.game_stat_limits) = 7, 'statistiky patří sedmi hrám');
-select tt.ok((select count(*) from public.game_badge_defs) = 519, 'v seznamu je 519 herních odznaků');
-select tt.ok((select sum(xp) from public.game_badge_defs) = 47020, 'herní odznaky dohromady dávají 47 020 XP');
+select tt.ok((select count(*) from public.game_badge_defs) = 520, 'v seznamu je 520 herních odznaků');
+select tt.ok((select sum(xp) from public.game_badge_defs) = 47620, 'herní odznaky dohromady dávají 47 620 XP (včetně jednoho skrytého)');
 select tt.ok((select min(c) from (select count(*) as c from public.game_badge_defs group by game_id) s) >= 50, 'každá hra má aspoň 50 odznaků');
 select tt.ok((select count(*) from public.game_badge_defs d where not exists (select 1 from public.game_stat_limits l where l.game_id = d.game_id and l.stat_key = d.stat_key)) = 0, 'každý odznak sedí na existující statistiku');
 select tt.ok((select count(*) from public.game_badge_defs d join public.game_stat_limits l using (game_id, stat_key) where d.threshold > l.max_value) = 0, 'práh žádného odznaku není nad věrohodnou mezí statistiky');
@@ -154,6 +154,16 @@ select tt.ok((tt.rep(7, 'rocket', 'no_hit_bosses', 1))->'unlocked' = '["rocket_n
 select tt.ok((tt.rep(7, 'rocket', 'total_boss_kills', 30))->'unlocked' = '["rocket_boss3", "rocket_boss10", "rocket_boss30"]'::jsonb and (tt.rep(7, 'rocket', 'bombs_used', 20))->'unlocked' = '["rocket_bombs5", "rocket_bombs20"]'::jsonb, 'poražení bossové a použité bomby');
 select tt.ok((select count(*) from public.game_badge_unlocks where user_id = tt.gu(7) and badge_id like 'rocket\_%') = 20, 'účet 7 má všech 20 odznaků Rocketu z těchto kroků');
 
+-- ===== Skrytý příběh Rocketu: statistika a odznak, které appka nikde neukazuje, dokud je hráč nezíská =====
+select tt.gmk(8, 'majak');
+select tt.ok((select max_value from public.game_stat_limits where game_id = 'rocket' and stat_key = 'story_end') = 1, 'skrytá statistika příběhu má mez 1');
+select tt.ok((tt.rep(8, 'rocket', 'story_end', 2)) = '{"ok": false, "reason": "implausible"}'::jsonb, 'víc než 1 je podvrh');
+select tt.ok((tt.rep(8, 'rocket', 'story_end', 1)) = '{"ok": true, "value": 1, "improved": true, "unlocked": ["rocket_beacon"], "xp": 600}'::jsonb, 'dokončený příběh odemkne skrytý odznak (600 XP)');
+select tt.ok((tt.rep(8, 'rocket', 'story_end', 1))->'unlocked' = '[]'::jsonb, 'podruhé už nic nového nepřijde');
+select tt.as_gu(8);
+select tt.ok(((public.my_game_progress())->>'xp')::int = 600 and (public.my_game_progress())->'unlocked' = '["rocket_beacon"]'::jsonb, 'skrytý odznak a jeho XP jsou ve výpisu postupu');
+select tt.no_user();
+
 -- ===== smazání účtu =====
 select tt.ok((select count(*) from public.game_records where user_id = tt.gu(3)) = 2, 'účet 3 má dva rekordy před smazáním');
 delete from public.profiles where id = tt.gu(3);
@@ -169,7 +179,7 @@ update public.game_badge_defs set xp = 1 where badge_id = 'rocket_ace';
 \ir ../game-records.sql
 select tt.ok(not exists (select 1 from public.game_badge_defs where badge_id = 'zz_zrusen') and not exists (select 1 from public.game_badge_unlocks where badge_id = 'zz_zrusen'), 'odznak mimo seznam zmizel i s odemčením');
 select tt.ok((select xp from public.game_badge_defs where badge_id = 'rocket_ace') = 60, 'změněná hodnota XP se vrátila podle souboru');
-select tt.ok((select count(*) from public.game_badge_defs) = 519 and (select count(*) from public.game_stat_limits) = 261, 'seznamy mají zase 519 a 261 položek');
+select tt.ok((select count(*) from public.game_badge_defs) = 520 and (select count(*) from public.game_stat_limits) = 262, 'seznamy mají zase 520 a 262 položek');
 select tt.ok(tt.gsnap() = :'before_rerun', 'rekordy a odemčené odznaky všech ostatních zůstaly beze změny');
 select tt.as_gu(1);
 select tt.ok(((public.my_game_progress())->>'xp')::int = 840, 'XP účtu 1 je po novém spuštění stejné (840)');

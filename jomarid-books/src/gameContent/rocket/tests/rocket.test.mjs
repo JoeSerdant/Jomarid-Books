@@ -176,7 +176,7 @@ test('Insane Peklo se projeví v kódu: bossové probíjejí štít, nepřátel�
   assert.match(html, /get hell\(\) \{\s*return this\.insane \? INSANE : INFERNO;/);
   assert.doesNotMatch(html, /INFERNO\.\w+/, 'čísla Pekla se berou přes g.hell, ne napřímo');
   assert.match(html, /\(g\.bossActive && !g\.insane\) \|\| g\.tutActive \|\| g\.mode === 'rush'/);
-  for (const call of ['damagePlayer(14, 620, false, true)', 'damagePlayer(12, 500, false, true)', 'damagePlayer(26, 900, false, true)', 'damagePlayer(b.dmg, 400, false, b.fromBoss)']) {
+  for (const call of ["damagePlayer(14, 620, false, true, 'beam')", 'damagePlayer(12, 500, false, true)', 'damagePlayer(26, 900, false, true)', 'damagePlayer(b.dmg, 400, false, b.fromBoss)']) {
     assert.ok(html.includes(call), call);
   }
   assert.equal((html.match(/b\.fromBoss = true;/g) || []).length, 2, 'střely bosse jsou označené (fire i fireRaw)');

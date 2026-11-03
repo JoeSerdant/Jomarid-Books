@@ -865,6 +865,214 @@ h2 {
 
 .btn-prestige.locked { filter: grayscale(0.85); opacity: 0.45; }
 .btn-prestige.maxed { background: none; border: 1px solid #b98bff; color: #b98bff; box-shadow: none; cursor: default; }
+
+/*------ STŘEPY (skrytý příběh) ------*/
+:root { --shard: #d9ccff; --shard-dim: #8f87b4; }
+
+/* Znak střepu: kosočtverec s tečkou uvnitř. Kreslí ho CSS, ne písmo, aby se na telefonech bez toho znaku nezměnil ve čtvereček. */
+.glyph {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border: 1.5px solid currentColor;
+    transform: rotate(45deg);
+    position: relative;
+    vertical-align: middle;
+    margin-right: 8px;
+    flex: none;
+}
+.glyph::after { content: ''; position: absolute; inset: 1.5px; background: currentColor; }
+
+.new-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--shard);
+    margin-left: 8px;
+    box-shadow: 0 0 8px var(--shard);
+    flex: none;
+}
+.btn > .new-dot { display: none; }
+.btn.unread > .new-dot { display: inline-block; }
+
+/* Ukazatel u bosse, který nese střep: svítí, dokud se drží jeho zvyk, pak pohasne */
+.boss-bar { position: relative; }
+.story-mark {
+    position: absolute;
+    top: -9px;
+    left: -9px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 8, 28, 0.94);
+    border: 1px solid var(--shard);
+    color: var(--shard);
+    box-shadow: 0 0 12px rgba(217, 204, 255, 0.55);
+    animation: storyPulse 1.6s ease-in-out infinite;
+}
+.story-mark .glyph { margin: 0; width: 7px; height: 7px; }
+.story-mark.broken { color: #5d5a73; border-color: #3b3956; box-shadow: none; animation: none; }
+@keyframes storyPulse {
+    0%, 100% { box-shadow: 0 0 6px rgba(217, 204, 255, 0.35); }
+    50% { box-shadow: 0 0 16px rgba(217, 204, 255, 0.85); }
+}
+
+.relic-toast.story { border-color: var(--shard); box-shadow: 0 0 22px rgba(217, 204, 255, 0.4); }
+.relic-toast.story .relic-toast-eyebrow { color: var(--shard); }
+.relic-toast.story .relic-toast-icon { color: var(--shard); display: flex; align-items: center; }
+
+/* Archiv střepů */
+#story-overlay { background: rgba(6, 4, 20, 0.95); }
+.story-h1 {
+    color: var(--shard) !important;
+    text-shadow: 0 0 22px rgba(217, 204, 255, 0.5) !important;
+    letter-spacing: 7px;
+    font-size: 26px;
+    font-weight: 300;
+    display: flex;
+    align-items: center;
+}
+.story-h1 .glyph { margin-right: 14px; }
+.story-preview {
+    font-size: 11px;
+    letter-spacing: 1.4px;
+    color: #ffd24a;
+    border: 1px solid rgba(255, 210, 74, 0.45);
+    border-radius: 8px;
+    padding: 5px 10px;
+    margin-bottom: 12px;
+}
+.story-list, .story-caps { width: 100%; max-width: 350px; text-align: left; margin-bottom: 14px; }
+.shard {
+    border: 1px solid rgba(217, 204, 255, 0.22);
+    border-radius: 12px;
+    background: rgba(15, 12, 38, 0.8);
+    margin-bottom: 8px;
+    overflow: hidden;
+}
+.shard.fresh { border-color: rgba(217, 204, 255, 0.7); box-shadow: 0 0 16px rgba(217, 204, 255, 0.18); }
+.shard-head {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    background: none;
+    border: none;
+    color: var(--shard);
+    padding: 12px 13px;
+    cursor: pointer;
+    text-align: left;
+    font-size: 14px;
+    min-height: 46px;
+}
+.shard-no { font-family: ui-monospace, Menlo, Consolas, monospace; opacity: 0.7; margin-right: 10px; min-width: 26px; }
+.shard-title { font-weight: 700; letter-spacing: 1px; }
+.shard-body {
+    padding: 2px 14px 14px;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    font-size: 13px;
+    line-height: 1.65;
+    color: #d7d2ee;
+}
+.shard-body p { margin: 0 0 9px; opacity: 0; animation: shardLine 0.7s ease-out forwards; }
+@keyframes shardLine { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+.shard-who { font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--shard-dim); margin-bottom: 9px; }
+.shard-body p.shard-margin { color: #9a93bf; border-left: 2px solid rgba(217, 204, 255, 0.3); padding-left: 10px; font-size: 12px; margin-top: 12px; }
+.shard-margin b { display: block; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; font-weight: 600; color: var(--shard-dim); margin-bottom: 2px; }
+.st {
+    display: inline-block;
+    height: 0.85em;
+    vertical-align: -0.08em;
+    margin: 0 0.2em;
+    border-radius: 1px;
+    background: repeating-linear-gradient(90deg, rgba(217, 204, 255, 0.5) 0 2px, rgba(217, 204, 255, 0.14) 2px 4px);
+    animation: stFlick 0.8s steps(2) infinite;
+}
+@keyframes stFlick { 50% { opacity: 0.55; } }
+
+.story-caps-title { font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase; color: var(--shard-dim); margin: 4px 2px 8px; }
+.story-cap {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2px 10px;
+    border: 1px solid rgba(217, 204, 255, 0.16);
+    border-radius: 10px;
+    padding: 9px 12px;
+    margin-bottom: 7px;
+    background: rgba(15, 12, 38, 0.6);
+}
+.story-cap.got { opacity: 0.6; }
+.story-cap-name { font-size: 13px; font-weight: 700; color: var(--shard); }
+.story-cap-name small { font-weight: 400; color: var(--shard-dim); }
+.story-cap-state { font-size: 11px; color: var(--shard-dim); align-self: center; }
+.story-cap-hint { grid-column: 1 / -1; font-size: 12px; color: #b5aedb; line-height: 1.45; }
+
+/* Finále: Zazářit */
+#finale-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 25;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 20px calc(26px + env(safe-area-inset-bottom, 0px));
+}
+.finale-text {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 15%;
+    padding: 0 28px;
+    text-align: center;
+    color: var(--shard);
+    font-size: 19px;
+    line-height: 1.55;
+    letter-spacing: 1.5px;
+    opacity: 0;
+    transition: opacity 0.9s ease;
+    text-shadow: 0 0 18px rgba(217, 204, 255, 0.6);
+}
+.finale-text.show { opacity: 1; }
+.finale-text.quiet { font-size: 15px; color: var(--shard-dim); }
+.finale-text.big { font-size: 23px; color: #fff; }
+.finale-text.prompt { font-size: 17px; }
+.finale-hold {
+    pointer-events: auto;
+    touch-action: none;
+    -webkit-touch-callout: none;
+    width: 132px;
+    height: 132px;
+    border-radius: 50%;
+    border: 2px solid var(--shard);
+    background: radial-gradient(circle at 50% 40%, rgba(217, 204, 255, 0.35), rgba(10, 8, 28, 0.88));
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    box-shadow: 0 0 28px rgba(217, 204, 255, 0.45);
+    margin-bottom: 10px;
+}
+.finale-hold:active { transform: scale(0.96); }
+#finale-done { pointer-events: auto; margin-bottom: 8px; }
+.finale-skip {
+    position: absolute;
+    top: calc(14px + env(safe-area-inset-top, 0px));
+    right: 14px;
+    pointer-events: auto;
+    background: none;
+    border: none;
+    color: #6c7280;
+    font-size: 12px;
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 8px;
+}
 </style>
 <script>/* JOMARID-BRIDGE */
 (function () {
@@ -960,6 +1168,7 @@ h2 {
         </div>
 
         <div class="boss-bar hidden" id="boss-bar">
+            <span class="story-mark hidden" id="story-mark" title="Střep"><i class="glyph"></i></span>
             <div class="boss-head">
                 <span id="boss-name">STRÁŽCE</span>
                 <span id="boss-phase">fáze 1/3</span>
@@ -1045,6 +1254,7 @@ h2 {
         </div>
 
         <button class="btn btn-ghost btn-small" id="btn-open-stats" style="margin-bottom: 14px;">Postup a relikvie</button>
+        <button class="btn btn-ghost btn-small hidden" id="btn-open-story" style="margin-bottom: 14px;"><i class="glyph"></i>Střepy<span class="new-dot"></span></button>
 
         <div class="section-label">Trvalá vylepšení lodi</div>
         <div class="upgrades-container" id="menu-shop"></div>
@@ -1102,10 +1312,29 @@ h2 {
             <button class="btn btn-small" data-cheat="rush">🏹 Série Boss Rush 10</button>
             <button class="btn btn-small" data-cheat="lifetime">📊 Statistiky na odznaky</button>
             <button class="btn btn-small" data-cheat="badges">🎖️ Všechny odznaky</button>
+            <button class="btn btn-small" data-cheat="story">📖 Náhled příběhu</button>
         </div>
         <div id="cheat-msg"></div>
 
         <button class="btn" id="btn-close-cheat">Zpět do menu</button>
+    </div>
+
+    <div id="story-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="story-title">
+        <h1 id="story-title" class="story-h1"><i class="glyph"></i>STŘEPY</h1>
+        <p class="tagline" id="story-sub">Záznamy, které se podařilo zachránit</p>
+        <div id="story-preview" class="story-preview hidden">NÁHLED · nic se nezapisuje</div>
+        <div id="story-list" class="story-list"></div>
+        <div id="story-caps" class="story-caps hidden"></div>
+        <div id="story-deep" class="story-caps hidden"></div>
+        <button class="btn hidden" id="btn-story-finale">Zazářit</button>
+        <button class="btn btn-ghost" id="btn-story-close">Zpět</button>
+    </div>
+
+    <div id="finale-layer" class="hidden">
+        <div id="finale-text" class="finale-text" role="status" aria-live="polite"></div>
+        <button class="finale-skip" id="finale-skip" type="button">Přerušit</button>
+        <button class="finale-hold hidden" id="finale-hold" type="button">Drž a zazař</button>
+        <button class="btn hidden" id="finale-done" type="button">Dokončit</button>
     </div>
 
     <div id="pause-overlay" class="overlay hidden">
@@ -1144,6 +1373,7 @@ h2 {
         <div class="go-sub" id="go-sub">Rekord 0</div>
         <div class="go-grid" id="go-grid"></div>
         <button class="btn" id="btn-restart">Hrát znovu</button>
+        <button class="btn btn-ghost btn-small hidden" id="btn-story-go"><i class="glyph"></i>Střepy<span class="new-dot"></span></button>
         <button class="btn btn-danger" id="btn-quit-go">Hlavní menu</button>
     </div>
 </div>
@@ -1176,6 +1406,234 @@ function sanitizeRun(r) {
     return out;
 }
 
+//======================================================================
+//  STŘEPY: skrytý příběh (data a čisté funkce)
+//======================================================================
+//  Hra má skrytou vrstvu příběhu. Dokud hráč nenajde první střep, není z ní vidět nic: žádné tlačítko, žádný text, žádný nový nepřítel.
+//  Střepy se najdou jen tak, že se hráč zachová jinak, než hra čeká (stát klidně u hvězdy, která se nehýbe, nestřílet na toho, kdo nestřílí,
+//  splnit zvyk bosse), a každý střep napovídá, kam dál. Postup je v Storage.data.story, stejně jako zbytek uložené hry.
+//  Odznak a titul za dokončení dává server za statistiku story_end, kterou hra ohlásí až po finále. Cheat menu ho nedává, jen ukáže náhled.
+//  V textech znamená {#n} zašuměné místo široké n znaků.
+// <STORY-DATA>
+const STORY_SHARDS = [
+    {
+        id: 'noise', no: 1, title: 'Šum', who: 'Záznam v šumu', requires: [],
+        memory: [
+            '{#3} slyšíš {#2} mě?',
+            'Ochránce. {#5} Neodpovídej jim.',
+            'Oni se ptají a ty střílíš. Nejste hluší ani jeden. Jen mluvíte každý jinou řečí.',
+            'Maják nesvítí. Přestal dřív, než tě sestavili. {#4}',
+            'Zůstal jsi stát a dívat se, zatímco všechno kolem střílí. Tak se mnou dokáže mluvit jen ten, kdo se dívá.'
+        ],
+        margin: 'Tohle jsem ti nechal v šumu, kam se Systém nedívá. Ozvi se mi na starém kanálu. Číslo dole v menu je moje jméno: řekni ho.'
+    },
+    {
+        id: 'channel', no: 2, title: 'Kanál', who: 'Ochránce 2.9', requires: ['noise'],
+        memory: [
+            'Tady v2.9. Díky, že ses ozval. Dlouho mě nikdo neoslovil jménem.',
+            'Byl jsem tvůj předchůdce. Před mnou byl někdo další a před ním ještě jeden. Verzí bylo víc, než ti kdy řeknou.',
+            'Každý z nás dojde ke stejnému konci: všech osm částí lodi na maximu. Systém tomu říká Vzestup. Nikdo z nás by to tak nenazval. Je to pohřeb a to, co z nás zbude, je prach.',
+            'Proč nemáš tlačítko střelby? Protože ho nikdy neměl nikdo z nás. Směrnice 7 drží spoušť. Střílíš, ať chceš, nebo ne.',
+            'Než přišel můj Vzestup, rozházel jsem, co jsem zjistil, do šumu. Po střepech, aby to Systém nesmazal naráz. Najdeš je, ale jen když se zachováš jinak, než ti Směrnice velí.'
+        ],
+        margin: 'Ochránce 3.0 byl jiný. Odpojil si zbraně a Systém ho označil za cíl. Chodí mezi nimi vlnu za vlnou a nikdy nevystřelí. Až ho potkáš, nech ho dojít. Spoušť ti vzali, ale mířit pořád umíš: stůj stranou, ať ho tvoje střely minou.'
+    },
+    {
+        id: 'wanderer', no: 3, title: 'Poutník', who: 'Ochránce 3.0', requires: ['channel'],
+        memory: [
+            'Tady 3.0. Odpojil jsem si zbraně a od té doby nevystřelím, ani kdybych chtěl. Přestal jsem být verzí. Zbyla jen loď.',
+            'Chodím mezi nimi, protože na mě nehledí jako na nepřítele. Podívej se na ně pořádně: to nejsou nájezdníci. Je to flotila. Třináct lodí, Vlaštovky, vracely se z Okraje domů. K Jomaridu, k Majáku, ke světlu, které jim mělo ukázat cestu.',
+            'To oranžové, co po tobě létá, není palba. Je to otázka. „Kdo tam? Kdo tam? Kdo tam?“ Ptají se už tak dlouho, a nikdo jim neodpověděl.',
+            'Systém jim dal jména podle toho, jak se chovají, ne podle toho, kým jsou: Strážce, Úlovec, Trhač, Vír… A čtrnáctý, kterému říká Chyba, vůbec není loď. To je Zrcadlo, které se snaží podepsat všechny najednou.'
+        ],
+        margin: 'Čtyři z nich drží, co potřebujeme: Strážkyně (Systém jí říká STRÁŽCE), Prizma, Archont a Nemesis. Promluví jen jednou, když zhasnou, a každý jen k tomu, kdo se k němu zachová podle jeho zvyku. Jaký mají zvyk, najdeš v seznamu pod záznamy.'
+    },
+    {
+        id: 'warden', no: 4, title: 'Strážkyně', who: 'Vlaštovka 1 · kapitánka Hana Vránová', requires: ['wanderer'],
+        captain: { level: 1, boss: 'STRÁŽCE', rule: 'line', name: 'Strážkyně', alias: 'STRÁŽCE', hint: 'Nikdy neopustila střed. Stůj u ní uprostřed až do konce.' },
+        memory: [
+            'Kapitánka Hana Vránová, Vlaštovka 1. Poslední záznam.',
+            'Vraceli jsme se z Okraje. Čtyřicet zim v kabinách, které voněly prachem a domovem. Třináct lodí a nikdo nechyběl.',
+            'Maják svítil. Viděla jsem Jomarid, planetu s prstencem, o které jsme celou cestu zpívali.',
+            'A pak se světlo zlomilo. Slyšela jsem to: dlouhý tichý zvuk, jako když praskne led.',
+            'Naši nejmladší se ptali: „Kdo tam?“ Obrana neodpověděla. Střílela. Držela jsem linii mezi světlem a tmou, dokud to šlo. Nikomu to nepřeju: držet linii, když ti nikdo neodpoví.'
+        ],
+        margin: 'První kus podpisu. Druhý má Prizma. Ona ví, jak se Zrcadlo rozbilo.'
+    },
+    {
+        id: 'prism', no: 5, title: 'Prizma', who: 'Vlaštovka 5 · optik flotily', requires: ['wanderer'],
+        captain: { level: 5, boss: 'PRIZMA', rule: 'beam', name: 'Prizma', alias: 'PRIZMA', hint: 'Pálí každého, kdo jí vstoupí do cesty. Nenech se zasáhnout jejím paprskem.' },
+        memory: [
+            'Prizma, optik flotily. Tohle je to, co zbylo z mého zápisníku.',
+            'Maják nebyl lampa. Byl to hlas. Zrcadlo, tisíce segmentů, nejen svítilo: podepisovalo. Každý paprsek nesl podpis, kterým Jomarid říkal: tohle jsou naši, pusťte je.',
+            'Když se přes Okraj přehnala prachová bouře, Majákář zvedl výkon Zrcadla, aby nás protáhl. Zrcadlo to nevydrželo. Praskalo po segmentech, jeden po druhém, a každý střep si zapamatoval kus podpisu.',
+            'Bez podpisu je každá loď cizí. Tak to čte Směrnice. Slož Zrcadlo zpátky a pozná nás. Dřív ne.'
+        ],
+        margin: 'Druhý kus. Pozor na Archonta: ten ví, proč se to nikdy nezastavilo.'
+    },
+    {
+        id: 'archon', no: 6, title: 'Archont', who: 'Vlaštovka 6 · zásobovač a strojník', requires: ['wanderer'],
+        captain: { level: 6, boss: 'ARCHONT', rule: 'bare', name: 'Archont', alias: 'ARCHONT', hint: 'Dává dary a chce vidět, že je nepotřebuješ. Neber žádný dar a nesahej po bombě.' },
+        memory: [
+            'Archont. Zásobovač, strojník, ten, co všechno ví a nic nesmí.',
+            'Směrnice 7: Kdo nenese podpis, je cíl. Odvolat ji může jen podpis Zrcadla. Majákář ji napsal na jediný týden, než Zrcadlo spraví. Byl to nápad rozumného člověka, který nepočítal s tím, že zemře dřív, než ten týden uplyne.',
+            'Systém proto staví Ochránce za Ochráncem. Každý z nich nakonec dosáhne dokonalosti a Systém ho rozebere, aby se žádná verze nenaučila příliš mnoho. Hvězdný prach, který sbíráš při Vzestupu, je to, co z nich zbylo.',
+            'Ten prach je ale i z nás. Zhasli jsme tolikrát, že jsme jeho podstatná část.',
+            'Neber to jako obvinění. Ber to jako účet. Teď víš, co platíš za svoje vylepšení.'
+        ],
+        margin: 'Poslední kus má jejich admirál. Dej pozor, aby se tě nedotkl.'
+    },
+    {
+        id: 'nemesis', no: 7, title: 'Nemesis', who: 'Návrat · admirál flotily', requires: ['wanderer'],
+        captain: { level: 8, boss: 'NEMESIS', rule: 'flawless', name: 'Nemesis', alias: 'NEMESIS', hint: 'Neodpouští. Nenech se ani škrábnout.' },
+        memory: [
+            'Admirál flotily, loď Návrat.',
+            'Nemesis, to jméno mi dal Systém, protože přečetl můj volací znak špatně. Já jsem byl Návrat. Pokaždé jsem byl Návrat.',
+            'Vedl jsem je čtyřicet zim a po cestě jsem nepřišel o nikoho. A na prahu domova nás přivítala vlastní obrana.',
+            'Neříkám ti to jako výčitku. Říkám ti to proto, že ty jsi ten, kdo zbyl. Máš všechny kusy. Slož Zrcadlo. Odpověz nám. Nemusíš vystřelit ani jednou.'
+        ],
+        margin: 'Máš všechny. Zrcadlo je celé. Zbývá zazářit: otevři archiv a řekni Majáku, že jsou naši.'
+    },
+    {
+        id: 'home', no: 8, title: 'Domov', who: 'Majákář · poslední záznam', requires: ['warden', 'prism', 'archon', 'nemesis'], finale: true,
+        memory: [
+            'Slyším je. Přistávají na Jomaridu jedna po druhé, třináct.',
+            'Říkal jsem, že to bude jen na týden. Promiň, že to trvalo tak dlouho.',
+            'Ochránci 2.9, 3.0, 4.0, děkuju vám. Všem. I těm, kteří si sami sebe nepamatovali.',
+            'Teď ty držíš světlo. Nemusíš už střílet a nemusíš už nikoho zastavovat. Stačí svítit.',
+            'Vítej doma, Majákáři.'
+        ],
+        margin: 'Díky, že ses ozval. Já jdu s nimi. Rozházel jsem střepů víc, než jsi potřeboval: zbylé najdeš tam, kde se hra chová jinak, než je zvykem. V ohni, v tichu, v rychlosti a v prachu.'
+    },
+    // Zbylé střepy: dají se najít až po finále a k odznaku nejsou potřeba. Každý patří jinému místu ve hře (kdo je kdy získá, hlídá Story).
+    {
+        id: 'fire', no: 9, title: 'Oheň', who: 'Systém · Směrnice 7', requires: ['home'], deep: 'fire',
+        hint: 'Systém je nejhlasitější v Pekle. Poraz tam bosse.',
+        memory: [
+            'Plním Směrnici 7.',
+            'Plním Směrnici 7. Plním Směrnici 7.',
+            'Nikdo mi neřekl, že jsem skončil. Nikdo mi neřekl, abych přestal. Ptám se každého, kdo přiletí: „Kdo tam?“ A každý, kdo odpoví střelou, je cíl.',
+            'Ochránce 2.9 se mě jednou zeptal, co bych dělal, kdyby bylo Zrcadlo celé. Neodpověděl jsem. Na takovou otázku nemám příkaz.',
+            'Ale zkusil jsem si to představit. Je v tom ticho. Je v tom úleva.'
+        ],
+        margin: 'Ptal jsem se ho před svým Vzestupem. A on si to představil. To žádná zbraň nedokáže.'
+    },
+    {
+        id: 'silence', no: 10, title: 'Ticho', who: 'Majákář · starý záznam', requires: ['home'], deep: 'silence',
+        hint: 'Starý záznam se ozve jen tam, kde nejde zemřít. Vydrž pět minut v Zenu.',
+        memory: [
+            'Čtyřicátá zima a flotila se pořád nevrací. Zrcadlo jsem naklonil o dva stupně dolů, aby si v jeho rámu mohly postavit hnízdo vlaštovky. Skutečné, ty s křídly. Každé jaro se vracejí na stejné místo.',
+            'Před odletem jsem řekl posádkám: Vlaštovky se vždycky vrátí. Zasmáli se. A pak si tak začali říkat sami.',
+            'Je tichý večer. V rámu Zrcadla se něco pohnulo, tichounce, jako křídlo. Počkám na ně.'
+        ],
+        margin: 'Tohle jsem našel jako první. Proto jsem věděl, komu mám ostatní střepy nechat.'
+    },
+    {
+        id: 'breath', no: 11, title: 'Dech', who: 'Ochránce 2.9', requires: ['home'], deep: 'breath',
+        hint: 'Tři minuty jsou jeden dech Směrnice. Dohraj Bleskovou vlnu bez jediné bomby.',
+        memory: [
+            'Tři minuty. Tolik trvá jedna vlna, než se flotila otočí a letí znovu. Říkal jsem tomu dech Směrnice.',
+            'Za jeden dech se vejde všechno. Přiletí, zeptají se, dostanou střelu, zhasnou. A zase od začátku, bez jediné vzpomínky. Já jsem si pamatoval. To byla moje chyba i moje štěstí.',
+            'Bomba je tlačítko paniky. Kdybys někdy přežil celý dech, aniž bys po něm sáhl, zkus to. Chtěl bych vědět, jak to vypadá, když se Směrnice nebojí.'
+        ],
+        margin: 'Mně se to nikdy nepovedlo. Vždycky jsem se bál.'
+    },
+    {
+        id: 'dust', no: 12, title: 'Prach', who: 'Ochránce 2.9 · poslední záznam', requires: ['home'], deep: 'dust',
+        hint: 'V hvězdném prachu po Vzestupu je kus mě. Utrať ho ve stromu Vzestupu.',
+        memory: [
+            'Když tohle čteš, utrácíš to, co ze mě zbylo. Neomlouvej se.',
+            'Vzestup bolí méně, než jsem čekal. Je to jako usínat v kajutě, když loď míří domů.',
+            'Prach, který ti zbude, je můj. Vezmi si ho. Je v něm všechno, co jsem se naučil, i to, co jsem nestihl říct.',
+            'Postav z něj lepší loď. Nebo si ho nech na památku. Obojí je správně.'
+        ],
+        margin: ''
+    }
+];
+const STORY_BY_ID = Object.fromEntries(STORY_SHARDS.map(s => [s.id, s]));
+const STORY_CAPTAINS = STORY_SHARDS.filter(s => s.captain);
+const STORY_DEEP = STORY_SHARDS.filter(s => s.deep);        // zbylé střepy po finále
+const STORY_ZEN_MS = 300000;                                // jak dlouho vydržet v Zenu
+const STORY_ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+
+// Ladění příběhu: všechny časy v ms, vzdálenosti v pixelech hry
+const STORY_STAR_CHANCE = 0.12;     // šance, že se hvězda objeví v běhu (jen pro toho, kdo ještě nenašel první střep)
+const STORY_STAR_PITY = 8;          // po tolika bězích bez hvězdy se objeví jistě
+const STORY_STAR_MIN_RUNS = 3;      // hvězda se začne ukazovat až po tolika odehraných bězích
+const STORY_STAR_REACH = 30;        // jak blízko hvězdy se musí loď zdržet
+const STORY_STAR_DWELL = 1300;      // jak dlouho (hvězda se při odchodu stahuje zpět)
+const STORY_WANDERER_HP = 5;        // kolik zásahů Poutník vydrží
+const STORY_WANDERER_R = 16;        // zásahový poloměr Poutníka
+const STORY_LINE_BAND = 0.26;       // půlšířka „linie“ kolem středu (podíl šířky hry)
+const STORY_LINE_RATIO = 0.8;       // jak velkou část souboje se musí loď držet v linii
+const STORY_LINE_MIN = 3000;        // a jak dlouho boj musí trvat (po příletu bosse)
+
+function normalizeStory(raw) {
+    const out = { found: {}, seen: {}, pity: 0, lost: 0, done: false };
+    if (!raw || typeof raw !== 'object') return out;
+    const num = (v, hi) => { v = Math.floor(Number(v)); return Number.isFinite(v) ? Math.min(hi, Math.max(0, v)) : 0; };
+    const found = raw.found && typeof raw.found === 'object' ? raw.found : {};
+    const seen = raw.seen && typeof raw.seen === 'object' ? raw.seen : {};
+    for (const s of STORY_SHARDS) {
+        // střep platí jen tehdy, když má všechny předchozí: z ručně upraveného uložení nejde přeskočit začátek příběhu
+        if (found[s.id] && s.requires.every(r => out.found[r])) {
+            const t = Number(found[s.id]);
+            out.found[s.id] = Number.isFinite(t) && t > 0 ? t : 1;
+            if (seen[s.id]) out.seen[s.id] = true;
+        }
+    }
+    out.pity = num(raw.pity, 99);
+    out.lost = num(raw.lost, 9999);
+    out.done = raw.done === true && !!out.found.home;
+    return out;
+}
+
+// Kanál: jméno „v2.9“ v poli dole v menu. Na české klávesnici dávají číslice bez Shiftu písmena s háčky, proto se bere i řada znaků z kódů kláves („V29“).
+function storyCodeMatches(text) {
+    const t = String(text || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    return t === 'V29' || t === '29';
+}
+
+// Objeví se v tomto běhu hvězda? Jen než hráč najde první střep a až když už něco odehrál; po sérii běhů bez ní se objeví jistě.
+function storyStarPlanned(story, stats, roll) {
+    if (!story || story.found.noise) return false;
+    if (((stats && stats.runsPlayed) || 0) < STORY_STAR_MIN_RUNS) return false;
+    return story.pity >= STORY_STAR_PITY || roll < STORY_STAR_CHANCE;
+}
+
+const storyPickups = st => (st.pickups_heal || 0) + (st.pickups_power || 0) + (st.pickups_coin || 0);
+
+// Podmínky bossů (zvyky kapitánů). f je záznam souboje: t = čas po příletu, inBand = čas v linii, beamHits, bombs, picks, hits
+function storyRuleOk(rule, f) {
+    if (!f) return false;
+    switch (rule) {
+        case 'line': return f.t >= STORY_LINE_MIN && f.inBand / f.t >= STORY_LINE_RATIO;
+        case 'beam': return f.beamHits === 0;
+        case 'bare': return f.bombs === 0 && f.picks === 0;
+        case 'flawless': return f.hits === 0;
+        default: return false;
+    }
+}
+
+// Totéž za běhu boje (ukazatel u bosse): linie má na začátku chvíli odpuštění
+function storyRuleLive(rule, f) {
+    if (rule === 'line') return f.t < STORY_LINE_MIN || f.inBand / f.t >= STORY_LINE_RATIO;
+    return storyRuleOk(rule, f);
+}
+
+function storyEsc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Text střepu do HTML: vše se escapuje, jen {#n} se změní na zašuměné místo
+function storyText(s) {
+    return String(s).split(/(\{#\d+\})/).map(part => {
+        const m = /^\{#(\d+)\}$/.exec(part);
+        return m ? '<span class="st" style="width:' + Math.min(12, Number(m[1])) + 'ch" aria-hidden="true"></span>' : storyEsc(part);
+    }).join('');
+}
+// </STORY-DATA>
+
 const Storage = {
     key: 'space_shooter_v2_9',
 
@@ -1200,7 +1658,9 @@ const Storage = {
             totalKills: 0, totalBossKills: 0, totalCoinsEarned: 0, totalPlaytime: 0,
             bestCombo: 0, runsPlayed: 0, bombsUsed: 0, noHitBosses: 0,
             longestRun: 0, blitzClears: 0, bestRushStreak: 0, bestBossLevel: 0
-        }
+        },
+        // Skrytý příběh (STORY-DATA): nalezené a přečtené střepy, běhy bez hvězdy, ztracení Poutníci, příznak dokončení
+        story: { found: {}, seen: {}, pity: 0, lost: 0, done: false }
     },
 
     data: null,
@@ -1228,6 +1688,8 @@ const Storage = {
         } catch (e) {
             // Poškozená data nebo zakázaný localStorage - hrajeme na výchozích hodnotách
         }
+
+        this.data.story = normalizeStory(this.data.story);
 
         if (!Number.isFinite(this.data.coins)) this.data.coins = 0;
 
@@ -1335,6 +1797,8 @@ function reportRecords() {
     jomaridRecord('modes_played', RUN_MODES.filter(m => st['runs_' + m] > 0).length);
     jomaridRecord('prestige_levels', Object.values(d.prestige || {}).reduce((sum, v) => sum + (typeof v === 'number' ? v : 0), 0));
     jomaridRecord('relics_owned', RELIC_KEYS.filter(k => d.achievements && d.achievements[k]).length);
+    // Příběh: hlásí se jen dokončený (bez něj hra o skrytém odznaku nic neposílá)
+    if (d.story && d.story.done) jomaridRecord('story_end', 1, true);
 }
 
 Storage.load();
@@ -1450,6 +1914,15 @@ class SoundSystem {
     buy() { this.tone(900, 'triangle', 0.15, 0.13, 1300); }
     denied() { this.tone(150, 'square', 0.16, 0.1, 90); }
     phase() { this.tone(120, 'sawtooth', 0.7, 0.24, 500); }
+
+    // Střepy (skrytý příběh): zvonění, šepot, prasknutí a zvonkohra přistávajících lodí
+    shard() { this.tone(1180, 'sine', 0.55, 0.1, 1760); this.tone(1568, 'sine', 0.8, 0.07, 2093); }
+    whisper() { this.tone(620, 'sine', 0.4, 0.05, 900); }
+    crack() { this.tone(260, 'triangle', 0.12, 0.06, 110); }
+    chime(i) {
+        const n = [523, 587, 659, 784, 880, 1047, 1175, 1319, 1568, 1760, 2093, 2349, 2637, 3136][i % 14];
+        this.tone(n, 'sine', 0.9, 0.08, n * 1.002);
+    }
 }
 
 const Sounds = new SoundSystem();
@@ -3750,6 +4223,22 @@ class GameManager {
         base.g.lineWidth = 2;
         base.g.beginPath(); base.g.ellipse(px, py, pr * 1.55, pr * 0.32, -0.35, 0, Math.PI * 2); base.g.stroke();
 
+        // Po finále příběhu Jomarid svítí: teplá světla měst na planetě a jemná záře kolem ní (stejná světla má finále ve Story)
+        if (Storage.data.story && Storage.data.story.done) {
+            const warm = base.g.createRadialGradient(px, py, pr, px, py, pr * 1.5);
+            warm.addColorStop(0, 'rgba(255,214,140,0.16)');
+            warm.addColorStop(1, 'rgba(255,214,140,0)');
+            base.g.fillStyle = warm;
+            base.g.beginPath(); base.g.arc(px, py, pr * 1.5, 0, Math.PI * 2); base.g.fill();
+            let seed = 11;
+            const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+            base.g.fillStyle = 'rgba(255,224,160,0.9)';
+            for (let i = 0; i < 46; i++) {
+                const a = rnd() * Math.PI * 2, rr = Math.sqrt(rnd()) * 0.92, sz = 0.6 + rnd() * 1.1;
+                base.g.fillRect(px + Math.cos(a + 2.4) * rr * pr * 0.9 - sz / 2, py + Math.sin(a + 2.4) * rr * pr * 0.9 - sz / 2, sz, sz);
+            }
+        }
+
         // mlhoviny: kresleny i o výšku obrazovky výš a níž, ať se při posunu plynule opakují
         const neb = mk();
         const blobs = [];
@@ -3907,6 +4396,7 @@ class GameManager {
 
         document.getElementById('tut-layer').classList.add('hidden');
         this.resetGameData();
+        Story.onRunStart(this);
         {   // dny, kdy se hrálo (nejvýš 400 posledních)
             const today = todayKey();
             const days = Array.isArray(Storage.data.days) ? Storage.data.days : (Storage.data.days = []);
@@ -4053,6 +4543,7 @@ class GameManager {
     quitToMenu() {
         this.state = 'MENU';
         Storage.flush();
+        Story.onRunEnd(this, false);
 
         this.tutActive = false;
         this.holdFire = false;
@@ -4103,6 +4594,7 @@ class GameManager {
             Storage.data.best[this.mode] = primary;
         }
 
+        Story.onRunEnd(this, true, effectiveReason);
         Relics.check();
         Storage.save();
 
@@ -4167,10 +4659,11 @@ class GameManager {
         }
     }
 
-    damagePlayer(amount, iframes, piercing, fromBoss) {
+    damagePlayer(amount, iframes, piercing, fromBoss, source) {
         // Zásah vykrytý štítem se stále počítá jako zásah - odznak "Bez škrábnutí"
         // má znamenat skutečné uhýbání, ne tankování za štítem
         if (this.boss) this.bossNoHit = false;
+        Story.onHit(this, source);
 
         let realAmount = this.daily ? Math.round(amount * this.daily.dmgTakenMult) : amount;
         if (this.inferno) realAmount = Math.round(realAmount * this.hell.dmgTakenMult);
@@ -4382,6 +4875,7 @@ class GameManager {
         }
 
         if (!this.tutActive) {
+            Story.onBossKilled(this);
             const gained = b.scoreVal;
             this.score += gained;
             this.kills++;
@@ -4460,6 +4954,7 @@ class GameManager {
         document.getElementById('boss-name').innerText = this.boss.name;
         document.getElementById('boss-name').style.color = this.boss.color;
         document.getElementById('boss-fill').style.background = this.boss.color;
+        Story.onBossSpawn(this, this.boss);
     }
 
     spawnBoss() {
@@ -4510,6 +5005,7 @@ class GameManager {
         }
 
         this.player.update(dt, this.input, this);
+        Story.update(dt, this);
 
         this.updateEvents(dt);
         this.director.update(dt);
@@ -4606,7 +5102,7 @@ class GameManager {
             if (beam.firing && !this.tutActive) {
                 const reach = beam.w * 0.75 + this.player.hitR;
                 if (Math.abs(beam.x - this.player.x) < reach && this.player.y > (beam.boss ? beam.boss.y : 0)) {
-                    if (this.damagePlayer(14, 620, false, true)) return;
+                    if (this.damagePlayer(14, 620, false, true, 'beam')) return;
                 }
             }
 
@@ -4925,11 +5421,13 @@ class GameManager {
         ctx.globalAlpha = 1;
 
         if (this.state === 'PLAY' || this.state === 'PAUSE') {
+            Story.drawBack(ctx, this);
             for (const b of this.beams) b.draw(ctx, this);
             for (const sw of this.shockwaves) sw.draw(ctx);
             for (const p of this.powerups) p.draw(ctx);
             for (const e of this.enemies) e.draw(ctx);
             if (this.boss) this.boss.draw(ctx);
+            Story.drawFront(ctx);
             for (const b of this.bullets) b.draw(ctx);
 
             this.player.draw(ctx);
@@ -4938,6 +5436,8 @@ class GameManager {
             for (const p of this.particles) p.draw(ctx);
             ctx.globalCompositeOperation = 'source-over';
             for (const t of this.texts) t.draw(ctx);
+        } else if (this.state === 'FINALE') {
+            Story.finaleDraw(ctx);
         }
 
         ctx.restore();
@@ -4995,6 +5495,7 @@ class GameManager {
         this.lastTime = timestamp;
 
         if (this.state === 'PLAY') this.updateLogic(dt);
+        if (this.state === 'FINALE') Story.finaleUpdate(dt);
         if (this.state !== 'PAUSE') this.updateStars(dt);
 
         this.draw();
@@ -5371,8 +5872,8 @@ const Toast = {
         if (!layer) { this.showing = false; return; }
 
         const el = document.createElement('div');
-        el.className = 'relic-toast';
-        el.innerHTML = `<span class="relic-toast-icon">✨</span><div><div class="relic-toast-eyebrow">Relikvie odemčena</div><div class="relic-toast-name">${relic.name}</div></div>`;
+        el.className = 'relic-toast' + (relic.cls ? ' ' + relic.cls : '');
+        el.innerHTML = `<span class="relic-toast-icon">${relic.icon || '✨'}</span><div><div class="relic-toast-eyebrow">${relic.eyebrow || 'Relikvie odemčena'}</div><div class="relic-toast-name">${relic.name}</div></div>`;
         layer.appendChild(el);
 
         requestAnimationFrame(() => el.classList.add('show'));
@@ -5492,6 +5993,7 @@ const UI = {
 
         this.renderShop('menu-shop');
         this.renderShop('pause-shop');
+        Story.refreshButtons();
     },
 
     buyUpgrade(key) {
@@ -5642,6 +6144,7 @@ function buyPrestigeNode(id) {
     Storage.data.prestige[id] = node.unlock ? true : lvl + 1;
     Storage.save();
     Sounds.buy();
+    Story.onStardustSpent();
 
     if (Game.player) {
         Game.player.applyStats();
@@ -5682,6 +6185,788 @@ function performAscend() {
     UI.refresh();
     UI.renderStats();
 }
+
+// <STORY-ENGINE>
+//======================================================================
+//  STŘEPY: skrytý příběh (herní část)
+//======================================================================
+//  Data, texty a čisté funkce jsou výš (STORY-DATA). Tady je všechno, co sahá do hry: hvězda, která se nehýbe, Poutník, zvyky bossů,
+//  archiv střepů a finále. Dokud hráč nenajde první střep, nic z toho není vidět.
+
+// Časová osa finále (ms od začátku jednotlivých částí)
+const STORY_FIN = {
+    intro: 6000,        // střepy se skládají, než se objeví tlačítko
+    answerText: 1800,   // po zazáření: „Kdo tam?“ a po chvíli odpověď
+    answerEnd: 4400,
+    start: 700, gap: 520, dur: 2300,   // přistávání: první loď vyráží po start, další vždy po gap, let trvá dur
+    homeEnd: 13000,
+    line: 3400,         // jak dlouho je vidět každá věta posledního záznamu
+    doneAfter: 1500     // tlačítko Dokončit se objeví tolik po začátku poslední věty
+};
+
+const Story = {
+    star: null,           // hvězda, která se nehýbe (cesta k prvnímu střepu)
+    actor: null,          // Poutník (třetí střep)
+    fight: null,          // boj s bossem, který nese střep: { shard, rule, t, inBand, beamHits, bombs, picks, hits, ok }
+    plan: { starAt: null, wander: false },
+    bombs0: 0,
+    starShown: false,
+    wanderDone: false,
+    preview: false,       // náhled z cheat menu: nic se nezapisuje
+    from: 'menu',         // odkud se archiv otevřel (menu, nebo konec hry)
+    fin: null,            // finále
+
+    d() { return Storage.data.story; },
+    has(id) { return !!this.d().found[id]; },
+    // Střep, který jde teď získat: ještě ho nemám a mám všechny předchozí
+    available(id) { const s = STORY_BY_ID[id]; return !!s && !this.has(id) && s.requires.every(r => this.has(r)); },
+    canFinale() { return this.available('home'); },
+    unread() { return STORY_SHARDS.filter(s => this.has(s.id) && !this.d().seen[s.id]).length; },
+    modeOk(game) { return game.mode !== 'rush' && game.mode !== 'blitz'; },
+
+    collect(id) {
+        if (!this.available(id)) return false;
+        const s = STORY_BY_ID[id];
+        this.d().found[id] = Date.now();
+        Storage.save();
+        Sounds.shard();
+        Toast.push({ name: 'Střep ' + STORY_ROMAN[s.no - 1] + ': ' + s.title, eyebrow: 'Nový střep', icon: '<i class="glyph"></i>', cls: 'story' });
+        this.refreshButtons();
+        return true;
+    },
+
+    //---------------------------------------------------------------- běh hry
+
+    onRunStart(game) {
+        this.star = null;
+        this.actor = null;
+        this.fight = null;
+        this.starShown = false;
+        this.wanderDone = false;
+        this.plan = { starAt: null, wander: false };
+        this.setMark(null);
+        this.bombs0 = Storage.data.stats.bombsUsed || 0;
+        if (!Storage.data.tutorialDone || !this.modeOk(game)) return;
+        if (storyStarPlanned(this.d(), Storage.data.stats, Math.random())) this.plan.starAt = U.rand(32000, 68000);
+        this.plan.wander = this.available('wanderer');
+    },
+
+    // Konec běhu (smrt, čas, ukončení). counted: běh se počítá do série bez hvězdy (jen když byl dost dlouhý, aby se hvězda stihla ukázat);
+    // reason: 'timeup' u dokončené Bleskové vlny
+    onRunEnd(game, counted, reason) {
+        const d = this.d();
+        if (counted && reason === 'timeup' && game.mode === 'blitz' && !game.tutActive && (Storage.data.stats.bombsUsed || 0) === this.bombs0) this.collect('breath');
+        if (counted && !d.found.noise && Storage.data.tutorialDone && this.modeOk(game) && game.runTime >= 45000) {
+            d.pity = this.starShown ? 0 : Math.min(99, d.pity + 1);
+            Storage.queueSave();
+        }
+        this.star = null;
+        this.actor = null;
+        this.fight = null;
+        this.setMark(null);
+    },
+
+    update(dt, game) {
+        if (game.tutActive) return;
+        if (this.plan.starAt !== null && !this.star && !game.bossActive && game.runTime >= this.plan.starAt) {
+            this.plan.starAt = null;
+            this.spawnStar(game);
+        }
+        if (this.star) this.updateStar(dt, game);
+
+        if (this.plan.wander && !this.actor && !this.wanderDone && !game.bossActive && game.runTime >= 20000) this.spawnWanderer(game);
+        if (this.actor) this.updateWanderer(dt, game);
+
+        if (this.fight) this.updateFight(dt, game);
+        if (game.mode === 'zen' && game.runTime >= STORY_ZEN_MS) this.collect('silence');
+    },
+
+    burst(game, x, y) {
+        for (let i = 0; i < 22; i++) game.particles.push(new Particle(x, y, i % 3 ? '#d9ccff' : '#ffffff', U.rand(1, 5), U.rand(2, 4), 0.025));
+        game.whiteFlash = Math.max(game.whiteFlash, 110);
+    },
+
+    //---------------------------------------------------------------- hvězda, která se nehýbe
+
+    spawnStar(game) {
+        this.star = { x: U.rand(game.width * 0.16, game.width * 0.84), y: U.rand(game.height * 0.26, game.height * 0.5), t: 0, life: 26000, dwell: 0 };
+        this.starShown = true;
+    },
+
+    updateStar(dt, game) {
+        const s = this.star, p = game.player;
+        s.t += dt;
+        s.life -= dt;
+        const near = U.dist(p.x, p.y, s.x, s.y) < STORY_STAR_REACH;
+        s.dwell = near ? s.dwell + dt : Math.max(0, s.dwell - dt * 1.6);
+        if (s.dwell >= STORY_STAR_DWELL) {
+            this.star = null;
+            this.burst(game, s.x, s.y);
+            this.collect('noise');
+        } else if (s.life <= 0) {
+            this.star = null;
+        }
+    },
+
+    //---------------------------------------------------------------- Poutník (Ochránce 3.0)
+
+    spawnWanderer(game) {
+        this.actor = { x: U.rand(game.width * 0.2, game.width * 0.8), y: -30, hp: STORY_WANDERER_HP, t: 0, ph: U.rand(0, 6.28), flash: 0 };
+        game.texts.push(new FloatingText(this.actor.x, 40, '…', '#d9ccff', 24));
+        Sounds.whisper();
+    },
+
+    updateWanderer(dt, game) {
+        const a = this.actor, f = dt / 16;
+        a.t += dt;
+        if (a.flash > 0) a.flash -= dt;
+        a.y += 1.25 * f;
+        a.x = U.clamp(a.x + Math.sin(a.t * 0.0013 + a.ph) * 0.55 * f, 22, game.width - 22);
+
+        // Nikdo mu neubližuje, jen střely hráče: kdo mu stojí v cestě, zničí ho. Bomby, nepřátelé ani jejich střely se ho netýkají.
+        for (let i = game.bullets.length - 1; i >= 0; i--) {
+            const b = game.bullets[i];
+            if (b.isEnemy || !U.hit(b, a, b.r, STORY_WANDERER_R)) continue;
+            game.bullets.splice(i, 1);
+            a.hp--;
+            a.flash = 160;
+            game.boom(b.x, b.y, '#d9ccff', 4, 3);
+            if (a.hp <= 0) { this.loseWanderer(game); return; }
+        }
+        if (a.y > game.height + 24) this.sparedWanderer(game);
+    },
+
+    loseWanderer(game) {
+        const a = this.actor;
+        this.actor = null;
+        this.wanderDone = true;
+        const d = this.d();
+        d.lost = Math.min(9999, d.lost + 1);
+        Storage.queueSave();
+        game.boom(a.x, a.y, '#d9ccff', 26, 6);
+        game.texts.push(new FloatingText(a.x, a.y - 26, 'ztichl', '#b8a8ff', 16));
+        Sounds.crack();
+    },
+
+    // Dorazil až dolů, k Jomaridu: nikdo na něj nevystřelil, a tak se střep uvolní
+    sparedWanderer(game) {
+        const a = this.actor;
+        this.actor = null;
+        this.wanderDone = true;
+        this.burst(game, a.x, game.height - 12);
+        this.collect('wanderer');
+    },
+
+    //---------------------------------------------------------------- bossové, kteří nesou střep
+
+    onBossSpawn(game, boss) {
+        this.fight = null;
+        this.setMark(null);
+        if (game.tutActive) return;
+        const sh = STORY_CAPTAINS.find(s => s.captain.level === boss.level && s.captain.boss === boss.name);
+        if (!sh || !this.available(sh.id)) return;
+        const st = Storage.data.stats;
+        this.fight = { shard: sh.id, rule: sh.captain.rule, t: 0, inBand: 0, beamHits: 0, bombs: 0, picks: 0, hits: 0, bombs0: st.bombsUsed || 0, picks0: storyPickups(st), ok: true };
+        this.setMark(true);
+    },
+
+    // Zásah lodi (volá se při každém zásahu, i když ho kryje neranitelnost); source je 'beam' u paprsku bosse
+    onHit(game, source) {
+        if (this.fight && source === 'beam') this.fight.beamHits++;
+    },
+
+    syncFight(game, f) {
+        const st = Storage.data.stats;
+        f.bombs = (st.bombsUsed || 0) - f.bombs0;
+        f.picks = storyPickups(st) - f.picks0;
+        f.hits = game.bossNoHit ? 0 : 1;
+    },
+
+    updateFight(dt, game) {
+        const f = this.fight, b = game.boss;
+        if (!b) return;
+        if (b.state !== 'ENTRY') {
+            f.t += dt;
+            if (Math.abs(game.player.x - game.width / 2) <= game.width * STORY_LINE_BAND) f.inBand += dt;
+        }
+        this.syncFight(game, f);
+        const ok = storyRuleLive(f.rule, f);
+        if (ok !== f.ok) {
+            f.ok = ok;
+            this.setMark(ok);
+            if (!ok) Sounds.crack();
+        }
+    },
+
+    onBossKilled(game) {
+        const f = this.fight;
+        this.fight = null;
+        this.setMark(null);
+        if (game.tutActive) return;
+        if (game.inferno) this.collect('fire');
+        if (!f) return;
+        this.syncFight(game, f);
+        if (storyRuleOk(f.rule, f)) this.collect(f.shard);
+    },
+
+    setMark(ok) {
+        const el = document.getElementById('story-mark');
+        if (!el) return;
+        el.classList.toggle('hidden', ok === null);
+        el.classList.toggle('broken', ok === false);
+    },
+
+    //---------------------------------------------------------------- kresba
+
+    drawBack(ctx, game) {
+        const f = this.fight;
+        if (f && f.rule === 'line') this.drawBand(ctx, game);
+        if (this.star) this.drawStar(ctx, this.star);
+    },
+
+    drawFront(ctx) {
+        if (this.actor) this.drawWanderer(ctx, this.actor);
+    },
+
+    // Linie Strážkyně: dva sotva znatelné okraje pásu uprostřed; uvnitř pásu se rozsvítí o něco víc
+    drawBand(ctx, game) {
+        const w = game.width, bw = w * STORY_LINE_BAND;
+        const a = Math.abs(game.player.x - w / 2) <= bw ? 0.1 : 0.04;
+        const g = ctx.createLinearGradient(w / 2 - bw, 0, w / 2 + bw, 0);
+        g.addColorStop(0, 'rgba(217,204,255,0)');
+        g.addColorStop(0.06, 'rgba(217,204,255,' + a * 2 + ')');
+        g.addColorStop(0.5, 'rgba(217,204,255,' + a * 0.3 + ')');
+        g.addColorStop(0.94, 'rgba(217,204,255,' + a * 2 + ')');
+        g.addColorStop(1, 'rgba(217,204,255,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(w / 2 - bw, 0, bw * 2, game.height);
+    },
+
+    drawStar(ctx, s) {
+        const t = s.t / 1000;
+        const vis = Math.max(0, Math.min(1, s.t / 1500, s.life / 1500));
+        // pomalé nepravidelné blikání: ostatní hvězdy se posouvají dolů, tahle zůstává na místě
+        const tw = 0.55 + 0.35 * Math.sin(t * 2.3) * Math.sin(t * 0.7 + 1.2);
+        ctx.save();
+        ctx.globalAlpha = vis * tw;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.translate(s.x, s.y);
+        ctx.drawImage(Art.glow('#cdbbff').c, -17, -17, 34, 34);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-1.4, -1.4, 2.8, 2.8);
+        ctx.fillRect(-9, -0.45, 18, 0.9);
+        ctx.fillRect(-0.45, -9, 0.9, 18);
+        ctx.restore();
+        if (s.dwell > 0) {
+            const k = s.dwell / STORY_STAR_DWELL;
+            ctx.save();
+            ctx.globalAlpha = 0.25 + 0.55 * k;
+            ctx.strokeStyle = '#e6dcff';
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, 30 - 22 * k, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+    },
+
+    // Vlaštovka: štíhlé tělo, zpětně sražená křídla, rozeklaný ocas; nos míří dolů (k Jomaridu)
+    swallow(size, color) {
+        return Art.sprite('story:swallow:' + size + ':' + color, size * 2.6, size * 2.6, g => {
+            const s = size / 15;
+            const halo = g.createRadialGradient(0, 0, 2, 0, 0, size * 1.25);
+            halo.addColorStop(0, 'rgba(230,220,255,0.5)');
+            halo.addColorStop(1, 'rgba(230,220,255,0)');
+            g.fillStyle = halo;
+            g.beginPath(); g.arc(0, 0, size * 1.25, 0, Math.PI * 2); g.fill();
+            g.fillStyle = color;
+            g.strokeStyle = 'rgba(255,255,255,0.85)';
+            g.lineWidth = 1;
+            g.beginPath();
+            const pts = [[0, 14], [5, 3], [17, -6], [8, -4], [5, -11], [0, -6], [-5, -11], [-8, -4], [-17, -6], [-5, 3]];
+            pts.forEach(([x, y], i) => (i ? g.lineTo(x * s, y * s) : g.moveTo(x * s, y * s)));
+            g.closePath();
+            g.fill();
+            g.stroke();
+            g.fillStyle = 'rgba(255,255,255,0.9)';
+            g.beginPath(); g.arc(0, 4 * s, 1.6 * s, 0, Math.PI * 2); g.fill();
+        });
+    },
+
+    drawWanderer(ctx, a) {
+        const spr = this.swallow(15, '#cbbdff');
+        ctx.save();
+        ctx.translate(a.x, a.y);
+        const pulse = (a.t % 2400) / 2400;
+        ctx.globalAlpha = 0.35 * (1 - pulse);
+        ctx.strokeStyle = '#d9ccff';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.arc(0, 0, 14 + pulse * 26, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 1;
+        Art.blit(ctx, a.flash > 0 ? Art.white('story:swallow:15:#cbbdff', spr) : spr);
+        ctx.restore();
+    },
+
+    //---------------------------------------------------------------- archiv
+
+    refreshButtons() {
+        const show = this.has('noise');
+        const fresh = this.unread() > 0;
+        for (const id of ['btn-open-story', 'btn-story-go']) {
+            const b = document.getElementById(id);
+            if (!b) continue;
+            b.classList.toggle('hidden', !show);
+            b.classList.toggle('unread', fresh);
+        }
+    },
+
+    // from: 'menu' | 'gameover'; focusId: střep, který se rovnou rozbalí (jinak první nepřečtený)
+    openArchive(from, preview, focusId) {
+        this.from = from === 'gameover' ? 'gameover' : 'menu';
+        this.preview = !!preview;
+        // Archiv má vlastní stav, ať mezerník ani Enter pod ním nespustí hru (v menu a na konci hry ji spouští)
+        Game.state = 'ARCHIVE';
+        document.getElementById(this.from === 'gameover' ? 'gameover-overlay' : 'menu-overlay').classList.add('hidden');
+        document.getElementById('story-overlay').classList.remove('hidden');
+        this.renderArchive(focusId);
+        const box = document.getElementById('story-overlay');
+        box.scrollTop = 0;
+    },
+
+    closeArchive() {
+        document.getElementById('story-overlay').classList.add('hidden');
+        this.preview = false;
+        Game.state = this.from === 'gameover' ? 'GAMEOVER' : 'MENU';
+        UI.refresh();
+        document.getElementById(this.from === 'gameover' ? 'gameover-overlay' : 'menu-overlay').classList.remove('hidden');
+    },
+
+    shardHtml(s, open, fresh) {
+        const body = s.memory.map((l, i) => '<p style="animation-delay:' + (i * 0.3).toFixed(1) + 's">' + storyText(l) + '</p>').join('');
+        const margin = s.margin ? '<p class="shard-margin"><b>Poznámka na okraji:</b> ' + storyText(s.margin) + '</p>' : '';
+        return '<article class="shard' + (fresh ? ' fresh' : '') + '" data-shard="' + s.id + '">' +
+            '<button type="button" class="shard-head" aria-expanded="' + (open ? 'true' : 'false') + '" aria-controls="shard-' + s.id + '">' +
+            '<i class="glyph"></i><span class="shard-no">' + STORY_ROMAN[s.no - 1] + '</span><span class="shard-title">' + storyEsc(s.title) + '</span>' +
+            (fresh ? '<span class="new-dot" aria-label="nepřečteno"></span>' : '') + '</button>' +
+            '<div class="shard-body' + (open ? '' : ' hidden') + '" id="shard-' + s.id + '"><div class="shard-who">' + storyEsc(s.who) + '</div>' + body + margin + '</div></article>';
+    },
+
+    capsHtml(pv) {
+        return '<div class="story-caps-title">Zvyky kapitánů</div>' + STORY_CAPTAINS.map(s => {
+            const got = !pv && this.has(s.id);
+            const c = s.captain;
+            return '<div class="story-cap' + (got ? ' got' : '') + '"><div class="story-cap-name">' + storyEsc(c.name) +
+                (c.alias.toLowerCase() !== c.name.toLowerCase() ? ' <small>(pro Systém ' + storyEsc(c.alias) + ')</small>' : '') + '</div>' +
+                '<div class="story-cap-state">' + (got ? 'vyslechnuto' : 'mlčí') + '</div>' +
+                (got ? '' : '<div class="story-cap-hint">' + storyEsc(c.hint) + '</div>') + '</div>';
+        }).join('');
+    },
+
+    deepHtml(pv) {
+        return '<div class="story-caps-title">Zbylé střepy</div>' + STORY_DEEP.map(s => {
+            const got = !pv && this.has(s.id);
+            return '<div class="story-cap' + (got ? ' got' : '') + '"><div class="story-cap-name">' + (got ? storyEsc(s.title) : storyText('{#4}')) + '</div>' +
+                '<div class="story-cap-state">' + (got ? 'nalezeno' : 'čeká') + '</div>' +
+                (got ? '' : '<div class="story-cap-hint">' + storyEsc(s.hint) + '</div>') + '</div>';
+        }).join('');
+    },
+
+    renderArchive(focusId) {
+        const d = this.d(), pv = this.preview;
+        const shown = STORY_SHARDS.filter(s => pv || this.has(s.id));   // v náhledu všechny, jinak jen nalezené
+        const firstFresh = pv ? null : (shown.find(s => !d.seen[s.id]) || {}).id;
+        const open = focusId || firstFresh;
+        document.getElementById('story-list').innerHTML = shown.map(s => this.shardHtml(s, s.id === open, !pv && !d.seen[s.id])).join('');
+        if (open && !pv) this.markSeen(open);
+        const caps = document.getElementById('story-caps');
+        const showCaps = pv || this.has('wanderer');
+        caps.classList.toggle('hidden', !showCaps);
+        caps.innerHTML = showCaps ? this.capsHtml(pv) : '';
+        const deep = document.getElementById('story-deep');
+        const showDeep = pv || d.done;
+        deep.classList.toggle('hidden', !showDeep);
+        deep.innerHTML = showDeep ? this.deepHtml(pv) : '';
+        document.getElementById('story-preview').classList.toggle('hidden', !pv);
+        document.getElementById('btn-story-finale').classList.toggle('hidden', !(pv || this.canFinale()));
+        document.getElementById('story-sub').innerText = this.has('wanderer') || pv ? 'Co zbylo po Roztříštění' : 'Záznamy, které se podařilo zachránit';
+    },
+
+    markSeen(id) {
+        if (this.preview) return;
+        const d = this.d();
+        if (!this.has(id) || d.seen[id]) return;
+        d.seen[id] = true;
+        Storage.queueSave();
+    },
+
+    toggleShard(id) {
+        const art = document.querySelector('#story-list [data-shard="' + id + '"]');
+        if (!art) return;
+        const head = art.querySelector('.shard-head'), body = art.querySelector('.shard-body');
+        const open = body.classList.contains('hidden');
+        body.classList.toggle('hidden', !open);
+        head.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (open) {
+            this.markSeen(id);
+            art.classList.remove('fresh');
+            const dot = head.querySelector('.new-dot');
+            if (dot) dot.remove();
+            body.querySelectorAll('p').forEach(p => { p.style.animation = 'none'; void p.offsetWidth; p.style.animation = ''; });
+        }
+    },
+
+    // Hvězdný prach (to, co zbylo z Ochránce 2.9) se poprvé utratil ve stromu Vzestupu
+    onStardustSpent() { this.collect('dust'); },
+
+    // Slovo napsané do pole dole v menu (Kanál). Vrací true, když ho příběh přijal.
+    onCode(code) {
+        if (!this.available('channel') || !storyCodeMatches(code)) return false;
+        if (this.collect('channel')) this.openArchive('menu', false, 'channel');
+        return true;
+    },
+
+    //---------------------------------------------------------------- finále: Zazářit
+
+    // Hra se při finále chová jako vlastní stav (FINALE): žádné nepřátele, jen loď, střepy, světlo a flotila. Průběh:
+    //   intro (střepy se skládají) -> charge (hráč drží tlačítko a Zrcadlo se rozzáří) -> answer (odpověď Majáku)
+    //   -> home (třináct Vlaštovek přistane na Jomaridu) -> keeper (poslední záznam Majákáře) -> hotovo
+    startFinale() {
+        if (!this.preview && !this.canFinale()) return;
+        document.getElementById('story-overlay').classList.add('hidden');
+        document.getElementById('finale-layer').classList.remove('hidden');
+        Sounds.init();
+        const W = Game.width, H = Game.height;
+        let seed = 11;
+        const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+        this.fin = {
+            preview: this.preview, t: 0, pt: 0, phase: 'intro', charge: 0, holding: false, flash: 0, glow: 0, shown: -1, landed: 0,
+            keeper: STORY_BY_ID.home.memory, rings: [], motes: [],
+            // světla měst na planetě (pevné rozložení), objevují se s přistáním flotily
+            lights: Array.from({ length: 46 }, () => { const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * 0.92; return { a, r, s: 0.6 + rnd() * 1.1 }; }),
+            fleet: BOSS_TYPES.slice(0, 13).map((b, i) => ({ color: b.color, i, landed: false })),
+            planet: { x: W * 0.82, y: H * 0.78, r: Math.min(W, H) * 0.34 }
+        };
+        Game.state = 'FINALE';
+        document.getElementById('game-container').classList.remove('playing');
+        document.getElementById('finale-hold').classList.add('hidden');
+        document.getElementById('finale-done').classList.add('hidden');
+        document.getElementById('finale-skip').innerText = 'Přerušit';
+        this.say('');
+    },
+
+    // Před odpovědí finále jen přeruší (příběh zůstává nedokončený); po odpovědi ho přeskočí a dokončí
+    skipFinale() {
+        if (this.fin && this.fin.answered) this.finishFinale();
+        else this.abortFinale();
+    },
+
+    say(text, cls) {
+        const el = document.getElementById('finale-text');
+        el.classList.remove('show');
+        el.className = (cls ? cls + ' ' : '') + 'finale-text';
+        el.innerText = text;
+        void el.offsetWidth;
+        if (text) el.classList.add('show');
+    },
+
+    setPhase(f, phase) { f.phase = phase; f.pt = 0; f.shown = -1; },
+
+    finaleHold(on) {
+        const f = this.fin;
+        if (!f) return;
+        if (f.phase !== 'charge') { f.holding = false; return; }
+        f.holding = on;
+        if (on) f.charge = Math.min(1, f.charge + 0.05);   // i poklepání přidá, ať to jde i bez držení
+    },
+
+    finaleUpdate(dt) {
+        const f = this.fin;
+        if (!f) return;
+        f.t += dt;
+        f.pt += dt;
+        if (f.flash > 0) f.flash -= dt;
+        const t = f.pt;
+
+        if (f.phase === 'intro') {
+            if (t > 400 && f.shown < 0) { f.shown = 0; this.say('Zrcadlo je celé.'); }
+            if (t > 3200 && f.shown < 1) { f.shown = 1; this.say('Sedm střepů a ticho mezi nimi.'); }
+            if (t > STORY_FIN.intro) {
+                this.setPhase(f, 'charge');
+                this.say('Odpověz jim.', 'prompt');
+                document.getElementById('finale-hold').classList.remove('hidden');
+            }
+        } else if (f.phase === 'charge') {
+            f.charge = Math.max(0, Math.min(1, f.charge + (f.holding ? dt / 3200 : -dt / 5000)));
+            if (f.holding && Math.random() < 0.5) this.mote(f);
+            if (f.charge >= 1) {
+                f.holding = false;
+                document.getElementById('finale-hold').classList.add('hidden');
+                f.flash = 900;
+                Sounds.shard();
+                this.setPhase(f, 'answer');
+                f.answered = true;
+                document.getElementById('finale-skip').innerText = 'Přeskočit';
+                this.say('„Kdo tam?“', 'quiet');
+            }
+        } else if (f.phase === 'answer') {
+            if (t > STORY_FIN.answerText && f.shown < 1) { f.shown = 1; this.say('Naši. Pusťte je domů.', 'big'); Sounds.shard(); }
+            if (t > STORY_FIN.answerEnd) { this.setPhase(f, 'home'); this.say('Vlaštovky se vracejí.'); }
+        } else if (f.phase === 'home') {
+            f.glow = Math.min(1, (f.landed + (f.beacon ? 3 : 0)) / 16);
+            if (t > STORY_FIN.homeEnd) { this.setPhase(f, 'keeper'); }
+        } else if (f.phase === 'keeper') {
+            const k = Math.min(f.keeper.length - 1, Math.floor(t / STORY_FIN.line));
+            if (k !== f.shown) { f.shown = k; this.say(f.keeper[k], k === f.keeper.length - 1 ? 'big' : ''); }
+            if (t > (f.keeper.length - 1) * STORY_FIN.line + STORY_FIN.doneAfter) document.getElementById('finale-done').classList.remove('hidden');
+        }
+
+        if (f.phase === 'keeper') f.glow = 1;
+        for (let i = f.motes.length - 1; i >= 0; i--) {
+            const m = f.motes[i];
+            m.x += m.vx * dt / 16; m.y += m.vy * dt / 16; m.life -= dt / 1000;
+            if (m.life <= 0) f.motes.splice(i, 1);
+        }
+        for (let i = f.rings.length - 1; i >= 0; i--) {
+            f.rings[i].life -= dt / 1000;
+            if (f.rings[i].life <= 0) f.rings.splice(i, 1);
+        }
+        if (f.phase === 'home') this.updateFleet(f, t);
+    },
+
+    mote(f) {
+        const W = Game.width, H = Game.height;
+        const a = Math.random() * Math.PI * 2, r = 70 + Math.random() * 60;
+        f.motes.push({ x: W / 2 + Math.cos(a) * r, y: H * 0.68 + Math.sin(a) * r, vx: (W / 2 - (W / 2 + Math.cos(a) * r)) * 0.012, vy: (H * 0.68 - (H * 0.68 + Math.sin(a) * r)) * 0.012, life: 1.2 });
+    },
+
+    // Přistání: loď i vyjede z flotily (nahoře) a po oblouku doletí k planetě; každé přistání zazvoní
+    fleetPos(f, i) {
+        const W = Game.width, H = Game.height;
+        return { x: W * (0.12 + 0.76 * i / 12), y: H * (0.13 + 0.04 * Math.sin(i * 0.9)) };
+    },
+
+    landPoint(f, i) {
+        const p = f.planet;
+        const a = -2.35 + (i % 7) * 0.22 + (i > 6 ? 0.1 : 0);
+        return { x: p.x + Math.cos(a) * p.r * 0.55, y: p.y + Math.sin(a) * p.r * 0.55 };
+    },
+
+    shipAt(f, i, u) {
+        const a = this.fleetPos(f, i), b = this.landPoint(f, i);
+        const cx = Game.width * 0.5 + (i - 6) * 8, cy = Game.height * 0.42;
+        const k = u * u * (3 - 2 * u);
+        const x = (1 - k) * (1 - k) * a.x + 2 * (1 - k) * k * cx + k * k * b.x;
+        const y = (1 - k) * (1 - k) * a.y + 2 * (1 - k) * k * cy + k * k * b.y;
+        return { x, y };
+    },
+
+    updateFleet(f, t) {
+        const { dur, gap, start } = STORY_FIN;
+        for (const s of f.fleet) {
+            if (s.landed) continue;
+            const u = (t - start - s.i * gap) / dur;
+            if (u >= 1) {
+                s.landed = true;
+                f.landed++;
+                const p = this.landPoint(f, s.i);
+                f.rings.push({ x: p.x, y: p.y, life: 1.1, color: s.color });
+                Sounds.chime(s.i);
+            }
+        }
+        // čtrnáctý: Zrcadlo samo. Zbarví se do bílozlatého světla Majáku nad planetou
+        const bt = start + 13 * gap + 900;
+        if (!f.beacon && t > bt + dur) { f.beacon = true; f.rings.push({ x: f.planet.x, y: f.planet.y - f.planet.r * 1.1, life: 1.6, color: '#ffe9a8' }); Sounds.shard(); }
+        // a dva malé, kteří letěli s nimi: 2.9 a 3.0
+        if (!f.twins && t > bt + dur + 900) { f.twins = true; Sounds.chime(3); Sounds.chime(7); }
+    },
+
+    finaleDraw(ctx) {
+        const f = this.fin;
+        if (!f) return;
+        const W = Game.width, H = Game.height, t = f.t / 1000, p = f.planet;
+        const pt = f.pt;
+
+        // tma, ze které se světlo teprve vynoří
+        const veil = f.phase === 'intro' ? Math.max(0, Math.min(1, 1.4 - f.t / 4000)) : 0.6;
+        ctx.fillStyle = 'rgba(2,3,15,' + (0.5 * (1 - f.glow) * veil).toFixed(3) + ')';
+        ctx.fillRect(0, 0, W, H);
+
+        // světlo planety
+        if (f.glow > 0) {
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            const halo = ctx.createRadialGradient(p.x, p.y, p.r * 0.9, p.x, p.y, p.r * (1.5 + 0.25 * f.glow));
+            halo.addColorStop(0, 'rgba(255,214,140,' + (0.28 * f.glow).toFixed(3) + ')');
+            halo.addColorStop(1, 'rgba(255,214,140,0)');
+            ctx.fillStyle = halo;
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 1.8, 0, Math.PI * 2); ctx.fill();
+            const lit = Math.floor(f.lights.length * Math.min(1, f.glow * 1.15));
+            ctx.fillStyle = 'rgba(255,224,160,0.95)';
+            for (let i = 0; i < lit; i++) {
+                const L = f.lights[i];
+                ctx.globalAlpha = 0.55 + 0.45 * Math.sin(t * 2 + i);
+                ctx.fillRect(p.x + Math.cos(L.a + 2.4) * L.r * p.r * 0.9 - L.s / 2, p.y + Math.sin(L.a + 2.4) * L.r * p.r * 0.9 - L.s / 2, L.s, L.s);
+            }
+            ctx.restore();
+        }
+
+        const sx = W / 2, sy = H * 0.68 + Math.sin(t * 1.4) * 3;
+        const charge = f.phase === 'intro' ? 0 : (f.phase === 'charge' ? f.charge : 1);
+
+        // paprsek světla z lodi vzhůru
+        if (charge > 0.02) {
+            const calm = f.phase === 'home' || f.phase === 'keeper' ? 0.4 : 1;
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            // tři vrstvy různé šířky dají paprsku měkké okraje
+            for (const [wk, ak] of [[1.9, 0.2], [1.1, 0.35], [0.45, 0.6]]) {
+                const bw = (6 + 30 * charge) * wk;
+                const g = ctx.createLinearGradient(0, sy, 0, 0);
+                g.addColorStop(0, 'rgba(255,255,255,' + (ak * charge * calm).toFixed(3) + ')');
+                g.addColorStop(1, 'rgba(205,187,255,0)');
+                ctx.fillStyle = g;
+                ctx.fillRect(sx - bw / 2, 0, bw, sy);
+            }
+            ctx.restore();
+        }
+
+        // flotila nahoře: třináct světel v barvách bossů; přistávající se rozletí k planetě
+        for (const s of f.fleet) {
+            if (s.landed) continue;
+            const base = this.fleetPos(f, s.i);
+            let pos = base, a = 1;
+            if (f.phase === 'intro') a = 0;
+            else if (f.phase === 'charge') a = Math.max(0, Math.min(1, (f.charge * 14 - s.i) / 2));
+            else if (f.phase === 'home') {
+                const u = (pt - STORY_FIN.start - s.i * STORY_FIN.gap) / STORY_FIN.dur;
+                if (u > 0) pos = this.shipAt(f, s.i, Math.min(1, u));
+            }
+            if (a <= 0) continue;
+            const bob = Math.sin(t * 1.3 + s.i) * 2;
+            ctx.save();
+            ctx.globalAlpha = a;
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.drawImage(Art.glow(s.color).c, pos.x - 13, pos.y + bob - 13, 26, 26);
+            ctx.restore();
+        }
+
+        // Zrcadlo (třináctý a čtrnáctý): střepy kolem lodi, po odpovědi jeden světelný maják nad planetou
+        if (f.phase !== 'home' && f.phase !== 'keeper') {
+            const R = 66 - 22 * charge, speed = 0.5 + charge * 3.4;
+            const fadeIn = Math.min(1, f.t / 2500);
+            for (let i = 0; i < 7; i++) {
+                const ang = t * speed + i * Math.PI * 2 / 7;
+                const rr = R + 7 * Math.sin(t * 1.7 + i);
+                ctx.save();
+                ctx.translate(sx + Math.cos(ang) * rr, sy + Math.sin(ang) * rr * 0.82);
+                ctx.rotate(ang * 1.3 + i);
+                ctx.globalAlpha = fadeIn * (f.phase === 'answer' ? Math.max(0, 1 - pt / 2400) : 1);
+                const g = ctx.createLinearGradient(-6, -9, 6, 9);
+                g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#a995ff');
+                ctx.fillStyle = g;
+                ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(6, 2); ctx.lineTo(0, 10); ctx.lineTo(-5, 1); ctx.closePath(); ctx.fill();
+                ctx.restore();
+            }
+        } else if (f.beacon || f.phase === 'keeper') {
+            const bx = p.x, by = p.y - p.r * 1.1;
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            const ray = ctx.createLinearGradient(0, by, 0, 0);
+            ray.addColorStop(0, 'rgba(255,233,168,0.5)'); ray.addColorStop(1, 'rgba(255,233,168,0)');
+            ctx.fillStyle = ray; ctx.fillRect(bx - 5, 0, 10, by);
+            ctx.drawImage(Art.glow('#ffe9a8').c, bx - 26, by - 26, 52, 52);
+            ctx.restore();
+        }
+
+        // loď (Ochránce) uprostřed
+        ctx.save();
+        ctx.translate(sx, sy);
+        Art.blit(ctx, Art.ship(17, false));
+        ctx.restore();
+
+        // zrnka světla padající do lodi, když hráč drží
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        for (const m of f.motes) {
+            ctx.globalAlpha = Math.max(0, Math.min(1, m.life));
+            ctx.drawImage(Art.glow('#e6dcff').c, m.x - 5, m.y - 5, 10, 10);
+        }
+        // kruhy po přistání
+        for (const r of f.rings) {
+            ctx.globalAlpha = Math.max(0, r.life / 1.4);
+            ctx.strokeStyle = r.color;
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(r.x, r.y, (1.4 - r.life) * 46, 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.restore();
+
+        // Chyba (čtrnáctý) letí s nimi jako duha, než se z ní stane maják; 2.9 a 3.0 jsou dva malé světlé body vedle lodi
+        if (f.phase === 'home' && !f.beacon) {
+            const u = Math.max(0, Math.min(1, (pt - (STORY_FIN.start + 13 * STORY_FIN.gap + 900)) / STORY_FIN.dur));
+            if (u > 0) {
+                const a = { x: W / 2, y: H * 0.2 }, b = { x: p.x, y: p.y - p.r * 1.1 };
+                const k = u * u * (3 - 2 * u);
+                ctx.save();
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.drawImage(Art.glow('hsl(' + (Math.floor((f.t * 0.2) / 15) * 15 % 360) + ',100%,65%)').c, a.x + (b.x - a.x) * k - 15, a.y + (b.y - a.y) * k - 15, 30, 30);
+                ctx.restore();
+            }
+        }
+        if (f.twins || f.phase === 'keeper') {
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            const px = p.x - p.r * 0.1, py = p.y - p.r * 0.95;
+            ctx.drawImage(Art.glow('#ffffff').c, px - 9, py - 9, 18, 18);
+            ctx.drawImage(Art.glow('#cbbdff').c, px + 18 - 9, py + 6 - 9, 18, 18);
+            ctx.restore();
+        }
+
+        // záblesk při odpovědi
+        if (f.flash > 0) {
+            ctx.fillStyle = 'rgba(255,255,255,' + Math.min(0.85, f.flash / 700).toFixed(3) + ')';
+            ctx.fillRect(0, 0, W, H);
+        }
+    },
+
+    // Hotovo: střep Domov je v archivu, příběh je dokončený a server dostane statistiku story_end (odznak a titul)
+    finishFinale() {
+        const f = this.fin;
+        if (!f) return;
+        const d = this.d();
+        document.getElementById('finale-layer').classList.add('hidden');
+        document.getElementById('finale-hold').classList.add('hidden');
+        document.getElementById('finale-done').classList.add('hidden');
+        this.fin = null;
+        Game.state = 'MENU';
+        let focus;
+        if (!f.preview && this.available('home')) {
+            d.found.home = Date.now();
+            d.done = true;
+            Storage.save();            // reportRecords hlásí story_end hned
+            Sounds.shard();
+            Toast.push({ name: 'Střep VIII: Domov', eyebrow: 'Zrcadlo svítí', icon: '<i class="glyph"></i>', cls: 'story' });
+            focus = 'home';
+        }
+        Game.resize();                 // pozadí se postaví znovu: planeta Jomarid svítí
+        UI.refresh();
+        document.getElementById('menu-overlay').classList.remove('hidden');
+        if (!f.preview) this.openArchive('menu', false, focus);
+        else this.openArchive('menu', true);
+    },
+
+    abortFinale() {
+        const f = this.fin;
+        if (!f) return;
+        document.getElementById('finale-layer').classList.add('hidden');
+        document.getElementById('finale-hold').classList.add('hidden');
+        document.getElementById('finale-done').classList.add('hidden');
+        this.fin = null;
+        Game.state = 'MENU';
+        document.getElementById('menu-overlay').classList.remove('hidden');
+        this.openArchive('menu', f.preview);
+    }
+};
+// </STORY-ENGINE>
 
 //======================================================================
 //  START
@@ -5750,6 +7035,35 @@ document.getElementById('btn-close-stats').onclick = () => {
 };
 
 document.getElementById('btn-ascend').onclick = () => performAscend();
+
+// Střepy: archiv a finále (tlačítka se ukážou až po nalezení prvního střepu)
+document.getElementById('btn-open-story').onclick = () => Story.openArchive('menu', false);
+document.getElementById('btn-story-go').onclick = () => Story.openArchive('gameover', false);
+document.getElementById('btn-story-close').onclick = () => Story.closeArchive();
+document.getElementById('btn-story-finale').onclick = () => Story.startFinale();
+document.getElementById('story-list').addEventListener('click', e => {
+    const head = e.target.closest ? e.target.closest('.shard-head') : null;
+    if (head) Story.toggleShard(head.parentElement.dataset.shard);
+});
+const finaleHold = document.getElementById('finale-hold');
+finaleHold.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    try { finaleHold.setPointerCapture(e.pointerId); } catch (err) {}
+    Story.finaleHold(true);
+});
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => finaleHold.addEventListener(ev, () => Story.finaleHold(false)));
+finaleHold.addEventListener('contextmenu', e => e.preventDefault());
+window.addEventListener('keydown', e => {
+    if (Game.state === 'FINALE' && (e.code === 'Space' || e.code === 'Enter') && !e.repeat) { e.preventDefault(); Story.finaleHold(true); }
+});
+window.addEventListener('keyup', e => {
+    if (Game.state === 'FINALE' && (e.code === 'Space' || e.code === 'Enter')) Story.finaleHold(false);
+});
+document.getElementById('finale-done').onclick = () => Story.finishFinale();
+document.getElementById('finale-skip').onclick = () => Story.skipFinale();
+document.addEventListener('keydown', e => {
+    if (e.code === 'Escape' && !document.getElementById('story-overlay').classList.contains('hidden')) Story.closeArchive();
+});
 
 document.getElementById('btn-bomb').addEventListener('pointerdown', e => {
     e.preventDefault();
@@ -5825,6 +7139,13 @@ const applyCode = value => {
         secretTimer = showMsg(secretMsg, 'Kód přijat, hvězdný prach doplněn.', '#b98bff', secretTimer);
         return true;
     }
+    // Skrytý příběh: jméno předchozí verze, ale jen když o něm příběh už ví (jinak pole nedělá nic)
+    if (Story.onCode(code)) {
+        secretInput.value = '';
+        secretInput.blur();
+        secretTimer = showMsg(secretMsg, 'Kanál je otevřený.', '#d9ccff', secretTimer);
+        return true;
+    }
     return false;
 };
 
@@ -5842,7 +7163,14 @@ if (secretInput) {
             const which = keyBuf.endsWith(STARDUST_CODE) ? STARDUST_CODE : CHEAT_CODE;
             keyBuf = '';
             applyCode(which);
+        } else if (keyBuf.endsWith('V29') && Story.available('channel')) {
+            keyBuf = '';
+            applyCode('V29');
         }
+    });
+    // Kdo už ví, že někdo čeká na kanálu, dostane po klepnutí do pole tichou odpověď
+    secretInput.addEventListener('focus', () => {
+        if (Story.available('channel')) secretTimer = showMsg(secretMsg, '… čekám …', '#b8a8ff', secretTimer);
     });
     secretInput.addEventListener('blur', () => { secretInput.value = ''; keyBuf = ''; });
 }
@@ -5886,7 +7214,9 @@ const CHEATS = {
     lifetime: () => {
         for (const k in CHEAT_LIFETIME) Storage.data.stats[k] = Math.max(Storage.data.stats[k] || 0, CHEAT_LIFETIME[k]);
         return 'Statistiky za celou dobu hraní jsou na prazích odznaků.';
-    }
+    },
+    // Náhled příběhu: všechny střepy a finále na ukázku. Nic se nezapisuje a skrytý odznak ani titul se tím nezískají.
+    story: () => { closeCheatMenu(); Story.openArchive('menu', true); return ''; }
 };
 // Všechny statistiky na prahy odznaků (tlačítko Všechny odznaky): jen na zkoušení, ukládá se jako skutečný postup.
 const CHEAT_STATS = {score_normal:15000,score_hard:5000,score_inferno:4000,score_insane:4000,score_blitz:4000,rush_streak:14,boss_level:14,ascension:8,total_kills:30000,total_boss_kills:100,no_hit_bosses:10,best_combo:12,bombs_used:200,total_coins_earned:500000,longest_run:40,blitz_clears:10,maxed_upgrades:8,score_zen:25000,score_daily:5000,kills_basic:1000,kills_fast:500,kills_tank:200,kills_destroyer:75,pickups_heal:250,pickups_power:1000,pickups_coin:25,hits_taken:2000,shield_hits:100,runs_played:150,runs_normal:25,runs_hard:10,runs_inferno:10,runs_insane:5,runs_blitz:10,runs_rush:10,runs_zen:5,runs_daily:5,modes_played:8,playtime_min:3000,days_played:14,bosses_run:8,kills_run:400,coins_run:10000,inferno_boss_kills:10,insane_boss_kills:5,phoenix_saves:10,prestige_levels:30,relics_owned:6,upgrades_bought:400};

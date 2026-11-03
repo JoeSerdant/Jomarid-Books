@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Gamepad2, Check, Lock, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { GAME_CATALOG, GAME_BADGES, GAME_BADGES_TOTAL_XP } from '../gameRecords/catalog';
+import { GAME_CATALOG, countGameBadges, visibleGameBadges } from '../gameRecords/catalog';
 import { loadGameLeaderboard } from '../gameRecords/api';
 
 const fmt = (n) => Number(n || 0).toLocaleString('cs-CZ');
@@ -46,7 +46,7 @@ const GameCard = ({ game, progress, userId, open, onToggle }) => {
   const Icon = game.icon;
   const records = progress.records[game.id] || {};
   const unlocked = new Set(progress.unlocked);
-  const badges = GAME_BADGES.filter((b) => b.game === game.id);
+  const badges = visibleGameBadges(game.id, progress.unlocked);   // skrytý odznak je v seznamu až tehdy, když ho čtenář má
   const earned = badges.filter((b) => unlocked.has(b.id)).length;
   const [filter, setFilter] = useState('all');   // all | open | done: her je mnoho odznaků, ať jde zobrazit jen to, co ještě chybí
   const shown = badges.filter((b) => filter === 'all' || (filter === 'done') === unlocked.has(b.id));
@@ -117,7 +117,7 @@ const GameCard = ({ game, progress, userId, open, onToggle }) => {
                   >
                     <span style={{ color: on ? 'var(--bg-primary)' : 'var(--text-muted)' }} className="mt-0.5 shrink-0">{on ? <Check size={14} aria-label="Odemčeno" /> : <Lock size={13} aria-label="Zamčeno" />}</span>
                     <span className="min-w-0">
-                      <span className="block text-xs font-black">{b.title} <span style={{ color: 'var(--text-muted)' }} className="font-bold">+{b.xp} XP</span></span>
+                      <span className="block text-xs font-black">{b.title} <span style={{ color: 'var(--text-muted)' }} className="font-bold">+{b.xp} XP</span>{b.secret && <span style={{ color: 'var(--bg-primary)' }} className="ml-1.5 text-[0.5625rem] font-black uppercase tracking-wider">skrytý</span>}</span>
                       <span style={{ color: 'var(--text-muted)' }} className="block text-[0.6875rem] font-bold">{b.description}</span>
                     </span>
                   </li>
@@ -136,7 +136,7 @@ const GameCard = ({ game, progress, userId, open, onToggle }) => {
 // Sekce Odznaků her: rekordy, herní odznaky a žebříčky všech her. Postup (progress) předává stránka Odznaky; stejné XP se přičítá do úrovně.
 export const GamesProgress = ({ progress, userId }) => {
   const [openId, setOpenId] = useState(null);
-  const unlockedCount = useMemo(() => new Set(progress.unlocked).size, [progress.unlocked]);
+  const counts = useMemo(() => countGameBadges(progress.unlocked), [progress.unlocked]);
 
   return (
     <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 shadow-sm mb-8" data-testid="games-progress">
@@ -145,7 +145,7 @@ export const GamesProgress = ({ progress, userId }) => {
           <Gamepad2 size={16} style={{ color: 'var(--bg-primary)' }} /> Hry
         </h3>
         <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-1 m-0 opacity-70" data-testid="games-progress-summary">
-          Herní odznaky: {unlockedCount} z {GAME_BADGES.length}, dohromady {fmt(progress.xp)} z {fmt(GAME_BADGES_TOTAL_XP)} XP. Rekordy se ukládají k účtu a hlásí je hry samy.
+          Herní odznaky: {counts.unlocked} z {counts.total}, dohromady {fmt(progress.xp)} z {fmt(counts.totalXp)} XP. Rekordy se ukládají k účtu a hlásí je hry samy.
         </p>
       </div>
       <div className="flex flex-col gap-2">
