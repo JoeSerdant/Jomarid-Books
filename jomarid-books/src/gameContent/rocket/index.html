@@ -1101,6 +1101,7 @@ h2 {
             <button class="btn btn-small" data-cheat="score-blitz">⚡ Skóre Blesková 3 000</button>
             <button class="btn btn-small" data-cheat="rush">🏹 Série Boss Rush 10</button>
             <button class="btn btn-small" data-cheat="lifetime">📊 Statistiky na odznaky</button>
+            <button class="btn btn-small" data-cheat="badges">🎖️ Všechny odznaky</button>
         </div>
         <div id="cheat-msg"></div>
 
@@ -1295,6 +1296,11 @@ const Storage = {
     }
 };
 
+// Klíče relikvií (kvůli statistikám) a čítače, které se hlásí přímo ze Storage.data.stats (RUN_MODES je výš).
+const RELIC_KEYS = ['hunter_300', 'boss_10', 'combo_8', 'bomb_20', 'coins_5000', 'ascend_1'];
+const TRACKED_STATS = ['kills_basic', 'kills_fast', 'kills_tank', 'kills_destroyer', 'pickups_heal', 'pickups_power', 'pickups_coin', 'hits_taken', 'shield_hits', 'bosses_run',
+    'kills_run', 'coins_run', 'inferno_boss_kills', 'insane_boss_kills', 'phoenix_saves', 'upgrades_bought', ...RUN_MODES.map(m => 'runs_' + m)];
+
 // Rekordy se hlásí appce (jomaridRecord v mostu na začátku dokumentu; mimo appku funkce není a nic se neděje).
 // Posílá se jen zvýšení, takže volání při každém uložení nic nestojí. Server si nejvyšší hodnotu pamatuje u účtu a odemyká herní odznaky.
 function reportRecords() {
@@ -1318,6 +1324,17 @@ function reportRecords() {
     jomaridRecord('blitz_clears', d.stats.blitzClears);
     // Seznam vylepšení (UPGRADES) je definovaný až níže, tady se kategorie berou z výchozího postupu
     jomaridRecord('maxed_upgrades', Object.keys(Storage.defaults.upgrades).filter(k => d.upgrades[k] >= MAX_LVL).length);
+    // Další statistiky: čítače jsou v d.stats (Game.trackStat / trackMax), zbytek se odvozuje z postupu. Názvy jsou stejné jako v src/gameRecords/defs/rocket.js.
+    const st = d.stats;
+    jomaridRecord('score_zen', d.best.zen);
+    jomaridRecord('score_daily', d.daily && d.daily.score);
+    TRACKED_STATS.forEach(k => jomaridRecord(k, st[k]));
+    jomaridRecord('runs_played', st.runsPlayed);
+    jomaridRecord('playtime_min', (st.totalPlaytime || 0) / 60000);
+    jomaridRecord('days_played', Array.isArray(d.days) ? d.days.length : 0);
+    jomaridRecord('modes_played', RUN_MODES.filter(m => st['runs_' + m] > 0).length);
+    jomaridRecord('prestige_levels', Object.values(d.prestige || {}).reduce((sum, v) => sum + (typeof v === 'number' ? v : 0), 0));
+    jomaridRecord('relics_owned', RELIC_KEYS.filter(k => d.achievements && d.achievements[k]).length);
 }
 
 Storage.load();
@@ -3661,6 +3678,7 @@ class GameManager {
         this.boss = null;
         this.bossActive = false;
         this.bossCount = 0;
+        this.runBosses = 0;
         this.bossNoHit = true;
         this.shockwaves = [];
 
@@ -3889,6 +3907,11 @@ class GameManager {
 
         document.getElementById('tut-layer').classList.add('hidden');
         this.resetGameData();
+        {   // dny, kdy se hrálo (nejvýš 400 posledních)
+            const today = todayKey();
+            const days = Array.isArray(Storage.data.days) ? Storage.data.days : (Storage.data.days = []);
+            if (!days.includes(today)) { days.push(today); if (days.length > 400) days.shift(); }
+        }
         this.state = 'PLAY';
         this.player.shieldTimer = prestigeLevel('startShield') * 1500;
 
@@ -4060,6 +4083,9 @@ class GameManager {
         if (this.mode === 'blitz' && effectiveReason === 'timeup') {
             Storage.data.stats.blitzClears = (Storage.data.stats.blitzClears || 0) + 1;
         }
+        this.trackStat('runs_' + this.mode);
+        this.trackMax('kills_run', this.kills);
+        this.trackMax('coins_run', this.coinsEarned);
 
         const isRush = this.mode === 'rush';
         const isDaily = this.mode === 'daily';
@@ -4160,6 +4186,8 @@ class GameManager {
         const wouldDie = this.player.takeDamage(realAmount, iframes, shieldBlock);
 
         if (this.player.hp < before) {
+            this.trackStat('hits_taken');
+            if (this.player.shieldTimer > 0) this.trackStat('shield_hits');
             this.shake = Math.max(this.shake, 9);
             this.flash = 400;
             this.combo = 0;
@@ -4178,6 +4206,7 @@ class GameManager {
         // Fénixovo jádro: jednou za běh přežiješ smrtící zásah s 1 HP
         if (!this.tutActive && Relics.has('phoenix') && !this.phoenixUsed) {
             this.phoenixUsed = true;
+            this.trackStat('phoenix_saves');
             this.player.hp = 1;
             this.player.invulnTimer = Math.max(this.player.invulnTimer, 2200);
             this.shake = Math.max(this.shake, 20);
@@ -4208,6 +4237,12 @@ class GameManager {
                 Relics.check();
             }
         }
+    }
+
+    // Nejvyšší hodnota za jeden běh (stejně jako trackStat se ve výcviku nezapisuje)
+    trackMax(key, value) {
+        if (this.tutActive) return;
+        if (value > (Storage.data.stats[key] || 0)) Storage.data.stats[key] = value;
     }
 
     // Statistiky se během výcviku vůbec nezapisují, ať cvičné souboje nic neodemykají
@@ -4287,6 +4322,7 @@ class GameManager {
             this.score += gained;
             this.kills++;
             this.trackStat('totalKills');
+            if (e.type !== 'asteroid') this.trackStat('kills_' + e.type);
 
             if (this.comboMult > 1 && e.scoreVal > 0) {
                 this.texts.push(new FloatingText(e.x, e.y, '+' + gained, '#ffffff', 13));
@@ -4350,6 +4386,10 @@ class GameManager {
             this.score += gained;
             this.kills++;
             this.trackStat('totalBossKills');
+            this.runBosses = (this.runBosses || 0) + 1;
+            this.trackMax('bosses_run', this.runBosses);
+            if (this.inferno) this.trackStat('inferno_boss_kills');
+            if (this.insane) this.trackStat('insane_boss_kills');
             Storage.data.stats.bestBossLevel = Math.max(Storage.data.stats.bestBossLevel || 0, b.level);
             if (this.bossNoHit) this.trackStat('noHitBosses');
 
@@ -4633,6 +4673,7 @@ class GameManager {
 
             if (U.hit(p, this.player)) {
                 const pl = this.player;
+                this.trackStat(p.type === 'heal' ? 'pickups_heal' : (p.type === 'coin' ? 'pickups_coin' : 'pickups_power'));
 
                 if (p.type === 'triple') pl.tripleShotTimer = pl.tripleTime;
                 if (p.type === 'shield') pl.shieldTimer = pl.shieldTime;
@@ -5475,6 +5516,7 @@ const UI = {
 
         Storage.data.coins -= cost;
         Storage.data.upgrades[key] = lvl + 1;
+        Game.trackStat('upgrades_bought');
         Storage.save();
         Sounds.buy();
 
@@ -5821,12 +5863,33 @@ const CHEATS = {
         Storage.data.stats.bestRushStreak = Math.max(Storage.data.stats.bestRushStreak || 0, CHEAT_RUSH);
         return 'Série v Boss Rush je aspoň ' + CHEAT_RUSH + ' bossů.';
     },
+    // Všechny statistiky na prahy odznaků (včetně skóre v režimech, Vzestupů a relikvií); loď na maximum je zvlášť (tlačítko maxship)
+    badges: () => {
+        const d = Storage.data, st = d.stats, c = CHEAT_STATS;
+        for (const mode of ['normal', 'hard', 'inferno', 'insane', 'blitz', 'zen']) d.best[mode] = Math.max(d.best[mode] || 0, c['score_' + mode]);
+        d.best.rush = Math.max(d.best.rush || 0, c.rush_streak);
+        d.daily = { date: todayKey(), score: Math.max(d.daily && d.daily.date === todayKey() ? d.daily.score : 0, c.score_daily) };
+        d.ascension = Math.max(d.ascension || 0, c.ascension);
+        d.prestige.hull = Math.max(d.prestige.hull || 0, c.prestige_levels);
+        for (const k of RELIC_KEYS) d.achievements[k] = true;
+        const direct = { bestBossLevel: 'boss_level', totalKills: 'total_kills', totalBossKills: 'total_boss_kills', noHitBosses: 'no_hit_bosses', bestCombo: 'best_combo',
+            bombsUsed: 'bombs_used', totalCoinsEarned: 'total_coins_earned', blitzClears: 'blitz_clears', bestRushStreak: 'rush_streak', runsPlayed: 'runs_played' };
+        for (const k in direct) st[k] = Math.max(st[k] || 0, c[direct[k]]);
+        st.longestRun = Math.max(st.longestRun || 0, c.longest_run * 60000);
+        st.totalPlaytime = Math.max(st.totalPlaytime || 0, c.playtime_min * 60000);
+        for (const k of TRACKED_STATS) st[k] = Math.max(st[k] || 0, c[k] || 0);
+        d.days = Array.from({ length: Math.max(c.days_played, (d.days || []).length) }, (_, i) => (d.days && d.days[i]) || 'cheat-' + i);
+        for (const u of UPGRADES.slice(0, c.maxed_upgrades)) d.upgrades[u.key] = MAX_LVL;
+        return 'Všechny statistiky jsou na hodnotách pro odznaky.';
+    },
     // Statistiky za celou dobu hraní na prahy odznaků a relikvií (loď na maximum je zvlášť)
     lifetime: () => {
         for (const k in CHEAT_LIFETIME) Storage.data.stats[k] = Math.max(Storage.data.stats[k] || 0, CHEAT_LIFETIME[k]);
         return 'Statistiky za celou dobu hraní jsou na prazích odznaků.';
     }
 };
+// Všechny statistiky na prahy odznaků (tlačítko Všechny odznaky): jen na zkoušení, ukládá se jako skutečný postup.
+const CHEAT_STATS = {score_normal:15000,score_hard:5000,score_inferno:4000,score_insane:4000,score_blitz:4000,rush_streak:14,boss_level:14,ascension:8,total_kills:30000,total_boss_kills:100,no_hit_bosses:10,best_combo:12,bombs_used:200,total_coins_earned:500000,longest_run:40,blitz_clears:10,maxed_upgrades:8,score_zen:25000,score_daily:5000,kills_basic:1000,kills_fast:500,kills_tank:200,kills_destroyer:75,pickups_heal:250,pickups_power:1000,pickups_coin:25,hits_taken:2000,shield_hits:100,runs_played:150,runs_normal:25,runs_hard:10,runs_inferno:10,runs_insane:5,runs_blitz:10,runs_rush:10,runs_zen:5,runs_daily:5,modes_played:8,playtime_min:3000,days_played:14,bosses_run:8,kills_run:400,coins_run:10000,inferno_boss_kills:10,insane_boss_kills:5,phoenix_saves:10,prestige_levels:30,relics_owned:6,upgrades_bought:400};
 const CHEAT_LIFETIME = { totalKills: 1500, totalBossKills: 30, noHitBosses: 1, bestCombo: 8, bombsUsed: 20, totalCoinsEarned: 50000, longestRun: 1200000, blitzClears: 1 };
 const CHEAT_SCORE = 3000;
 const CHEAT_RUSH = 10;

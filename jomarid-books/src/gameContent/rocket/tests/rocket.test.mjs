@@ -248,22 +248,62 @@ test('relikvie: podmínky odpovídají odznakům v appce (každý odznak s relik
 });
 
 test('reportRecords hlásí všechny statistiky Rocketu z katalogu appky ve správných jednotkách', () => {
-  for (const s of rocketStats) assert.ok(html.includes(`jomaridRecord('${s.key}'`), s.key);
   const fn = html.match(/function reportRecords\(\) \{[\s\S]*?\n\}\n/)[0];
   const keys = [...html.match(/defaults: \{[\s\S]*?upgrades: \{([^}]*)\}/)[1].matchAll(/(\w+):/g)].map((m) => m[1]);
   assert.equal(keys.length, rocketStats.find((s) => s.key === 'maxed_upgrades').max, 'osm kategorií vylepšení');
+  const consts = ['RUN_MODES', 'RELIC_KEYS', 'TRACKED_STATS'].map((n) => html.match(new RegExp(`const ${n} = [\\s\\S]*?;\\n`))[0]).join('');
   const calls = {};
   const upgrades = Object.fromEntries(keys.map((k, i) => [k, i < 5 ? 20 : 19]));
+  const literal = [...html.match(/const TRACKED_STATS = \[([\s\S]*?)\];/)[1].matchAll(/'(\w+)'/g)].map((m) => m[1]).filter((k) => k !== 'runs_');
+  const stats = { ...Object.fromEntries(literal.map((k) => [k, 3])), ...Object.fromEntries(['normal', 'hard', 'inferno', 'insane', 'blitz', 'rush', 'zen', 'daily'].map((m) => ['runs_' + m, 1])), bestBossLevel: 9, totalKills: 301, totalBossKills: 11, noHitBosses: 1, bestCombo: 8, bombsUsed: 21, totalCoinsEarned: 5001, longestRun: 20 * 60000 + 59999, blitzClears: 3, runsPlayed: 7, totalPlaytime: 61 * 60000 + 5, runs_normal: 2, kills_basic: 4, pickups_power: 5 };
   const ctx = vm.createContext({ jomaridRecord: (k, v) => { calls[k] = v; }, MAX_LVL: 20, Storage: { defaults: { upgrades: Object.fromEntries(keys.map((k) => [k, 1])) }, data: {
-    best: { normal: 11, hard: 12, inferno: 13, insane: 14, blitz: 15, rush: 16 }, ascension: 2, upgrades,
-    stats: { bestBossLevel: 9, totalKills: 301, totalBossKills: 11, noHitBosses: 1, bestCombo: 8, bombsUsed: 21, totalCoinsEarned: 5001, longestRun: 20 * 60000 + 59999, blitzClears: 3 } } } });
-  vm.runInContext(`${fn}; reportRecords();`, ctx);
-  assert.deepEqual(JSON.parse(JSON.stringify(calls)), {
+    best: { normal: 11, hard: 12, inferno: 13, insane: 14, blitz: 15, rush: 16, zen: 17 }, daily: { date: '2026-01-01', score: 18 }, ascension: 2, upgrades, days: ['a', 'b', 'c'],
+    prestige: { hull: 3, aura: 2, zenUnlocked: true }, achievements: { hunter_300: true, boss_10: true, stary_klic: true }, stats } } });
+  vm.runInContext(`${consts}${fn}; reportRecords();`, ctx);
+  const got = JSON.parse(JSON.stringify(calls));
+  assert.deepEqual(Object.fromEntries(Object.entries(got).filter(([k]) => rocketStats.slice(0, 17).some((s) => s.key === k))), {
     score_normal: 11, score_hard: 12, score_inferno: 13, score_insane: 14, score_blitz: 15, rush_streak: 16, boss_level: 9, ascension: 2,
     total_kills: 301, total_boss_kills: 11, no_hit_bosses: 1, best_combo: 8, bombs_used: 21, total_coins_earned: 5001, longest_run: (20 * 60000 + 59999) / 60000, blitz_clears: 3, maxed_upgrades: 5,
   });
-  // reportRecords se volá i při načtení hry, kdy ještě není definované UPGRADES: seznam kategorií se proto bere z výchozího postupu
-  assert.doesNotMatch(fn.replace(/\/\/.*$/gm, ''), /UPGRADES/);
+  assert.deepEqual([got.score_zen, got.score_daily, got.runs_played, got.playtime_min, got.days_played, got.modes_played, got.prestige_levels, got.relics_owned, got.kills_basic, got.pickups_power, got.runs_normal],
+    [17, 18, 7, (61 * 60000 + 5) / 60000, 3, 8, 5, 2, 4, 5, 2], 'jednotky a odvozené statistiky (relikvie jen ze šesti známých klíčů, v prestiži jen čísla)');
+  assert.deepEqual(Object.keys(got).sort(), rocketStats.map((s) => s.key).sort(), 'hra hlásí přesně statistiky z katalogu');
+  // reportRecords se volá i při načtení hry, kdy ještě není definované UPGRADES ani RELICS: kategorie se berou z výchozího postupu a relikvie z pevného seznamu klíčů
+  assert.doesNotMatch(fn.replace(/\/\/.*$/gm, ''), /UPGRADES|RELICS/);
+});
+
+test('čítače: každý z nich má ve hře své místo, běh a výcvik se nepočítají dvakrát', () => {
+  const tracked = [...html.match(/const TRACKED_STATS = \[([\s\S]*?)\];/)[1].matchAll(/'(\w+)'/g)].map((m) => m[1]).filter((k) => k !== 'runs_');
+  const patterns = {
+    kills_basic: /trackStat\('kills_' \+ e\.type\)/, kills_fast: /trackStat\('kills_' \+ e\.type\)/, kills_tank: /trackStat\('kills_' \+ e\.type\)/, kills_destroyer: /trackStat\('kills_' \+ e\.type\)/,
+    pickups_heal: /trackStat\(p\.type === 'heal' \? 'pickups_heal'/, pickups_power: /'pickups_power'/, pickups_coin: /'pickups_coin'/,
+    hits_taken: /trackStat\('hits_taken'\)/, shield_hits: /trackStat\('shield_hits'\)/, bosses_run: /trackMax\('bosses_run'/, kills_run: /trackMax\('kills_run'/, coins_run: /trackMax\('coins_run'/,
+    inferno_boss_kills: /trackStat\('inferno_boss_kills'\)/, insane_boss_kills: /trackStat\('insane_boss_kills'\)/, phoenix_saves: /trackStat\('phoenix_saves'\)/, upgrades_bought: /Game\.trackStat\('upgrades_bought'\)/,
+  };
+  for (const key of tracked) assert.match(html, patterns[key] || /trackStat\('runs_' \+ this\.mode\)/, key);
+  assert.equal(tracked.length, 16, 'šestnáct čítačů (k nim osm čítačů běhů podle režimů)');
+  assert.match(html, /\.\.\.RUN_MODES\.map\(m => 'runs_' \+ m\)/);
+  assert.match(html, /trackMax\(key, value\) \{\s*if \(this\.tutActive\) return;/, 've výcviku se nic nezapisuje');
+  assert.match(html, /this\.bossCount = 0;\s*this\.runBosses = 0;/, 'počítadlo bossů běhu se nuluje');
+  assert.match(html, /if \(!days\.includes\(today\)\) \{ days\.push\(today\); if \(days\.length > 400\) days\.shift\(\); \}/);
+});
+
+test('cheat Všechny odznaky zvedne všechny statistiky z katalogu na prahy odznaků a nic nesníží', () => {
+  const lit = html.match(/const CHEAT_STATS = (\{[^}]*\});/)[1];
+  const cheat = html.match(/    badges: \(\) => \{[\s\S]*?\n    \},\n    \/\/ Statistiky za celou dobu/)[0].replace(/^    badges: /, 'const badges = ').replace(/,\n    \/\/ Statistiky za celou dobu$/, ';');
+  const keys = [...html.match(/defaults: \{[\s\S]*?upgrades: \{([^}]*)\}/)[1].matchAll(/(\w+):/g)].map((m) => m[1]);
+  const consts = ['RUN_MODES', 'RELIC_KEYS', 'TRACKED_STATS'].map((n) => html.match(new RegExp(`const ${n} = [\\s\\S]*?;\\n`))[0]).join('');
+  const data = { best: {}, daily: { date: '', score: 0 }, ascension: 0, upgrades: Object.fromEntries(keys.map((k) => [k, 1])), prestige: { hull: 0 }, achievements: {}, stats: { totalKills: 999999 }, days: [] };
+  const calls = {};
+  const fn = html.match(/function reportRecords\(\) \{[\s\S]*?\n\}\n/)[0];
+  const ctx = vm.createContext({ Storage: { defaults: { upgrades: data.upgrades }, data }, MAX_LVL: 20, UPGRADES: keys.map((k) => ({ key: k })), todayKey: () => '2026-11-03', jomaridRecord: (k, v) => { calls[k] = Math.max(calls[k] || 0, Math.floor(v) || 0); } });
+  vm.runInContext(`${consts}const CHEAT_STATS = ${lit};\n${cheat}\n${fn}\nbadges(); reportRecords();`, ctx);
+  for (const s of rocketStats) {
+    const need = Math.max(...rocketBadges.filter((b) => b.stat === s.key).map((b) => b.threshold));
+    assert.ok(calls[s.key] >= need, `${s.key}: cheat dá ${calls[s.key]}, odznak chce ${need}`);
+  }
+  assert.equal(data.stats.totalKills, 999999, 'vyšší skutečná hodnota zůstane');
+  assert.equal(Object.keys(data.achievements).length, 6, 'relikvie');
 });
 
 test('každý nový odznak Rocketu míří na statistiku, kterou hra opravdu počítá', () => {
