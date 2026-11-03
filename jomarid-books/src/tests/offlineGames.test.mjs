@@ -258,6 +258,13 @@ const syncEnv = (over = {}) => {
 };
 const setKey = (sync, value, key = 'space_shooter_v2_9') => sync.apply({ op: 'set', key, value });
 
+// Zápis kopie do zařízení (šifrování) doběhne chvíli po změně: počká na ni, než se s ní porovnává.
+const savedCopy = async (gameSaves, ok) => {
+  let rec = await gameSaves.get(U, 'rocket');
+  for (let i = 0; i < 200 && !(rec && ok(rec)); i += 1) { await new Promise((r) => setTimeout(r, 5)); rec = await gameSaves.get(U, 'rocket'); }
+  return rec;
+};
+
 test('hra online zrcadlí postup do zařízení: po načtení, při změně (dirty) a po uložení na server (čisto)', async () => {
   const e = syncEnv();
   e.server.saves.rocket = { rev: 2, data: rocket({ totalPlaytime: 40 }), backup: null };
@@ -266,7 +273,7 @@ test('hra online zrcadlí postup do zařízení: po načtení, při změně (dir
   const next = rocket({ totalPlaytime: 41 }).space_shooter_v2_9;
   setKey(e.sync, next);
   await e.clock.advance(700);
-  const mid = await e.gameSaves.get(U, 'rocket');
+  const mid = await savedCopy(e.gameSaves, (r) => r.dirty && r.map.space_shooter_v2_9 === next);
   assert.deepEqual([mid.map.space_shooter_v2_9, mid.dirty], [next, true], 'změna je v zařízení hned (zatím neuložená na server)');
   await e.clock.advance(3000);
   for (let i = 0; i < 50 && (await e.gameSaves.get(U, 'rocket')).dirty; i += 1) await tick();   // zápis do kopie (šifrování) doběhne chvíli po uložení na server
@@ -314,7 +321,8 @@ test('offline bez kopie si hráč může zvolit hru od začátku: po připojení
   const fresh = rocket({ totalPlaytime: 30 }).space_shooter_v2_9;
   setKey(a.sync, fresh);
   await a.clock.advance(1000);
-  assert.deepEqual([(await a.gameSaves.get(U, 'rocket')).dirty, (await a.gameSaves.get(U, 'rocket')).rev], [true, 0], 'změna je v zařízení');
+  const copyA = await savedCopy(a.gameSaves, (r) => r.dirty);
+  assert.deepEqual([copyA.dirty, copyA.rev], [true, 0], 'změna je v zařízení');
   a.server.state.down = false; a.net.offline = false;
   await a.sync.retryNow();
   assert.equal(a.server.saves.rocket.data.space_shooter_v2_9, fresh);
@@ -352,15 +360,16 @@ test('hraní bez spojení: nic se neposílá, změny jsou v zařízení, po při
   await e.clock.advance(20000);
   assert.equal(e.server.log.length, 0, 'bez spojení se server nevolá');
   assert.equal(e.sync.state().status, 'offline');
-  assert.equal((await e.gameSaves.get(U, 'rocket')).dirty, true);
-  assert.equal((await e.gameSaves.get(U, 'rocket')).map.space_shooter_v2_9, v1);
+  const offlineCopy = await savedCopy(e.gameSaves, (r) => r.dirty && r.map.space_shooter_v2_9 === v1);
+  assert.equal(offlineCopy.dirty, true);
+  assert.equal(offlineCopy.map.space_shooter_v2_9, v1);
   const v2 = rocket({ totalPlaytime: 95 }).space_shooter_v2_9;
   setKey(e.sync, v2);
   e.net.offline = false; e.server.state.down = false;
   await e.sync.retryNow();
   assert.equal(e.server.saves.rocket.data.space_shooter_v2_9, v2, 'po připojení je na serveru poslední stav');
   assert.deepEqual([e.sync.state().status, e.sync.state().dirty, e.statuses.map((s) => s.state + (s.recovered ? '+' : ''))], ['ok', false, ['offline', 'ok+']]);
-  assert.equal((await e.gameSaves.get(U, 'rocket')).dirty, false);
+  assert.equal((await savedCopy(e.gameSaves, (r) => !r.dirty)).dirty, false);
 });
 
 test('po offline hraní se mezitím hrálo jinde: pokročilejší vyhrává (a druhý je záloha), hra to nepřehlédne', async () => {
