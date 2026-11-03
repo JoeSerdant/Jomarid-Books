@@ -4,8 +4,10 @@
 //  - nastavení: ve výchozím stavu vypnuto, ukládá se, nastavuje atribut na <html>, synchronizuje se s účtem, poškozené úložiště nic nerozbije,
 //  - že čtečka, hry a krátké knihy zůstávají klidné a ozdoby po stranách nezasahují do širokých stránek (správa, nakladatel),
 //  - jiskřičky po kliknutí: jen u zapnutého režimu, bez omezení pohybu, jen na ovladatelných prvcích, se stropem počtu a úklidem,
-//  - ozdoby: ikony, animace a stránky v CSS existují (překlep by znamenal neviditelnou nebo nepohyblivou ozdobu),
-//  - že pravidla v lively.css nedělají z prvků, které obsahují position: fixed, blok s vlastním souřadným systémem.
+//  - postavičky a tvorové: každá scéna existuje, každá třída v kresbě má pravidlo v CSS a každá animace klíčové snímky (překlep by znamenal
+//    nepohyblivou nebo neviditelnou postavičku), výchozí stav bez animací je hezký obrázek (Omezit pohyb),
+//  - že pravidla v lively.css nedělají z prvků, které obsahují position: fixed, blok s vlastním souřadným systémem,
+//  - že čtečka a hry jsou klidné (vstupní animace se u nich vypínají) a že se nic neskrývá v tisku ani bez podpory scroll animací.
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -14,13 +16,14 @@ import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import * as T from '../theme.js';
 import * as S from '../settings/settingsSync.js';
-import { livelyScope, scrollProgress } from '../lively/scope.js';
-import { SIDE_ITEMS, ICON_NAMES, ANIMATIONS, particles, PARTICLE_COUNT } from '../lively/items.js';
-import { sparkleSpecs, sparkleTarget, burstAt, installClickSparkles, SPARKLE_COUNT, MAX_LIVE_SPARKLES } from '../lively/sparkles.js';
+import { livelyScope, pointerOffset, scrollProgress } from '../lively/scope.js';
+import { SIDE_ITEMS, ROAMERS, SCENE_NAMES, FLOATS, particles, PARTICLE_COUNT, PARTICLE_SHAPES } from '../lively/items.js';
+import { sparkleSpecs, sparkleTarget, burstAt, installClickSparkles, SPARKLE_COUNT, BURST_SIZE, MAX_LIVE_SPARKLES } from '../lively/sparkles.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (...p) => fs.readFileSync(path.join(ROOT, ...p), 'utf8');
 const css = read('src', 'lively.css');
+const scenes = read('src', 'lively', 'Scenes.jsx');
 
 const makeStorage = (init = {}, broken = false) => {
   const m = new Map(Object.entries(init));
@@ -131,53 +134,121 @@ describe('pruh průběhu stránky', () => {
   });
 });
 
-describe('ozdoby', () => {
-  test('každá ikona z dat je naimportovaná a zapsaná v mapě ikon komponenty', () => {
-    const src = read('src', 'lively', 'LivelyScenery.jsx');
-    const imported = src.match(/import \{([^}]*)\} from 'lucide-react'/)[1].split(',').map((s) => s.trim());
-    const mapped = src.match(/const ICONS = \{([^}]*)\}/)[1].split(',').map((s) => s.trim());
-    for (const name of ICON_NAMES) { assert.ok(imported.includes(name), `import ${name}`); assert.ok(mapped.includes(name), `mapa ${name}`); }
-    for (const name of mapped) assert.ok(ICON_NAMES.includes(name), `nepoužitá ikona ${name}`);
+describe('pointerOffset (světlo a posun ozdob podle myši)', () => {
+  test('střed okna je 0, okraje -1 a 1, mimo okno se ořízne, nesmysl dá 0', () => {
+    assert.deepEqual(pointerOffset(500, 300, 1000, 600), { px: 0, py: 0 });
+    assert.deepEqual(pointerOffset(0, 0, 1000, 600), { px: -1, py: -1 });
+    assert.deepEqual(pointerOffset(1000, 600, 1000, 600), { px: 1, py: 1 });
+    assert.deepEqual(pointerOffset(1500, -200, 1000, 600), { px: 1, py: -1 });
+    assert.deepEqual(pointerOffset(250, 450, 1000, 600), { px: -0.5, py: 0.5 });
+    for (const bad of [NaN, undefined, 'x', null]) assert.deepEqual(pointerOffset(bad, bad, 1000, 600), { px: 0, py: 0 }, String(bad));
+    assert.deepEqual(pointerOffset(10, 10, 0, 0), { px: 0, py: 0 }, 'okno bez rozměrů');
   });
-  test('každá ikona z dat opravdu existuje v lucide-react', () => {
-    for (const name of ICON_NAMES) {
-      const file = name.replace(/([a-z])([A-Z0-9])/g, '$1-$2').toLowerCase();
-      assert.ok(fs.existsSync(path.join(ROOT, 'node_modules', 'lucide-react', 'dist', 'esm', 'icons', `${file}.js`)), name);
-    }
+});
+
+// Názvy tříd v kresbách postaviček: barvy a obrysy mají obecná pravidla, ostatní (owl-lid, coffee-steam...) musí mít vlastní pravidlo v CSS.
+const PALETTE = new Set(['a', 'a2', 'gold', 'gold2', 'sky', 'pink', 'orange', 'yellow', 'brown', 'ink', 'white', 'st-a', 'st-w', 'st-ink', 'st-gold', 'st-gold2', 'st-brown']);
+const sceneClasses = () => [...new Set([...scenes.matchAll(/className="([^"{]+)"/g)].flatMap((m) => m[1].trim().split(/\s+/)))];
+
+describe('postavičky a scény', () => {
+  const defined = [...scenes.matchAll(/^const (\w+) = \(p\) => \(/gm)].map((m) => m[1]);
+  const exported = scenes.match(/export const SCENES = \{([^}]*)\}/)[1].split(',').map((n) => n.trim()).filter(Boolean);
+
+  test('každá scéna z dat je nakreslená a zapsaná v mapě SCENES; v mapě není nic navíc', () => {
+    for (const name of SCENE_NAMES) { assert.ok(defined.includes(name), `nakreslená ${name}`); assert.ok(exported.includes(name), `v mapě ${name}`); }
+    assert.deepEqual([...exported].sort(), [...defined].sort(), 'mapa odpovídá kresbám');
+    for (const name of exported) assert.ok(SCENE_NAMES.includes(name), `nepoužitá scéna ${name}`);
   });
-  test('každá animace má pravidlo i klíčové snímky v lively.css', () => {
-    for (const a of ANIMATIONS) {
-      assert.ok(css.includes(`.lv-${a} {`), `třída lv-${a}`);
-      assert.ok(css.includes(`@keyframes lv${a[0].toUpperCase()}${a.slice(1)} `), `klíčové snímky ${a}`);
-    }
-    for (const it of Object.values(SIDE_ITEMS).flat()) assert.ok(ANIMATIONS.includes(it.anim), `${it.icon}: ${it.anim}`);
+  test('v obou pruzích je po šesti postavičkách, každá jiná; vlevo čtenářský koutek, vpravo hry', () => {
+    assert.equal(SIDE_ITEMS.left.length, 6);
+    assert.equal(SIDE_ITEMS.right.length, 6);
+    assert.deepEqual(SIDE_ITEMS.left.map((i) => i.scene), ['Owl', 'Book', 'Coffee', 'Lamp', 'Moon', 'Quill']);
+    assert.deepEqual(SIDE_ITEMS.right.map((i) => i.scene), ['Rocket', 'Coin', 'Trophy', 'Flame', 'Gamepad', 'Crown']);
   });
-  test('ozdoby po stranách: oba pruhy, rozumné rozměry, uvnitř pruhu, nic se nepřekrývá', () => {
-    assert.ok(SIDE_ITEMS.left.length >= 6 && SIDE_ITEMS.right.length >= 6);
+  test('rozmístění: uvnitř pruhu, pod horní lištou, od sebe, rozumná velikost a rychlosti', () => {
     for (const [side, items] of Object.entries(SIDE_ITEMS)) {
       for (const it of items) {
-        assert.ok(it.x >= 15 && it.x <= 85 && it.y >= 12 && it.y <= 92, `${side} ${it.icon} je uvnitř pruhu`);
-        assert.ok(it.size >= 24 && it.size <= 48, `${side} ${it.icon} velikost`);
-        assert.ok(it.par >= 0.001 && it.par <= 0.004, `${side} ${it.icon} rychlost houpání při posouvání`);
-        assert.ok(it.dur >= 3 && it.dur <= 14 && it.del <= 0, `${side} ${it.icon} doba a záporné zpoždění`);
+        assert.ok(it.x >= 30 && it.x <= 70 && it.y >= 12 && it.y <= 92, `${side} ${it.scene} je uvnitř pruhu`);
+        assert.ok(it.size >= 56 && it.size <= 80, `${side} ${it.scene} velikost (u 1280 px je pruh jen 64 px, zmenšuje se ×0,8)`);
+        assert.ok(it.par >= 0.001 && it.par <= 0.004, `${side} ${it.scene} rychlost houpání při posouvání`);
+        assert.ok(it.dp >= 0.4 && it.dp <= 1.3, `${side} ${it.scene} hloubka`);
+        assert.ok(it.dur > 0 && it.del <= 0, `${side} ${it.scene} doba a záporné zpoždění`);
+        assert.ok(FLOATS.includes(it.float), `${side} ${it.scene} houpání ${it.float}`);
       }
       const ys = items.map((it) => it.y).sort((a, b) => a - b);
-      for (let i = 1; i < ys.length; i++) assert.ok(ys[i] - ys[i - 1] >= 8, `${side}: ozdoby jsou od sebe`);
+      for (let i = 1; i < ys.length; i++) assert.ok(ys[i] - ys[i - 1] >= 12, `${side}: postavičky se nepřekrývají ani na nízké obrazovce`);
     }
   });
-  test('tečky: pevné rozmístění (žádná náhoda), uvnitř okna, každá se pohybuje jinak', () => {
+  test('každá třída v kresbách je buď z palety, nebo má pravidlo v CSS (překlep = postavička stojí)', () => {
+    const missing = sceneClasses().filter((c) => !PALETTE.has(c) && !css.includes(`.${c}`) && !c.startsWith('lv-'));
+    assert.deepEqual(missing, []);
+  });
+  test('každá barva z palety má pravidlo', () => {
+    for (const c of PALETTE) assert.ok(css.includes(`.lv-scene .${c}`) || css.includes(`.${c},`) || css.includes(`.${c} `) || css.includes(`.${c})`), c);
+  });
+  test('jiskry mají vlastní <g transform>: CSS animace transform by jinak přepsala atribut a jiskra by skočila do rohu', () => {
+    const withAttr = [...scenes.matchAll(/<(path|circle|ellipse|rect)[^>]*\btransform="[^"]*"[^>]*>/g)].map((m) => m[0]);
+    for (const el of withAttr) assert.ok(!/(spark|owl-|book-|coffee-|lamp-|moon-|quill-|rocket-|coin-|trophy-|flame-|pad-|crown-|bf-|worm-)/.test(el), `animovaný prvek s transform atributem: ${el.slice(0, 80)}`);
+  });
+  test('každá postava a pohyb: animované třídy mají v CSS animation (nic se nemá jen tvářit)', () => {
+    for (const cls of ['owl-body', 'owl-lid', 'owl-pupil', 'book-flip', 'coffee-steam', 'lamp-head', 'lamp-cone', 'moon-z', 'quill-pen', 'quill-line', 'rocket-wrap', 'rocket-flame', 'rocket-puff', 'coin-spin', 'coin-hop', 'trophy-shine', 'fl1', 'fl2', 'fl3', 'flame-ember', 'pad-wrap', 'pad-btn', 'crown-wrap', 'crown-gem', 'bf-wing', 'worm-seg', 'spark']) {
+      const rule = css.split('\n').find((l) => l.startsWith(`.lv-scene .${cls} {`));
+      assert.ok(rule && /animation/.test(rule), `${cls} má animaci`);
+    }
+  });
+  test('pupily sova sleduje myš přes --px a --py (nastavuje LivelyScenery)', () => {
+    assert.match(css, /\.owl-pupil \{[^}]*translate: calc\(var\(--px, 0\)/);
+    assert.match(read('src', 'lively', 'LivelyScenery.jsx'), /setProperty\('--px'/);
+  });
+});
+
+describe('tvorové, kteří přelétají obrazovku', () => {
+  test('motýli, letadlo a housenka jsou nakreslení a mají pohyb v CSS; na telefonu jsou aspoň tři', () => {
+    assert.deepEqual([...new Set(ROAMERS.map((r) => r.scene))].sort(), ['Butterfly', 'Plane', 'Worm']);
+    for (const r of ROAMERS) {
+      assert.ok(scenes.includes(`const ${r.scene} =`), r.scene);
+      assert.ok(css.includes(`.lv-roam-${r.kind}`), `pohyb ${r.kind}`);
+      assert.ok(r.dur >= 20 && r.del <= 0 && r.w >= 24 && r.w <= 80, `${r.scene} doba, zpoždění a velikost`);
+      if (r.kind !== 'worm') assert.ok(r.top >= 5 && r.top <= 70, `${r.scene} výška`);
+    }
+    assert.ok(ROAMERS.filter((r) => !r.desktop).length >= 3, 'telefon (bez pruhů po stranách) má taky život');
+  });
+  test('housenka leze po spodním okraji, ostatní nahoře; letadlo má vlastní dráhu, motýli se mihotají', () => {
+    assert.match(css, /\.lv-roam-worm \{ top: auto; bottom: 1px; \}/);
+    assert.match(css, /\.lv-roam-plane \{ animation-name: lvPlane; \}/);
+    assert.match(css, /\.lv-roam-wander \.lv-wander \{ animation: lvWander/);
+  });
+  test('Omezit pohyb: tvorové, tečky a světlo za myší se skryjí úplně (zastavený motýl uprostřed obrazovky by jen překážel)', () => {
+    assert.match(css, /html\[data-reduce-motion="1"\] :is\(\.lv-dot, \.lv-shoot, \.lv-roamers, \.lv-spot\) \{ display: none; \}/);
+  });
+});
+
+describe('tečky', () => {
+  test('pevné rozmístění (žádná náhoda), uvnitř okna, různé tvary a rychlosti', () => {
     const a = particles(); const b = particles();
     assert.deepEqual(a, b);
     assert.equal(a.length, PARTICLE_COUNT);
-    for (const p of a) { assert.ok(p.x >= 1 && p.x <= 98 && p.size >= 3 && p.size <= 6 && p.dur >= 16 && p.dur <= 28 && p.del <= 0); }
+    for (const p of a) { assert.ok(p.x >= 1 && p.x <= 98 && p.size >= 4 && p.size <= 8 && p.dur >= 16 && p.dur <= 28 && p.del <= 0); assert.ok(PARTICLE_SHAPES.includes(p.shape)); }
     assert.ok(new Set(a.map((p) => p.x)).size >= PARTICLE_COUNT - 1, 'různé vodorovné polohy');
     assert.ok(new Set(a.map((p) => p.dur)).size > 4, 'různé rychlosti');
+    assert.deepEqual([...new Set(a.map((p) => p.shape))].sort(), [...PARTICLE_SHAPES].sort(), 'všechny tři tvary se použijí');
+    for (const shape of PARTICLE_SHAPES) assert.ok(css.includes(`.lv-dot-${shape}`), shape);
   });
 });
 
 describe('lively.css', () => {
+  const keyframes = new Set([...css.matchAll(/@keyframes (lv\w+)/g)].map((m) => m[1]));
+  const used = new Set([...css.matchAll(/animation(?:-name)?:([^;}]*)[;}]/g)].flatMap((m) => [...m[1].matchAll(/\b(lv[A-Z]\w*)/g)].map((x) => x[1])));
+  test('každá použitá animace má klíčové snímky a každé klíčové snímky se používají', () => {
+    assert.ok(keyframes.size > 45, `klíčových snímků je dost (${keyframes.size})`);
+    for (const name of used) assert.ok(keyframes.has(name), `chybí @keyframes ${name}`);
+    for (const name of keyframes) assert.ok(used.has(name), `nepoužité @keyframes ${name}`);
+  });
+  test('houpání celé postavičky: každá volba z dat má třídu v CSS', () => {
+    for (const f of FLOATS.filter((x) => x !== 'none')) assert.ok(css.includes(`.lv-float-${f} {`), f);
+  });
   test('ozdoby jsou jen dekorace: nikdy nezachytí klik a mají vlastní vrstvy', () => {
-    for (const sel of ['.lv-bg', '.lv-sides', '.lv-progress']) {
+    for (const sel of ['.lv-bg', '.lv-sides', '.lv-roamers', '.lv-progress']) {
       const m = css.match(new RegExp(`${sel.replace('.', '\\.')} \\{([^}]*)\\}`));
       assert.ok(m, sel);
       assert.match(m[1], /pointer-events: none/, sel);
@@ -185,26 +256,65 @@ describe('lively.css', () => {
     }
     assert.match(css, /\.lv-bg \{[^}]*z-index: -1/, 'pozadí je pod obsahem');
   });
-  test('Omezit pohyb: tečky a padající hvězda zmizí, vynucené barvy a tisk ozdoby skryjí', () => {
-    assert.match(css, /html\[data-reduce-motion="1"\] \.lv-dot/);
-    assert.match(css, /@media \(forced-colors: active\), print \{[^}]*display: none/);
+  test('Omezit pohyb: výchozí stav bez animací je hezký obrázek (oči sovy otevřené, pára vidět, lesk a obláčky skryté)', () => {
+    const rule = (sel) => css.split('\n').find((l) => l.startsWith(sel));
+    assert.match(rule('.lv-scene .owl-lid {'), /transform: scaleY\(0\)/, 'oči otevřené');
+    assert.match(rule('.lv-scene .coffee-steam {'), /opacity: 0\.75/, 'pára vidět');
+    assert.match(rule('.lv-scene .trophy-shine {'), /opacity: 0/, 'lesk skrytý');
+    assert.match(rule('.lv-scene .rocket-puff {'), /opacity: 0/, 'obláčky skryté');
+    assert.match(rule('.lv-scene .flame-ember {'), /opacity: 0/, 'jiskry skryté');
+    assert.match(rule('.lv-scene .quill-line {'), /stroke-dashoffset: 0/, 'čára napsaná');
+    assert.match(css, /html\[data-reduce-motion="1"\] :is\(\.lv-dot/);
   });
-  test('postranní ozdoby jen tam, kde je vedle obsahu místo (od 1280 px), a pruh má šířku podle obsahu max-w-6xl', () => {
+  test('vynucené barvy Windows a tisk ozdoby skryjí; tisk navíc zruší odhalování sekcí (jinak by se vytiskly prázdné)', () => {
+    assert.match(css, /@media \(forced-colors: active\), print \{[^}]*display: none/);
+    assert.match(css, /@media print \{\s*html\[data-lively="1"\] :is\([^)]*main section[^)]*\) \{ animation: none !important; opacity: 1 !important; transform: none !important; \}/);
+  });
+  test('postranní postavičky jen tam, kde je vedle obsahu místo (od 1280 px), s rostoucí velikostí; pruh má šířku podle obsahu max-w-6xl', () => {
     assert.match(css, /@media \(min-width: 1280px\) \{ \.lv-sides \{ display: block; \} \}/);
+    for (const w of [1440, 1600, 1800, 2200]) assert.match(css, new RegExp(`@media \\(min-width: ${w}px\\) \\{ \\.lv-sides \\{ --k:`), `${w}`);
     assert.match(css, /width: calc\(\(100% - 72rem\) \/ 2\)/);
     assert.equal(read('src', 'pages', 'HomePage.jsx').includes('max-w-6xl'), true, 'obsah stránek je opravdu max-w-6xl (72rem)');
   });
-  test('rozsvícení stránky mění jen průhlednost (transform by přesunul prvky s position: fixed)', () => {
-    const line = css.split('\n').find((l) => l.startsWith('@keyframes lvFadeIn'));
-    assert.ok(line, 'klíčové snímky existují');
-    assert.match(line, /opacity/);
-    assert.ok(!/transform|translate|scale/.test(line));
-    assert.match(css, /html\[data-lively="1"\] main > \* \{ animation: lvFadeIn/, 'a opravdu se používají na obsahu stránky');
+  test('světlo za myší: jen s myší (na dotyku se skryje), jemně se vleče', () => {
+    assert.match(css, /@media \(hover: none\), \(pointer: coarse\) \{ \.lv-spot \{ display: none; \} \}/);
+    assert.match(css, /\.lv-spot \{[^}]*transition: transform 0\.45s/);
+    assert.match(read('src', 'lively', 'LivelyScenery.jsx'), /\(hover: hover\) and \(pointer: fine\)/);
+  });
+  test('klidné stránky (čtečka, hry): vstupní animace stránek a karet i odhalování jsou za :not([data-lively-calm])', () => {
+    const entrance = css.split('\n').filter((l) => /^\s*html\[data-lively="1"\]:not\(\[data-lively-calm="1"\]\)|^\s*html\[data-lively="1"\].*(main > \* > \* \{ animation|main > \* > \*:nth|library-card"\]:nth|library-card"\] \{ animation|main section \{ animation)/.test(l));
+    assert.ok(entrance.length >= 10, `pravidel vstupních animací je ${entrance.length}`);
+    for (const l of entrance) assert.match(l, /:not\(\[data-lively-calm="1"\]\)/, l.slice(0, 90));
+    const src = read('src', 'lively', 'LivelyScenery.jsx');
+    assert.match(src, /useLayoutEffect/, 'značka se nastaví ještě před prvním vykreslením stránky');
+    assert.match(src, /dataset\.livelyCalm = '1'/);
+  });
+  test('vstupní animace stránek, karet a sekcí končí bez transformace (transform: none) a bez výplně, ať nezůstane blok pro position: fixed', () => {
+    for (const name of ['lvEnter', 'lvPop', 'lvReveal', 'lvAppear']) {
+      const line = css.split('\n').find((l) => l.startsWith(`@keyframes ${name}`));
+      assert.ok(line, name);
+      assert.match(line, /to \{[^}]*transform: none/, `${name} končí bez transformace`);
+    }
+    const fade = css.split('\n').find((l) => l.startsWith('@keyframes lvFadeIn'));
+    assert.match(fade, /opacity/);
+    assert.ok(!/transform|translate|scale/.test(fade), 'rozsvícení celé stránky mění jen průhlednost');
+    assert.match(css, /html\[data-lively="1"\] main > \* \{ animation: lvFadeIn/);
+    for (const rule of css.split('\n').filter((l) => /main > \* > \* \{ animation: lvEnter|library-card"\] \{ animation: lvPop/.test(l))) assert.match(rule, /backwards;/, 'jen výplň před začátkem, ne po konci');
+  });
+  test('odhalování sekcí při scrollu: jen v prohlížečích, které to umí, a ne při omezeném pohybu', () => {
+    const block = css.match(/@supports \(animation-timeline: view\(\)\) \{([\s\S]*?)\n\}/);
+    assert.ok(block, 'je v @supports');
+    assert.match(block[1], /:not\(\[data-reduce-motion="1"\]\)/);
+    assert.match(block[1], /animation-timeline: view\(\)/);
   });
   test('každé pravidlo pro prvky stránky je za data-lively="1" (vypnutý režim nic nemění)', () => {
     const rules = css.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => /^html\b/.test(l.trim()) && !/^html\[data-reduce-motion/.test(l.trim()));
-    assert.ok(rules.length > 5);
-    for (const l of rules) assert.match(l, /^html\[data-lively="1"\]/, l.slice(0, 80));
+    assert.ok(rules.length > 20);
+    for (const l of rules) assert.match(l.trim(), /^html\[data-lively="1"\]/, l.slice(0, 80));
+  });
+  test('barevná tlačítka mají při najetí lesk a přechod pozice pozadí je v seznamu přechodů tlačítek', () => {
+    assert.match(css, /\[style\*="background-color: var\(--bg-primary\)"\]:hover/);
+    assert.match(css, /transition-property: translate, scale, rotate, transform, box-shadow, background-color, background-position/);
   });
 });
 
@@ -230,13 +340,14 @@ const flush = () => new Promise((r) => setImmediate(r));
 
 describe('jiskřičky po kliknutí', () => {
   test('směry: správný počet, opakovatelné, v rozumném dosahu a opravdu do všech stran', () => {
+    assert.equal(BURST_SIZE, SPARKLE_COUNT + 1, 'výbuch = jiskřičky a rázový kruh');
     const a = sparkleSpecs(SPARKLE_COUNT, 5); const b = sparkleSpecs(SPARKLE_COUNT, 5);
     assert.deepEqual(a, b);
     assert.notDeepEqual(a, sparkleSpecs(SPARKLE_COUNT, 6), 'jiné semínko = jiný výbuch');
     assert.equal(a.length, SPARKLE_COUNT);
     for (const s of a) {
-      assert.ok(Math.hypot(s.dx, s.dy) >= 15 && Math.hypot(s.dx, s.dy) <= 50, 'dosah');
-      assert.ok(s.size >= 4 && s.size <= 8 && s.ms >= 480 && s.ms <= 700);
+      assert.ok(Math.hypot(s.dx, s.dy) >= 22 && Math.hypot(s.dx, s.dy) <= 62, 'dosah');
+      assert.ok(s.size >= 6 && s.size <= 12 && s.ms >= 520 && s.ms <= 800);
     }
     assert.ok(a.some((s) => s.dx > 0) && a.some((s) => s.dx < 0) && a.some((s) => s.dy > 0) && a.some((s) => s.dy < 0));
     for (let seed = 1; seed < 60; seed++) for (const s of sparkleSpecs(SPARKLE_COUNT, seed * 7919 + 13)) assert.ok(Number.isFinite(s.dx) && Number.isFinite(s.dy));
@@ -251,15 +362,18 @@ describe('jiskřičky po kliknutí', () => {
   });
   test('výbuch vytvoří jiskřičky, nastaví je na pozici kliknutí a po dohrání je uklidí', async () => {
     const doc = fakeDoc(); const live = { n: 0 };
-    assert.equal(burstAt(100, 200, { doc, seed: 3, live }), SPARKLE_COUNT);
-    assert.equal(live.n, SPARKLE_COUNT);
-    assert.equal(doc.body.children.length, SPARKLE_COUNT);
+    assert.equal(burstAt(100, 200, { doc, seed: 3, live }), BURST_SIZE);
+    assert.equal(live.n, BURST_SIZE);
+    assert.equal(doc.body.children.length, BURST_SIZE, 'rázový kruh a jiskřičky');
+    assert.equal(doc.created[0].style.borderRadius, '50%', 'první je rázový kruh');
+    assert.equal(doc.created[0].animations[0].frames.at(-1).opacity, 0, 'kruh se rozšíří a zmizí');
     for (const el of doc.created) {
       assert.equal(el.style.left, '100px'); assert.equal(el.style.top, '200px');
       assert.equal(el.style.pointerEvents, 'none');
       assert.equal(el.attrs['aria-hidden'], 'true');
       assert.equal(el.animations.length, 1);
-      assert.equal(el.animations[0].frames[1].opacity, 0, 'jiskra na konci zmizí');
+      assert.equal(el.animations[0].frames.at(-1).opacity, 0, 'jiskra na konci zmizí');
+      assert.ok(el.animations[0].frames[0].opacity >= 0.9, 'a na začátku je dobře vidět');
     }
     doc.created.forEach((el) => el.animations[0].finish());
     await flush();
@@ -287,7 +401,7 @@ describe('jiskřičky po kliknutí', () => {
     assert.ok(doc.listeners.pointerdown, 'poslouchá pointerdown');
     assert.equal(doc.listeners.pointerdown.o.passive, true, 'nezdržuje posouvání na dotykových zařízeních');
     doc.listeners.pointerdown.fn({ button: 0, clientX: 50, clientY: 60, target: target() });
-    assert.equal(doc.created.length, SPARKLE_COUNT);
+    assert.equal(doc.created.length, BURST_SIZE);
     off();
     assert.equal(doc.listeners.pointerdown, undefined);
   });
@@ -303,15 +417,15 @@ describe('jiskřičky po kliknutí', () => {
     assert.equal(click(fakeDoc(), { button: 2 }), 0, 'pravé tlačítko');
     assert.equal(click(fakeDoc(), { target: { closest: () => null } }), 0, 'klik mimo ovladací prvek');
     assert.equal(click(fakeDoc(), { target: target({ disabled: true }) }), 0, 'vypnuté tlačítko');
-    assert.equal(click(fakeDoc()), SPARKLE_COUNT, 'kontrola: za normálních podmínek funguje');
+    assert.equal(click(fakeDoc()), BURST_SIZE, 'kontrola: za normálních podmínek funguje');
   });
   test('každé kliknutí má jiné semínko (výbuchy nejsou stejné razítko)', () => {
     const doc = fakeDoc();
     installClickSparkles({ doc });
     doc.listeners.pointerdown.fn({ button: 0, clientX: 1, clientY: 1, target: target() });
     doc.listeners.pointerdown.fn({ button: 0, clientX: 1, clientY: 1, target: target() });
-    const first = doc.created.slice(0, SPARKLE_COUNT).map((e) => JSON.stringify(e.animations[0].frames[1]));
-    const second = doc.created.slice(SPARKLE_COUNT).map((e) => JSON.stringify(e.animations[0].frames[1]));
+    const first = doc.created.slice(1, BURST_SIZE).map((e) => JSON.stringify(e.animations[0].frames.at(-1)));
+    const second = doc.created.slice(BURST_SIZE + 1).map((e) => JSON.stringify(e.animations[0].frames.at(-1)));
     assert.notDeepEqual(first, second);
   });
   test('bez dokumentu (mimo prohlížeč) se nic nezapne', () => {

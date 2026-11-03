@@ -16,3 +16,9 @@ export const scrollProgress = (top, total, view) => {
   if (!Number.isFinite(range) || !Number.isFinite(t) || range <= 0) return 0;
   return Math.min(1, Math.max(0, t / range));
 };
+
+/** Poloha myši jako číslo -1 až 1 vůči středu okna (vlevo/nahoře -1, vpravo/dole 1). Ozdoby se podle ní lehce posouvají a sova se dívá za myší. */
+export const pointerOffset = (x, y, width, height) => {
+  const axis = (v, size) => (typeof v === 'number' && Number.isFinite(v) && typeof size === 'number' && Number.isFinite(size) && size > 0 ? Math.min(1, Math.max(-1, (v / size) * 2 - 1)) : 0);
+  return { px: axis(x, width), py: axis(y, height) };
+};
