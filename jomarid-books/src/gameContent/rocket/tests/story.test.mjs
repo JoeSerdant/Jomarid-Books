@@ -16,6 +16,7 @@ const html = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
 const block = (name) => html.match(new RegExp(`// <${name}>\\n([\\s\\S]*?)// </${name}>`))[1];
 const DATA = block('STORY-DATA');
 const ENGINE = block('STORY-ENGINE');
+const GUARD = block('STORY-GUARD');
 const bossTypes = vm.runInNewContext(html.match(/const BOSS_TYPES = (\[[\s\S]*?\n\]);/)[1]);
 
 // Hodnoty z vm mají jiné prototypy než ty v testu, proto se data a výsledky porovnávají přes prosté kopie
@@ -182,7 +183,7 @@ function makeEnv(storyRaw = {}, { stats = {}, tutorialDone = true, game: over = 
   const el = (id) => { if (!els.has(id)) els.set(id, mkEl()); return els.get(id); };
   for (const id of ['story-overlay', 'finale-layer', 'finale-hold', 'finale-done', 'btn-story-finale', 'story-caps', 'story-deep', 'story-preview', 'btn-open-story', 'btn-story-go', 'story-mark']) el(id).classList.add('hidden');
   const document = { getElementById: el, querySelector: () => null, querySelectorAll: () => [] };
-  const log = { save: 0, queue: 0, sounds: [], toasts: [] };
+  const log = { save: 0, queue: 0, sounds: [], toasts: [], errors: [] };
   const Storage = { data: { tutorialDone, stats: { runsPlayed: 6, bombsUsed: 0, pickups_heal: 0, pickups_power: 0, pickups_coin: 0, ...stats }, story: null }, save() { log.save++; }, queueSave() { log.queue++; } };
   const Sounds = new Proxy({}, { get: (_, k) => (...a) => { log.sounds.push(k); } });
   const Toast = { push: (t) => log.toasts.push(t) };
@@ -194,7 +195,9 @@ function makeEnv(storyRaw = {}, { stats = {}, tutorialDone = true, game: over = 
   };
   const env = { rnd: 0.5 };
   const M = Object.assign(Object.create(Math), { random: () => env.rnd });
-  const ctx = vm.createContext({ document, Storage, Sounds, Toast, Particle, FloatingText, Math: M, Date, Game: game, UI: { refresh() {} }, BOSS_TYPES: bossTypes, Art: {} });
+  const sprite = { c: {}, w: 10, h: 10 };
+  const Art = { glow: () => sprite, ship: () => sprite, sprite: () => sprite, white: () => sprite, blit() {} };
+  const ctx = vm.createContext({ document, Storage, Sounds, Toast, Particle, FloatingText, Math: M, Date, Game: game, UI: { refresh() {} }, BOSS_TYPES: bossTypes, Art, console: { error: (...a) => log.errors.push(a) } });
   vm.runInContext(`const U = ${html.match(/const U = (\{[\s\S]*?\n\});/)[1]};`, ctx);
   vm.runInContext(`${DATA}\n${ENGINE}\nglobalThis.__story = Story; globalThis.__normalize = normalizeStory;`, ctx);
   const Story = ctx.__story;
@@ -622,6 +625,119 @@ test('finále: Přerušit před odpovědí nic nezapíše, Přeskočit po odpov�
   assert.equal(e.Story.fin.answered, true);
   e.Story.skipFinale();
   assert.ok(e.Story.d().done, 'po odpovědi se přeskočení počítá jako dokončené');
+});
+
+/* ---------------------------------------------------------------- kreslení a pojistka proti pádu */
+// Plátno, které se chová jako skutečné tam, kde skutečné vyhodí výjimku (záporný poloměr, nekonečné souřadnice) nebo tiše ignoruje vadnou hodnotu
+// (průhlednost mimo 0 až 1). Výjimka při kreslení v hlavní smyčce hru zmrazí, proto se kreslení zkouší po celou dobu příběhu.
+function strictCanvas() {
+  const bad = [];
+  const finite = (...a) => a.every((n) => Number.isFinite(n));
+  const grad = { addColorStop(o) { if (!(o >= 0 && o <= 1)) bad.push(`addColorStop ${o}`); } };
+  const alphaOf = (v) => { const m = /^rgba\(.*,\s*([-\d.e]+)\)$/.exec(String(v)); return m ? Number(m[1]) : null; };
+  const ctx = new Proxy({}, {
+    get(_, k) {
+      switch (k) {
+        case 'arc': return (x, y, r) => { if (!finite(x, y, r) || r < 0) bad.push(`arc ${x},${y},${r}`); };
+        case 'createLinearGradient': return (...a) => { if (!finite(...a)) bad.push(`linear ${a}`); return grad; };
+        case 'createRadialGradient': return (...a) => { if (!finite(...a) || a[2] < 0 || a[5] < 0) bad.push(`radial ${a}`); return grad; };
+        case 'drawImage': return (img, ...a) => { if (!finite(...a)) bad.push(`drawImage ${a}`); };
+        case 'fillRect': case 'translate': case 'rotate': case 'moveTo': case 'lineTo': return (...a) => { if (!finite(...a)) bad.push(`${String(k)} ${a}`); };
+        default: return () => {};
+      }
+    },
+    set(_, k, v) {
+      if (k === 'globalAlpha' && !(v >= 0 && v <= 1)) bad.push(`globalAlpha ${v}`);
+      if ((k === 'fillStyle' || k === 'strokeStyle') && typeof v === 'string') { const a = alphaOf(v); if (a !== null && !(a >= 0 && a <= 1)) bad.push(`${String(k)} ${v}`); }
+      if (k === 'lineWidth' && !(v > 0)) bad.push(`lineWidth ${v}`);
+      return true;
+    },
+  });
+  return { ctx, bad };
+}
+
+test('finále se po celou dobu vykreslí bez výjimky a bez vadných hodnot (záporný poloměr kruhu dřív hru zmrazil při rozsvícení majáku)', () => {
+  for (const [w, h] of [[390, 780], [320, 568], [620, 900]]) {
+    const e = makeEnv(found(...MAIN), { game: { width: w, height: h } });
+    const { ctx, bad } = strictCanvas();
+    e.Story.openArchive('menu', false);
+    e.Story.startFinale();
+    let frames = 0, reachedKeeper = 0;
+    // snímek po snímku jako ve skutečné smyčce (16 ms): úvod, držení, odpověď, přistání, poslední záznam
+    for (let t = 0; t < 70000 && e.Story.fin; t += 16) {
+      if (e.Story.fin.phase === 'charge' && !e.Story.fin.holding) e.Story.finaleHold(true);
+      e.Story.finaleUpdate(16);
+      e.Story.finaleDraw(ctx);
+      frames++;
+      if (e.Story.fin.phase === 'keeper') reachedKeeper++;
+    }
+    assert.deepEqual(bad, [], `${w}x${h}: vadné kreslení`);
+    assert.ok(frames > 3000 && reachedKeeper > 500, `${w}x${h}: celá časová osa se prošla (${frames} snímků, ${reachedKeeper} v posledním záznamu)`);
+    assert.equal(e.Story.off, false);
+    assert.deepEqual(e.log.errors, []);
+  }
+  // krátké snímky (rychlý monitor) i dlouhé (100 ms, nejvíc, co hra povolí) dopadnou stejně
+  for (const dt of [4, 33, 100]) {
+    const e = makeEnv(found(...MAIN));
+    const { ctx, bad } = strictCanvas();
+    e.Story.openArchive('menu', false); e.Story.startFinale();
+    for (let t = 0; t < 70000 && e.Story.fin; t += dt) {
+      if (e.Story.fin.phase === 'charge' && !e.Story.fin.holding) e.Story.finaleHold(true);
+      e.Story.finaleUpdate(dt); e.Story.finaleDraw(ctx);
+    }
+    assert.deepEqual(bad, [], `snímek ${dt} ms`);
+  }
+});
+
+test('hvězda, Poutník a linie se vykreslí bez vadných hodnot ve všech stavech (dotyk hvězdy, konec života, zásah Poutníka, okraje linie)', () => {
+  const e = makeEnv(found('noise', 'channel', 'wanderer'));
+  const { ctx, bad } = strictCanvas();
+  for (const t of [0, 100, 1500, 12000, 25000, 26000]) for (const life of [26000, 1500, 100, 0]) for (const dwell of [0, 1, 650, 1299]) {
+    e.Story.drawStar(ctx, { x: 100, y: 300, t, life, dwell });
+  }
+  for (const flash of [0, 160]) for (const tt of [0, 1200, 2399, 5000]) e.Story.drawWanderer(ctx, { x: 50, y: 400, t: tt, flash, hp: 5 });
+  for (const x of [0, 195, 390, 1e4]) { e.game.player.x = x; e.Story.drawBand(ctx, e.game); }
+  assert.deepEqual(bad, []);
+});
+
+test('pojistka: výjimka v příběhu hru nezastaví, příběh se vypne a rozehrané finále skončí v menu', () => {
+  // běh hry: chyba při aktualizaci hvězdy
+  let e = makeEnv(); vm.runInContext(GUARD, e.ctx);
+  e.Story.star = { x: 10, y: 10, t: 0, life: 1000, dwell: 0 };
+  e.Story.updateStar = () => { throw new Error('rozbité'); };
+  assert.doesNotThrow(() => e.Story.update(16, e.game));
+  assert.equal(e.Story.off, true);
+  assert.equal(e.Story.star, null);
+  assert.equal(e.log.errors.length, 1);
+  assert.equal(e.Story.update(16, e.game), undefined, 'po vypnutí se nic nevolá');
+  assert.equal(e.log.errors.length, 1);
+  assert.equal(e.Story.onBossSpawn(e.game, { level: 1, name: 'STRÁŽCE' }), undefined);
+  assert.equal(e.el('story-mark').classList.contains('hidden'), true);
+  // finále: chyba při kreslení
+  e = makeEnv(found(...MAIN)); vm.runInContext(GUARD, e.ctx);
+  e.Story.openArchive('menu', false); e.Story.startFinale();
+  assert.equal(e.game.state, 'FINALE');
+  Object.defineProperty(e.game, 'width', { get() { throw new Error('rozbité kreslení'); } });
+  const { ctx } = strictCanvas();
+  assert.doesNotThrow(() => e.Story.finaleDraw(ctx));
+  assert.equal(e.Story.off, true);
+  assert.equal(e.Story.fin, null);
+  assert.equal(e.game.state, 'MENU', 'hra se vrátí do menu, ne do zamrzlého finále');
+  assert.equal(e.el('finale-layer').classList.contains('hidden'), true);
+  assert.equal(e.el('menu-overlay').classList.contains('hidden'), false);
+  assert.equal(e.Story.startFinale(), undefined);
+  assert.equal(e.Story.fin, null, 'vypnutý příběh finále nespustí');
+  assert.equal(hasShard(e, 'home'), false, 'rozbité finále nic nezapíše');
+});
+
+test('pojistka: všechna volání příběhu z herní smyčky jsou obalená, ostatní jsou obsluha tlačítek (její výjimka smyčku nezastaví)', () => {
+  const guarded = GUARD.match(/\[('onRunStart'[^\]]*)\]\.forEach\(wrap\)/)[1].split(',').map((x) => x.trim().replace(/'/g, ''));
+  assert.deepEqual(guarded.sort(), ['drawBack', 'drawFront', 'finaleDraw', 'finaleUpdate', 'onBossKilled', 'onBossSpawn', 'onHit', 'onRunEnd', 'onRunStart', 'onStardustSpent', 'refreshButtons', 'update']);
+  const handlers = new Set(['openArchive', 'closeArchive', 'startFinale', 'skipFinale', 'finaleHold', 'finishFinale', 'onCode', 'available', 'toggleShard']);
+  const used = new Set([...html.replace(ENGINE, '').replace(GUARD, '').matchAll(/\bStory\.(\w+)\(/g)].map((m) => m[1]));
+  for (const name of used) assert.ok(guarded.includes(name) || handlers.has(name), `Story.${name} se volá bez pojistky`);
+  for (const name of guarded) assert.ok(used.has(name), `Story.${name} je obalená, ale hra ji nevolá`);
+  assert.match(ENGINE, /\n    fail\(err\) \{/);
 });
 
 /* ---------------------------------------------------------------- skrytost, napojení a cheaty (zdroj hry) */

@@ -6215,6 +6215,7 @@ const Story = {
     preview: false,       // náhled z cheat menu: nic se nezapisuje
     from: 'menu',         // odkud se archiv otevřel (menu, nebo konec hry)
     fin: null,            // finále
+    off: false,           // příběh se kvůli chybě vypnul (viz fail)
 
     d() { return Storage.data.story; },
     has(id) { return !!this.d().found[id]; },
@@ -6631,7 +6632,7 @@ const Story = {
     //   intro (střepy se skládají) -> charge (hráč drží tlačítko a Zrcadlo se rozzáří) -> answer (odpověď Majáku)
     //   -> home (třináct Vlaštovek přistane na Jomaridu) -> keeper (poslední záznam Majákáře) -> hotovo
     startFinale() {
-        if (!this.preview && !this.canFinale()) return;
+        if (this.off || (!this.preview && !this.canFinale())) return;
         document.getElementById('story-overlay').classList.add('hidden');
         document.getElementById('finale-layer').classList.remove('hidden');
         Sounds.init();
@@ -6769,13 +6770,13 @@ const Story = {
                 s.landed = true;
                 f.landed++;
                 const p = this.landPoint(f, s.i);
-                f.rings.push({ x: p.x, y: p.y, life: 1.1, color: s.color });
+                f.rings.push({ x: p.x, y: p.y, life: 1.1, max: 1.1, color: s.color });
                 Sounds.chime(s.i);
             }
         }
         // čtrnáctý: Zrcadlo samo. Zbarví se do bílozlatého světla Majáku nad planetou
         const bt = start + 13 * gap + 900;
-        if (!f.beacon && t > bt + dur) { f.beacon = true; f.rings.push({ x: f.planet.x, y: f.planet.y - f.planet.r * 1.1, life: 1.6, color: '#ffe9a8' }); Sounds.shard(); }
+        if (!f.beacon && t > bt + dur) { f.beacon = true; f.rings.push({ x: f.planet.x, y: f.planet.y - f.planet.r * 1.1, life: 1.6, max: 1.6, color: '#ffe9a8' }); Sounds.shard(); }
         // a dva malé, kteří letěli s nimi: 2.9 a 3.0
         if (!f.twins && t > bt + dur + 900) { f.twins = true; Sounds.chime(3); Sounds.chime(7); }
     },
@@ -6893,10 +6894,11 @@ const Story = {
         }
         // kruhy po přistání
         for (const r of f.rings) {
-            ctx.globalAlpha = Math.max(0, r.life / 1.4);
+            const k = Math.max(0, Math.min(1, 1 - r.life / r.max));      // 0 na začátku kruhu, 1 na konci
+            ctx.globalAlpha = 1 - k;
             ctx.strokeStyle = r.color;
             ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.arc(r.x, r.y, (1.4 - r.life) * 46, 0, Math.PI * 2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(r.x, r.y, 4 + k * (r.max > 1.2 ? 70 : 46), 0, Math.PI * 2); ctx.stroke();
         }
         ctx.restore();
 
@@ -6954,6 +6956,23 @@ const Story = {
         else this.openArchive('menu', true);
     },
 
+    // Chyba v příběhu nesmí zastavit hru (výjimka ve smyčce by ji zmrazila): příběh se do obnovení stránky vypne a rozehrané finále skončí v menu.
+    // Volá to obal STORY-GUARD pod enginem, který obaluje všechna volání příběhu ze hry.
+    fail(err) {
+        this.off = true;
+        try { console.error('Střepy se vypnuly kvůli chybě:', err); } catch (e) {}
+        this.star = null;
+        this.actor = null;
+        this.fight = null;
+        try { this.setMark(null); } catch (e) {}
+        if (this.fin) {
+            this.fin = null;
+            for (const id of ['finale-layer', 'finale-hold', 'finale-done']) document.getElementById(id).classList.add('hidden');
+            if (Game.state === 'FINALE') Game.state = 'MENU';
+            document.getElementById('menu-overlay').classList.remove('hidden');
+        }
+    },
+
     abortFinale() {
         const f = this.fin;
         if (!f) return;
@@ -6967,6 +6986,21 @@ const Story = {
     }
 };
 // </STORY-ENGINE>
+
+// <STORY-GUARD>
+// Všechna volání příběhu ze hry jsou obalená: výjimka v příběhu (třeba při kreslení) nesmí zastavit hlavní smyčku, jinak by hra zamrzla.
+// Při chybě se příběh vypne (Story.fail) a hra běží dál bez něj.
+(() => {
+    const wrap = name => {
+        const fn = Story[name];
+        Story[name] = function (...args) {
+            if (Story.off) return undefined;
+            try { return fn.apply(Story, args); } catch (err) { Story.fail(err); return undefined; }
+        };
+    };
+    ['onRunStart', 'onRunEnd', 'update', 'drawBack', 'drawFront', 'onBossSpawn', 'onBossKilled', 'onHit', 'onStardustSpent', 'refreshButtons', 'finaleUpdate', 'finaleDraw'].forEach(wrap);
+})();
+// </STORY-GUARD>
 
 //======================================================================
 //  START
