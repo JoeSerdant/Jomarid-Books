@@ -1129,6 +1129,7 @@
           this.gold -= goldCost;
           this.manpower -= manpowerCost;
           unit.hpPercent = 1.0;
+          GameCampaign.track({ replenishes: 1 });
           return true;
         }
         return false;
@@ -1148,6 +1149,7 @@
         if (item && this.gold >= item.gold && this.manpower >= item.mp) {
           this.gold -= item.gold;
           this.manpower -= item.mp;
+          GameCampaign.track({ recruits: 1 });
           this.playerRoster.push({
             id: 'u_' + Date.now(),
             type: unitType,
@@ -1183,12 +1185,31 @@
       SAVE_KEY: 'hannibal_save_v1',
       started: false,
 
+      // Čítače pro odznaky: za celou dobu hraní, přežijí novou kampaň (nejsou v meta). Názvy jsou stejné jako statistiky v src/gameRecords/defs/hannibal.js.
+      stats: {},
+      TRACKED_STATS: ['kills', 'attacks', 'crits', 'flank_hits', 'rear_hits', 'charges', 'damage_dealt', 'best_hit', 'elephant_kills', 'cavalry_kills', 'ambushes', 'routs',
+        'abilities_used', 'turns', 'moves', 'battles_won', 'battles_lost', 'flawless_battles', 'units_lost', 'retreats', 'minigame_wins', 'perfect_minigames', 'endless_waves',
+        'endless_defeats', 'recruits', 'replenishes', 'level_ups', 'roster_peak', 'gold_peak', 'manpower_peak', 'senate_peak'],
+      // Přičte čítače (inc) a zvedne nejvyšší hodnoty (max); do uložení se zapíše při příštím saveGame().
+      track(inc, max) {
+        const st = this.stats;
+        for (const k in (inc || {})) { if (inc[k]) st[k] = (st[k] || 0) + inc[k]; }
+        for (const k in (max || {})) { if (max[k] > (st[k] || 0)) st[k] = max[k]; }
+      },
+      // Čítače z uloženého postupu (jen vyšší hodnoty): volá se při spuštění a při načtení postupu.
+      loadStats(d) {
+        const src = d && d.stats;
+        if (!src || typeof src !== 'object') return;
+        for (const k in src) { const n = Number(src[k]); if (Number.isFinite(n) && n > (this.stats[k] || 0)) this.stats[k] = n; }
+      },
+
       serialize() {
         const m = this.meta;
         const doctrines = {}; Object.keys(m.doctrines).forEach(k => { doctrines[k] = !!m.doctrines[k].unlocked; });
         const nodes = {}; CAMPAIGN_MAP.nodes.forEach(n => { nodes[n.id] = { unlocked: !!n.unlocked, completed: !!n.completed }; });
+        this.track(null, { gold_peak: m.gold, manpower_peak: m.manpower, senate_peak: m.senateFavor, roster_peak: m.playerRoster.length });
         return { v: 1, savedAt: Date.now(), gold: m.gold, manpower: m.manpower, senateFavor: m.senateFavor,
-                 roster: m.playerRoster, tutorialDone: m.tutorialDone, saguntumBonusGiven: m.saguntumBonusGiven, doctrines, nodes };
+                 roster: m.playerRoster, tutorialDone: m.tutorialDone, saguntumBonusGiven: m.saguntumBonusGiven, doctrines, nodes, stats: this.stats };
       },
 
       saveGame() {
@@ -1208,6 +1229,8 @@
           jomaridRecord('doctrines_unlocked', Object.keys(doctrines).filter(k => doctrines[k]).length);
           jomaridRecord('top_unit_level', Math.max(0, ...(d.roster || []).map(u => Number(u.level) || 0)));
           jomaridRecord('endless_wave', this.getEndlessBest());
+          const st = d.stats || this.stats || {};
+          this.TRACKED_STATS.forEach(k => jomaridRecord(k, st[k]));
         } catch (e) { /* hra jde dál bez hlášení */ }
       },
 
@@ -1236,6 +1259,7 @@
           const st = d.nodes && d.nodes[n.id];
           if (st) { n.unlocked = !!st.unlocked; n.completed = !!st.completed; }
         });
+        this.loadStats(d);
         this.started = true;
         return true;
       },
@@ -1394,9 +1418,10 @@
         this.meta.playerRoster.forEach(u => {
           u.hpPercent = Math.min(1, u.hpPercent + 0.15);
           u.xp += 20;
-          if (u.xp >= 100) { u.level += 1; u.xp -= 100; }
+          if (u.xp >= 100) { u.level += 1; u.xp -= 100; this.track({ level_ups: 1 }); }
         });
         this.rewardCoins('wave', 2);
+        this.track({ endless_waves: 1 });
         let msg = `Vlna ${wave} poražena! Jednotky se částečně doléčily a získal jsi +${40 + wave * 8} Zlata.`;
         if (lost.length > 0) msg += ` Padli však: ${lost.map(u => u.name).join(', ')}.`;
         if (this.meta.playerRoster.length === 0) {
@@ -1413,6 +1438,7 @@
 
       onEndlessDefeat(battleUnits, wave, hannibalFell) {
         const { lost } = this.syncRosterFromBattle(battleUnits);
+        this.track({ endless_defeats: 1 });
         this.saveEndlessBest(Math.max(0, wave - 1));
         this.saveGame();
         const isRecord = wave - 1 >= this.getEndlessBest() && wave > 1;
@@ -1445,6 +1471,7 @@
           : "Opravdu chceš ustoupit z bitvy? Zranění jednotek zůstane a případné ztráty jsou trvalé.";
         if (confirm(confirmMsg)) {
           const { lost } = this.syncRosterFromBattle(window.gameEngine.units);
+          this.track({ retreats: 1 });
           if (isEndless) this.saveEndlessBest(Math.max(0, window.gameEngine.endlessWave - 1));
           Game.showScreen('campaign-hub');
           this.renderHub();
@@ -1472,10 +1499,11 @@
           // Award XP to surviving player units
           this.meta.playerRoster.forEach(u => {
             u.xp += 35;
-            if (u.xp >= 100) { u.level += 1; u.xp -= 100; }
+            if (u.xp >= 100) { u.level += 1; u.xp -= 100; this.track({ level_ups: 1 }); }
           });
         }
         if (node) this.rewardCoins('victory', 10);
+        this.track({ battles_won: 1, flawless_battles: lost.length === 0 ? 1 : 0 });
         let msg = `Dosáhl jsi slavného vítězství! Získal jsi +${node ? node.rewards.gold : 100} Zlata a posílil důvěru Senátu.`;
         if (lost.length > 0) msg += ` Ve vřavě boje jsi ale nadobro ztratil: ${lost.map(u => u.name).join(', ')}.`;
 
@@ -1495,6 +1523,7 @@
 
       onBattleDefeat(battleUnits, hannibalFell) {
         const { lost } = this.syncRosterFromBattle(battleUnits);
+        this.track({ battles_lost: 1 });
         let msg = hannibalFell
           ? "HANNIBAL PADL V BOJI! Bez svého legendárního velitele se Kartágo nemůže dále bránit na tomto bojišti."
           : "Tvá armáda byla poražena a rozprášena. Ustup k nejbližším základnám a doplň síly.";
@@ -1519,7 +1548,7 @@
           this.meta.senateFavor = Math.min(100, this.meta.senateFavor + favor);
           result.goldGained = gold;
           result.manpowerGained = manpower;
-          if (result.success !== false) this.rewardCoins('victory', 5);
+          if (result.success !== false) { this.rewardCoins('victory', 5); this.track({ minigame_wins: 1, perfect_minigames: mult >= 1.5 ? 1 : 0 }); }
         }
         this.saveGame();
         Game.showBattleResultModal(
@@ -1846,6 +1875,7 @@
         u.x = col;
         u.y = row;
         u.hasMoved = true;
+        GameCampaign.track({ moves: 1 });
         u._charging = !!u.isCavalry && dist >= 2;
         audioFX.playMarch();
         this.log(`${u.name} se přesunul na pozici [${col}, ${row}]${u._charging ? ' (výpad!)' : ''}`, 'player');
@@ -2115,6 +2145,7 @@
         const immuneToRout = ironDiscipline && unit.hp > unit.maxHp * 0.5;
         if (unit.morale <= 0 && !unit.routed && !immuneToRout) {
           unit.routed = true;
+          if (unit.team === 'enemy') GameCampaign.track({ routs: 1 });
           this.log(`${unit.name} se dává na útěk! Morálka zlomena!`, unit.team === 'player' ? 'enemy' : 'player');
         }
       }
@@ -2198,6 +2229,10 @@
         const result = this.computeDamage(attacker, target, angle, charged);
 
         audioFX.playSword();
+        if (attacker.team === 'player') {
+          GameCampaign.track({ attacks: 1, crits: result.isCrit ? 1 : 0, flank_hits: angle === 'flank' ? 1 : 0, rear_hits: angle === 'rear' ? 1 : 0, charges: charged ? 1 : 0,
+            damage_dealt: result.dmg, ambushes: opts.ambush ? 1 : 0 }, { best_hit: result.dmg });
+        }
         this.addSlash(attacker.x, attacker.y, target.x, target.y, result.isCrit ? '#ffd700' : '#ff8a65');
         if (result.isCrit) this.triggerShake(9);
         target.hp -= result.dmg;
@@ -2214,6 +2249,8 @@
         this.resolveCounterAttack(attacker, target, angle);
 
         if (target.hp <= 0) {
+          if (attacker.team === 'player') GameCampaign.track({ kills: 1, elephant_kills: attacker.type === 'elephants' ? 1 : 0, cavalry_kills: attacker.isCavalry ? 1 : 0 });
+          else if (target.team === 'player') GameCampaign.track({ units_lost: 1 });
           this.log(`${target.name} byl zničen!`, attacker.team === 'player' ? 'player' : 'enemy');
           this.units.forEach(u => {
             if (u !== target && u.team === target.team && u.hp > 0 && Math.abs(u.x - target.x) <= 2 && Math.abs(u.y - target.y) <= 2) {
@@ -2223,6 +2260,7 @@
           this.units = this.units.filter(u => u !== target);
         }
         if (attacker.hp <= 0) {
+          if (attacker.team === 'player') GameCampaign.track({ units_lost: 1 });
           this.log(`${attacker.name} padl při protiútoku!`, attacker.team === 'player' ? 'enemy' : 'player');
           this.units = this.units.filter(u => u !== attacker);
         }
@@ -2281,6 +2319,7 @@
         } else {
           return;
         }
+        GameCampaign.track({ abilities_used: 1 });
         this.selectedUnit = null;
         this.updateUnitDetailCard(null);
         this.checkBattleEnd();
@@ -2376,6 +2415,7 @@
       /* ===================== TAH NEPŘÍTELE (AI) ===================== */
       endTurn() {
         if (this.turn !== 'player') return;
+        GameCampaign.track({ turns: 1 });
         if (typeof Tutorial !== 'undefined') Tutorial.notify('endturn');
         this.turn = 'enemy';
         this.selectedUnit = null;
@@ -2503,6 +2543,7 @@
         this.applyMorale(target, (result.dmg / target.maxHp) * 50 + (angle !== 'front' ? 15 : 0) + (result.encircled ? 15 : 0));
         this.resolveCounterAttack(attacker, target, angle);
         if (target.hp <= 0) {
+          GameCampaign.track({ units_lost: 1 });
           this.log(`${target.name} padl v boji!`, 'enemy');
           this.units = this.units.filter(u => u !== target);
         }
@@ -3622,6 +3663,7 @@
     window.addEventListener('load', () => {
       window.gameEngine = new TacticalEngine('gameCanvas');
       Game.refreshMenu();
+      GameCampaign.loadStats(GameCampaign.readSave());
       GameCampaign.reportRecords(GameCampaign.readSave() || { nodes: {}, doctrines: {}, roster: [] });   // postup z dřívějška se ohlásí hned, ne až po dalším uložení
     });
   </script>
