@@ -40,20 +40,34 @@ test('id her v katalogu jsou stejná jako v Games.jsx a v mostech her', () => {
   assert.deepEqual(GAME_CATALOG.map((g) => g.title).sort(), [...games.matchAll(/^\s+title: '([^']+)',$/gm)].map((m) => m[1]).sort(), 'názvy her sedí s hubem');
 });
 
-test('XP herních odznaků: ve stejné statistice těžší odznak vždy dává víc, každý dává aspoň 30 XP, hry samy dovedou čtenáře zhruba na úroveň 13', () => {
+test('XP herních odznaků: ve stejné statistice těžší odznak vždy dává víc, každý dává aspoň 20 XP, hry samy dovedou čtenáře zhruba na úroveň 16', () => {
   const chains = new Map();
   for (const b of GAME_BADGES) { const k = `${b.game}.${b.stat}`; chains.set(k, [...(chains.get(k) || []), b]); }
   for (const [key, list] of chains) {
     const sorted = [...list].sort((a, b) => a.threshold - b.threshold);
     for (let i = 1; i < sorted.length; i += 1) assert.ok(sorted[i].xp > sorted[i - 1].xp, `${key}: ${sorted[i].id} (${sorted[i].xp} XP) musí dávat víc než lehčí ${sorted[i - 1].id} (${sorted[i - 1].xp} XP)`);
   }
-  for (const b of GAME_BADGES) assert.ok(b.xp >= 30 && b.xp % 10 === 0, `${b.id}: ${b.xp} XP`);
-  assert.equal(GAME_BADGES_TOTAL_XP, 14040);
-  assert.equal(calculateLevelAndProgress(GAME_BADGES_TOTAL_XP).level, 13);
+  for (const b of GAME_BADGES) assert.ok(b.xp >= 20 && b.xp % 10 === 0, `${b.id}: ${b.xp} XP`);
+  assert.equal(GAME_BADGES_TOTAL_XP, 47020);
+  assert.equal(calculateLevelAndProgress(GAME_BADGES_TOTAL_XP).level, 16);
+});
+
+test('každá hra má aspoň 50 odznaků, aspoň 20 různých statistik a odznaky se nepovedou jen o jedné statistice', () => {
+  for (const g of GAME_CATALOG) {
+    const list = GAME_BADGES.filter((b) => b.game === g.id);
+    const statsUsed = new Set(list.map((b) => b.stat));
+    assert.ok(list.length >= 50, `${g.id}: ${list.length} odznaků`);
+    assert.ok(statsUsed.size >= 20, `${g.id}: odznaky stojí jen na ${statsUsed.size} statistikách`);
+    const biggest = Math.max(...[...statsUsed].map((s) => list.filter((b) => b.stat === s).length));
+    assert.ok(biggest <= 8, `${g.id}: jedna statistika nese ${biggest} odznaků (řetězec má být krátký)`);
+    assert.equal(new Set(list.map((b) => b.title)).size, list.length, `${g.id}: názvy odznaků se opakují`);
+    assert.equal(new Set(list.map((b) => b.description)).size, list.length, `${g.id}: popisy odznaků se opakují`);
+    for (const s of g.stats) assert.ok(statsUsed.has(s.key) || s.key === g.headline, `${g.id}.${s.key}: statistika bez odznaku`);
+  }
 });
 
 test('sumGameBadgeXp a pomocné funkce katalogu', () => {
-  assert.equal(sumGameBadgeXp(['rocket_ace', 'chess_first', 'neznamy', 5]), 150);
+  assert.equal(sumGameBadgeXp(['rocket_ace', 'chess_first', 'neznamy', 5]), 80);
   assert.equal(sumGameBadgeXp('x'), 0);
   assert.equal(sumGameBadgeXp(undefined), 0);
   assert.equal(getBadge('rocket_ace').game, 'rocket');
@@ -104,7 +118,7 @@ test('normalizeProgress zahodí neznámé hry, statistiky a odznaky, zaokrouhlí
   assert.deepEqual(p.records, { rocket: { score_normal: 1500 } });
   assert.deepEqual(p.unlocked, ['rocket_ace', 'chess_first']);
   assert.equal(p.xp, 77);
-  assert.equal(normalizeProgress({ unlocked: ['rocket_ace', 'chess_first'] }).xp, 150, 'bez XP ze serveru se spočítá z odznaků');
+  assert.equal(normalizeProgress({ unlocked: ['rocket_ace', 'chess_first'] }).xp, 80, 'bez XP ze serveru se spočítá z odznaků');
   for (const bad of [null, undefined, 5, 'x', [], true]) assert.deepEqual(normalizeProgress(bad), EMPTY_PROGRESS);
 });
 
@@ -242,11 +256,18 @@ test('každá hra hlásí všechny statistiky ze svého katalogu a ostatní hry 
   for (const g of GAME_CATALOG) {
     const text = sources[g.id].join('\n');
     const reported = new Set([...text.matchAll(/jomaridRecord\(\s*['"]([a-z_]+)['"]\s*,/g)].map((m) => m[1]));
-    if (g.id === 'koulovikamosi') {
-      assert.match(text, /for\(const m of\['classic','time','drops','chaos'\]\)jomaridRecord\('score_'\+m,S\.bm\[m\]\)/);
-      for (const m of ['classic', 'time', 'drops', 'chaos']) reported.add('score_' + m);
+    // čítače, které hra hlásí ve smyčce přes seznam TRACKED_STATS (a u Rocketu k tomu osm čítačů běhů podle režimů)
+    for (const list of text.matchAll(/const TRACKED_STATS = \[([\s\S]*?)\];/g)) {
+      for (const m of list[1].matchAll(/'(\w+)'/g)) if (m[1] !== 'runs_') reported.add(m[1]);
+      if (/\.\.\.RUN_MODES\.map\(m => 'runs_' \+ m\)/.test(list[1])) for (const m of ['normal', 'hard', 'inferno', 'insane', 'blitz', 'rush', 'zen', 'daily']) reported.add('runs_' + m);
     }
-    assert.deepEqual([...reported].sort(), g.stats.map((s) => s.key).sort(), g.id);
+    if (g.id === 'koulovikamosi') {
+      assert.match(text, /for\(const m of\['classic','time','drops','chaos','zen'\]\)jomaridRecord\('score_'\+m,S\.bm\[m\]\)/);
+      for (const m of ['classic', 'time', 'drops', 'chaos', 'zen']) reported.add('score_' + m);
+    }
+    assert.deepEqual([...reported].filter((k) => !g.stats.some((s) => s.key === k)), [], `${g.id}: hra hlásí statistiku, kterou katalog nezná`);
+    // Hry, které hlásí přes obecnou smyčku nebo pomocnou funkci (město, šachy, kouloví kámoši, Hannibal), mají úplnost statistik hlídanou vlastním testem ve své sadě testů
+    if (!['cityclicker', 'chess', 'koulovikamosi', 'hannibal'].includes(g.id)) assert.deepEqual(g.stats.map((s) => s.key).filter((k) => !reported.has(k)), [], `${g.id}: statistika, kterou hra nehlásí`);
   }
 });
 
@@ -281,5 +302,7 @@ test('záložka Odznaky her: shrnutí, karta každé hry s rekordy, odznaky a ž
   assert.match(c, /GAME_CATALOG\.map\(\(game\) =>/);
   assert.match(c, /loadGameLeaderboard\(supabase, game\.id, game\.headline, 5\)/);
   assert.match(c, /aria-expanded=\{open\}/);
+  assert.match(c, /\[\['all', 'Vše'\], \['open', 'Chybí'\], \['done', 'Mám'\]\]/, 'filtr dlouhého seznamu odznaků (Vše / Chybí / Mám)');
+  assert.match(c, /const shown = badges\.filter\(\(b\) => filter === 'all' \|\| \(filter === 'done'\) === unlocked\.has\(b\.id\)\);/);
   assert.match(c, /Nejlepší hráči: /);
 });

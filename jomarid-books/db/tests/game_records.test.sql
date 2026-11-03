@@ -50,10 +50,11 @@ select tt.gmk(6, '   ');
 select tt.gmk(7, 'nový');
 
 -- ===== seznam statistik a odznaků =====
-select tt.ok((select count(*) from public.game_stat_limits) = 46, 'v seznamu je 46 statistik u sedmi her');
+select tt.ok((select count(*) from public.game_stat_limits) = 261, 'v seznamu je 261 statistik u sedmi her');
 select tt.ok((select count(distinct game_id) from public.game_stat_limits) = 7, 'statistiky patří sedmi hrám');
-select tt.ok((select count(*) from public.game_badge_defs) = 82, 'v seznamu je 82 herních odznaků');
-select tt.ok((select sum(xp) from public.game_badge_defs) = 14040, 'herní odznaky dohromady dávají 14 040 XP');
+select tt.ok((select count(*) from public.game_badge_defs) = 519, 'v seznamu je 519 herních odznaků');
+select tt.ok((select sum(xp) from public.game_badge_defs) = 47020, 'herní odznaky dohromady dávají 47 020 XP');
+select tt.ok((select min(c) from (select count(*) as c from public.game_badge_defs group by game_id) s) >= 50, 'každá hra má aspoň 50 odznaků');
 select tt.ok((select count(*) from public.game_badge_defs d where not exists (select 1 from public.game_stat_limits l where l.game_id = d.game_id and l.stat_key = d.stat_key)) = 0, 'každý odznak sedí na existující statistiku');
 select tt.ok((select count(*) from public.game_badge_defs d join public.game_stat_limits l using (game_id, stat_key) where d.threshold > l.max_value) = 0, 'práh žádného odznaku není nad věrohodnou mezí statistiky');
 
@@ -67,36 +68,36 @@ select tt.ok((tt.rep(1, 'rocket', 'score_normal', 100000001)) = '{"ok": false, "
 select tt.ok((select count(*) from public.game_records where user_id = tt.gu(1)) = 0, 'a nic se nezapsalo');
 
 select tt.ok((tt.rep(1, 'rocket', 'score_inferno', 900)) = '{"ok": true, "value": 900, "improved": true, "unlocked": [], "xp": 0}'::jsonb, 'první rekord pod prahem: zapsán, bez odznaku');
-select tt.ok((tt.rep(1, 'rocket', 'score_inferno', 1500)) = '{"ok": true, "value": 1500, "improved": true, "unlocked": ["rocket_hell"], "xp": 150}'::jsonb, 'rekord přesně na prahu odemkne odznak (150 XP)');
+select tt.ok((tt.rep(1, 'rocket', 'score_inferno', 1500)) = '{"ok": true, "value": 1500, "improved": true, "unlocked": ["rocket_hell"], "xp": 100}'::jsonb, 'rekord přesně na prahu odemkne odznak (100 XP)');
 select tt.ok((tt.rep(1, 'rocket', 'score_inferno', 1499)) = '{"ok": true, "value": 1500, "improved": false, "unlocked": [], "xp": 0}'::jsonb, 'nižší hodnota rekord nesníží a nic neodemkne');
 select tt.ok((tt.rep(1, 'rocket', 'score_inferno', 1500)) = '{"ok": true, "value": 1500, "improved": false, "unlocked": [], "xp": 0}'::jsonb, 'stejná hodnota se nepočítá jako zlepšení');
-select tt.ok((tt.rep(1, 'rocket', 'score_inferno', 5000)) = '{"ok": true, "value": 5000, "improved": true, "unlocked": [], "xp": 0}'::jsonb, 'vyšší hodnota rekord zvedne, odznak už nepřijde podruhé');
-select tt.ok((tt.rep(1, 'rocket', 'score_normal', 2499))->'unlocked' = '[]'::jsonb, 'o jedna pod prahem odznak nevznikne');
+select tt.ok((tt.rep(1, 'rocket', 'score_inferno', 5000)) = '{"ok": true, "value": 5000, "improved": true, "unlocked": ["rocket_i4k"], "xp": 200}'::jsonb, 'vyšší hodnota rekord zvedne a odemkne další odznak v řadě, ten první už nepřijde podruhé');
+select tt.ok((tt.rep(1, 'rocket', 'score_normal', 2499))->'unlocked' = '["rocket_n1000"]'::jsonb, 'o jedna pod prahem 2 500 vznikne jen lehčí odznak za 1 000');
 select tt.ok((tt.rep(1, 'rocket', 'score_normal', 2500))->'unlocked' = '["rocket_ace"]'::jsonb, 'přesně na prahu odznak vznikne');
-select tt.ok((tt.rep(1, 'rocket', 'boss_level', 14)) = '{"ok": true, "value": 14, "improved": true, "unlocked": ["rocket_nemesis", "rocket_glitch"], "xp": 400}'::jsonb, 'jedna hodnota může odemknout víc odznaků najednou (od nejnižšího prahu)');
-select tt.ok((tt.rep(1, 'chess', 'wins_total', 30)) = '{"ok": true, "value": 30, "improved": true, "unlocked": ["chess_first", "chess_10", "chess_25"], "xp": 250}'::jsonb, 'výhry v šachách: tři odznaky najednou (50 + 80 + 120 XP)');
+select tt.ok((tt.rep(1, 'rocket', 'boss_level', 14)) = '{"ok": true, "value": 14, "improved": true, "unlocked": ["rocket_boss4", "rocket_nemesis", "rocket_glitch"], "xp": 300}'::jsonb, 'jedna hodnota může odemknout víc odznaků najednou (od nejnižšího prahu)');
+select tt.ok((tt.rep(1, 'chess', 'wins_total', 30)) = '{"ok": true, "value": 30, "improved": true, "unlocked": ["chess_first", "chess_10", "chess_25"], "xp": 150}'::jsonb, 'výhry v šachách: tři odznaky najednou (20 + 50 + 80 XP)');
 select tt.ok((select value from public.game_records where user_id = tt.gu(1) and game_id = 'rocket' and stat_key = 'score_inferno') = 5000, 'v tabulce je nejvyšší hodnota');
-select tt.ok((select count(*) from public.game_badge_unlocks where user_id = tt.gu(1)) = 7, 'odemčeno je 7 odznaků');
+select tt.ok((select count(*) from public.game_badge_unlocks where user_id = tt.gu(1)) = 10, 'odemčeno je 10 odznaků');
 
 -- ===== vlastní postup =====
 select tt.as_gu(1);
 select tt.ok((public.my_game_progress())->'records'->'rocket'->>'score_inferno' = '5000' and (public.my_game_progress())->'records'->'chess'->>'wins_total' = '30', 'my_game_progress vrací rekordy po hrách');
 select tt.ok(jsonb_typeof((public.my_game_progress())->'xp') = 'number', 'xp se vrací jako číslo');
-select tt.ok(((public.my_game_progress())->>'xp')::int = 150 + 100 + 400 + 250, 'XP je součet odemčených odznaků (hell 150 + ace 100 + nemesis a glitch 400 + šachy 250)');
-select tt.ok((public.my_game_progress())->'unlocked' @> '["rocket_hell", "rocket_ace", "chess_25"]'::jsonb and jsonb_array_length((public.my_game_progress())->'unlocked') = 7, 'seznam odemčených odznaků');
+select tt.ok(((public.my_game_progress())->>'xp')::int = 100 + 200 + 30 + 60 + 300 + 150, 'XP je součet odemčených odznaků (hell 100 + i4k 200 + n1000 30 + ace 60 + tři za bosse 300 + šachy 150)');
+select tt.ok((public.my_game_progress())->'unlocked' @> '["rocket_hell", "rocket_ace", "chess_25"]'::jsonb and jsonb_array_length((public.my_game_progress())->'unlocked') = 10, 'seznam odemčených odznaků');
 select tt.as_gu(7);
 select tt.ok((public.my_game_progress()) = '{"records": {}, "unlocked": [], "xp": 0}'::jsonb, 'nový účet má prázdný postup');
 select tt.no_user();
 select tt.gfails($$select public.my_game_progress()$$, 'not_authenticated', 'bez přihlášení postup nevrátí');
 
 -- ===== XP v žebříčku =====
-select tt.rep(2, 'koulovikamosi', 'balls_discovered', 12);   -- 10 + 25
-select tt.rep(3, 'chess', 'wins_total', 1);                  -- 5
-select tt.rep(4, 'chess', 'expert_wins', 1);                 -- 25, ale účet je skrytý
+select tt.rep(2, 'koulovikamosi', 'balls_discovered', 12);   -- 40 + 80 + 250
+select tt.rep(3, 'chess', 'wins_total', 1);                  -- 20
+select tt.rep(4, 'chess', 'expert_wins', 1);                 -- 150, ale účet je skrytý
 select tt.as_gu(1);
-select tt.ok((select xp from public.game_xp_totals() where user_id = tt.gu(1)) = 900, 'game_xp_totals: XP prvního účtu');
-select tt.ok((select xp from public.game_xp_totals() where user_id = tt.gu(2)) = 370, 'game_xp_totals: dva odznaky najednou (120 + 250)');
-select tt.ok((select xp from public.game_xp_totals() where user_id = tt.gu(3)) = 50, 'game_xp_totals: jeden odznak');
+select tt.ok((select xp from public.game_xp_totals() where user_id = tt.gu(1)) = 840, 'game_xp_totals: XP prvního účtu');
+select tt.ok((select xp from public.game_xp_totals() where user_id = tt.gu(2)) = 370, 'game_xp_totals: tři odznaky najednou (40 + 80 + 250)');
+select tt.ok((select xp from public.game_xp_totals() where user_id = tt.gu(3)) = 20, 'game_xp_totals: jeden odznak');
 select tt.ok((select count(*) from public.game_xp_totals() where user_id = tt.gu(4)) = 0, 'skrytý účet v žebříčku XP není');
 select tt.ok((select count(*) from public.game_xp_totals() where user_id = tt.gu(7)) = 0, 'účet bez odznaků v žebříčku XP není');
 select tt.no_user();
@@ -134,24 +135,24 @@ select tt.ok((select bool_and(relrowsecurity) from pg_class where oid in ('publi
 
 -- ===== Polygon aréna: odznaky za dřívější úspěchy ve hře =====
 select tt.ok((tt.rep(7, 'polygonarena', 'classes_discovered', 541)) = '{"ok": false, "reason": "implausible"}'::jsonb, 'víc objevených tříd, než hra má, vrátí implausible');
-select tt.ok((tt.rep(7, 'polygonarena', 'classes_discovered', 150)) = '{"ok": true, "value": 150, "improved": true, "unlocked": ["polygon_cdx40", "polygon_cdx150"], "xp": 150}'::jsonb, 'objevené třídy: dva odznaky najednou (50 + 100 XP)');
-select tt.ok((tt.rep(7, 'polygonarena', 'best_tier', 5))->'unlocked' = '["polygon_tier4", "polygon_tier5"]'::jsonb, 'stupeň třídy 5 odemkne oba odznaky za stupeň');
+select tt.ok((tt.rep(7, 'polygonarena', 'classes_discovered', 150)) = '{"ok": true, "value": 150, "improved": true, "unlocked": ["polygon_cdx10", "polygon_cdx40", "polygon_cdx150"], "xp": 130}'::jsonb, 'objevené třídy: tři odznaky najednou (20 + 40 + 70 XP)');
+select tt.ok((tt.rep(7, 'polygonarena', 'best_tier', 5))->'unlocked' = '["polygon_tier3", "polygon_tier4", "polygon_tier5"]'::jsonb, 'stupeň třídy 5 odemkne všechny tři odznaky za stupeň');
 select tt.ok((tt.rep(7, 'polygonarena', 'best_tier', 6)) = '{"ok": false, "reason": "implausible"}'::jsonb, 'stupeň třídy nad 5 je podvrh');
-select tt.ok((tt.rep(7, 'polygonarena', 'modes_played', 8))->'unlocked' = '["polygon_allmodes"]'::jsonb, 'všech 8 režimů odemkne odznak');
+select tt.ok((tt.rep(7, 'polygonarena', 'modes_played', 8))->'unlocked' = '["polygon_modes4", "polygon_allmodes"]'::jsonb, 'všech 8 režimů odemkne oba odznaky za režimy');
 select tt.ok((tt.rep(7, 'polygonarena', 'hell_best_level', 24))->'unlocked' = '[]'::jsonb and (tt.rep(7, 'polygonarena', 'hell_best_level', 25))->'unlocked' = '["polygon_hell"]'::jsonb, 'Peklo: úroveň 24 nic, úroveň 25 odemkne odznak');
-select tt.ok((tt.rep(7, 'polygonarena', 'boss_kinds', 12))->'unlocked' = '["polygon_bossall"]'::jsonb and (tt.rep(7, 'polygonarena', 'bosses_defeated', 5))->'unlocked' = '["polygon_boss", "polygon_boss5"]'::jsonb, 'bossové: všechny druhy a pátý boss');
-select tt.ok((select count(*) from public.game_badge_unlocks where user_id = tt.gu(7)) = 9, 'účet 7 má 9 odemčených odznaků Polygon arény');
+select tt.ok((tt.rep(7, 'polygonarena', 'boss_kinds', 12))->'unlocked' = '["polygon_kind3", "polygon_kind6", "polygon_bossall"]'::jsonb and (tt.rep(7, 'polygonarena', 'bosses_defeated', 5))->'unlocked' = '["polygon_boss", "polygon_boss5"]'::jsonb, 'bossové: všechny druhy a pátý boss');
+select tt.ok((select count(*) from public.game_badge_unlocks where user_id = tt.gu(7)) = 14, 'účet 7 má 14 odemčených odznaků Polygon arény');
 
 -- ===== Rocket: dřívější úspěchy ve hře jsou odznaky (celkové statistiky, nejdelší běh, loď na maximum) =====
 select tt.ok((tt.rep(7, 'rocket', 'total_kills', 299))->'unlocked' = '[]'::jsonb, 'o jedna pod prahem 300 zničených nepřátel odznak nevznikne');
-select tt.ok((tt.rep(7, 'rocket', 'total_kills', 1500)) = '{"ok": true, "value": 1500, "improved": true, "unlocked": ["rocket_hunter300", "rocket_hunter1500"], "xp": 170}'::jsonb, 'zničení nepřátelé: dva odznaky najednou (50 + 120 XP)');
-select tt.ok((tt.rep(7, 'rocket', 'longest_run', 20))->'unlocked' = '["rocket_run10", "rocket_run20"]'::jsonb, 'nejdelší běh 20 minut odemkne oba odznaky za přežití');
-select tt.ok((tt.rep(7, 'rocket', 'total_coins_earned', 50000))->'unlocked' = '["rocket_coins5k", "rocket_coins50k"]'::jsonb, 'vydělané mince: oba odznaky');
+select tt.ok((tt.rep(7, 'rocket', 'total_kills', 1500)) = '{"ok": true, "value": 1500, "improved": true, "unlocked": ["rocket_hunter300", "rocket_hunter1500"], "xp": 120}'::jsonb, 'zničení nepřátelé: dva odznaky najednou (40 + 80 XP)');
+select tt.ok((tt.rep(7, 'rocket', 'longest_run', 20))->'unlocked' = '["rocket_run5", "rocket_run10", "rocket_run20"]'::jsonb, 'nejdelší běh 20 minut odemkne tři odznaky za přežití');
+select tt.ok((tt.rep(7, 'rocket', 'total_coins_earned', 50000))->'unlocked' = '["rocket_coins500", "rocket_coins5k", "rocket_coins50k"]'::jsonb, 'vydělané mince: tři odznaky');
 select tt.ok((tt.rep(7, 'rocket', 'maxed_upgrades', 9)) = '{"ok": false, "reason": "implausible"}'::jsonb, 'víc vylepšených kategorií, než loď má (8), je podvrh');
-select tt.ok((tt.rep(7, 'rocket', 'maxed_upgrades', 8)) = '{"ok": true, "value": 8, "improved": true, "unlocked": ["rocket_maxship"], "xp": 300}'::jsonb, 'všech osm kategorií na maximu odemkne Dokonalou loď (300 XP)');
-select tt.ok((tt.rep(7, 'rocket', 'no_hit_bosses', 1))->'unlocked' = '["rocket_nohit"]'::jsonb and (tt.rep(7, 'rocket', 'best_combo', 8))->'unlocked' = '["rocket_combo8"]'::jsonb and (tt.rep(7, 'rocket', 'blitz_clears', 1))->'unlocked' = '["rocket_blitzclear"]'::jsonb, 'boss bez zásahu, kombo ×8 a dokončená Blesková vlna');
-select tt.ok((tt.rep(7, 'rocket', 'total_boss_kills', 30))->'unlocked' = '["rocket_boss10", "rocket_boss30"]'::jsonb and (tt.rep(7, 'rocket', 'bombs_used', 20))->'unlocked' = '["rocket_bombs20"]'::jsonb, 'poražení bossové a použité bomby');
-select tt.ok((select count(*) from public.game_badge_unlocks where user_id = tt.gu(7) and badge_id like 'rocket\_%') = 13, 'účet 7 má všech 13 nových odznaků Rocketu');
+select tt.ok((tt.rep(7, 'rocket', 'maxed_upgrades', 8)) = '{"ok": true, "value": 8, "improved": true, "unlocked": ["rocket_max3", "rocket_maxship"], "xp": 250}'::jsonb, 'všech osm kategorií na maximu odemkne Dokonalou loď (a lehčí odznak za tři, 250 XP)');
+select tt.ok((tt.rep(7, 'rocket', 'no_hit_bosses', 1))->'unlocked' = '["rocket_nohit"]'::jsonb and (tt.rep(7, 'rocket', 'best_combo', 8))->'unlocked' = '["rocket_combo3", "rocket_combo5", "rocket_combo8"]'::jsonb and (tt.rep(7, 'rocket', 'blitz_clears', 1))->'unlocked' = '["rocket_blitzclear"]'::jsonb, 'boss bez zásahu, kombo ×8 a dokončená Blesková vlna');
+select tt.ok((tt.rep(7, 'rocket', 'total_boss_kills', 30))->'unlocked' = '["rocket_boss3", "rocket_boss10", "rocket_boss30"]'::jsonb and (tt.rep(7, 'rocket', 'bombs_used', 20))->'unlocked' = '["rocket_bombs5", "rocket_bombs20"]'::jsonb, 'poražení bossové a použité bomby');
+select tt.ok((select count(*) from public.game_badge_unlocks where user_id = tt.gu(7) and badge_id like 'rocket\_%') = 20, 'účet 7 má všech 20 odznaků Rocketu z těchto kroků');
 
 -- ===== smazání účtu =====
 select tt.ok((select count(*) from public.game_records where user_id = tt.gu(3)) = 2, 'účet 3 má dva rekordy před smazáním');
@@ -167,9 +168,9 @@ update public.game_stat_limits set max_value = 5 where game_id = 'chess' and sta
 update public.game_badge_defs set xp = 1 where badge_id = 'rocket_ace';
 \ir ../game-records.sql
 select tt.ok(not exists (select 1 from public.game_badge_defs where badge_id = 'zz_zrusen') and not exists (select 1 from public.game_badge_unlocks where badge_id = 'zz_zrusen'), 'odznak mimo seznam zmizel i s odemčením');
-select tt.ok((select xp from public.game_badge_defs where badge_id = 'rocket_ace') = 100, 'změněná hodnota XP se vrátila podle souboru');
-select tt.ok((select count(*) from public.game_badge_defs) = 82 and (select count(*) from public.game_stat_limits) = 46, 'seznamy mají zase 82 a 46 položek');
+select tt.ok((select xp from public.game_badge_defs where badge_id = 'rocket_ace') = 60, 'změněná hodnota XP se vrátila podle souboru');
+select tt.ok((select count(*) from public.game_badge_defs) = 519 and (select count(*) from public.game_stat_limits) = 261, 'seznamy mají zase 519 a 261 položek');
 select tt.ok(tt.gsnap() = :'before_rerun', 'rekordy a odemčené odznaky všech ostatních zůstaly beze změny');
 select tt.as_gu(1);
-select tt.ok(((public.my_game_progress())->>'xp')::int = 900, 'XP účtu 1 je po novém spuštění stejné (900)');
+select tt.ok(((public.my_game_progress())->>'xp')::int = 840, 'XP účtu 1 je po novém spuštění stejné (840)');
 select tt.no_user();
