@@ -266,7 +266,7 @@ const groupBy = (rows, key) => {
   return map;
 };
 
-// Série čtení všech čtenářů, jak je vyhodnotil server (db/leaderboard-streaks.sql): Map(id účtu -> {streak, frozen: Set dní zachráněných pojistkou}).
+// Série čtení všech čtenářů, jak je vyhodnotil server (db/leaderboard-streaks.sql): Map(id účtu -> {streak, frozen: Set dní zachráněných pojistkou, freezes: pojistky v zásobě}).
 // null, dokud SQL v databázi neběží (nebo když volání selže): žebříček pak počítá sérii jen ze dnů čtení.
 async function loadStreakBase(client) {
   try {
@@ -275,7 +275,11 @@ async function loadStreakBase(client) {
     const map = new Map();
     for (const row of Array.isArray(data) ? data : []) {
       if (!row?.user_id) continue;
-      map.set(row.user_id, { streak: Math.max(0, parseInt(row.current_streak, 10) || 0), frozen: new Set(Array.isArray(row.frozen_dates) ? row.frozen_dates : []) });
+      map.set(row.user_id, {
+        streak: Math.max(0, parseInt(row.current_streak, 10) || 0),
+        frozen: new Set(Array.isArray(row.frozen_dates) ? row.frozen_dates : []),
+        freezes: Math.max(0, parseInt(row.streak_freezes, 10) || 0), // chybí, dokud se db/leaderboard-streaks.sql nespustí znovu: pak se bere 0
+      });
     }
     return map;
   } catch (err) {
@@ -284,14 +288,31 @@ async function loadStreakBase(client) {
   }
 }
 
+// Den před dnem zapsaným jako RRRR-MM-DD (počítá se v UTC, takže přechod na letní čas nic nepřeskočí ani nezdvojí).
+const prevDay = (s) => new Date(Date.parse(`${s}T00:00:00Z`) - 86400000).toISOString().slice(0, 10);
+
 // Série čtenáře do žebříčku stejně jako u vlastní série (loadMyStats): série vyhodnocená serverem (zmeškaný den zachráněný pojistkou ji nepřeruší)
 // plus dnešek, pokud se dnes četlo. Série, která nedosahuje do včerejška (ani čtením, ani pojistkou), už skončila.
-// Bez dat ze serveru (base null) se série počítá jen z po sobě jdoucích dnů čtení.
-export function boardStreak({ base, acts, todayStr, yestStr }) {
+// Vrací i to, zda sérii právě drží pojistka (Streak Freeze), tedy dnes se ještě nečetlo a poslední den série byl zachráněn pojistkou:
+// takový čtenář nemá nulu, v žebříčku se jeho řádek zbarví modře.
+// Server (resolve_streak) pojistky spotřebuje až ve chvíli, kdy čtenář appku otevře. Kdo zmeškal den a appku ještě neotevřel, má
+// v databázi dny nezachráněné, ale pojistky v zásobě (base.freezes): když zmeškaných dní není víc než pojistek, série drží i tak.
+// Bez dat ze serveru (base null) se série počítá jen z po sobě jdoucích dnů čtení a nikdy není zmrzlá.
+export function boardStreakInfo({ base, acts, todayStr, yestStr }) {
   const readToday = acts.has(todayStr);
   if (base) {
-    const alive = readToday || acts.has(yestStr) || base.frozen.has(yestStr) || base.frozen.has(todayStr);
-    return alive ? base.streak + (readToday ? 1 : 0) : 0;
+    if (readToday) return { streak: base.streak + 1, frozen: false };
+    if (acts.has(yestStr)) return { streak: base.streak, frozen: false };
+    const held = base.streak > 0;
+    if (base.frozen.has(yestStr) || base.frozen.has(todayStr)) return { streak: base.streak, frozen: held };
+    // zmeškané dny, které by pojistky v zásobě ještě pokryly (nejvýš tolik dní, kolik je pojistek)
+    const covered = (d) => acts.has(d) || base.frozen.has(d);
+    const freezes = Math.max(0, base.freezes | 0);
+    let missed = 0;
+    let day = yestStr;
+    while (missed <= freezes && !covered(day)) { missed++; day = prevDay(day); }
+    if (missed >= 1 && missed <= freezes && held) return { streak: base.streak, frozen: true };
+    return { streak: 0, frozen: false };
   }
   let streak = 0;
   if (readToday || acts.has(yestStr)) {
@@ -301,8 +322,10 @@ export function boardStreak({ base, acts, todayStr, yestStr }) {
       chk.setDate(chk.getDate() - 1);
     }
   }
-  return streak;
+  return { streak, frozen: false };
 }
+
+export const boardStreak = (args) => boardStreakInfo(args).streak;
 
 // Pořadí v kategorii: vyšší hodnota výš, při shodě víc XP, pak jméno (aby pořadí nezáleželo na tom, v jakém pořadí přišla data).
 const rankBy = (users, key) => [...users].sort((a, b) => b[key] - a[key] || b.xp - a.xp || a.email.localeCompare(b.email, 'cs'));
@@ -346,7 +369,8 @@ export async function loadLeaderboards(client, user, mine = null) {
       const uBooks = booksByUser.get(p.id) || [];
       const uActs = new Set((actsByUser.get(p.id) || []).map(a => a.activity_date));
 
-      const uStreak = boardStreak({ base: streakBase?.get(p.id) || null, acts: uActs, todayStr, yestStr });
+      const streakInfo = boardStreakInfo({ base: streakBase?.get(p.id) || null, acts: uActs, todayStr, yestStr });
+      const uStreak = streakInfo.streak;
 
       const uMRead = uBooks.filter(b => {
         if (!b.first_completed_at) return false;
@@ -370,9 +394,15 @@ export async function loadLeaderboards(client, user, mine = null) {
 
       const isMe = p.id === user.id;
       const own = isMe && mine ? mine : null;
+      // Vlastní řádek: série i pojistky přesně podle toho, co vidíš nahoře (server je právě vyhodnotil), ne podle cizí kopie.
+      const ownFrozen = own ? boardStreakInfo({
+        base: { streak: Math.max(0, (parseInt(own.streak, 10) || 0) - (uActs.has(todayStr) ? 1 : 0)), frozen: new Set(own.frozenDates || []), freezes: parseInt(own.streakFreezes, 10) || 0 },
+        acts: uActs, todayStr, yestStr,
+      }).frozen : false;
       return {
         email: p.username || 'Anonym',
         streak: own ? own.streak : uStreak,
+        streakFrozen: own ? ownFrozen : streakInfo.frozen,
         level: own ? own.level : uLvl,
         totalRead: own ? own.totalRead : uBooks.length,
         monthlyRead: own ? own.monthlyRead : uMRead,
