@@ -3,177 +3,31 @@
 // Hry samy nic nepočítají ani neudělují: hlásí jen aktuální hodnotu (jomaridRecord), server si pamatuje nejvyšší a odemyká odznaky.
 import { Rocket, Swords, Building2, Target, Crown, Smile, Castle } from 'lucide-react';
 
-// id her jsou stejná jako v Games.jsx a v mostu pro odměny; headline je statistika, podle které se řadí žebříček hry
-export const GAME_CATALOG = [
-  {
-    id: 'rocket', title: 'Jomarid Rocket Game', icon: Rocket, headline: 'score_normal',
-    stats: [
-      { key: 'score_normal', label: 'Normální (skóre)', max: 100000000 },
-      { key: 'score_hard', label: 'Těžká (skóre)', max: 100000000 },
-      { key: 'score_inferno', label: 'Peklo (skóre)', max: 100000000 },
-      { key: 'score_insane', label: 'Insane Peklo (skóre)', max: 100000000 },
-      { key: 'score_blitz', label: 'Blesková vlna (skóre)', max: 100000000 },
-      { key: 'rush_streak', label: 'Boss Rush (série bossů)', max: 10000 },
-      { key: 'boss_level', label: 'Nejvyšší poražený boss', max: 1000 },
-      { key: 'ascension', label: 'Vzestupy', max: 10000 },
-      { key: 'total_kills', label: 'Zničení nepřátelé celkem', max: 2000000000 },
-      { key: 'total_boss_kills', label: 'Poražení bossové celkem', max: 100000000 },
-      { key: 'no_hit_bosses', label: 'Bossové poražení bez zásahu', max: 100000000 },
-      { key: 'best_combo', label: 'Nejvyšší kombo', max: 1000 },
-      { key: 'bombs_used', label: 'Použité bomby', max: 1000000000 },
-      { key: 'total_coins_earned', label: 'Vydělané mince celkem', max: 1000000000000 },
-      { key: 'longest_run', label: 'Nejdelší běh (minuty)', max: 100000 },
-      { key: 'blitz_clears', label: 'Dokončené Bleskové vlny', max: 100000000 },
-      { key: 'maxed_upgrades', label: 'Vylepšení lodi na maximu (z 8)', max: 8 },
-    ],
-  },
-  {
-    id: 'warroom', title: 'Warroom: Frontlines', icon: Swords, headline: 'best_sector',
-    stats: [
-      { key: 'best_sector', label: 'Nejdál v kampani (sektor)', max: 10000 },
-      { key: 'scenarios_unlocked', label: 'Odemčené scénáře', max: 100 },
-    ],
-  },
-  {
-    id: 'cityclicker', title: 'City Clicker', icon: Building2, headline: 'prestige_count',
-    stats: [
-      { key: 'prestige_count', label: 'Prestiže', max: 100000 },
-      { key: 'total_clicks', label: 'Kliknutí celkem', max: 2000000000 },
-    ],
-  },
-  {
-    id: 'polygonarena', title: 'Polygon aréna', icon: Target, headline: 'best_level',
-    stats: [
-      { key: 'best_level', label: 'Nejvyšší úroveň', max: 100 },
-      { key: 'bosses_defeated', label: 'Poražení bossové', max: 1000000 },
-      { key: 'wins', label: 'Vyhrané zápasy', max: 1000000 },
-      { key: 'best_tier', label: 'Nejvyšší stupeň třídy', max: 5 },
-      { key: 'boss_kinds', label: 'Druhy poražených bossů', max: 12 },
-      { key: 'classes_discovered', label: 'Objevené třídy', max: 540 },
-      { key: 'best_wave', label: 'Nejvyšší vlna v Přežití', max: 1000 },
-      { key: 'hill_wins', label: 'Výhry v Králi kopce', max: 1000000 },
-      { key: 'royale_wins', label: 'Výhry v Posledním přeživším', max: 1000000 },
-      { key: 'rush_wins', label: 'Výhry v Honu na bossy', max: 1000000 },
-      { key: 'hell_best_level', label: 'Nejvyšší úroveň na Pekle', max: 100 },
-      { key: 'modes_played', label: 'Vyzkoušené režimy', max: 8 },
-    ],
-  },
-  {
-    id: 'chess', title: 'Chess League', icon: Crown, headline: 'rating_peak',
-    stats: [
-      { key: 'rating_peak', label: 'Nejvyšší rating', max: 4000 },
-      { key: 'wins_total', label: 'Výhry v hodnocených partiích', max: 1000000 },
-      { key: 'expert_wins', label: 'Výhry nad Drakem', max: 1000000 },
-      { key: 'bots_unlocked', label: 'Odemčení soupeři', max: 5 },
-    ],
-  },
-  {
-    id: 'koulovikamosi', title: 'Kouloví Kámoši', icon: Smile, headline: 'score_classic',
-    stats: [
-      { key: 'score_classic', label: 'Klasika (skóre)', max: 50000000 },
-      { key: 'score_time', label: 'Časovka (skóre)', max: 50000000 },
-      { key: 'score_drops', label: '30 hodů (skóre)', max: 50000000 },
-      { key: 'score_chaos', label: 'Chaos (skóre)', max: 50000000 },
-      { key: 'balls_discovered', label: 'Objevené koule', max: 12 },
-    ],
-  },
-  {
-    id: 'hannibal', title: 'Hannibal: Barca', icon: Castle, headline: 'endless_wave',
-    stats: [
-      { key: 'endless_wave', label: 'Nejvyšší vlna v Nekonečném tažení', max: 1000 },
-      { key: 'chapters_completed', label: 'Dokončené kapitoly kampaně (z 11)', max: 11 },
-      { key: 'doctrines_unlocked', label: 'Odemčené doktríny (z 6)', max: 6 },
-      { key: 'top_unit_level', label: 'Nejvyšší úroveň jednotky', max: 1000 },
-    ],
-  },
+import * as rocket from './defs/rocket.js';
+import * as warroom from './defs/warroom.js';
+import * as cityClicker from './defs/cityClicker.js';
+import * as polygonArena from './defs/polygonArena.js';
+import * as chess from './defs/chess.js';
+import * as koulovi from './defs/koulovi.js';
+import * as hannibal from './defs/hannibal.js';
+
+// id her jsou stejná jako v Games.jsx a v mostu pro odměny; headline je statistika, podle které se řadí žebříček hry.
+// Statistiky a odznaky každé hry jsou ve vlastním souboru ve složce defs (a každá hra je hlásí přes jomaridRecord).
+const GAMES = [
+  { id: 'rocket', title: 'Jomarid Rocket Game', icon: Rocket, headline: 'score_normal', defs: rocket },
+  { id: 'warroom', title: 'Warroom: Frontlines', icon: Swords, headline: 'best_sector', defs: warroom },
+  { id: 'cityclicker', title: 'City Clicker', icon: Building2, headline: 'prestige_count', defs: cityClicker },
+  { id: 'polygonarena', title: 'Polygon aréna', icon: Target, headline: 'best_level', defs: polygonArena },
+  { id: 'chess', title: 'Chess League', icon: Crown, headline: 'rating_peak', defs: chess },
+  { id: 'koulovikamosi', title: 'Kouloví Kámoši', icon: Smile, headline: 'score_classic', defs: koulovi },
+  { id: 'hannibal', title: 'Hannibal: Barca', icon: Castle, headline: 'endless_wave', defs: hannibal },
 ];
 
-// Odznaky za hry dávají jen XP (ne mince). Ve stejné statistice platí, že čím těžší odznak, tím víc XP; dohromady je to 14 040 XP, takže hry samy
-// dovedou čtenáře zhruba na úroveň 13 a dál už jen čtení. XP z her se do úrovně přičítá, ale odznaky za úroveň (a s nimi mince) se z něj nevyhodnocují.
-export const GAME_BADGES = [
-  { id: 'rocket_ace', game: 'rocket', stat: 'score_normal', threshold: 2500, xp: 100, title: 'Eso hvězd', description: 'Získej v Normální obtížnosti 2 500 bodů.' },
-  { id: 'rocket_hell', game: 'rocket', stat: 'score_inferno', threshold: 1500, xp: 150, title: 'Pekelný pilot', description: 'Získej v Pekle 1 500 bodů.' },
-  { id: 'rocket_insane', game: 'rocket', stat: 'score_insane', threshold: 1500, xp: 250, title: 'Šílenec', description: 'Získej v Insane Pekle 1 500 bodů.' },
-  { id: 'rocket_nemesis', game: 'rocket', stat: 'boss_level', threshold: 8, xp: 150, title: 'Konec NEMESIS', description: 'Poraz osmého bosse (NEMESIS).' },
-  { id: 'rocket_glitch', game: 'rocket', stat: 'boss_level', threshold: 14, xp: 250, title: 'Chyba v systému', description: 'Poraz čtrnáctého bosse (GLITCH).' },
-  { id: 'rocket_ascend', game: 'rocket', stat: 'ascension', threshold: 1, xp: 300, title: 'Hvězdný vzestup', description: 'Dokonči první Vzestup. Odemyká relikvii Fénixovo jádro.' },
-  { id: 'rocket_hard', game: 'rocket', stat: 'score_hard', threshold: 2000, xp: 120, title: 'Těžká cesta', description: 'Získej v Těžké obtížnosti 2 000 bodů.' },
-  { id: 'rocket_blitz', game: 'rocket', stat: 'score_blitz', threshold: 1500, xp: 100, title: 'Bleskový pilot', description: 'Získej v Bleskové vlně 1 500 bodů.' },
-  { id: 'rocket_rush5', game: 'rocket', stat: 'rush_streak', threshold: 5, xp: 150, title: 'Nájezdník', description: 'V Boss Rush poraz 5 bossů v jedné sérii.' },
-  { id: 'rocket_rush10', game: 'rocket', stat: 'rush_streak', threshold: 10, xp: 300, title: 'Legenda nájezdů', description: 'V Boss Rush poraz 10 bossů v jedné sérii.' },
-  { id: 'rocket_hunter300', game: 'rocket', stat: 'total_kills', threshold: 300, xp: 50, title: 'Vyhlazovač', description: 'Znič 300 nepřátel. Odemyká relikvii Posílená hlaveň.' },
-  { id: 'rocket_hunter1500', game: 'rocket', stat: 'total_kills', threshold: 1500, xp: 120, title: 'Zkáza hvězd', description: 'Znič 1 500 nepřátel.' },
-  { id: 'rocket_boss10', game: 'rocket', stat: 'total_boss_kills', threshold: 10, xp: 80, title: 'Postrach bossů', description: 'Poraz 10 bossů. Odemyká relikvii Silné pláty.' },
-  { id: 'rocket_boss30', game: 'rocket', stat: 'total_boss_kills', threshold: 30, xp: 200, title: 'Exterminátor', description: 'Poraz 30 bossů.' },
-  { id: 'rocket_nohit', game: 'rocket', stat: 'no_hit_bosses', threshold: 1, xp: 150, title: 'Bez škrábnutí', description: 'Poraz bosse, aniž bys v souboji dostal zásah.' },
-  { id: 'rocket_combo8', game: 'rocket', stat: 'best_combo', threshold: 8, xp: 80, title: 'Nezastavitelný', description: 'Dosáhni násobiče kombo ×8. Odemyká relikvii Rychlá ruka.' },
-  { id: 'rocket_bombs20', game: 'rocket', stat: 'bombs_used', threshold: 20, xp: 40, title: 'Demolice', description: 'Použij bomby 20krát. Odemyká relikvii Nouzové bomby.' },
-  { id: 'rocket_coins5k', game: 'rocket', stat: 'total_coins_earned', threshold: 5000, xp: 40, title: 'Boháč', description: 'Vydělej ve hře celkem 5 000 mincí. Odemyká relikvii Sběrač.' },
-  { id: 'rocket_coins50k', game: 'rocket', stat: 'total_coins_earned', threshold: 50000, xp: 120, title: 'Magnát', description: 'Vydělej ve hře celkem 50 000 mincí.' },
-  { id: 'rocket_run10', game: 'rocket', stat: 'longest_run', threshold: 10, xp: 100, title: 'Vytrvalec', description: 'Přežij 10 minut v jednom běhu.' },
-  { id: 'rocket_run20', game: 'rocket', stat: 'longest_run', threshold: 20, xp: 250, title: 'Železné plíce', description: 'Přežij 20 minut v jednom běhu.' },
-  { id: 'rocket_blitzclear', game: 'rocket', stat: 'blitz_clears', threshold: 1, xp: 80, title: 'Bleskový útok', description: 'Dokonči celé kolo Bleskové vlny.' },
-  { id: 'rocket_maxship', game: 'rocket', stat: 'maxed_upgrades', threshold: 8, xp: 300, title: 'Dokonalá loď', description: 'Vylepši všech osm kategorií lodi na maximum.' },
-  { id: 'chess_first', game: 'chess', stat: 'wins_total', threshold: 1, xp: 50, title: 'První výhra', description: 'Vyhraj hodnocenou partii.' },
-  { id: 'chess_25', game: 'chess', stat: 'wins_total', threshold: 25, xp: 120, title: 'Stálý hráč', description: 'Vyhraj 25 hodnocených partií.' },
-  { id: 'chess_dragon', game: 'chess', stat: 'expert_wins', threshold: 1, xp: 250, title: 'Přemožitel draka', description: 'Poraz Draka v hodnocené partii.' },
-  { id: 'chess_r1000', game: 'chess', stat: 'rating_peak', threshold: 1000, xp: 100, title: 'Rating 1000', description: 'Dosáhni ratingu 1 000.' },
-  { id: 'chess_r1300', game: 'chess', stat: 'rating_peak', threshold: 1300, xp: 200, title: 'Rating 1300', description: 'Dosáhni ratingu 1 300.' },
-  { id: 'chess_10', game: 'chess', stat: 'wins_total', threshold: 10, xp: 80, title: 'Deset výher', description: 'Vyhraj 10 hodnocených partií.' },
-  { id: 'chess_bots3', game: 'chess', stat: 'bots_unlocked', threshold: 3, xp: 80, title: 'Třetí soupeř', description: 'Odemkni třetího soupeře.' },
-  { id: 'chess_bots5', game: 'chess', stat: 'bots_unlocked', threshold: 5, xp: 150, title: 'Všichni soupeři', description: 'Odemkni všech 5 soupeřů.' },
-  { id: 'chess_expert5', game: 'chess', stat: 'expert_wins', threshold: 5, xp: 350, title: 'Postrach draků', description: 'Poraz Draka 5krát v hodnocené partii.' },
-  { id: 'koulovi_3000', game: 'koulovikamosi', stat: 'score_classic', threshold: 3000, xp: 100, title: 'Měkká klasika', description: 'Získej v Klasice 3 000 bodů.' },
-  { id: 'koulovi_big', game: 'koulovikamosi', stat: 'balls_discovered', threshold: 8, xp: 120, title: 'Velká koule', description: 'Objev 8 typů koulí.' },
-  { id: 'koulovi_all', game: 'koulovikamosi', stat: 'balls_discovered', threshold: 12, xp: 250, title: 'Všichni kámoši', description: 'Objev všech 12 typů koulí.' },
-  { id: 'koulovi_10k', game: 'koulovikamosi', stat: 'score_classic', threshold: 10000, xp: 200, title: 'Vysoká klasika', description: 'Získej v Klasice 10 000 bodů.' },
-  { id: 'koulovi_time', game: 'koulovikamosi', stat: 'score_time', threshold: 1000, xp: 80, title: 'Rychlé koule', description: 'Získej v Časovce 1 000 bodů.' },
-  { id: 'koulovi_drops', game: 'koulovikamosi', stat: 'score_drops', threshold: 500, xp: 80, title: 'Přesné hody', description: 'Získej ve hře 30 hodů 500 bodů.' },
-  { id: 'koulovi_chaos', game: 'koulovikamosi', stat: 'score_chaos', threshold: 1500, xp: 120, title: 'Zvládnutý chaos', description: 'Získej v Chaosu 1 500 bodů.' },
-  { id: 'polygon_lvl20', game: 'polygonarena', stat: 'best_level', threshold: 20, xp: 100, title: 'Veterán arény', description: 'Dosáhni úrovně 20.' },
-  { id: 'polygon_lvl58', game: 'polygonarena', stat: 'best_level', threshold: 58, xp: 300, title: 'Legenda arény', description: 'Dosáhni maximální úrovně.' },
-  { id: 'polygon_boss', game: 'polygonarena', stat: 'bosses_defeated', threshold: 1, xp: 100, title: 'Lovec bossů', description: 'Poraz bosse.' },
-  { id: 'polygon_win', game: 'polygonarena', stat: 'wins', threshold: 1, xp: 100, title: 'Vítěz zápasu', description: 'Vyhraj zápas.' },
-  { id: 'polygon_boss5', game: 'polygonarena', stat: 'bosses_defeated', threshold: 5, xp: 150, title: 'Zabiják titánů', description: 'Poraz 5 bossů.' },
-  { id: 'polygon_bossall', game: 'polygonarena', stat: 'boss_kinds', threshold: 12, xp: 250, title: 'Sběratel trofejí', description: 'Poraz všech 12 druhů bossů.' },
-  { id: 'polygon_tier4', game: 'polygonarena', stat: 'best_tier', threshold: 4, xp: 150, title: 'Vrchol vývoje', description: 'Dosáhni 4. stupně třídy.' },
-  { id: 'polygon_tier5', game: 'polygonarena', stat: 'best_tier', threshold: 5, xp: 200, title: 'Vzestup třídy', description: 'Dosáhni 5. stupně třídy (Vzestup).' },
-  { id: 'polygon_cdx40', game: 'polygonarena', stat: 'classes_discovered', threshold: 40, xp: 50, title: 'Znalec', description: 'Objev 40 tříd.' },
-  { id: 'polygon_cdx150', game: 'polygonarena', stat: 'classes_discovered', threshold: 150, xp: 100, title: 'Archivář', description: 'Objev 150 tříd.' },
-  { id: 'polygon_cdx400', game: 'polygonarena', stat: 'classes_discovered', threshold: 400, xp: 250, title: 'Encyklopedie', description: 'Objev 400 tříd.' },
-  { id: 'polygon_wave10', game: 'polygonarena', stat: 'best_wave', threshold: 10, xp: 100, title: 'Desátá vlna', description: 'Zvládni 10 vln v režimu Přežití.' },
-  { id: 'polygon_hill', game: 'polygonarena', stat: 'hill_wins', threshold: 1, xp: 100, title: 'Král kopce', description: 'Vyhraj zápas v režimu Král kopce.' },
-  { id: 'polygon_royale', game: 'polygonarena', stat: 'royale_wins', threshold: 1, xp: 120, title: 'Poslední v bouři', description: 'Vyhraj režim Poslední přeživší.' },
-  { id: 'polygon_rush', game: 'polygonarena', stat: 'rush_wins', threshold: 1, xp: 250, title: 'Přemožitel', description: 'Poraz všechny bossy v Honu na bossy.' },
-  { id: 'polygon_hell', game: 'polygonarena', stat: 'hell_best_level', threshold: 25, xp: 200, title: 'Z pekla', description: 'Dosáhni úrovně 25 na obtížnosti Peklo.' },
-  { id: 'polygon_allmodes', game: 'polygonarena', stat: 'modes_played', threshold: 8, xp: 120, title: 'Všechny režimy', description: 'Zahraj si všech 8 herních režimů.' },
-  { id: 'city_prestige', game: 'cityclicker', stat: 'prestige_count', threshold: 1, xp: 150, title: 'Nový začátek', description: 'Proveď první prestiž.' },
-  { id: 'city_prestige5', game: 'cityclicker', stat: 'prestige_count', threshold: 5, xp: 250, title: 'Zkušený starosta', description: 'Proveď 5 prestiží.' },
-  { id: 'city_clicks', game: 'cityclicker', stat: 'total_clicks', threshold: 10000, xp: 100, title: 'Klikací mistr', description: 'Klikni 10 000krát.' },
-  { id: 'city_clicks1k', game: 'cityclicker', stat: 'total_clicks', threshold: 1000, xp: 30, title: 'Rozcvička', description: 'Klikni 1 000krát.' },
-  { id: 'city_prestige3', game: 'cityclicker', stat: 'prestige_count', threshold: 3, xp: 200, title: 'Stavitel měst', description: 'Proveď 3 prestiže.' },
-  { id: 'city_prestige10', game: 'cityclicker', stat: 'prestige_count', threshold: 10, xp: 400, title: 'Mistr přestaveb', description: 'Proveď 10 prestiží.' },
-  { id: 'city_clicks100k', game: 'cityclicker', stat: 'total_clicks', threshold: 100000, xp: 200, title: 'Klikací legenda', description: 'Klikni 100 000krát.' },
-  { id: 'war_sector5', game: 'warroom', stat: 'best_sector', threshold: 5, xp: 100, title: 'Držíme linii', description: 'Dostaň se v kampani do 5. sektoru.' },
-  { id: 'war_sector10', game: 'warroom', stat: 'best_sector', threshold: 10, xp: 150, title: 'Průlom', description: 'Dostaň se v kampani do 10. sektoru.' },
-  { id: 'war_sector25', game: 'warroom', stat: 'best_sector', threshold: 25, xp: 300, title: 'Generál', description: 'Dostaň se v kampani do 25. sektoru.' },
-  { id: 'war_scen4', game: 'warroom', stat: 'scenarios_unlocked', threshold: 4, xp: 250, title: 'Čtyři fronty', description: 'Odemkni 4 scénáře.' },
-  { id: 'war_scen12', game: 'warroom', stat: 'scenarios_unlocked', threshold: 12, xp: 500, title: 'Půl světa', description: 'Odemkni 12 scénářů.' },
-  { id: 'war_scen24', game: 'warroom', stat: 'scenarios_unlocked', threshold: 24, xp: 800, title: 'Všechny fronty', description: 'Odemkni všech 24 scénářů.' },
-  { id: 'war_sector15', game: 'warroom', stat: 'best_sector', threshold: 15, xp: 200, title: 'Hluboký průlom', description: 'Dostaň se v kampani do 15. sektoru.' },
-  { id: 'han_ch1', game: 'hannibal', stat: 'chapters_completed', threshold: 1, xp: 50, title: 'Pád Sagunta', description: 'Dokonči první kapitolu kampaně.' },
-  { id: 'han_ch4', game: 'hannibal', stat: 'chapters_completed', threshold: 4, xp: 100, title: 'Přes Alpy', description: 'Dokonči 4 kapitoly kampaně.' },
-  { id: 'han_ch8', game: 'hannibal', stat: 'chapters_completed', threshold: 8, xp: 200, title: 'Hrozba pro Řím', description: 'Dokonči 8 kapitol kampaně.' },
-  { id: 'han_ch11', game: 'hannibal', stat: 'chapters_completed', threshold: 11, xp: 400, title: 'Celé tažení', description: 'Dokonči všech 11 kapitol kampaně.' },
-  { id: 'han_doc1', game: 'hannibal', stat: 'doctrines_unlocked', threshold: 1, xp: 50, title: 'První doktrína', description: 'Odemkni první taktickou doktrínu.' },
-  { id: 'han_doc3', game: 'hannibal', stat: 'doctrines_unlocked', threshold: 3, xp: 100, title: 'Zkušený taktik', description: 'Odemkni 3 taktické doktríny.' },
-  { id: 'han_doc6', game: 'hannibal', stat: 'doctrines_unlocked', threshold: 6, xp: 250, title: 'Mistr taktiky', description: 'Odemkni všech 6 taktických doktrín.' },
-  { id: 'han_wave5', game: 'hannibal', stat: 'endless_wave', threshold: 5, xp: 80, title: 'Neúnavné tažení', description: 'Poraž 5 vln v Nekonečném tažení.' },
-  { id: 'han_wave10', game: 'hannibal', stat: 'endless_wave', threshold: 10, xp: 150, title: 'Neústupný', description: 'Poraž 10 vln v Nekonečném tažení.' },
-  { id: 'han_wave20', game: 'hannibal', stat: 'endless_wave', threshold: 20, xp: 300, title: 'Nekonečná armáda', description: 'Poraž 20 vln v Nekonečném tažení.' },
-  { id: 'han_lvl5', game: 'hannibal', stat: 'top_unit_level', threshold: 5, xp: 80, title: 'Ostřílený voják', description: 'Vypěstuj jednotku na úroveň 5.' },
-  { id: 'han_lvl10', game: 'hannibal', stat: 'top_unit_level', threshold: 10, xp: 200, title: 'Legenda armády', description: 'Vypěstuj jednotku na úroveň 10.' },
-];
+export const GAME_CATALOG = GAMES.map(({ id, title, icon, headline, defs }) => ({ id, title, icon, headline, stats: defs.STATS }));
+
+// Odznaky za hry dávají jen XP (ne mince). XP se bere z tabulky obtížnosti (defs/helpers.js): ve stejné statistice platí, že čím těžší odznak, tím víc XP.
+// XP z her se do úrovně přičítá, ale odznaky za úroveň (a s nimi mince) se z něj nevyhodnocují.
+export const GAME_BADGES = GAMES.flatMap(({ id, defs }) => defs.BADGES.map((b) => ({ ...b, game: id })));
 
 export const GAME_BADGES_TOTAL_XP = GAME_BADGES.reduce((sum, b) => sum + b.xp, 0);
 

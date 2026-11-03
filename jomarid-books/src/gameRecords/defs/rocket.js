@@ -1,0 +1,48 @@
+// Jomarid Rocket Game: statistiky, které hra hlásí, a odznaky z nich (id a prahy se nemění, na nich stojí odemčené odznaky hráčů).
+import { stat, badge } from './helpers.js';
+
+export const STATS = [
+  stat("score_normal", "Normální (skóre)", 100000000),
+  stat("score_hard", "Těžká (skóre)", 100000000),
+  stat("score_inferno", "Peklo (skóre)", 100000000),
+  stat("score_insane", "Insane Peklo (skóre)", 100000000),
+  stat("score_blitz", "Blesková vlna (skóre)", 100000000),
+  stat("rush_streak", "Boss Rush (série bossů)", 10000),
+  stat("boss_level", "Nejvyšší poražený boss", 1000),
+  stat("ascension", "Vzestupy", 10000),
+  stat("total_kills", "Zničení nepřátelé celkem", 2000000000),
+  stat("total_boss_kills", "Poražení bossové celkem", 100000000),
+  stat("no_hit_bosses", "Bossové poražení bez zásahu", 100000000),
+  stat("best_combo", "Nejvyšší kombo", 1000),
+  stat("bombs_used", "Použité bomby", 1000000000),
+  stat("total_coins_earned", "Vydělané mince celkem", 1000000000000),
+  stat("longest_run", "Nejdelší běh (minuty)", 100000),
+  stat("blitz_clears", "Dokončené Bleskové vlny", 100000000),
+  stat("maxed_upgrades", "Vylepšení lodi na maximu (z 8)", 8),
+];
+
+export const BADGES = [
+  badge("rocket_ace", "score_normal", 2500, 6, "Eso hvězd", "Získej v Normální obtížnosti 2 500 bodů."),
+  badge("rocket_hell", "score_inferno", 1500, 8, "Pekelný pilot", "Získej v Pekle 1 500 bodů."),
+  badge("rocket_insane", "score_insane", 1500, 10, "Šílenec", "Získej v Insane Pekle 1 500 bodů."),
+  badge("rocket_nemesis", "boss_level", 8, 8, "Konec NEMESIS", "Poraz osmého bosse (NEMESIS)."),
+  badge("rocket_glitch", "boss_level", 14, 10, "Chyba v systému", "Poraz čtrnáctého bosse (GLITCH)."),
+  badge("rocket_ascend", "ascension", 1, 11, "Hvězdný vzestup", "Dokonči první Vzestup. Odemyká relikvii Fénixovo jádro."),
+  badge("rocket_hard", "score_hard", 2000, 7, "Těžká cesta", "Získej v Těžké obtížnosti 2 000 bodů."),
+  badge("rocket_blitz", "score_blitz", 1500, 6, "Bleskový pilot", "Získej v Bleskové vlně 1 500 bodů."),
+  badge("rocket_rush5", "rush_streak", 5, 8, "Nájezdník", "V Boss Rush poraz 5 bossů v jedné sérii."),
+  badge("rocket_rush10", "rush_streak", 10, 11, "Legenda nájezdů", "V Boss Rush poraz 10 bossů v jedné sérii."),
+  badge("rocket_hunter300", "total_kills", 300, 3, "Vyhlazovač", "Znič 300 nepřátel. Odemyká relikvii Posílená hlaveň."),
+  badge("rocket_hunter1500", "total_kills", 1500, 7, "Zkáza hvězd", "Znič 1 500 nepřátel."),
+  badge("rocket_boss10", "total_boss_kills", 10, 5, "Postrach bossů", "Poraz 10 bossů. Odemyká relikvii Silné pláty."),
+  badge("rocket_boss30", "total_boss_kills", 30, 9, "Exterminátor", "Poraz 30 bossů."),
+  badge("rocket_nohit", "no_hit_bosses", 1, 8, "Bez škrábnutí", "Poraz bosse, aniž bys v souboji dostal zásah."),
+  badge("rocket_combo8", "best_combo", 8, 5, "Nezastavitelný", "Dosáhni násobiče kombo ×8. Odemyká relikvii Rychlá ruka."),
+  badge("rocket_bombs20", "bombs_used", 20, 2, "Demolice", "Použij bomby 20krát. Odemyká relikvii Nouzové bomby."),
+  badge("rocket_coins5k", "total_coins_earned", 5000, 2, "Boháč", "Vydělej ve hře celkem 5 000 mincí. Odemyká relikvii Sběrač."),
+  badge("rocket_coins50k", "total_coins_earned", 50000, 7, "Magnát", "Vydělej ve hře celkem 50 000 mincí."),
+  badge("rocket_run10", "longest_run", 10, 6, "Vytrvalec", "Přežij 10 minut v jednom běhu."),
+  badge("rocket_run20", "longest_run", 20, 10, "Železné plíce", "Přežij 20 minut v jednom běhu."),
+  badge("rocket_blitzclear", "blitz_clears", 1, 5, "Bleskový útok", "Dokonči celé kolo Bleskové vlny."),
+  badge("rocket_maxship", "maxed_upgrades", 8, 11, "Dokonalá loď", "Vylepši všech osm kategorií lodi na maximum."),
+];
