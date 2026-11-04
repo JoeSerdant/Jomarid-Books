@@ -3,8 +3,9 @@ import { ThemeContext } from '../contexts/AuthContext';
 import { countAt, countDuration } from './motion';
 import { prefersReducedMotion } from './reduced';
 
-// Číslo, které se v Živém režimu „dotočí“ z nuly (nebo z předchozí hodnoty) na cílovou hodnotu. Mimo Živý režim, při omezeném pohybu
-// a u hodnoty, která není číslo, se ukáže rovnou. Text se zapisuje přímo do prvku (žádné překreslování Reactu v každém snímku).
+// Číslo, které se v Živém režimu „dotočí“ z nuly (nebo z předchozí hodnoty) na cílovou hodnotu a na konci pružně „dosedne“ (třída lv-landed).
+// Mimo Živý režim, při omezeném pohybu a u hodnoty, která není číslo, se ukáže rovnou. Text se zapisuje přímo do prvku (žádné překreslování
+// Reactu v každém snímku).
 
 export const CountUp = ({ value, format = String, delay = 250 }) => {
   const ctx = useContext(ThemeContext);
@@ -20,6 +21,7 @@ export const CountUp = ({ value, format = String, delay = 250 }) => {
     if (!animated) { shown.current = Number.isFinite(target) ? target : null; el.textContent = format(value); return undefined; }
     const from = shown.current == null ? 0 : shown.current;
     if (from === target) { el.textContent = format(target); return undefined; }
+    el.classList.remove('lv-landed');
     el.textContent = format(from);
     const duration = countDuration(from, target);
     let raf = 0; let startAt = 0;
@@ -29,11 +31,11 @@ export const CountUp = ({ value, format = String, delay = 250 }) => {
       const v = p >= 1 ? target : countAt(from, target, p);
       shown.current = v;
       el.textContent = format(v);
-      if (p < 1) raf = requestAnimationFrame(tick);
+      if (p < 1) raf = requestAnimationFrame(tick); else el.classList.add('lv-landed');
     };
     const timer = setTimeout(() => { raf = requestAnimationFrame(tick); }, delay);
     return () => { clearTimeout(timer); cancelAnimationFrame(raf); };
   }, [animated, target]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <span ref={ref} />;
+  return <span ref={ref} data-lv-count />;
 };

@@ -17,11 +17,13 @@ import * as T from '../theme.js';
 import * as S from '../settings/settingsSync.js';
 import { livelyScope, scrollProgress } from '../lively/scope.js';
 import { SIDE_ITEMS, ICON_NAMES, ANIMATIONS, particles, PARTICLE_COUNT } from '../lively/items.js';
-import { REVEAL_STEP, REVEAL_MAX_STEPS, NESTED_BASE, TILT_MAX, staggerDelay, easeOutExpo, countAt, countDuration, tiltFor } from '../lively/motion.js';
+import { REVEAL_STEP, REVEAL_MAX_STEPS, REVEAL_VARIANTS, NESTED_BASE, TILT_MAX, staggerDelay, easeOutExpo, countAt, countDuration, tiltFor, revealVariant } from '../lively/motion.js';
 import { CARD_SELECTOR, GROW_SELECTOR, REVEAL_SELECTOR, SKIP_SELECTOR, ANIMATIONS as REVEAL_ANIMATIONS, createReveal, isCandidate } from '../lively/reveal.js';
 import { TILT_SELECTOR, installTilt } from '../lively/tilt.js';
 import { MAX_RIPPLES, rippleAt, rippleTarget, installClickRipple } from '../lively/ripple.js';
-import { supportsViewTransition, trackPointerOrigin, withViewTransition } from '../lively/viewTransition.js';
+import { supportsViewTransition, trackPointerOrigin, runViewTransition, withViewTransition } from '../lively/viewTransition.js';
+import { FLIP_SELECTOR, FLIP_MS, SNAPSHOT_TTL, MIN_MOVE, flipDelta, installFlip } from '../lively/flip.js';
+import { transitionTarget, waitForPage, installPageTransitions } from '../lively/pageTransition.js';
 import { prefersReducedMotion } from '../lively/reduced.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -192,7 +194,7 @@ describe('motion.js: časování a čísla', () => {
     assert.equal(staggerDelay(500), staggerDelay(REVEAL_MAX_STEPS));
     assert.ok(Math.abs(staggerDelay(2, 0.5) - (0.5 + 2 * REVEAL_STEP)) < 1e-9, 'zpoždění celé dávky se přičte');
     for (const bad of [-5, NaN, undefined, 'x']) assert.equal(staggerDelay(bad), 0, String(bad));
-    assert.ok(staggerDelay(REVEAL_MAX_STEPS) < 1, 'celé objevení trvá pod vteřinu zpoždění');
+    assert.ok(staggerDelay(REVEAL_MAX_STEPS) <= 1, 'zpoždění posledního prvku nepřesáhne vteřinu');
   });
   test('easeOutExpo: 0 na začátku, 1 na konci, rychlý rozjezd, rostoucí, ořezaný', () => {
     assert.equal(easeOutExpo(0) < 0.001, true);
@@ -212,9 +214,23 @@ describe('motion.js: časování a čísla', () => {
     const mid = countAt(100, 0, 0.1); assert.ok(mid < 100 && mid > 0, 'klesá');
     assert.equal(countAt(0, NaN, 0.5), 0);
   });
-  test('countDuration: malé změny rychle, velké déle, vždy mezi 0,6 a 1,4 s', () => {
+  test('countDuration: malé změny rychle, velké déle, vždy mezi 0,9 a 1,8 s (číslo je vidět, jak se točí)', () => {
     assert.ok(countDuration(0, 3) < countDuration(0, 5000));
-    for (const [a, b] of [[0, 0], [0, 1], [0, 50], [0, 100000], [900, 0], [NaN, 5]]) { const d = countDuration(a, b); assert.ok(d >= 600 && d <= 1400, `${a}→${b}: ${d}`); }
+    for (const [a, b] of [[0, 0], [0, 1], [0, 50], [0, 100000], [900, 0], [NaN, 5]]) { const d = countDuration(a, b); assert.ok(d >= 900 && d <= 1800, `${a}→${b}: ${d}`); }
+  });
+  test('revealVariant: ukazatel roste, řádek v kartě vjíždí zleva, článek se překlopí, sloupce vyjedou z krajů, zbytek zespodu', () => {
+    const container = { left: 100, width: 1000 };
+    assert.equal(revealVariant({ grow: true, nested: true }), 'grow');
+    assert.equal(revealVariant({ nested: true, article: true }), 'row');
+    assert.equal(revealVariant({ article: true, rect: { left: 100, width: 200 }, container }), 'flip');
+    assert.equal(revealVariant({ rect: { left: 100, width: 300 }, container }), 'left', 'levý sloupec');
+    assert.equal(revealVariant({ rect: { left: 800, width: 300 }, container }), 'right', 'pravý sloupec');
+    assert.equal(revealVariant({ rect: { left: 450, width: 300 }, container }), 'rise', 'prostřední');
+    assert.equal(revealVariant({ rect: { left: 100, width: 1000 }, container }), 'rise', 'přes celou šířku');
+    assert.equal(revealVariant({ rect: { left: 100, width: 700 }, container }), 'rise', 'víc než 62 % šířky už není sloupec');
+    assert.equal(revealVariant({}), 'rise'); assert.equal(revealVariant({ rect: { left: 0, width: 10 }, container: null }), 'rise');
+    for (const v of REVEAL_VARIANTS) assert.equal(typeof v, 'string');
+    assert.deepEqual([...REVEAL_VARIANTS].sort(), ['flip', 'grow', 'left', 'right', 'rise', 'row']);
   });
   test('tiltFor: střed karty bez náklonu, rohy do opačných stran, ořez a nesmysly', () => {
     const rect = { width: 200, height: 300 };
@@ -259,7 +275,7 @@ const setup = ({ withMain = true, io = true, mo = true } = {}) => {
   const reveal = createReveal({ doc, win: { innerHeight: 800 }, IO: io ? IO : undefined, MO: mo ? MO : undefined, setTimer: (fn, ms) => { timers.push({ id: ++timerId, fn, ms }); return timerId; }, clearTimer: (id) => { const i = timers.findIndex((t) => t.id === id); if (i >= 0) timers.splice(i, 1); } });
   const hit = (...els) => ios[0].cb(els.map((target) => ({ target, isIntersecting: true })));
   const added = (...nodes) => mos[0].cb([{ addedNodes: nodes }]);
-  const end = (el, animationName = 'lvIn') => listeners.animationend && listeners.animationend({ target: el, animationName });
+  const end = (el, animationName = 'lvRise') => listeners.animationend && listeners.animationend({ target: el, animationName });
   return { main, doc, reveal, observed, ios, mos, timers, listeners, hit, added, end };
 };
 const card = (parent, top, extra = {}) => new FakeEl(`card@${top}`, { card: true, parent, rect: { top, height: 120 }, ...extra });
@@ -313,14 +329,33 @@ describe('reveal.js: objevování', () => {
     const order = [...c].sort((x, y) => x.props['--lv-d'].localeCompare(y.props['--lv-d'])).map((e) => e.name);
     assert.deepEqual(order, ['card@0', 'card@150', 'card@150', 'card@300']);
     assert.deepEqual(c.map((e) => e.lv), ['in', 'in', 'in', 'in']);
-    assert.equal(c[1].props['--lv-d'], '0.00s'); assert.equal(c[2].props['--lv-d'], '0.06s'); assert.equal(c[3].props['--lv-d'], '0.12s'); assert.equal(c[0].props['--lv-d'], '0.18s');
+    assert.equal(c[1].props['--lv-d'], '0.00s'); assert.equal(c[2].props['--lv-d'], '0.08s'); assert.equal(c[3].props['--lv-d'], '0.16s'); assert.equal(c[0].props['--lv-d'], '0.24s');
     assert.equal(t.observed.size, 0, 'objevené se už nesledují');
   });
-  test('víc než devět prvků naráz: zpoždění se zastaví na stropu', () => {
+  test('víc než deset prvků naráz: zpoždění se zastaví na stropu', () => {
     const t = setup(); const c = Array.from({ length: 14 }, (_, i) => card(t.main, i * 150));
     t.reveal.start(); t.hit(...c);
     assert.equal(c[13].props['--lv-d'], `${(REVEAL_MAX_STEPS * REVEAL_STEP).toFixed(2)}s`);
-    assert.equal(c[9].props['--lv-d'], c[13].props['--lv-d']);
+    assert.equal(c[REVEAL_MAX_STEPS].props['--lv-d'], c[13].props['--lv-d']);
+    assert.notEqual(c[REVEAL_MAX_STEPS - 1].props['--lv-d'], c[13].props['--lv-d']);
+  });
+  test('každý prvek dostane variantu podle toho, co je: ukazatel, řádek v kartě, článek, sloupec, celá šířka', () => {
+    const t = setup(); t.main.rect = { top: 0, left: 100, width: 1000, height: 2000, bottom: 2000 };
+    const full = card(t.main, 0, { rect: { top: 0, left: 100, width: 1000, height: 100 } });
+    const colL = card(t.main, 200, { rect: { top: 200, left: 100, width: 300, height: 100 } });
+    const colR = card(t.main, 200, { rect: { top: 200, left: 800, width: 300, height: 100 } });
+    const art = card(t.main, 400, { rect: { top: 400, left: 100, width: 250, height: 300 } }); art.tagName = 'ARTICLE';
+    const row = card(full, 10, { rect: { top: 10, left: 100, width: 900, height: 50 } });
+    const bar = new FakeEl('bar', { grow: true, parent: full, rect: { top: 80, left: 100, width: 80, height: 8 } });
+    t.reveal.start();
+    assert.deepEqual([full, colL, colR, art, row, bar].map((e) => e.attrs['data-lv-v']), ['rise', 'left', 'right', 'flip', 'row', 'grow']);
+    t.hit(full); t.end(full, 'lvRise');
+    assert.equal(full.attrs['data-lv-v'], undefined, 'po dohrání se varianta odebere spolu s ostatními atributy');
+  });
+  test('řádek přidaný do už hotové karty vjede zleva, ne zespodu (přepnutí záložky žebříčku)', () => {
+    const t = setup(); const outer = card(t.main, 0); t.reveal.start(); t.hit(outer); t.end(outer, 'lvRise');
+    const late = card(outer, 10, { rect: { top: 10, height: 50 } }); t.added(late);
+    assert.equal(late.attrs['data-lv-v'], 'row');
   });
   test('vnořený prvek (řádek, ukazatel) čeká zaparkovaný, dokud se neobjeví karta, a začne chvíli po ní', () => {
     const t = setup(); const outer = card(t.main, 0); const row1 = card(outer, 10, { rect: { top: 10, height: 50 } }); const bar = new FakeEl('bar', { grow: true, parent: outer, rect: { top: 80, width: 80, height: 8 } });
@@ -354,11 +389,11 @@ describe('reveal.js: objevování', () => {
     const t = setup(); const c = card(t.main, 0); t.reveal.start(); t.hit(c);
     assert.equal(c.lv, 'in');
     t.end(c, 'jinaAnimace'); assert.equal(c.lv, 'in', 'cizí animace prvek neuvolní');
-    t.end(new FakeEl('x'), 'lvIn'); assert.equal(c.lv, 'in', 'animationend jiného prvku také ne');
-    t.end(c, 'lvIn');
+    t.end(new FakeEl('x'), 'lvRise'); assert.equal(c.lv, 'in', 'animationend jiného prvku také ne');
+    t.end(c, 'lvRise');
     assert.equal(c.lv, undefined); assert.equal(c.props['--lv-d'], undefined);
     t.added(c); assert.equal(c.lv, undefined, 'přesunutý už jednou objevený prvek se znovu nehýbe');
-    assert.deepEqual(REVEAL_ANIMATIONS, ['lvIn', 'lvGrow']);
+    assert.deepEqual(REVEAL_ANIMATIONS, ['lvRise', 'lvLeft', 'lvRight', 'lvFlip', 'lvRow', 'lvGrow']);
   });
   test('pojistka: kdyby animationend nedorazil, prvek se uvolní sám po uplynutí animace', () => {
     const t = setup(); const c = card(t.main, 0); t.reveal.start(); t.hit(c);
@@ -542,6 +577,184 @@ describe('viewTransition.js: kruhový přechod při změně motivu', () => {
   });
 });
 
+describe('flip.js: plynulé přeskládání karet', () => {
+  const rectOf = (x, y) => ({ left: x, top: y, width: 200, height: 300 });
+  const makeCard = (x, y, extra = {}) => {
+    const c = { rect: rectOf(x, y), anims: [], attrs: { ...extra }, getBoundingClientRect() { return this.rect; }, hasAttribute(k) { return k in this.attrs; }, animate(frames, opts) { this.anims.push({ frames, opts }); } };
+    return c;
+  };
+  const setupFlip = ({ lively = '1', reduce = '0', withMain = true, withMO = true } = {}) => {
+    const listeners = {}; let cards = []; let t = 0; let mo = null;
+    const main = { querySelectorAll: (sel) => (sel === FLIP_SELECTOR ? cards : []) };
+    const doc = { querySelector: (q) => (withMain && q === 'main' ? main : null), documentElement: { dataset: { lively, reduceMotion: reduce } }, addEventListener: (type, fn) => { listeners[type] = fn; }, removeEventListener: (type) => { delete listeners[type]; } };
+    class MO { constructor(cb) { this.cb = cb; this.disconnected = false; mo = this; } observe() {} disconnect() { this.disconnected = true; } }
+    const win = { scrollX: 0, scrollY: 0, innerHeight: 800 };
+    const off = installFlip({ doc, win, MO: withMO ? MO : undefined, now: () => t });
+    return { listeners, win, off, setCards: (c) => { cards = c; }, tick: (ms) => { t += ms; }, mutate: () => mo.cb([]), mo: () => mo };
+  };
+  test('flipDelta: malý posun se neanimuje, příliš daleký taky, jinak vrátí, kolik se má karta na začátku vrátit zpět', () => {
+    assert.equal(flipDelta({ x: 0, y: 0 }, { x: MIN_MOVE - 1, y: 0 }), null);
+    assert.deepEqual(flipDelta({ x: 10, y: 10 }, { x: 10, y: 310 }), { dx: 0, dy: -300 });
+    assert.deepEqual(flipDelta({ x: 400, y: 0 }, { x: 100, y: 0 }), { dx: 300, dy: 0 });
+    assert.equal(flipDelta({ x: 0, y: 0 }, { x: 0, y: 5000 }, 800), null, 'dál než 1,5 okna');
+    assert.ok(flipDelta({ x: 0, y: 0 }, { x: 0, y: 1100 }, 800), 'těsně pod limitem se animuje');
+    assert.equal(flipDelta(null, { x: 1, y: 1 }), null); assert.equal(flipDelta({ x: 1, y: 1 }, undefined), null);
+    assert.deepEqual(flipDelta({ x: NaN, y: 0 }, { x: -50, y: 0 }), { dx: 50, dy: 0 }, 'nesmysl se bere jako 0');
+  });
+  test('po akci uživatele a změně seznamu karty, které se pohnuly, doplují z původních míst; ostatní, nové a objevující se se nehýbou', () => {
+    const t = setupFlip();
+    const moved = makeCard(0, 0); const still = makeCard(300, 0); const entering = makeCard(600, 0);
+    t.setCards([moved, still, entering]);
+    t.listeners.pointerdown({});                                   // uživatel kliknul na filtr: polohy se zapamatují
+    moved.rect = rectOf(300, 340); still.rect = rectOf(300, 0);   // React překreslil seznam
+    entering.attrs['data-lv'] = 'in'; entering.rect = rectOf(900, 0);
+    const brandNew = makeCard(0, 340); t.setCards([moved, still, entering, brandNew]);
+    t.mutate();
+    assert.equal(moved.anims.length, 1);
+    assert.deepEqual(moved.anims[0].frames, [{ transform: 'translate(-300px, -340px)' }, { transform: 'translate(0px, 0px)' }]);
+    assert.equal(moved.anims[0].opts.duration, FLIP_MS); assert.match(moved.anims[0].opts.easing, /cubic-bezier/);
+    assert.deepEqual([still.anims.length, entering.anims.length, brandNew.anims.length], [0, 0, 0], 'nepohnutá, objevující se a nová karta se nehýbou');
+  });
+  test('jedna změna = jedno přeskládání (další změna bez nové akce se neanimuje) a zapamatované polohy po vteřině propadnou', () => {
+    const t = setupFlip(); const c = makeCard(0, 0); t.setCards([c]);
+    t.listeners.pointerdown({}); c.rect = rectOf(200, 0); t.mutate();
+    assert.equal(c.anims.length, 1);
+    c.rect = rectOf(400, 0); t.mutate(); assert.equal(c.anims.length, 1, 'bez nové akce nic');
+    t.tick(5000); t.listeners.keydown({}); t.tick(SNAPSHOT_TTL + 50); c.rect = rectOf(0, 0); t.mutate();
+    assert.equal(c.anims.length, 1, 'data z internetu, která dorazí o chvíli později, se neanimují');
+  });
+  test('posun stránky mezi akcí a změnou karty „nepohne“ (polohy jsou v souřadnicích dokumentu)', () => {
+    const t = setupFlip(); const c = makeCard(0, 600); t.setCards([c]);
+    t.listeners.pointerdown({});
+    t.win.scrollY = 400; c.rect = rectOf(0, 200); // stránka se odscrollovala o 400, karta je pořád na stejném místě dokumentu
+    t.mutate();
+    assert.equal(c.anims.length, 0);
+  });
+  test('opakované klávesy (psaní do hledání) se zapamatují jednou za chvíli, ne při každém stisku', () => {
+    const t = setupFlip(); const c = makeCard(0, 0); t.setCards([c]);
+    t.listeners.keydown({}); c.rect = rectOf(250, 0); t.tick(10); t.listeners.keydown({});
+    t.mutate();
+    assert.deepEqual(c.anims[0].frames[0], { transform: 'translate(-250px, 0px)' }, 'platí první, rychlý druhý stisk polohy nepřepíše');
+  });
+  test('vypnutý režim a omezený pohyb nic nezapamatují ani neanimují; bez main nebo MutationObserveru se nic nezapne', () => {
+    for (const opts of [{ lively: '0' }, { reduce: '1' }]) {
+      const t = setupFlip(opts); const c = makeCard(0, 0); t.setCards([c]);
+      t.listeners.pointerdown({}); c.rect = rectOf(300, 0); t.mutate();
+      assert.equal(c.anims.length, 0, JSON.stringify(opts));
+    }
+    for (const opts of [{ withMain: false }, { withMO: false }]) { const t = setupFlip(opts); assert.deepEqual(Object.keys(t.listeners), [], JSON.stringify(opts)); assert.equal(typeof t.off, 'function'); }
+  });
+  test('vypnutí odpojí pozorovatele a odebere všechny posluchače', () => {
+    const t = setupFlip(); assert.deepEqual(Object.keys(t.listeners).sort(), ['change', 'input', 'keydown', 'pointerdown']);
+    t.off(); assert.equal(t.mo().disconnected, true); assert.deepEqual(Object.keys(t.listeners), []);
+  });
+  test('selektor karet knihovny je stejný jako u naklánění', () => { assert.ok(FLIP_SELECTOR.includes(TILT_SELECTOR)); });
+});
+
+describe('pageTransition.js: přechod mezi stránkami', () => {
+  test('čekání na stránku nepoužívá requestAnimationFrame (po dobu přechodu by nikdy nepřišel a přechod by vypršel)', () => {
+    const src = read('src', 'lively', 'pageTransition.js');
+    assert.ok(!/requestAnimationFrame|\braf\b/.test(src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')), 'bez rAF v kódu');
+    assert.match(src, /setTimeout\(fn, 40\)/);
+  });
+  const LOC = { origin: 'https://app.cz', pathname: '/app', search: '' };
+  const evt = (extra = {}) => ({ defaultPrevented: false, button: 0, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, ...extra });
+  const link = (extra = {}) => ({ origin: 'https://app.cz', pathname: '/stats', search: '', hash: '', target: '', rel: '', hasAttribute: () => false, closest: () => null, ...extra });
+  test('transitionTarget: kam se má jít; vše ostatní nechá na prohlížeči a routeru', () => {
+    assert.equal(transitionTarget(evt(), link(), LOC), '/stats');
+    assert.equal(transitionTarget(evt(), link({ pathname: '/badges/games', search: '?a=1', hash: '#x' }), LOC), '/badges/games?a=1#x');
+    assert.equal(transitionTarget(evt(), link({ target: '_self' }), LOC), '/stats');
+    const no = (e, a, why) => assert.equal(transitionTarget(e, a, LOC), null, why);
+    no(evt({ defaultPrevented: true }), link(), 'už vyřízeno');
+    no(evt({ button: 1 }), link(), 'prostřední tlačítko'); no(evt({ button: 2 }), link(), 'pravé');
+    for (const k of ['metaKey', 'ctrlKey', 'shiftKey', 'altKey']) no(evt({ [k]: true }), link(), k);
+    no(evt(), link({ target: '_blank' }), 'nové okno'); no(evt(), link({ rel: 'noopener external' }), 'rel external');
+    no(evt(), link({ hasAttribute: (k) => k === 'download' }), 'ke stažení'); no(evt(), link({ hasAttribute: (k) => k === 'data-lv-no-transition' }), 'výslovně vypnuto');
+    no(evt(), link({ closest: () => ({}) }), 'uvnitř okna'); no(evt(), link({ origin: 'https://jiny.cz' }), 'jiný web');
+    no(evt(), link({ pathname: '/app', hash: '#dal' }), 'jen kotva na téže stránce'); no(evt(), link({ pathname: '/app', search: '' }), 'ta samá stránka');
+    no(evt(), link({ pathname: '/read/abc' }), 'do čtečky'); no(evt(), link({ pathname: '/games/rocket' }), 'do hry'); no(evt(), link({ pathname: '/shorts' }), 'do krátkých knih');
+    assert.equal(transitionTarget(evt(), link({ pathname: '/app', search: '?q=1' }), LOC), '/app?q=1', 'jiné hledání na téže adrese je jiná stránka');
+    assert.equal(transitionTarget(null, link(), LOC), null); assert.equal(transitionTarget(evt(), null, LOC), null); assert.equal(transitionTarget(evt(), link(), null), null);
+  });
+  const setupNav = ({ lively = '1', reduce = '0', support = true, scope = { motion: true } } = {}) => {
+    let click; const calls = { navigate: [], vt: 0, flush: 0, prevented: 0 };
+    let finish; const finished = new Promise((r) => { finish = r; });
+    const doc = {
+      documentElement: { dataset: { lively, reduceMotion: reduce } },
+      addEventListener: (t, fn, cap) => { if (t === 'click') click = { fn, cap }; }, removeEventListener: (t) => { if (t === 'click') click = null; },
+      startViewTransition: support ? (cb) => { calls.vt += 1; calls.vtResult = cb(); return { finished }; } : undefined,
+    };
+    const off = installPageTransitions({ doc, win: { location: LOC }, navigate: (to) => calls.navigate.push(to), flush: (fn) => { calls.flush += 1; fn(); }, getScope: () => scope, wait: async () => 'hotovo' });
+    const press = (a, e = evt()) => { const ev = { ...e, target: { closest: () => a }, preventDefault: () => { calls.prevented += 1; } }; click.fn(ev); };
+    return { doc, calls, press, off, finish, get click() { return click; } };
+  };
+  test('klik na odkaz uvnitř appky: prohlížeč dostane přechod, router přejde na stránku uvnitř něj a data-vt="page" platí jen po dobu přechodu', async () => {
+    const t = setupNav();
+    assert.equal(t.click.cap, true, 'posluchač je v zachycující fázi, ještě před routerem');
+    t.press(link());
+    assert.deepEqual([t.calls.vt, t.calls.prevented, t.calls.flush, t.calls.navigate], [1, 1, 1, ['/stats']]);
+    assert.equal(t.doc.documentElement.dataset.vt, 'page');
+    assert.equal(await t.calls.vtResult, 'hotovo', 'přechod čeká, až bude nová stránka hotová');
+    t.finish(); await flush();
+    assert.equal(t.doc.documentElement.dataset.vt, undefined);
+  });
+  test('nic se nezachytí: vypnutý režim, omezený pohyb, prohlížeč bez podpory, klidná stránka, odkaz, který se nemá animovat, neodkaz', () => {
+    for (const [opts, why] of [[{ lively: '0' }, 'režim vypnutý'], [{ reduce: '1' }, 'omezený pohyb'], [{ support: false }, 'bez podpory'], [{ scope: { motion: false } }, 'klidná stránka']]) {
+      const t = setupNav(opts); t.press(link());
+      assert.deepEqual([t.calls.vt, t.calls.prevented, t.calls.navigate], [0, 0, []], why);
+    }
+    const t = setupNav(); t.press(link({ target: '_blank' })); t.press(link(), evt({ ctrlKey: true })); t.press(null);
+    assert.deepEqual([t.calls.vt, t.calls.prevented], [0, 0]);
+    t.click.fn({ ...evt(), target: { closest: () => null }, preventDefault: () => { t.calls.prevented += 1; } });
+    assert.equal(t.calls.prevented, 0, 'klik mimo odkaz');
+  });
+  test('vypnutí odebere posluchač; bez navigate se nezapne nic', () => {
+    const t = setupNav(); t.off(); assert.equal(t.click, null);
+    assert.equal(typeof installPageTransitions({ doc: null, navigate: () => {} }), 'function');
+    const d = { addEventListener() { throw new Error('nemá se volat'); } };
+    assert.doesNotThrow(() => installPageTransitions({ doc: d, navigate: undefined }));
+  });
+  test('waitForPage (čeká na časovač, ne na snímek: při přechodu se vykreslování pozastaví): obsah hotový hned = hned; „Načítám...“ = čeká, dokud nezmizí, nejvýš timeout', async () => {
+    let status = null; let t = 0; const queue = [];
+    const doc = { querySelector: () => ({ querySelector: () => status }) };
+    const opts = { doc, later: (fn) => queue.push(fn), now: () => t, timeout: 900 };
+    let done = false; waitForPage(opts).then(() => { done = true; });
+    queue.shift()(); await flush(); assert.equal(done, true, 'žádný ukazatel načítání');
+    status = { textContent: 'Načítám...' }; done = false; waitForPage(opts).then(() => { done = true; });
+    queue.shift()(); await flush(); assert.equal(done, false, 'čeká');
+    t = 300; queue.shift()(); await flush(); assert.equal(done, false);
+    status = null; queue.shift()(); await flush(); assert.equal(done, true, 'stránka je tu');
+    status = { textContent: 'Načítám...' }; done = false; t = 0; waitForPage(opts).then(() => { done = true; });
+    queue.shift()(); t = 1000; queue.shift()(); await flush(); assert.equal(done, true, 'po vypršení se nečeká dál');
+    status = { textContent: 'Jiný stav' }; done = false; t = 0; waitForPage(opts).then(() => { done = true; }); queue.shift()(); await flush(); assert.equal(done, true, 'jiný role="status" přechod nezdržuje');
+  });
+});
+
+describe('viewTransition.js: druhy přechodu', () => {
+  const mk = (extra = {}) => { let finish; const finished = new Promise((r) => { finish = r; }); const cbs = []; return { finish, cbs, doc: { documentElement: { dataset: { reduceMotion: '0' }, style: {} }, startViewTransition: (cb) => { cbs.push(cb); return { finished }; }, ...extra } }; };
+  test('každý přechod nastaví svůj druh do data-vt a po dohrání ho odebere; změna se provede uvnitř a její slib se vrátí prohlížeči', async () => {
+    const m = mk(); let ran = 0;
+    assert.equal(runViewTransition(() => { ran += 1; return 'slib'; }, { kind: 'page', doc: m.doc }), true);
+    assert.equal(m.doc.documentElement.dataset.vt, 'page'); assert.equal(ran, 0);
+    assert.equal(m.cbs[0](), 'slib'); assert.equal(ran, 1);
+    m.finish(); await flush(); assert.equal(m.doc.documentElement.dataset.vt, undefined);
+    const t = mk(); withViewTransition(() => {}, { doc: t.doc }); assert.equal(t.doc.documentElement.dataset.vt, 'theme', 'přepnutí motivu je druh theme');
+  });
+  test('rychlé druhé kliknutí: konec prvního přechodu nesmaže druh toho druhého', async () => {
+    let fin1; const f1 = new Promise((r) => { fin1 = r; }); let n = 0;
+    const doc = { documentElement: { dataset: { reduceMotion: '0' }, style: {} }, startViewTransition: () => { n += 1; return { finished: n === 1 ? f1 : new Promise(() => {}) }; } };
+    runViewTransition(() => {}, { kind: 'page', doc }); runViewTransition(() => {}, { kind: 'theme', doc });
+    fin1(); await flush();
+    assert.equal(doc.documentElement.dataset.vt, 'theme');
+  });
+  test('bez podpory, vypnuto nebo omezený pohyb: změna se provede hned a druh se nenastaví', () => {
+    for (const opts of [{ doc: mk({ startViewTransition: undefined }).doc }, { doc: mk().doc, enabled: false }, { doc: mk({ documentElement: { dataset: { reduceMotion: '1' }, style: {} } }).doc }]) {
+      let ran = 0; assert.equal(runViewTransition(() => { ran += 1; }, opts), false); assert.equal(ran, 1);
+      assert.equal(opts.doc.documentElement.dataset.vt, undefined);
+    }
+  });
+});
+
 describe('zapojení do stránek', () => {
   const stats = read('src', 'pages', 'UserStats.jsx');
   test('Statistiky: čísla se dotáčejí, ukazatele se plní, řádky žebříčku se při přepnutí záložky znovu objeví', () => {
@@ -564,7 +777,8 @@ describe('zapojení do stránek', () => {
     const src = read('src', 'lively', 'LivelyMotion.jsx');
     assert.match(src, /useLayoutEffect\(\(\) => \{\s*if \(!on \|\| prefersReducedMotion\(\)\) return undefined;\s*const reveal = createReveal\(\);/);
     assert.match(src, /const on = enabled && scope\.motion;/);
-    assert.match(src, /if \(on\) off\.push\(installTilt\(\)\)/);
+    assert.match(src, /if \(on\) off\.push\(installTilt\(\), installFlip\(\), installPageTransitions\(\{ navigate: \(to\) => navigateRef\.current\(to\), flush: flushSync/);
+    assert.match(src, /navigateRef\.current = navigate/, 'posluchač má vždy aktuální navigate');
     assert.match(src, /installClickRipple\(\{ getScope: \(\) => scopeRef\.current \}\)/);
   });
 });
@@ -573,16 +787,37 @@ describe('lively.css', () => {
   const keyframes = new Set([...css.matchAll(/@keyframes (lv\w+)/g)].map((m) => m[1]));
   const used = new Set([...css.matchAll(/animation(?:-name)?:([^;}]*)[;}]/g)].flatMap((m) => [...m[1].matchAll(/\b(lv[A-Z]\w*)/g)].map((x) => x[1])));
   const line = (start) => css.split('\n').find((l) => l.startsWith(start));
+  test('žádné klíčové snímky nemají dvojí definici (pozdější by potichu přebila dřívější a rozbila druhou animaci)', () => {
+    const names = [...css.matchAll(/@keyframes (lv\w+)/g)].map((m) => m[1]);
+    assert.deepEqual(names.filter((n, i) => names.indexOf(n) !== i), []);
+  });
   test('každá použitá animace má klíčové snímky a každé klíčové snímky se používají', () => {
     assert.ok(keyframes.size >= 18, `klíčových snímků je dost (${keyframes.size})`);
     for (const name of used) assert.ok(keyframes.has(name), `chybí @keyframes ${name}`);
     for (const name of keyframes) assert.ok(used.has(name), `nepoužité @keyframes ${name}`);
     for (const name of REVEAL_ANIMATIONS) assert.ok(keyframes.has(name), `${name} z reveal.js`);
   });
-  test('čekající prvky se skryjí (průhledné a posunuté), objevující se jedou přes lvIn se zpožděním --lv-d; přechody se po dobu čekání vypínají', () => {
-    assert.match(line('html[data-lively="1"] [data-lv="wait"]'), /\[data-lv="parked"\] \{ opacity: 0; transform: translateY\(30px\) scale\(0\.97\); transition: none !important; \}/);
-    assert.match(line('html[data-lively="1"] [data-lv="in"]'), /animation: lvIn 0\.75s cubic-bezier\([^)]*\) var\(--lv-d, 0s\) backwards; transition: none !important;/);
-    assert.match(line('@keyframes lvIn'), /to \{ opacity: 1; transform: none; \}/);
+  test('čekající prvky se skryjí a podle varianty posunou; objevující se jedou přes animaci své varianty se zpožděním --lv-d; přechody se po dobu čekání vypínají', () => {
+    assert.match(line('html[data-lively="1"] [data-lv="wait"]'), /\[data-lv="parked"\] \{ opacity: 0; transition: none !important; \}/);
+    assert.match(line('html[data-lively="1"] [data-lv="in"] {'), /transition: none !important;/);
+    const lookup = { rise: 'lvRise', left: 'lvLeft', right: 'lvRight', flip: 'lvFlip', row: 'lvRow' };
+    for (const [variant, anim] of Object.entries(lookup)) {
+      assert.match(line(`html[data-lively="1"] [data-lv-v="${variant}"]:not([data-lv="in"])`), /transform: /, `${variant} čeká posunutý`);
+      assert.match(line(`html[data-lively="1"] [data-lv="in"][data-lv-v="${variant}"]`), new RegExp(`animation: ${anim} [\\d.]+s cubic-bezier\\([^)]*\\) var\\(--lv-d, 0s\\) backwards;`), `${variant} jede přes ${anim}`);
+      assert.match(line(`@keyframes ${anim}`), /to \{ opacity: 1; transform: none; \}/, `${anim} končí bez transformace`);
+    }
+    assert.match(line('html[data-lively="1"] [data-lv-v="flip"] {'), /transform-origin: 50% 100%/);
+    assert.deepEqual(Object.values(lookup).concat('lvGrow').sort(), [...REVEAL_ANIMATIONS].sort(), 'animace v CSS odpovídají těm, jejichž dohrání reveal.js sleduje');
+  });
+  test('nadpis v objevující se kartě se zaostří a vyjede o chvíli později než karta', () => {
+    assert.match(css, /\[data-lv="in"\] h1 \{ animation: lvTitle [\d.]+s [^;]*calc\(var\(--lv-d, 0s\) \+ 0\.12s\) backwards; \}/);
+    assert.match(line('@keyframes lvTitle'), /to \{ opacity: 1; transform: none; filter: none; \}/);
+  });
+  test('číslo, které se dotočilo, pružně dosedne (CountUp přidá lv-landed)', () => {
+    assert.match(css, /\[data-lv-count\] \{ display: inline-block; \}/);
+    assert.match(css, /\[data-lv-count\]\.lv-landed \{ animation: lvLand/);
+    const src = read('src', 'lively', 'CountUp.jsx');
+    assert.match(src, /el\.classList\.add\('lv-landed'\)/); assert.match(src, /el\.classList\.remove\('lv-landed'\)/); assert.match(src, /data-lv-count/);
   });
   test('ukazatele: čekají s nulovou šířkou zleva, plní se přes lvGrow a bez posunu; pravidla jsou až za obecnými (přebijí je)', () => {
     assert.match(line('html[data-lively="1"] [data-lv-grow][data-lv="wait"]'), /opacity: 1; transform: scaleX\(0\); transform-origin: left center;/);
@@ -591,8 +826,8 @@ describe('lively.css', () => {
     assert.ok(css.indexOf('[data-lv-grow][data-lv="wait"]') > css.indexOf('[data-lv="wait"], html'), 'pravidla ukazatelů jsou za obecnými');
   });
   test('žádná animace objevování nezanechá transformaci (jinak by prvky s position: fixed uvnitř přestaly sedět): končí transform: none a jen výplň „backwards“', () => {
-    for (const name of ['lvIn', 'lvGrow']) assert.match(line(`@keyframes ${name}`), /to \{[^}]*transform: none/, name);
-    for (const l of css.split('\n').filter((x) => /\[data-lv="in"\]/.test(x))) assert.match(l, /backwards/, 'bez výplně po konci');
+    for (const name of REVEAL_ANIMATIONS) assert.match(line(`@keyframes ${name}`), /to \{[^}]*transform: none/, name);
+    for (const l of css.split('\n').filter((x) => /\[data-lv="in"\]\[data-lv-v=/.test(x) && /animation:/.test(x))) assert.match(l, /backwards/, 'bez výplně po konci');
     const fade = line('@keyframes lvFadeIn'); assert.ok(!/transform|translate|scale/.test(fade), 'rozsvícení celé stránky mění jen průhlednost');
     assert.match(css, /html\[data-lively="1"\] main > \* \{ animation: lvFadeIn/);
   });
@@ -611,10 +846,18 @@ describe('lively.css', () => {
     assert.match(line('html[data-lively="1"] .justify-end > [role="dialog"]'), /animation-name: lvDrawer/);
     for (const name of ['lvModal', 'lvDrawer']) { const k = line(`@keyframes ${name}`); assert.ok(/translate:/.test(k) && !/transform:/.test(k), `${name} nepřepisuje vlastní transform okna`); }
   });
-  test('přepnutí motivu: nový vzhled se rozlije kruhem z --vt-x a --vt-y a stará strana se nehýbe', () => {
-    assert.match(css, /::view-transition-old\(root\), html\[data-lively="1"\]::view-transition-new\(root\) \{ animation: none; mix-blend-mode: normal; \}/);
-    assert.match(css, /::view-transition-new\(root\) \{ animation: lvThemeReveal/);
+  test('přepnutí motivu (data-vt="theme"): nový vzhled se rozlije kruhem z --vt-x a --vt-y a stará strana se nehýbe', () => {
+    assert.match(css, /html\[data-lively="1"\]\[data-vt="theme"\]::view-transition-old\(root\), html\[data-lively="1"\]\[data-vt="theme"\]::view-transition-new\(root\) \{ animation: none; mix-blend-mode: normal; \}/);
+    assert.match(css, /\[data-vt="theme"\]::view-transition-new\(root\) \{ animation: lvThemeReveal/);
     assert.match(line('@keyframes lvThemeReveal'), /circle\(0 at var\(--vt-x, 50%\) var\(--vt-y, 50%\)\).*circle\(150vmax at var\(--vt-x, 50%\) var\(--vt-y, 50%\)\)/);
+  });
+  test('přechod mezi stránkami (data-vt="page"): jméno přechodu má main jen po dobu přechodu, stará stránka odjede, nová se rozsvítí', () => {
+    assert.match(css, /html\[data-lively="1"\]\[data-vt="page"\] main \{ view-transition-name: lv-main; \}/);
+    assert.ok(!/^[^\n]*\bmain\b[^\n]*\{[^}]*view-transition-name/m.test(css.replace(/html\[data-lively="1"\]\[data-vt="page"\] main \{ view-transition-name: lv-main; \}/, '')), 'view-transition-name jinde není (vytvořil by blok pro position: fixed)');
+    assert.match(css, /\[data-vt="page"\]::view-transition-old\(lv-main\) \{ animation: lvPageOut [\d.]+s/);
+    assert.match(css, /\[data-vt="page"\]::view-transition-new\(lv-main\) \{ animation: lvPageIn [\d.]+s/);
+    assert.match(line('@keyframes lvPageOut'), /to \{ opacity: 0; transform: translateY\(-\d+px\) scale\(0\.9\d*\); \}/);
+    assert.match(line('@keyframes lvPageIn'), /from \{ opacity: 0; \}/, 'nová stránka se jen rozsvítí, karty si vyjedou samy');
   });
   test('tlačítka: každá vlastnost má vlastní průběh (barvy nesmějí přestřelit), lesk u barevných, přepínač se pružně přelévá', () => {
     const t = css.match(/button:is\(\.rounded-lg, \.rounded-xl, \.rounded-full\):not\(:disabled\) \{\s*transition: ([^;]*);/)[1];

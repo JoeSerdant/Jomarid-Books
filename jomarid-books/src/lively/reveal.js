@@ -1,4 +1,5 @@
-// Postupné objevování karet, sekcí a řádků (Živý režim): prvek, který se dostane do okna, vyjede s odrazem a sousedé se objevují
+// Postupné objevování karet, sekcí a řádků (Živý režim): prvek, který se dostane do okna, vyjede s odrazem (každý podle své varianty:
+// zleva, zprava, zespodu, překlopením) a sousedé se objevují
 // jeden po druhém. Platí při otevření stránky, při načtení dat (karty přijdou později) i při scrollu.
 //
 // Jak to funguje: každému vhodnému prvku se dá atribut data-lv="wait" (v CSS je průhledný a posunutý), IntersectionObserver ho pozná,
@@ -8,7 +9,7 @@
 //
 // Bezpečnost: nic se nedělá bez IntersectionObserveru; po vteřině a půl se objeví všechno, co je v okně a ještě čeká; a stránka bez JavaScriptu
 // nikdy nic skryté nemá (atributy dává až skript). Prvky ve vyskakovacích oknech, přilepené a s position: fixed se nechávají být.
-import { NESTED_BASE, staggerDelay } from './motion.js';
+import { NESTED_BASE, revealVariant, staggerDelay } from './motion.js';
 
 export const CARD_SELECTOR = 'main :is(section, article), main :is(div, li, a).border:is(.rounded-xl, .rounded-2xl, .rounded-3xl)';
 export const GROW_SELECTOR = 'main [data-lv-grow]';
@@ -16,7 +17,7 @@ export const REVEAL_SELECTOR = `${CARD_SELECTOR}, ${GROW_SELECTOR}`;
 export const SKIP_SELECTOR = '[data-lv-skip], [role="dialog"], .fixed, .sticky, nav';
 export const MIN_WIDTH = 120;  // menší prvky (štítky, tlačítka, políčka) se nehýbou
 export const MIN_HEIGHT = 44;
-export const ANIMATIONS = ['lvIn', 'lvGrow']; // názvy animací z lively.css, jejichž dohrání prvek „uvolní“
+export const ANIMATIONS = ['lvRise', 'lvLeft', 'lvRight', 'lvFlip', 'lvRow', 'lvGrow']; // názvy animací z lively.css (jedna na každou variantu), jejichž dohrání prvek „uvolní“
 const SWEEP_MS = 1500;
 const SETTLE_EXTRA_MS = 1400; // pojistka: kdyby animationend nedorazil, prvek se uvolní sám
 
@@ -50,6 +51,7 @@ export const createReveal = ({
     clearTimer(st.timer);
     info.delete(el); live.delete(el); settled.add(el);
     el.removeAttribute('data-lv');
+    el.removeAttribute('data-lv-v');
     el.style.removeProperty('--lv-d');
   };
 
@@ -89,13 +91,18 @@ export const createReveal = ({
     const pst = parent && info.get(parent);
     const parked = !!pst && pst.status !== 'in';
     info.set(el, { status: parked ? 'parked' : 'wait', base: pst && pst.status === 'in' ? pst.until : 0, until: 0, timer: 0 });
+    const inCard = !!(el.parentElement && el.parentElement.closest(CARD_SELECTOR)); // řádek v kartě vjede zleva i tehdy, když je karta už dávno hotová
+    el.setAttribute('data-lv-v', revealVariant({ grow: el.matches(GROW_SELECTOR), nested: inCard, article: el.tagName === 'ARTICLE', rect: el.getBoundingClientRect(), container: containerRect }));
     el.setAttribute('data-lv', parked ? 'parked' : 'wait');
     live.add(el);
     if (parked) { if (!kids.has(parent)) kids.set(parent, new Set()); kids.get(parent).add(el); } else io.observe(el);
   };
 
+  let containerRect = null; // obdélník obsahu stránky (main) při posledním prohledání: podle něj se karty ve sloupcích rozjíždějí do stran
   const scan = (node) => {
     if (!node || node.nodeType !== 1) return;
+    const main = doc.querySelector('main');
+    containerRect = main ? main.getBoundingClientRect() : null;
     const list = [];
     if (typeof node.matches === 'function' && node.matches(REVEAL_SELECTOR)) list.push(node);
     list.push(...node.querySelectorAll(REVEAL_SELECTOR)); // v pořadí dokumentu: rodiče před dětmi
@@ -145,7 +152,7 @@ export const createReveal = ({
     doc.removeEventListener('animationend', onAnimationEnd, true);
     if (sweepTimer) clearTimer(sweepTimer);
     sweepTimer = 0;
-    for (const el of live) { const st = info.get(el); if (st) clearTimer(st.timer); el.removeAttribute('data-lv'); el.style.removeProperty('--lv-d'); }
+    for (const el of live) { const st = info.get(el); if (st) clearTimer(st.timer); el.removeAttribute('data-lv'); el.removeAttribute('data-lv-v'); el.style.removeProperty('--lv-d'); }
     info = new WeakMap(); settled = new WeakSet(); kids = new WeakMap(); live = new Set(); io = null; mo = null;
   };
 
