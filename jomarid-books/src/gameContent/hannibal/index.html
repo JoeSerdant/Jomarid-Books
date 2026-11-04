@@ -500,6 +500,7 @@
       <!-- MAP & SCENARIOS TREE -->
       <div class="panel map-tree-container">
         <h3 style="color:var(--gold);" class="cinzel">Postup Tažení (Západní Středomoří)</h3>
+        <div id="campaign-resume" style="display:none; margin-bottom:12px; padding:12px; border:1px solid var(--gold); border-radius:8px; background:rgba(212,175,55,0.08);"></div>
         <div id="campaign-next" style="display:flex; gap:10px; align-items:center;"></div>
         <div id="campaign-nodes-tree" class="nodes-grid"></div>
         <button class="btn btn-danger" style="width:100%; margin-top:12px; padding:12px;" onclick="GameCampaign.startEndlessMode()">
@@ -1088,6 +1089,74 @@
     };
 
     /* ==========================================================================
+       ROZEHRANÁ BITVA: stav bitvy se ukládá na tahu hráče a po návratu jde obnovit (dřív zavřená stránka uprostřed bitvy o ni připravila)
+       ========================================================================== */
+    const BATTLE_KEY = 'hannibal_battle_v1';
+    const BATTLE_COLS = 12, BATTLE_ROWS = 8;
+    const BATTLE_UNIT_TYPES = ['hannibal', 'carthage_spearmen', 'numidian_cavalry', 'elephants', 'balearic_sling', 'libyan_heavy', 'celtiberian_swordsman',
+      'roman_legion', 'roman_cavalry', 'roman_triarii', 'roman_velites', 'gallic_warrior', 'mountain_tribe'];
+
+    // Ověří uloženou bitvu (poškozená, upravená nebo cizí data se zahodí) a vrátí čistou kopii, nebo null. Jednotky se berou jen se známými poli.
+    function normalizeBattleSave(raw, nodes, types) {
+      let d = null;
+      try { d = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { return null; }
+      if (!d || typeof d !== 'object' || d.v !== 1) return null;
+      const int = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
+      const num = (v, lo, hi) => typeof v === 'number' && isFinite(v) && v >= lo && v <= hi;
+      let nodeId = null, wave = 0, terrain = null;
+      if (d.kind === 'campaign') {
+        const n = (nodes || []).find(x => x.id === d.node);
+        if (!n || n.kind === 'minigame') return null;
+        nodeId = n.id;
+      } else if (d.kind === 'endless') {
+        if (!int(d.wave, 1, 9999)) return null;
+        wave = d.wave;
+        if (!d.terrain || typeof d.terrain !== 'object' || Array.isArray(d.terrain)) return null;
+        const keys = Object.keys(d.terrain);
+        if (keys.length > BATTLE_COLS * BATTLE_ROWS) return null;
+        terrain = {};
+        for (const k of keys) {
+          const m = /^(\d{1,2}),(\d{1,2})$/.exec(k);
+          if (!m || +m[1] >= BATTLE_COLS || +m[2] >= BATTLE_ROWS || !['hill', 'forest', 'snow', 'river', 'ford'].includes(d.terrain[k])) return null;
+          terrain[k] = d.terrain[k];
+        }
+      } else return null;
+      if (!int(d.turnNumber, 1, 9999) || !Array.isArray(d.units) || d.units.length < 2 || d.units.length > 80) return null;
+      const units = [], seenIds = new Set(), seenTiles = new Set();
+      for (const u of d.units) {
+        if (!u || typeof u !== 'object' || Array.isArray(u)) return null;
+        if (u.team !== 'player' && u.team !== 'enemy') return null;
+        if (typeof u.id !== 'string' || !u.id || u.id.length > 60 || typeof u.name !== 'string' || u.name.length > 80) return null;
+        if (!(types || []).includes(u.type)) return null;
+        if (!int(u.x, 0, BATTLE_COLS - 1) || !int(u.y, 0, BATTLE_ROWS - 1)) return null;
+        if (!num(u.maxHp, 1, 5000) || !num(u.hp, 0.0001, u.maxHp * 1.5)) return null;
+        if (!num(u.atk, 0, 2000) || !num(u.def, 0, 2000) || !int(u.move, 0, 20) || !int(u.range, 1, 12) || !num(u.morale, 0, 100)) return null;
+        if (!['N', 'E', 'S', 'W'].includes(u.facing)) return null;
+        for (const f of ['isCavalry', 'abilityUsed', 'hasMoved', 'hasActed', 'hidden']) if (typeof u[f] !== 'boolean') return null;
+        if (u.ability !== null && u.ability !== undefined && (typeof u.ability !== 'string' || u.ability.length > 20)) return null;
+        const key = u.x + ',' + u.y;
+        if (seenTiles.has(key) || seenIds.has(u.team + ':' + u.id)) return null;
+        seenTiles.add(key); seenIds.add(u.team + ':' + u.id);
+        const st = {};
+        if (u.statuses && typeof u.statuses === 'object' && !Array.isArray(u.statuses)) {
+          for (const k of ['chilled', 'sleepy']) { if (Object.prototype.hasOwnProperty.call(u.statuses, k) && int(u.statuses[k], 0, 99)) st[k] = u.statuses[k]; }
+        }
+        const out = { id: u.id, name: u.name, type: u.type, team: u.team, x: u.x, y: u.y, hp: u.hp, maxHp: u.maxHp, atk: u.atk, def: u.def, move: u.move, range: u.range,
+          isCavalry: u.isCavalry, ability: u.ability || null, abilityUsed: u.abilityUsed, hasMoved: u.hasMoved, hasActed: u.hasActed, facing: u.facing,
+          morale: u.morale, hidden: u.hidden, statuses: st };
+        if (int(u.level, 1, 99)) out.level = u.level;
+        for (const f of ['routed', 'isAmbush', '_charging']) if (typeof u[f] === 'boolean') out[f] = u[f];
+        units.push(out);
+      }
+      if (!units.some(u => u.team === 'player') || !units.some(u => u.team === 'enemy')) return null;
+      const stats = {};
+      if (d.stats && typeof d.stats === 'object' && !Array.isArray(d.stats)) {
+        for (const k of Object.keys(d.stats)) { if (/^[a-z_]{1,30}$/.test(k) && num(d.stats[k], 0, 1e12)) stats[k] = d.stats[k]; }
+      }
+      return { kind: d.kind, nodeId, wave, terrain, turnNumber: d.turnNumber, units, stats };
+    }
+
+    /* ==========================================================================
        2. META STRATEGY MANAGER
        ========================================================================== */
     class MetaStrategyManager {
@@ -1295,6 +1364,18 @@
         document.getElementById('res-favor').innerText = this.meta.senateFavor + '%';
         document.getElementById('res-endless-best').innerText = this.getEndlessBest();
 
+        const resumeBox = document.getElementById('campaign-resume');
+        const bs = this.readBattleSave();
+        if (bs) {
+          const rn = bs.kind === 'endless' ? 'Nekonečné Tažení, vlna ' + bs.wave : ((CAMPAIGN_MAP.nodes.find(n => n.id === bs.nodeId) || {}).title || 'Bitva');
+          resumeBox.style.display = 'block';
+          resumeBox.innerHTML = `<div style="font-weight:700; color:var(--gold); margin-bottom:6px;">⚔️ Rozehraná bitva: ${rn} (tah ${bs.turnNumber})</div>
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+              <button class="btn btn-success" style="flex:1; min-width:180px; padding:12px;" onclick="GameCampaign.resumeBattle()">▶ Pokračovat v bitvě</button>
+              <button class="btn" style="padding:8px 14px; font-size:0.8rem;" onclick="if (confirm('Zahodit rozehranou bitvu? Postup v ní se ztratí.')) GameCampaign.discardBattle()">Zahodit</button>
+            </div>`;
+        } else { resumeBox.style.display = 'none'; resumeBox.innerHTML = ''; }
+
         const next = this.nextNode();
         const nextBox = document.getElementById('campaign-next');
         nextBox.innerHTML = next
@@ -1383,6 +1464,59 @@
         window.gameEngine.loadCampaignScenario(node, this.meta);
       },
 
+      /* ===================== ROZEHRANÁ BITVA: obnovení ===================== */
+      // Jen nahlédne do uložení (bez kontroly armády a bez mazání): hlavní menu ho volá dřív, než se načte postup.
+      peekBattleSave() {
+        let raw = null;
+        try { raw = localStorage.getItem(BATTLE_KEY); } catch (e) { raw = null; }
+        return raw ? normalizeBattleSave(raw, CAMPAIGN_MAP.nodes, BATTLE_UNIT_TYPES) : null;
+      },
+
+      readBattleSave() {
+        let raw = null;
+        try { raw = localStorage.getItem(BATTLE_KEY); } catch (e) { raw = null; }
+        if (!raw) return null;
+        const s = normalizeBattleSave(raw, CAMPAIGN_MAP.nodes, BATTLE_UNIT_TYPES);
+        if (!s) { try { localStorage.removeItem(BATTLE_KEY); } catch (e) { /* ignore */ } return null; }
+        // armáda se mezitím nesmí změnit: každá bojující jednotka hráče musí být v rosteru
+        const ids = new Set(((this.meta && this.meta.playerRoster) || []).map(u => u.id));
+        const mine = s.units.filter(u => u.team === 'player' && !u.isAmbush);
+        if (!mine.length || mine.some(u => !ids.has(u.id))) { try { localStorage.removeItem(BATTLE_KEY); } catch (e) { /* ignore */ } return null; }
+        return s;
+      },
+
+      resumeBattle() {
+        const s = this.readBattleSave();
+        const eng = window.gameEngine;
+        if (!s || !eng) { this.discardBattle(); Game.toast('Rozehranou bitvu se nepodařilo obnovit.'); return; }
+        Game.showScreen('battle-screen');
+        eng._resuming = true;
+        try {
+          if (s.kind === 'endless') { eng.loadEndlessWave(s.wave, this.meta); eng.scenarioConf.terrainMap = s.terrain; }
+          else {
+            const node = CAMPAIGN_MAP.nodes.find(n => n.id === s.nodeId);
+            this.selectedNodeId = node.id;
+            eng.loadCampaignScenario(node, this.meta);
+          }
+          eng.units = s.units;
+          this.loadStats({ stats: s.stats }); // jen vyšší hodnoty, takže nic nedoplní dvakrát
+          if (s.nodeId === 'saguntum') this.meta.tutorialDone = true; // bitva se ukládá až po výcviku
+          eng.hannibalPresent = s.units.some(u => u.type === 'hannibal' && u.team === 'player');
+          eng.turnNumber = s.turnNumber;
+          eng.turn = 'player';
+          eng.selectedUnit = null;
+          eng.log(`Bitva obnovena v tahu ${s.turnNumber}.`, 'info');
+          eng.showBanner(`Bitva obnovena – tah ${s.turnNumber}`);
+          eng.updateHud();
+        } finally { eng._resuming = false; }
+        eng.render();
+      },
+
+      discardBattle() {
+        window.gameEngine.clearBattleSave();
+        this.renderHub();
+      },
+
       /* ===================== ENDLESS MOD ===================== */
       getEndlessBest() {
         try { return parseInt(localStorage.getItem('hannibal_endless_best') || '0', 10); } catch (e) { return 0; }
@@ -1409,6 +1543,7 @@
       },
 
       onEndlessWaveVictory(battleUnits, wave) {
+        window.gameEngine.clearBattleSave();
         audioFX.playVictory();
         const { lost } = this.syncRosterFromBattle(battleUnits);
         this.saveEndlessBest(wave);
@@ -1437,6 +1572,7 @@
       },
 
       onEndlessDefeat(battleUnits, wave, hannibalFell) {
+        window.gameEngine.clearBattleSave();
         const { lost } = this.syncRosterFromBattle(battleUnits);
         this.track({ endless_defeats: 1 });
         this.saveEndlessBest(Math.max(0, wave - 1));
@@ -1470,6 +1606,7 @@
           ? "Opravdu chceš ukončit nekonečné tažení a vrátit se do velitelství? Dosažená vlna se uloží jako rekord."
           : "Opravdu chceš ustoupit z bitvy? Zranění jednotek zůstane a případné ztráty jsou trvalé.";
         if (confirm(confirmMsg)) {
+          window.gameEngine.clearBattleSave();
           const { lost } = this.syncRosterFromBattle(window.gameEngine.units);
           this.track({ retreats: 1 });
           if (isEndless) this.saveEndlessBest(Math.max(0, window.gameEngine.endlessWave - 1));
@@ -1483,6 +1620,7 @@
 
       /* CRITICAL FIX #5: Safe Null Check in onBattleVictory */
       onBattleVictory(battleResults, battleUnits) {
+        window.gameEngine.clearBattleSave();
         audioFX.playVictory();
         const { lost } = this.syncRosterFromBattle(battleUnits);
         const node = CAMPAIGN_MAP.nodes.find(n => n.id === this.selectedNodeId);
@@ -1522,6 +1660,7 @@
       },
 
       onBattleDefeat(battleUnits, hannibalFell) {
+        window.gameEngine.clearBattleSave();
         const { lost } = this.syncRosterFromBattle(battleUnits);
         this.track({ battles_lost: 1 });
         let msg = hannibalFell
@@ -1603,6 +1742,42 @@
         this.canvas.addEventListener('mousemove', (e) => this.handleHover(e));
         this.canvas.addEventListener('mouseleave', () => { if (this.touchMode) return; this.hover = null; this.hideTooltip(); this.requestRender(); });
         document.addEventListener('keydown', (e) => this.handleKey(e));
+      }
+
+      /* ===================== ROZEHRANÁ BITVA: ukládání ===================== */
+      // Ukládá se jen na tahu hráče (tah nepřítele běží po částech a skončí, než se hráč vrátí) a jen při skutečné změně.
+      serializeBattle() {
+        if (this.turn !== 'player' || !this.isBattleActive() || !this.meta) return null;
+        if (!this.isEndless && !(this.currentScenario && this.currentScenario.id)) return null;
+        if (typeof Tutorial !== 'undefined' && Tutorial.active) return null; // výcvik se po obnovení nespustí, takže se během něj neukládá
+        return {
+          v: 1, t: Date.now(), kind: this.isEndless ? 'endless' : 'campaign', node: this.isEndless ? null : this.currentScenario.id,
+          wave: this.isEndless ? this.endlessWave : 0, turnNumber: this.turnNumber, units: JSON.parse(JSON.stringify(this.units)),
+          // terén nekonečného tažení se losuje při každé vlně, kampaňové mapy jsou pevné
+          terrain: this.isEndless ? Object.assign({}, this.scenarioConf.terrainMap) : null,
+          // čítače pro odznaky se do postupu zapisují až po bitvě; tady se drží, ať se po zavření stránky neztratí
+          stats: Object.assign({}, GameCampaign.stats)
+        };
+      }
+
+      queueBattleSave() {
+        if (this._saveT) return;
+        this._saveT = setTimeout(() => { this._saveT = null; this.saveBattleNow(); }, 600);
+      }
+
+      saveBattleNow() {
+        const s = this.serializeBattle();
+        if (!s) return;
+        const cmp = JSON.stringify(Object.assign({}, s, { t: 0 }));
+        if (cmp === this._lastBattleSave) return;
+        this._lastBattleSave = cmp;
+        try { localStorage.setItem(BATTLE_KEY, JSON.stringify(s)); } catch (e) { /* bez uložení se dá hrát dál */ }
+      }
+
+      clearBattleSave() {
+        if (this._saveT) { clearTimeout(this._saveT); this._saveT = null; }
+        this._lastBattleSave = null;
+        try { localStorage.removeItem(BATTLE_KEY); } catch (e) { /* ignore */ }
       }
 
       resetBattleUiState() {
@@ -1916,6 +2091,7 @@
 
       /* ===================== NAČTENÍ BITVY ===================== */
       loadCampaignScenario(node, meta) {
+        if (!this._resuming) this.clearBattleSave();
         this.meta = meta;
         this.isEndless = false;
         this.currentScenario = node;
@@ -1951,7 +2127,7 @@
         }
 
         // Saguntum zároveň slouží jako interaktivní tutoriál - spustí se jen jednou za kampaň
-        if (node.id === 'saguntum' && this.meta && !this.meta.tutorialDone && typeof Tutorial !== 'undefined') {
+        if (node.id === 'saguntum' && this.meta && !this.meta.tutorialDone && typeof Tutorial !== 'undefined' && !this._resuming) {
           setTimeout(() => Tutorial.start(), 500);
         }
 
@@ -1960,6 +2136,7 @@
 
       /* Endless mod: stejný engine, procedurálně generovaná mapa a stupňující se nepřátelé */
       loadEndlessWave(wave, meta) {
+        if (!this._resuming) this.clearBattleSave();
         this.meta = meta;
         this.isEndless = true;
         this.endlessWave = wave;
@@ -2794,6 +2971,7 @@
 
       /* ===================== VYKRESLENÍ ===================== */
       render() {
+        if (this.turn === 'player' && this.units.length) this.queueBattleSave();
         const now = Date.now();
         let shakeX = 0, shakeY = 0;
         if (this.shakeUntil && now < this.shakeUntil) {
@@ -3484,6 +3662,7 @@
           if (GameCampaign.started) info.innerText = 'Postup se ukládá automaticky.';
           else if (save) info.innerText = `Uložený postup: ${save.nodes ? Object.values(save.nodes).filter(n => n.completed).length : 0}/${CAMPAIGN_MAP.nodes.length} kapitol dokončeno.`;
           else info.innerText = '';
+          if ((GameCampaign.started || save) && GameCampaign.peekBattleSave()) info.innerText += '\n⚔️ Čeká na tebe rozehraná bitva.';
         }
         const nb = document.getElementById('btn-new-campaign');
         if (nb) { nb.classList.remove('btn-warn'); nb.innerText = 'Nová Kampaň'; }
@@ -3511,6 +3690,7 @@
         }
         clearTimeout(this._newTimer);
         this._newConfirm = false;
+        if (window.gameEngine) window.gameEngine.clearBattleSave();
         GameCampaign.resetState();
         GameCampaign.started = true;
         GameCampaign.renderHub();
@@ -3662,6 +3842,9 @@
     // Initialize Game Engine on Page Load
     window.addEventListener('load', () => {
       window.gameEngine = new TacticalEngine('gameCanvas');
+      // rozehraná bitva se uloží i při zavření nebo schování stránky (telefon při přepnutí jinam často nezavolá nic jiného)
+      window.addEventListener('pagehide', () => window.gameEngine.saveBattleNow());
+      document.addEventListener('visibilitychange', () => { if (document.hidden) window.gameEngine.saveBattleNow(); });
       Game.refreshMenu();
       GameCampaign.loadStats(GameCampaign.readSave());
       GameCampaign.reportRecords(GameCampaign.readSave() || { nodes: {}, doctrines: {}, roster: [] });   // postup z dřívějška se ohlásí hned, ne až po dalším uložení

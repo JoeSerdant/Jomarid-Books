@@ -34,10 +34,13 @@ test('dokument je jeden celek: všechny skripty se dají přeložit a nic se nes
 });
 
 test('postup se ukládá jen pod klíči, které appka přenáší na server', () => {
-  const used = new Set([...html.matchAll(/localStorage\.(?:getItem|setItem|removeItem)\(\s*(?:'([^']+)'|this\.SAVE_KEY)/g)].map((m) => m[1] || 'hannibal_save_v1'));
+  const named = { 'this.SAVE_KEY': 'hannibal_save_v1', BATTLE_KEY: 'hannibal_battle_v1' };
+  const used = new Set([...html.matchAll(/localStorage\.(?:getItem|setItem|removeItem)\(\s*(?:'([^']+)'|(this\.SAVE_KEY|BATTLE_KEY))/g)].map((m) => m[1] || named[m[2]]));
   assert.ok(html.includes("SAVE_KEY: 'hannibal_save_v1'"));
+  assert.ok(html.includes("const BATTLE_KEY = 'hannibal_battle_v1';"));
+  assert.deepEqual([...used].sort(), ['hannibal_battle_v1', 'hannibal_endless_best', 'hannibal_save_v1'], 'hra sahá přesně na tyto tři klíče');
   for (const key of used) assert.ok(LEGACY_KEYS.hannibal.includes(key), `${key} chybí v gameSave/catalog.js`);
-  assert.deepEqual([...LEGACY_KEYS.hannibal].sort(), ['hannibal_endless_best', 'hannibal_save_v1']);
+  assert.deepEqual([...LEGACY_KEYS.hannibal].sort(), ['hannibal_battle_v1', 'hannibal_endless_best', 'hannibal_save_v1']);
 });
 
 test('Jomarid Coins: hra jen žádá (vítězství v kampani 10, v minihře 5, poražená vlna nekonečného tažení 2), o částce rozhoduje server', () => {
@@ -103,4 +106,250 @@ test('čítače: track přičítá a drží nejvyšší hodnoty, loadStats bere 
   assert.match(html, /nodes, stats: this\.stats \};/, 'čítače jsou v uloženém postupu');
   assert.match(html, /this\.loadStats\(d\);\s+this\.started = true;/, 'načtení postupu čítače nesmaže');
   assert.doesNotMatch(html.slice(html.indexOf('resetState() {'), html.indexOf('nextNode() {')), /stats/, 'nová kampaň čítače nemaže (nejsou v meta)');
+});
+
+/* ============================ Rozehraná bitva: uložení a obnovení ============================ */
+const battleBlock = () => {
+  const start = html.indexOf("const BATTLE_KEY = 'hannibal_battle_v1';");
+  const end = html.lastIndexOf('/*', html.indexOf('2. META STRATEGY MANAGER'));
+  assert.ok(start > 0 && end > start, 'blok pro uložení bitvy je v souboru');
+  return html.slice(start, end);
+};
+const loadBattleCode = () => {
+  const ctx = {};
+  vm.runInNewContext(`${battleBlock()}\nthis.normalizeBattleSave = normalizeBattleSave; this.TYPES = BATTLE_UNIT_TYPES;`, ctx);
+  return ctx;
+};
+const methodSrc = (name, indent = 6) => {
+  const re = new RegExp(`\\n${' '.repeat(indent)}${name}\\([^)]*\\) \\{\\n[\\s\\S]*?\\n${' '.repeat(indent)}\\}`);
+  const m = html.match(re);
+  assert.ok(m, `metoda ${name} existuje`);
+  return m[0].replace(/^\n/, '');
+};
+const plain = (v) => JSON.parse(JSON.stringify(v));
+const NODES = [{ id: 'saguntum' }, { id: 'rhone' }, { id: 'scipio_chase', kind: 'minigame' }];
+const mkUnit = (o = {}) => ({
+  id: 'h', name: 'Hannibalova Garda', type: 'hannibal', team: 'player', x: 2, y: 3, hp: 200, maxHp: 220, atk: 45, def: 35, move: 3, range: 1,
+  isCavalry: false, ability: 'inspire', abilityUsed: false, hasMoved: false, hasActed: false, facing: 'E', morale: 90, hidden: false, statuses: {}, level: 2, ...o,
+});
+const mkFoe = (o = {}) => mkUnit({ id: 'e1', name: 'Římská legie', type: 'roman_legion', team: 'enemy', x: 9, y: 3, hp: 140, maxHp: 140, atk: 30, def: 25, move: 2, ability: null, facing: 'W', level: undefined, ...o });
+const mkSave = (o = {}) => ({ v: 1, t: 1700000000000, kind: 'campaign', node: 'saguntum', wave: 0, turnNumber: 4, terrain: null, units: [mkUnit(), mkFoe()], ...o });
+
+test('rozehraná bitva: platná uložená bitva projde a vrátí čistou kopii jen se známými poli', () => {
+  const { normalizeBattleSave } = loadBattleCode();
+  const raw = mkSave({ units: [mkUnit({ evil: 'x', __proto__x: 1, statuses: { chilled: 2, 'ne platné': 3, sleepy: -1, bad: 'a', other: 99, constructor: 3 } }), mkFoe(), mkUnit({ id: 'amb', name: 'Zvěd', type: 'carthage_spearmen', x: 9, y: 6, hidden: true, isAmbush: true, routed: true, _charging: true, level: undefined })] });
+  const out = plain(normalizeBattleSave(raw, NODES, ['hannibal', 'roman_legion', 'carthage_spearmen']));
+  assert.equal(out.kind, 'campaign');
+  assert.equal(out.nodeId, 'saguntum');
+  assert.equal(out.turnNumber, 4);
+  assert.equal(out.units.length, 3);
+  assert.deepEqual(out.units[0].statuses, { chilled: 2 }, 'z účinků zůstanou jen ty, které hra zná (prochladlý, ospalý), a jen s platnou hodnotou');
+  assert.ok(!('evil' in out.units[0]) && !('__proto__x' in out.units[0]), 'neznámá pole se nepřenášejí');
+  assert.deepEqual(Object.keys(out.units[0]).sort(), ['abilityUsed', 'ability', 'atk', 'def', 'facing', 'hasActed', 'hasMoved', 'hidden', 'hp', 'id', 'isCavalry', 'level', 'maxHp', 'morale', 'move', 'name', 'range', 'statuses', 'team', 'type', 'x', 'y'].sort());
+  const amb = out.units[2];
+  assert.equal(amb.hidden, true); assert.equal(amb.isAmbush, true); assert.equal(amb.routed, true); assert.equal(amb._charging, true);
+  assert.deepEqual(out.stats, {}, 'bez čítačů v uložení zůstane prázdný objekt');
+  const flags = plain(normalizeBattleSave(mkSave({ units: [mkUnit({ _charging: false, routed: false, isAmbush: 'ano' }), mkFoe()] }), NODES, ['hannibal', 'roman_legion']));
+  assert.equal(flags.units[0]._charging, false, 'příznak, který hra nastavuje na false, zůstane false');
+  assert.equal(flags.units[0].routed, false);
+  assert.ok(!('isAmbush' in flags.units[0]), 'příznak jiného typu než boolean se nepřenáší');
+  assert.ok(!('level' in out.units[1]), 'úroveň se doplňuje jen u jednotek, které ji mají');
+  raw.units[0].hp = 1;
+  assert.equal(out.units[0].hp, 200, 'výsledek je nezávislá kopie');
+  // z textu (tak se čte z úložiště) i z objektu
+  assert.equal(plain(normalizeBattleSave(JSON.stringify(mkSave()), NODES, ['hannibal', 'roman_legion'])).turnNumber, 4);
+});
+
+test('rozehraná bitva: čítače pro odznaky se čistí (jen známý tvar a smysluplná čísla), vadné čítače nezahodí celou bitvu', () => {
+  const { normalizeBattleSave } = loadBattleCode();
+  const T = ['hannibal', 'roman_legion'];
+  const out = plain(normalizeBattleSave(mkSave({ stats: { kills: 12, best_hit: 63.5, 'Zlé Jméno': 4, damage_dealt: -1, turns: NaN, moves: '5', crits: Infinity, attacks: 0, constructor: 'x', x: 1e13, ok_key: 1e12 } }), NODES, T));
+  assert.deepEqual(out.stats, { kills: 12, best_hit: 63.5, attacks: 0, ok_key: 1e12 });
+  for (const stats of [null, 5, 'x', [1, 2], undefined]) assert.deepEqual(plain(normalizeBattleSave(mkSave({ stats }), NODES, T)).stats, {}, String(stats));
+});
+
+test('rozehraná bitva: nekonečné tažení nese vlnu i terén (ten se při každé vlně losuje)', () => {
+  const { normalizeBattleSave } = loadBattleCode();
+  const T = ['hannibal', 'roman_legion'];
+  const ok = plain(normalizeBattleSave(mkSave({ kind: 'endless', node: null, wave: 7, terrain: { '3,0': 'hill', '4,5': 'forest', '5,2': 'river', '5,3': 'ford', '11,7': 'snow' } }), NODES, T));
+  assert.equal(ok.kind, 'endless'); assert.equal(ok.wave, 7); assert.equal(ok.nodeId, null);
+  assert.deepEqual(ok.terrain, { '3,0': 'hill', '4,5': 'forest', '5,2': 'river', '5,3': 'ford', '11,7': 'snow' });
+  const bad = (terrain, wave = 7) => normalizeBattleSave(mkSave({ kind: 'endless', node: null, wave, terrain }), NODES, T);
+  assert.equal(bad(undefined), null, 'bez terénu by se po obnovení změnilo bojiště');
+  assert.equal(bad(null), null);
+  assert.equal(bad([]), null);
+  assert.equal(bad({ '12,0': 'hill' }), null, 'mimo mapu vpravo');
+  assert.equal(bad({ '3,8': 'hill' }), null, 'mimo mapu dole');
+  assert.equal(bad({ 'a,b': 'hill' }), null);
+  assert.equal(bad({ '3,3': 'lava' }), null, 'neznámý terén');
+  assert.equal(bad({ '3,3': 'wall' }), null, 'hradby jsou jen v kampani');
+  assert.equal(bad({}, 0), null, 'vlna musí být od 1');
+  assert.equal(bad({}, 1.5), null);
+  assert.ok(bad({}) && bad({}).wave === 7, 'prázdný terén (samá pláň) je v pořádku');
+  const tooMany = {}; for (let x = 0; x < 12; x++) for (let y = 0; y < 8; y++) tooMany[`${x},${y}`] = 'hill'; tooMany['0,0x'] = 'hill';
+  assert.equal(bad(tooMany), null, 'víc polí, než mapa má');
+});
+
+test('rozehraná bitva: poškozená, upravená a cizí data se zahodí (nikdy výjimka)', () => {
+  const { normalizeBattleSave } = loadBattleCode();
+  const T = ['hannibal', 'roman_legion', 'carthage_spearmen'];
+  const n = (raw, nodes = NODES) => normalizeBattleSave(raw, nodes, T);
+  for (const raw of [null, undefined, '', 'nejde to', '{', '[]', '5', 'null', 42, true, [], {}]) assert.equal(n(raw), null, String(raw));
+  assert.equal(n(mkSave({ v: 2 })), null, 'jiná verze');
+  assert.equal(n(mkSave({ v: undefined })), null);
+  assert.equal(n(mkSave({ kind: 'minigame' })), null);
+  assert.equal(n(mkSave({ node: 'cannae' })), null, 'neznámá kapitola');
+  assert.equal(n(mkSave({ node: 'scipio_chase' })), null, 'minihra bitva není');
+  assert.equal(n(mkSave({ node: undefined })), null);
+  assert.equal(n(mkSave(), []), null, 'bez seznamu kapitol');
+  for (const turnNumber of [0, -1, 1.5, 10000, '3', null, NaN]) assert.equal(n(mkSave({ turnNumber })), null, `tah ${turnNumber}`);
+  for (const units of [null, 'x', {}, [], [mkUnit()], [mkFoe()], [mkUnit(), mkUnit({ id: 'a', x: 5 }), 7]]) assert.equal(n(mkSave({ units })), null);
+  assert.equal(n(mkSave({ units: Array.from({ length: 81 }, (_, i) => mkUnit({ id: 'u' + i, x: i % 12, y: Math.floor(i / 12) % 8, team: i % 2 ? 'enemy' : 'player' })) })), null, 'víc jednotek než pole');
+  const one = (o) => n(mkSave({ units: [mkUnit(o), mkFoe()] }));
+  assert.ok(one({}), 'základní jednotka je platná');
+  const rejected = [
+    { team: 'neutral' }, { id: '' }, { id: 5 }, { id: 'x'.repeat(61) }, { name: 7 }, { name: 'x'.repeat(81) }, { type: 'dragon' }, { type: undefined },
+    { x: -1 }, { x: 12 }, { y: 8 }, { x: 1.5 }, { x: '2' }, { x: NaN },
+    { hp: 0 }, { hp: -5 }, { hp: NaN }, { hp: Infinity }, { hp: '100' }, { hp: 400 }, { maxHp: 0 }, { maxHp: 6000 },
+    { atk: -1 }, { atk: 9999 }, { def: NaN }, { move: -1 }, { move: 21 }, { move: 1.5 }, { range: 0 }, { range: 13 }, { morale: -1 }, { morale: 101 }, { morale: NaN },
+    { facing: 'X' }, { facing: 'e' }, { facing: undefined }, { isCavalry: 1 }, { abilityUsed: 'ne' }, { hasMoved: null }, { hasActed: undefined }, { hidden: 0 },
+    { ability: 5 }, { ability: 'x'.repeat(21) },
+  ];
+  for (const o of rejected) assert.equal(one(o), null, JSON.stringify(o));
+  assert.equal(n(mkSave({ units: [mkUnit(), mkFoe({ x: 2, y: 3 })] })), null, 'dvě jednotky na jednom poli');
+  assert.equal(n(mkSave({ units: [mkUnit(), mkFoe({ id: 'h', x: 9, y: 3 }), mkUnit({ id: 'h', x: 4 })] })), null, 'dvě jednotky téhož hráče se stejným id');
+  assert.ok(n(mkSave({ units: [mkUnit({ id: 'same' }), mkFoe({ id: 'same' })] })), 'stejné id u hráče a nepřítele je v pořádku');
+  assert.equal(n(mkSave({ units: [mkUnit(), mkUnit({ id: 'b', x: 4 })] })), null, 'bez nepřátel by bitva byla vyhraná');
+  assert.equal(n(mkSave({ units: [mkFoe(), mkFoe({ id: 'e2', x: 8 })] })), null, 'bez hráčových jednotek by bitva byla prohraná');
+  // hlubší pokus o podvržení nesmí nic přepsat
+  const out = n(mkSave({ units: [mkUnit({ statuses: { constructor: 3, __proto__: 4, chilled: 1 } }), mkFoe()] }));
+  assert.deepEqual(plain(out.units[0].statuses), { chilled: 1 });
+  assert.equal({}.chilled, undefined);
+});
+
+test('rozehraná bitva: vše, co hra vyrábí, se do uložení vejde (typy jednotek, tvar jednotky z makeUnit)', () => {
+  const { normalizeBattleSave, TYPES } = loadBattleCode();
+  // všechny typy, které hra zná (getUnitStats) i které do bitvy vkládají scénáře (makeUnit)
+  const stats = html.slice(html.indexOf('getUnitStats(type, level = 1'), html.indexOf('base = Object.assign({}, base);'));
+  const known = new Set([...stats.matchAll(/case '(\w+)':/g)].map((m) => m[1]));
+  for (const m of html.matchAll(/makeUnit\([^,\n]+,[^,\n]+,\s*(?:'(\w+)'|[a-z.]+\))/g)) if (m[1]) known.add(m[1]);
+  assert.ok(known.size >= 12, 'našly se typy jednotek');
+  for (const type of known) assert.ok(TYPES.includes(type), `${type} chybí v BATTLE_UNIT_TYPES`);
+  for (const type of TYPES) assert.ok(known.has(type) || type === 'hannibal', `${type} v seznamu nemá ve hře žádný význam`);
+  // jednotka přesně tak, jak ji vyrobí makeUnit
+  const makeUnit = vm.runInNewContext(`(${html.match(/function makeUnit\(id, name, type, team, x, y, stats, extra = \{\}\) \{[\s\S]*?\n    \}/)[0].replace(/^function makeUnit/, 'function')})`);
+  let i = 0;
+  const units = TYPES.map((type) => makeUnit('u' + i, 'Jednotka ' + type, type, i % 2 ? 'enemy' : 'player', i % 12, Math.floor(i++ / 12), { maxHp: 120, atk: 30, def: 20, move: 2, range: type === 'balearic_sling' ? 3 : 1, isCavalry: /cavalry/.test(type), ability: type === 'elephants' ? 'trample' : undefined }));
+  units.push(makeUnit('amb', 'Zvěd', 'carthage_spearmen', 'player', 11, 7, { maxHp: 150, atk: 28, def: 30, move: 2, range: 1 }, { hidden: true, isAmbush: true }));
+  const out = normalizeBattleSave({ v: 1, kind: 'campaign', node: 'rhone', turnNumber: 2, units: plain(units) }, NODES, TYPES);
+  assert.ok(out, 'jednotky z makeUnit projdou');
+  assert.equal(out.units.length, units.length);
+  for (let k = 0; k < units.length; k++) {
+    for (const f of ['id', 'name', 'type', 'team', 'x', 'y', 'hp', 'maxHp', 'atk', 'def', 'move', 'range', 'isCavalry', 'abilityUsed', 'hasMoved', 'hasActed', 'facing', 'morale', 'hidden']) assert.equal(out.units[k][f], units[k][f], `${units[k].type}.${f}`);
+    assert.equal(out.units[k].ability, units[k].ability || null);
+  }
+});
+
+test('rozehraná bitva: ukládá se jen na tahu hráče, hluboká kopie, terén jen v nekonečném tažení', () => {
+  const src = methodSrc('serializeBattle');
+  const mk = (o = {}, tut = false) => Object.assign(vm.runInNewContext(`({ ${src} })`, { Date, JSON, Object, ...gl(tut) }), {
+    turn: 'player', isBattleActive: () => true, meta: {}, isEndless: false, endlessWave: 0, currentScenario: { id: 'rhone' }, turnNumber: 3,
+    units: [mkUnit(), mkFoe()], scenarioConf: { terrainMap: { '1,1': 'forest' } }, ...o,
+  });
+  // GameCampaign a Tutorial jsou globální objekty hry; tady stačí jejich nutné části
+  const gl = (tutorialActive) => ({ GameCampaign: { stats: { kills: 3, attacks: 9 } }, Tutorial: { active: tutorialActive } });
+  const camp = mk();
+  const s = camp.serializeBattle();
+  assert.equal(s.v, 1); assert.equal(s.kind, 'campaign'); assert.equal(s.node, 'rhone'); assert.equal(s.wave, 0); assert.equal(s.turnNumber, 3);
+  assert.equal(s.terrain, null, 'kampaňové mapy jsou pevné, nic se neukládá navíc');
+  assert.deepEqual(plain(s.stats), { kills: 3, attacks: 9 }, 'čítače pro odznaky jsou součástí uložení');
+  assert.equal(s.units.length, 2);
+  camp.units[0].hp = 5;
+  assert.equal(s.units[0].hp, 200, 'uložení je kopie, další tah ji nezmění');
+  assert.ok(Number.isFinite(s.t));
+  const endless = mk({ isEndless: true, endlessWave: 4, currentScenario: { title: 'Vlna 4' } }).serializeBattle();
+  assert.equal(endless.kind, 'endless'); assert.equal(endless.wave, 4); assert.equal(endless.node, null);
+  assert.deepEqual(plain(endless.terrain), { '1,1': 'forest' });
+  // jen na tahu hráče, jen při běžící bitvě, jen s kampaní a se známou kapitolou
+  assert.equal(mk({ turn: 'enemy' }).serializeBattle(), null);
+  assert.equal(mk({ isBattleActive: () => false }).serializeBattle(), null, 'okno výsledku nebo jiná obrazovka');
+  assert.equal(mk({ meta: null }).serializeBattle(), null);
+  assert.equal(mk({ currentScenario: null }).serializeBattle(), null);
+  assert.equal(mk({}, true).serializeBattle(), null, 'během výcviku se neukládá (po obnově by se nespustil)');
+  // a co uloží, to normalizace přijme
+  const { normalizeBattleSave, TYPES } = loadBattleCode();
+  assert.ok(normalizeBattleSave(JSON.stringify(s), NODES.concat([{ id: 'rhone' }]), TYPES));
+  assert.ok(normalizeBattleSave(JSON.stringify(endless), NODES, TYPES));
+});
+
+test('rozehraná bitva: čtení z úložiště zahodí poškozenou bitvu i bitvu, na kterou už nesedí armáda', () => {
+  const src = methodSrc('readBattleSave');
+  const store = new Map();
+  const { normalizeBattleSave, TYPES } = loadBattleCode();
+  const make = (roster) => vm.runInNewContext(`({ ${src} })`, {
+    localStorage: { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) },
+    normalizeBattleSave, CAMPAIGN_MAP: { nodes: NODES }, BATTLE_UNIT_TYPES: TYPES, BATTLE_KEY: 'hannibal_battle_v1',
+  });
+  const camp = Object.assign(make(), { meta: { playerRoster: [{ id: 'h' }, { id: 'p2' }] } });
+  assert.equal(camp.readBattleSave(), null, 'nic uloženo');
+  store.set('hannibal_battle_v1', JSON.stringify(mkSave({ units: [mkUnit(), mkUnit({ id: 'p2', type: 'carthage_spearmen', x: 3 }), mkUnit({ id: 'amb', x: 9, y: 6, hidden: true, isAmbush: true }), mkFoe()] })));
+  const ok = camp.readBattleSave();
+  assert.ok(ok && ok.units.length === 4, 'armáda sedí (zvěd z léčky v rosteru být nemusí)');
+  assert.ok(store.has('hannibal_battle_v1'), 'platná bitva zůstává uložená');
+  // jednotka, která v rosteru už není (například po nové kampani), bitvu neguje
+  camp.meta.playerRoster = [{ id: 'h' }];
+  assert.equal(camp.readBattleSave(), null);
+  assert.ok(!store.has('hannibal_battle_v1'), 'nepoužitelná bitva se vymaže, ať nezůstane viset v hubu');
+  store.set('hannibal_battle_v1', 'rozbité {');
+  assert.equal(camp.readBattleSave(), null);
+  assert.ok(!store.has('hannibal_battle_v1'));
+  camp.meta = { playerRoster: [] };
+  store.set('hannibal_battle_v1', JSON.stringify(mkSave()));
+  assert.equal(camp.readBattleSave(), null, 'prázdný roster');
+  // bez přístupu k úložišti (soukromé okno) se nic nerozbije
+  const noStore = vm.runInNewContext(`({ ${src} })`, { localStorage: { getItem() { throw new Error('zakázáno'); }, removeItem() { throw new Error('zakázáno'); } }, normalizeBattleSave, CAMPAIGN_MAP: { nodes: NODES }, BATTLE_UNIT_TYPES: TYPES, BATTLE_KEY: 'x' });
+  noStore.meta = { playerRoster: [] };
+  assert.equal(noStore.readBattleSave(), null);
+});
+
+test('rozehraná bitva: po vítězství, porážce i ústupu se uložení maže, nová bitva ho přepíše a kampaň od nuly také', () => {
+  for (const name of ['onBattleVictory', 'onBattleDefeat', 'onEndlessWaveVictory', 'onEndlessDefeat']) {
+    assert.match(methodSrc(name), /window\.gameEngine\.clearBattleSave\(\);/, `${name} maže uloženou bitvu`);
+  }
+  const retreat = methodSrc('retreatFromBattle');
+  assert.match(retreat, /if \(confirm\(confirmMsg\)\) \{\s*window\.gameEngine\.clearBattleSave\(\);/, 'ústup maže až po potvrzení');
+  for (const name of ['loadCampaignScenario', 'loadEndlessWave']) {
+    assert.match(methodSrc(name), /^\s*\w+\([^)]*\) \{\n\s*if \(!this\._resuming\) this\.clearBattleSave\(\);/, `${name} zahodí staré uložení, ledaže jde o obnovení`);
+  }
+  assert.match(html, /node\.id === 'saguntum' && this\.meta && !this\.meta\.tutorialDone && typeof Tutorial !== 'undefined' && !this\._resuming/, 'obnovená bitva nespouští výcvik znovu');
+  assert.match(html, /if \(window\.gameEngine\) window\.gameEngine\.clearBattleSave\(\);\s*GameCampaign\.resetState\(\);/, 'nová kampaň maže i rozehranou bitvu');
+  // jen na tahu hráče a za běhu bitvy se při překreslení plánuje uložení (s odstupem, ne při každém snímku)
+  assert.match(methodSrc('render'), /^\s*render\(\) \{\n\s*if \(this\.turn === 'player' && this\.units\.length\) this\.queueBattleSave\(\);/);
+  assert.match(methodSrc('queueBattleSave'), /if \(this\._saveT\) return;\s*this\._saveT = setTimeout\(\(\) => \{ this\._saveT = null; this\.saveBattleNow\(\); \}, 600\);/);
+  // uložení při zavření i schování stránky, ať se neztratí poslední tah
+  assert.match(html, /window\.addEventListener\('pagehide', \(\) => window\.gameEngine\.saveBattleNow\(\)\);/);
+  assert.match(html, /document\.addEventListener\('visibilitychange', \(\) => \{ if \(document\.hidden\) window\.gameEngine\.saveBattleNow\(\); \}\);/);
+  // uložení se nepíše, když se od posledního nic nezměnilo; chyba úložiště hru neshodí
+  const save = methodSrc('saveBattleNow');
+  assert.match(save, /if \(cmp === this\._lastBattleSave\) return;/);
+  assert.match(save, /try \{ localStorage\.setItem\(BATTLE_KEY, JSON\.stringify\(s\)\); \} catch \(e\)/);
+});
+
+test('rozehraná bitva: velitelství nabízí pokračování nebo zahození a obnova nepřepisuje armádu', () => {
+  assert.match(html, /<div id="campaign-resume" style="display:none;/);
+  assert.match(html, /onclick="GameCampaign\.resumeBattle\(\)"/);
+  assert.match(html, /onclick="if \(confirm\('Zahodit rozehranou bitvu\? Postup v ní se ztratí\.'\)\) GameCampaign\.discardBattle\(\)"/, 'zahození chce potvrzení');
+  const resume = methodSrc('resumeBattle');
+  assert.match(resume, /eng\._resuming = true;[\s\S]*?finally \{ eng\._resuming = false; \}/, 'příznak obnovy se vždy vrátí zpět');
+  assert.match(resume, /eng\.units = s\.units;/);
+  assert.match(resume, /eng\.turnNumber = s\.turnNumber;/);
+  assert.match(resume, /eng\.showBanner\(`Bitva obnovena – tah \$\{s\.turnNumber\}`\);/, 'nápis "Bitva začíná" z načtení se přepíše');
+  assert.match(resume, /this\.loadStats\(\{ stats: s\.stats \}\);/, 'čítače se vrací (jen vyšší hodnoty)');
+  assert.match(resume, /if \(s\.nodeId === 'saguntum'\) this\.meta\.tutorialDone = true;/);
+  // hlavní menu jen nahlíží (neruší uložení dřív, než se načte armáda z postupu)
+  const peek = methodSrc('peekBattleSave');
+  assert.doesNotMatch(peek, /removeItem/);
+  assert.match(html, /if \(\(GameCampaign\.started \|\| save\) && GameCampaign\.peekBattleSave\(\)\) info\.innerText \+= '\\n⚔️ Čeká na tebe rozehraná bitva\.';/);
+  assert.match(resume, /eng\.scenarioConf\.terrainMap = s\.terrain;/, 'terén nekonečného tažení se vrací');
+  assert.doesNotMatch(resume, /meta\.playerRoster\s*=/, 'obnova armádu v rosteru nemění');
 });
