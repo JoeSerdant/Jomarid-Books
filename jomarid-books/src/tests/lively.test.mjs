@@ -2,12 +2,11 @@
 //
 // Hlídají hlavně:
 //  - nastavení: ve výchozím stavu vypnuto, ukládá se, nastavuje atribut na <html>, synchronizuje se s účtem, poškozené úložiště nic nerozbije,
+//  - postupné objevování karet (reveal.js): co se hýbe a co ne, pořadí a zpoždění, vnořené prvky, úklid po dohrání, pojistky, když něco selže,
 //  - že čtečka, hry a krátké knihy zůstávají klidné a ozdoby po stranách nezasahují do širokých stránek (správa, nakladatel),
-//  - jiskřičky po kliknutí: jen u zapnutého režimu, bez omezení pohybu, jen na ovladatelných prvcích, se stropem počtu a úklidem,
-//  - postavičky a tvorové: každá scéna existuje, každá třída v kresbě má pravidlo v CSS a každá animace klíčové snímky (překlep by znamenal
-//    nepohyblivou nebo neviditelnou postavičku), výchozí stav bez animací je hezký obrázek (Omezit pohyb),
-//  - že pravidla v lively.css nedělají z prvků, které obsahují position: fixed, blok s vlastním souřadným systémem,
-//  - že čtečka a hry jsou klidné (vstupní animace se u nich vypínají) a že se nic neskrývá v tisku ani bez podpory scroll animací.
+//  - počítání čísel, naklánění karet, kruh po kliknutí a přepnutí motivu přes View Transition,
+//  - CSS: každá animace má klíčové snímky, čekající prvky se skryjí a po dohrání nezůstane žádná transformace (jinak by se pohnuly prvky
+//    s position: fixed), omezený pohyb a tisk nic neskrývají, vypnutý režim nic nemění.
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -16,14 +15,18 @@ import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import * as T from '../theme.js';
 import * as S from '../settings/settingsSync.js';
-import { livelyScope, pointerOffset, scrollProgress } from '../lively/scope.js';
-import { SIDE_ITEMS, ROAMERS, SCENE_NAMES, FLOATS, particles, PARTICLE_COUNT, PARTICLE_SHAPES } from '../lively/items.js';
-import { sparkleSpecs, sparkleTarget, burstAt, installClickSparkles, SPARKLE_COUNT, BURST_SIZE, MAX_LIVE_SPARKLES } from '../lively/sparkles.js';
+import { livelyScope, scrollProgress } from '../lively/scope.js';
+import { SIDE_ITEMS, ICON_NAMES, ANIMATIONS, particles, PARTICLE_COUNT } from '../lively/items.js';
+import { REVEAL_STEP, REVEAL_MAX_STEPS, NESTED_BASE, TILT_MAX, staggerDelay, easeOutExpo, countAt, countDuration, tiltFor } from '../lively/motion.js';
+import { CARD_SELECTOR, GROW_SELECTOR, REVEAL_SELECTOR, SKIP_SELECTOR, ANIMATIONS as REVEAL_ANIMATIONS, createReveal, isCandidate } from '../lively/reveal.js';
+import { TILT_SELECTOR, installTilt } from '../lively/tilt.js';
+import { MAX_RIPPLES, rippleAt, rippleTarget, installClickRipple } from '../lively/ripple.js';
+import { supportsViewTransition, trackPointerOrigin, withViewTransition } from '../lively/viewTransition.js';
+import { prefersReducedMotion } from '../lively/reduced.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (...p) => fs.readFileSync(path.join(ROOT, ...p), 'utf8');
 const css = read('src', 'lively.css');
-const scenes = read('src', 'lively', 'Scenes.jsx');
 
 const makeStorage = (init = {}, broken = false) => {
   const m = new Map(Object.entries(init));
@@ -102,16 +105,16 @@ describe('index.html: Živý režim před prvním vykreslením', () => {
 describe('kde se co kreslí', () => {
   test('čtečka, hra a krátké knihy zůstávají klidné', () => {
     for (const p of ['/read/abc', '/read/', '/read', '/games/rocket', '/games/chess/', '/shorts', '/shorts/']) {
-      assert.deepEqual(livelyScope(p), { ambient: false, sparkles: false, sides: false }, p);
+      assert.deepEqual(livelyScope(p), { ambient: false, motion: false, sides: false }, p);
     }
   });
   test('rozcestník her a běžné stránky dostanou všechno', () => {
     for (const p of ['/', '/app', '/games', '/games/', '/stats', '/badges/games', '/settings/vzhled', '/login', '/autor/12']) {
-      assert.deepEqual(livelyScope(p), { ambient: true, sparkles: true, sides: true }, p);
+      assert.deepEqual(livelyScope(p), { ambient: true, motion: true, sides: true }, p);
     }
   });
-  test('správa a nakladatelský panel mají široký obsah: pozadí a jiskřičky ano, ozdoby po stranách ne', () => {
-    for (const p of ['/admin', '/admin/', '/publisher']) assert.deepEqual(livelyScope(p), { ambient: true, sparkles: true, sides: false }, p);
+  test('správa a nakladatelský panel mají široký obsah: pozadí a pohyb ano, ozdoby po stranách ne', () => {
+    for (const p of ['/admin', '/admin/', '/publisher']) assert.deepEqual(livelyScope(p), { ambient: true, motion: true, sides: false }, p);
   });
   test('podobné názvy nespadají do klidných stránek (např. /readme, /gamesx)', () => {
     for (const p of ['/readme', '/gamesx', '/shortsfoo', '/administrace']) assert.equal(livelyScope(p).ambient, true, p);
@@ -134,191 +137,296 @@ describe('pruh průběhu stránky', () => {
   });
 });
 
-describe('pointerOffset (světlo a posun ozdob podle myši)', () => {
-  test('střed okna je 0, okraje -1 a 1, mimo okno se ořízne, nesmysl dá 0', () => {
-    assert.deepEqual(pointerOffset(500, 300, 1000, 600), { px: 0, py: 0 });
-    assert.deepEqual(pointerOffset(0, 0, 1000, 600), { px: -1, py: -1 });
-    assert.deepEqual(pointerOffset(1000, 600, 1000, 600), { px: 1, py: 1 });
-    assert.deepEqual(pointerOffset(1500, -200, 1000, 600), { px: 1, py: -1 });
-    assert.deepEqual(pointerOffset(250, 450, 1000, 600), { px: -0.5, py: 0.5 });
-    for (const bad of [NaN, undefined, 'x', null]) assert.deepEqual(pointerOffset(bad, bad, 1000, 600), { px: 0, py: 0 }, String(bad));
-    assert.deepEqual(pointerOffset(10, 10, 0, 0), { px: 0, py: 0 }, 'okno bez rozměrů');
+describe('jemné ozdoby (pozadí a ikonky po stranách)', () => {
+  test('každá ikona z dat je naimportovaná a zapsaná v mapě ikon komponenty', () => {
+    const src = read('src', 'lively', 'LivelyScenery.jsx');
+    const imported = src.match(/import \{([^}]*)\} from 'lucide-react'/)[1].split(',').map((s) => s.trim());
+    const mapped = src.match(/const ICONS = \{([^}]*)\}/)[1].split(',').map((s) => s.trim());
+    for (const name of ICON_NAMES) { assert.ok(imported.includes(name), `import ${name}`); assert.ok(mapped.includes(name), `mapa ${name}`); }
+    for (const name of mapped) assert.ok(ICON_NAMES.includes(name), `nepoužitá ikona ${name}`);
   });
-});
-
-// Názvy tříd v kresbách postaviček: barvy a obrysy mají obecná pravidla, ostatní (owl-lid, coffee-steam...) musí mít vlastní pravidlo v CSS.
-const PALETTE = new Set(['a', 'a2', 'gold', 'gold2', 'sky', 'pink', 'orange', 'yellow', 'brown', 'ink', 'white', 'st-a', 'st-w', 'st-ink', 'st-gold', 'st-gold2', 'st-brown']);
-const sceneClasses = () => [...new Set([...scenes.matchAll(/className="([^"{]+)"/g)].flatMap((m) => m[1].trim().split(/\s+/)))];
-
-describe('postavičky a scény', () => {
-  const defined = [...scenes.matchAll(/^const (\w+) = \(p\) => \(/gm)].map((m) => m[1]);
-  const exported = scenes.match(/export const SCENES = \{([^}]*)\}/)[1].split(',').map((n) => n.trim()).filter(Boolean);
-
-  test('každá scéna z dat je nakreslená a zapsaná v mapě SCENES; v mapě není nic navíc', () => {
-    for (const name of SCENE_NAMES) { assert.ok(defined.includes(name), `nakreslená ${name}`); assert.ok(exported.includes(name), `v mapě ${name}`); }
-    assert.deepEqual([...exported].sort(), [...defined].sort(), 'mapa odpovídá kresbám');
-    for (const name of exported) assert.ok(SCENE_NAMES.includes(name), `nepoužitá scéna ${name}`);
+  test('každá ikona z dat opravdu existuje v lucide-react', () => {
+    for (const name of ICON_NAMES) {
+      const file = name.replace(/([a-z])([A-Z0-9])/g, '$1-$2').toLowerCase();
+      assert.ok(fs.existsSync(path.join(ROOT, 'node_modules', 'lucide-react', 'dist', 'esm', 'icons', `${file}.js`)), name);
+    }
   });
-  test('v obou pruzích je po šesti postavičkách, každá jiná; vlevo čtenářský koutek, vpravo hry', () => {
-    assert.equal(SIDE_ITEMS.left.length, 6);
-    assert.equal(SIDE_ITEMS.right.length, 6);
-    assert.deepEqual(SIDE_ITEMS.left.map((i) => i.scene), ['Owl', 'Book', 'Coffee', 'Lamp', 'Moon', 'Quill']);
-    assert.deepEqual(SIDE_ITEMS.right.map((i) => i.scene), ['Rocket', 'Coin', 'Trophy', 'Flame', 'Gamepad', 'Crown']);
+  test('každá animace ikon má pravidlo i klíčové snímky v lively.css', () => {
+    for (const a of ANIMATIONS) {
+      assert.ok(css.includes(`.lv-${a} {`), `třída lv-${a}`);
+      assert.ok(css.includes(`@keyframes lv${a[0].toUpperCase()}${a.slice(1)} `), `klíčové snímky ${a}`);
+    }
+    for (const it of Object.values(SIDE_ITEMS).flat()) assert.ok(ANIMATIONS.includes(it.anim), `${it.icon}: ${it.anim}`);
   });
-  test('rozmístění: uvnitř pruhu, pod horní lištou, od sebe, rozumná velikost a rychlosti', () => {
+  test('ikonky po stranách: oba pruhy, uvnitř pruhu, pod horní lištou, od sebe', () => {
+    assert.ok(SIDE_ITEMS.left.length >= 6 && SIDE_ITEMS.right.length >= 6);
     for (const [side, items] of Object.entries(SIDE_ITEMS)) {
       for (const it of items) {
-        assert.ok(it.x >= 30 && it.x <= 70 && it.y >= 12 && it.y <= 92, `${side} ${it.scene} je uvnitř pruhu`);
-        assert.ok(it.size >= 56 && it.size <= 80, `${side} ${it.scene} velikost (u 1280 px je pruh jen 64 px, zmenšuje se ×0,8)`);
-        assert.ok(it.par >= 0.001 && it.par <= 0.004, `${side} ${it.scene} rychlost houpání při posouvání`);
-        assert.ok(it.dp >= 0.4 && it.dp <= 1.3, `${side} ${it.scene} hloubka`);
-        assert.ok(it.dur > 0 && it.del <= 0, `${side} ${it.scene} doba a záporné zpoždění`);
-        assert.ok(FLOATS.includes(it.float), `${side} ${it.scene} houpání ${it.float}`);
+        assert.ok(it.x >= 15 && it.x <= 85 && it.y >= 12 && it.y <= 92, `${side} ${it.icon} je uvnitř pruhu`);
+        assert.ok(it.size >= 24 && it.size <= 48, `${side} ${it.icon} velikost`);
+        assert.ok(it.par >= 0.001 && it.par <= 0.004, `${side} ${it.icon} rychlost houpání při posouvání`);
       }
       const ys = items.map((it) => it.y).sort((a, b) => a - b);
-      for (let i = 1; i < ys.length; i++) assert.ok(ys[i] - ys[i - 1] >= 12, `${side}: postavičky se nepřekrývají ani na nízké obrazovce`);
+      for (let i = 1; i < ys.length; i++) assert.ok(ys[i] - ys[i - 1] >= 8, `${side}: ikonky jsou od sebe`);
     }
   });
-  test('každá třída v kresbách je buď z palety, nebo má pravidlo v CSS (překlep = postavička stojí)', () => {
-    const missing = sceneClasses().filter((c) => !PALETTE.has(c) && !css.includes(`.${c}`) && !c.startsWith('lv-'));
-    assert.deepEqual(missing, []);
-  });
-  test('každá barva z palety má pravidlo', () => {
-    for (const c of PALETTE) assert.ok(css.includes(`.lv-scene .${c}`) || css.includes(`.${c},`) || css.includes(`.${c} `) || css.includes(`.${c})`), c);
-  });
-  test('jiskry mají vlastní <g transform>: CSS animace transform by jinak přepsala atribut a jiskra by skočila do rohu', () => {
-    const withAttr = [...scenes.matchAll(/<(path|circle|ellipse|rect)[^>]*\btransform="[^"]*"[^>]*>/g)].map((m) => m[0]);
-    for (const el of withAttr) assert.ok(!/(spark|owl-|book-|coffee-|lamp-|moon-|quill-|rocket-|coin-|trophy-|flame-|pad-|crown-|bf-|worm-)/.test(el), `animovaný prvek s transform atributem: ${el.slice(0, 80)}`);
-  });
-  test('každá postava a pohyb: animované třídy mají v CSS animation (nic se nemá jen tvářit)', () => {
-    for (const cls of ['owl-body', 'owl-lid', 'owl-pupil', 'book-flip', 'coffee-steam', 'lamp-head', 'lamp-cone', 'moon-z', 'quill-pen', 'quill-line', 'rocket-wrap', 'rocket-flame', 'rocket-puff', 'coin-spin', 'coin-hop', 'trophy-shine', 'fl1', 'fl2', 'fl3', 'flame-ember', 'pad-wrap', 'pad-btn', 'crown-wrap', 'crown-gem', 'bf-wing', 'worm-seg', 'spark']) {
-      const rule = css.split('\n').find((l) => l.startsWith(`.lv-scene .${cls} {`));
-      assert.ok(rule && /animation/.test(rule), `${cls} má animaci`);
-    }
-  });
-  test('pupily sova sleduje myš přes --px a --py (nastavuje LivelyScenery)', () => {
-    assert.match(css, /\.owl-pupil \{[^}]*translate: calc\(var\(--px, 0\)/);
-    assert.match(read('src', 'lively', 'LivelyScenery.jsx'), /setProperty\('--px'/);
-  });
-});
-
-describe('tvorové, kteří přelétají obrazovku', () => {
-  test('motýli, letadlo a housenka jsou nakreslení a mají pohyb v CSS; na telefonu jsou aspoň tři', () => {
-    assert.deepEqual([...new Set(ROAMERS.map((r) => r.scene))].sort(), ['Butterfly', 'Plane', 'Worm']);
-    for (const r of ROAMERS) {
-      assert.ok(scenes.includes(`const ${r.scene} =`), r.scene);
-      assert.ok(css.includes(`.lv-roam-${r.kind}`), `pohyb ${r.kind}`);
-      assert.ok(r.dur >= 20 && r.del <= 0 && r.w >= 24 && r.w <= 80, `${r.scene} doba, zpoždění a velikost`);
-      if (r.kind !== 'worm') assert.ok(r.top >= 5 && r.top <= 70, `${r.scene} výška`);
-    }
-    assert.ok(ROAMERS.filter((r) => !r.desktop).length >= 3, 'telefon (bez pruhů po stranách) má taky život');
-  });
-  test('housenka leze po spodním okraji, ostatní nahoře; letadlo má vlastní dráhu, motýli se mihotají', () => {
-    assert.match(css, /\.lv-roam-worm \{ top: auto; bottom: 1px; \}/);
-    assert.match(css, /\.lv-roam-plane \{ animation-name: lvPlane; \}/);
-    assert.match(css, /\.lv-roam-wander \.lv-wander \{ animation: lvWander/);
-  });
-  test('Omezit pohyb: tvorové, tečky a světlo za myší se skryjí úplně (zastavený motýl uprostřed obrazovky by jen překážel)', () => {
-    assert.match(css, /html\[data-reduce-motion="1"\] :is\(\.lv-dot, \.lv-shoot, \.lv-roamers, \.lv-spot\) \{ display: none; \}/);
-  });
-});
-
-describe('tečky', () => {
-  test('pevné rozmístění (žádná náhoda), uvnitř okna, různé tvary a rychlosti', () => {
+  test('tečky: pevné rozmístění (žádná náhoda při vykreslení), uvnitř okna, různé rychlosti', () => {
     const a = particles(); const b = particles();
     assert.deepEqual(a, b);
     assert.equal(a.length, PARTICLE_COUNT);
-    for (const p of a) { assert.ok(p.x >= 1 && p.x <= 98 && p.size >= 4 && p.size <= 8 && p.dur >= 16 && p.dur <= 28 && p.del <= 0); assert.ok(PARTICLE_SHAPES.includes(p.shape)); }
+    for (const p of a) assert.ok(p.x >= 1 && p.x <= 98 && p.size >= 3 && p.size <= 6 && p.dur >= 16 && p.dur <= 28 && p.del <= 0);
     assert.ok(new Set(a.map((p) => p.x)).size >= PARTICLE_COUNT - 1, 'různé vodorovné polohy');
     assert.ok(new Set(a.map((p) => p.dur)).size > 4, 'různé rychlosti');
-    assert.deepEqual([...new Set(a.map((p) => p.shape))].sort(), [...PARTICLE_SHAPES].sort(), 'všechny tři tvary se použijí');
-    for (const shape of PARTICLE_SHAPES) assert.ok(css.includes(`.lv-dot-${shape}`), shape);
+  });
+  test('zmizely postavičky, tvorové a konfety z minulé verze (rozhraní se hýbe, ne ozdoby)', () => {
+    for (const f of [['src', 'lively', 'Scenes.jsx'], ['src', 'lively', 'sparkles.js']]) assert.equal(fs.existsSync(path.join(ROOT, ...f)), false, f.join('/'));
+    for (const word of ['lv-roam', 'lv-scene', 'lv-spot', 'owl-', 'rocket-wrap']) assert.ok(!css.includes(word), word);
   });
 });
 
-describe('lively.css', () => {
-  const keyframes = new Set([...css.matchAll(/@keyframes (lv\w+)/g)].map((m) => m[1]));
-  const used = new Set([...css.matchAll(/animation(?:-name)?:([^;}]*)[;}]/g)].flatMap((m) => [...m[1].matchAll(/\b(lv[A-Z]\w*)/g)].map((x) => x[1])));
-  test('každá použitá animace má klíčové snímky a každé klíčové snímky se používají', () => {
-    assert.ok(keyframes.size > 45, `klíčových snímků je dost (${keyframes.size})`);
-    for (const name of used) assert.ok(keyframes.has(name), `chybí @keyframes ${name}`);
-    for (const name of keyframes) assert.ok(used.has(name), `nepoužité @keyframes ${name}`);
+describe('motion.js: časování a čísla', () => {
+  test('zpoždění roste po krocích a od devátého prvku už ne (stovka karet nečeká několik vteřin)', () => {
+    assert.equal(staggerDelay(0), 0);
+    assert.ok(Math.abs(staggerDelay(3) - 3 * REVEAL_STEP) < 1e-9);
+    assert.ok(Math.abs(staggerDelay(REVEAL_MAX_STEPS) - REVEAL_MAX_STEPS * REVEAL_STEP) < 1e-9);
+    assert.equal(staggerDelay(500), staggerDelay(REVEAL_MAX_STEPS));
+    assert.ok(Math.abs(staggerDelay(2, 0.5) - (0.5 + 2 * REVEAL_STEP)) < 1e-9, 'zpoždění celé dávky se přičte');
+    for (const bad of [-5, NaN, undefined, 'x']) assert.equal(staggerDelay(bad), 0, String(bad));
+    assert.ok(staggerDelay(REVEAL_MAX_STEPS) < 1, 'celé objevení trvá pod vteřinu zpoždění');
   });
-  test('houpání celé postavičky: každá volba z dat má třídu v CSS', () => {
-    for (const f of FLOATS.filter((x) => x !== 'none')) assert.ok(css.includes(`.lv-float-${f} {`), f);
+  test('easeOutExpo: 0 na začátku, 1 na konci, rychlý rozjezd, rostoucí, ořezaný', () => {
+    assert.equal(easeOutExpo(0) < 0.001, true);
+    assert.equal(easeOutExpo(1), 1);
+    assert.ok(easeOutExpo(0.3) > 0.8, 'za třetinu času je hotovo z větší části');
+    let prev = -1;
+    for (let t = 0; t <= 1; t += 0.05) { const v = easeOutExpo(t); assert.ok(v >= prev); prev = v; }
+    assert.equal(easeOutExpo(5), 1); assert.ok(easeOutExpo(-3) < 0.001); assert.ok(easeOutExpo(NaN) < 0.001);
   });
-  test('ozdoby jsou jen dekorace: nikdy nezachytí klik a mají vlastní vrstvy', () => {
-    for (const sel of ['.lv-bg', '.lv-sides', '.lv-roamers', '.lv-progress']) {
-      const m = css.match(new RegExp(`${sel.replace('.', '\\.')} \\{([^}]*)\\}`));
-      assert.ok(m, sel);
-      assert.match(m[1], /pointer-events: none/, sel);
-      assert.match(m[1], /position: fixed/, sel);
-    }
-    assert.match(css, /\.lv-bg \{[^}]*z-index: -1/, 'pozadí je pod obsahem');
+  test('countAt: celá čísla, na konci přesně cíl, funguje i dolů a z nuly', () => {
+    assert.equal(countAt(0, 100, 0) < 2, true);
+    assert.equal(countAt(0, 100, 1), 100);
+    assert.equal(countAt(0, 100, 2), 100, 'přes konec zůstane cíl');
+    assert.equal(countAt(100, 0, 1), 0);
+    assert.equal(countAt(40, 40, 0.5), 40);
+    for (let t = 0; t <= 1; t += 0.1) assert.ok(Number.isInteger(countAt(0, 997, t)), `celé číslo v ${t}`);
+    const mid = countAt(100, 0, 0.1); assert.ok(mid < 100 && mid > 0, 'klesá');
+    assert.equal(countAt(0, NaN, 0.5), 0);
   });
-  test('Omezit pohyb: výchozí stav bez animací je hezký obrázek (oči sovy otevřené, pára vidět, lesk a obláčky skryté)', () => {
-    const rule = (sel) => css.split('\n').find((l) => l.startsWith(sel));
-    assert.match(rule('.lv-scene .owl-lid {'), /transform: scaleY\(0\)/, 'oči otevřené');
-    assert.match(rule('.lv-scene .coffee-steam {'), /opacity: 0\.75/, 'pára vidět');
-    assert.match(rule('.lv-scene .trophy-shine {'), /opacity: 0/, 'lesk skrytý');
-    assert.match(rule('.lv-scene .rocket-puff {'), /opacity: 0/, 'obláčky skryté');
-    assert.match(rule('.lv-scene .flame-ember {'), /opacity: 0/, 'jiskry skryté');
-    assert.match(rule('.lv-scene .quill-line {'), /stroke-dashoffset: 0/, 'čára napsaná');
-    assert.match(css, /html\[data-reduce-motion="1"\] :is\(\.lv-dot/);
+  test('countDuration: malé změny rychle, velké déle, vždy mezi 0,6 a 1,4 s', () => {
+    assert.ok(countDuration(0, 3) < countDuration(0, 5000));
+    for (const [a, b] of [[0, 0], [0, 1], [0, 50], [0, 100000], [900, 0], [NaN, 5]]) { const d = countDuration(a, b); assert.ok(d >= 600 && d <= 1400, `${a}→${b}: ${d}`); }
   });
-  test('vynucené barvy Windows a tisk ozdoby skryjí; tisk navíc zruší odhalování sekcí (jinak by se vytiskly prázdné)', () => {
-    assert.match(css, /@media \(forced-colors: active\), print \{[^}]*display: none/);
-    assert.match(css, /@media print \{\s*html\[data-lively="1"\] :is\([^)]*main section[^)]*\) \{ animation: none !important; opacity: 1 !important; transform: none !important; \}/);
-  });
-  test('postranní postavičky jen tam, kde je vedle obsahu místo (od 1280 px), s rostoucí velikostí; pruh má šířku podle obsahu max-w-6xl', () => {
-    assert.match(css, /@media \(min-width: 1280px\) \{ \.lv-sides \{ display: block; \} \}/);
-    for (const w of [1440, 1600, 1800, 2200]) assert.match(css, new RegExp(`@media \\(min-width: ${w}px\\) \\{ \\.lv-sides \\{ --k:`), `${w}`);
-    assert.match(css, /width: calc\(\(100% - 72rem\) \/ 2\)/);
-    assert.equal(read('src', 'pages', 'HomePage.jsx').includes('max-w-6xl'), true, 'obsah stránek je opravdu max-w-6xl (72rem)');
-  });
-  test('světlo za myší: jen s myší (na dotyku se skryje), jemně se vleče', () => {
-    assert.match(css, /@media \(hover: none\), \(pointer: coarse\) \{ \.lv-spot \{ display: none; \} \}/);
-    assert.match(css, /\.lv-spot \{[^}]*transition: transform 0\.45s/);
-    assert.match(read('src', 'lively', 'LivelyScenery.jsx'), /\(hover: hover\) and \(pointer: fine\)/);
-  });
-  test('klidné stránky (čtečka, hry): vstupní animace stránek a karet i odhalování jsou za :not([data-lively-calm])', () => {
-    const entrance = css.split('\n').filter((l) => /^\s*html\[data-lively="1"\]:not\(\[data-lively-calm="1"\]\)|^\s*html\[data-lively="1"\].*(main > \* > \* \{ animation|main > \* > \*:nth|library-card"\]:nth|library-card"\] \{ animation|main section \{ animation)/.test(l));
-    assert.ok(entrance.length >= 10, `pravidel vstupních animací je ${entrance.length}`);
-    for (const l of entrance) assert.match(l, /:not\(\[data-lively-calm="1"\]\)/, l.slice(0, 90));
-    const src = read('src', 'lively', 'LivelyScenery.jsx');
-    assert.match(src, /useLayoutEffect/, 'značka se nastaví ještě před prvním vykreslením stránky');
-    assert.match(src, /dataset\.livelyCalm = '1'/);
-  });
-  test('vstupní animace stránek, karet a sekcí končí bez transformace (transform: none) a bez výplně, ať nezůstane blok pro position: fixed', () => {
-    for (const name of ['lvEnter', 'lvPop', 'lvReveal', 'lvAppear']) {
-      const line = css.split('\n').find((l) => l.startsWith(`@keyframes ${name}`));
-      assert.ok(line, name);
-      assert.match(line, /to \{[^}]*transform: none/, `${name} končí bez transformace`);
-    }
-    const fade = css.split('\n').find((l) => l.startsWith('@keyframes lvFadeIn'));
-    assert.match(fade, /opacity/);
-    assert.ok(!/transform|translate|scale/.test(fade), 'rozsvícení celé stránky mění jen průhlednost');
-    assert.match(css, /html\[data-lively="1"\] main > \* \{ animation: lvFadeIn/);
-    for (const rule of css.split('\n').filter((l) => /main > \* > \* \{ animation: lvEnter|library-card"\] \{ animation: lvPop/.test(l))) assert.match(rule, /backwards;/, 'jen výplň před začátkem, ne po konci');
-  });
-  test('odhalování sekcí při scrollu: jen v prohlížečích, které to umí, a ne při omezeném pohybu', () => {
-    const block = css.match(/@supports \(animation-timeline: view\(\)\) \{([\s\S]*?)\n\}/);
-    assert.ok(block, 'je v @supports');
-    assert.match(block[1], /:not\(\[data-reduce-motion="1"\]\)/);
-    assert.match(block[1], /animation-timeline: view\(\)/);
-  });
-  test('každé pravidlo pro prvky stránky je za data-lively="1" (vypnutý režim nic nemění)', () => {
-    const rules = css.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => /^html\b/.test(l.trim()) && !/^html\[data-reduce-motion/.test(l.trim()));
-    assert.ok(rules.length > 20);
-    for (const l of rules) assert.match(l.trim(), /^html\[data-lively="1"\]/, l.slice(0, 80));
-  });
-  test('barevná tlačítka mají při najetí lesk a přechod pozice pozadí je v seznamu přechodů tlačítek', () => {
-    assert.match(css, /\[style\*="background-color: var\(--bg-primary\)"\]:hover/);
-    assert.match(css, /transition-property: translate, scale, rotate, transform, box-shadow, background-color, background-position/);
+  test('tiltFor: střed karty bez náklonu, rohy do opačných stran, ořez a nesmysly', () => {
+    const rect = { width: 200, height: 300 };
+    assert.deepEqual(tiltFor(100, 150, rect), { rx: 0, ry: 0, mx: 50, my: 50 });
+    const tl = tiltFor(0, 0, rect); assert.equal(tl.rx, TILT_MAX); assert.equal(tl.ry, -TILT_MAX);
+    const br = tiltFor(200, 300, rect); assert.equal(br.rx, -TILT_MAX); assert.equal(br.ry, TILT_MAX);
+    assert.deepEqual(tiltFor(999, -999, rect), tiltFor(200, 0, rect), 'mimo kartu se ořízne');
+    assert.ok(TILT_MAX <= 10, 'náklon je jemný');
+    for (const bad of [null, {}, { width: 0, height: 10 }, { width: -1, height: -1 }]) assert.deepEqual(tiltFor(5, 5, bad), { rx: 0, ry: 0, mx: 50, my: 50 });
+    assert.deepEqual(tiltFor(NaN, undefined, rect), tiltFor(0, 0, rect));
   });
 });
 
-// ---- jiskřičky ----
+// ---- atrapa DOM pro reveal.js: jen to, co orchestrátor používá ----
+class FakeEl {
+  constructor(name, { card = false, grow = false, skip = false, absolute = false, rect = {}, parent = null } = {}) {
+    Object.assign(this, { name, nodeType: 1, flags: { card, grow, skip }, absolute, attrs: {}, props: {}, kids: [], isConnected: true });
+    this.rect = { top: 0, left: 0, width: 300, height: 120, bottom: (rect.top || 0) + (rect.height || 120), ...rect };
+    if (rect.top !== undefined && rect.bottom === undefined) this.rect.bottom = rect.top + this.rect.height;
+    this.parentElement = parent;
+    if (parent) parent.kids.push(this);
+    this.classList = { contains: (c) => c === 'absolute' && this.absolute };
+    this.style = { setProperty: (k, v) => { this.props[k] = v; }, removeProperty: (k) => { delete this.props[k]; } };
+  }
+  matches(sel) { if (sel === GROW_SELECTOR) return this.flags.grow; if (sel === CARD_SELECTOR) return this.flags.card; if (sel === REVEAL_SELECTOR) return this.flags.card || this.flags.grow; return false; }
+  closest(sel) { for (let e = this; e; e = e.parentElement) { if (sel === SKIP_SELECTOR ? e.flags.skip : sel === CARD_SELECTOR ? e.flags.card : false) return e; } return null; }
+  querySelectorAll(sel) { const out = []; const walk = (e) => { for (const k of e.kids) { if (k.matches(sel)) out.push(k); walk(k); } }; walk(this); return out; }
+  hasAttribute(k) { return k in this.attrs; }
+  setAttribute(k, v) { this.attrs[k] = String(v); }
+  removeAttribute(k) { delete this.attrs[k]; }
+  getBoundingClientRect() { return this.rect; }
+  get lv() { return this.attrs['data-lv']; }
+}
+const setup = ({ withMain = true, io = true, mo = true } = {}) => {
+  const main = new FakeEl('main');
+  const timers = []; let timerId = 0;
+  const listeners = {};
+  const doc = { querySelector: (s) => (withMain && s === 'main' ? main : null), addEventListener: (t, fn) => { listeners[t] = fn; }, removeEventListener: (t) => { delete listeners[t]; } };
+  const observed = new Set(); const ios = []; const mos = [];
+  class IO { constructor(cb, opts) { this.cb = cb; this.opts = opts; this.disconnected = false; ios.push(this); } observe(e) { observed.add(e); } unobserve(e) { observed.delete(e); } disconnect() { this.disconnected = true; } }
+  class MO { constructor(cb) { this.cb = cb; this.disconnected = false; mos.push(this); } observe(target, opts) { this.target = target; this.opts = opts; } disconnect() { this.disconnected = true; } }
+  const reveal = createReveal({ doc, win: { innerHeight: 800 }, IO: io ? IO : undefined, MO: mo ? MO : undefined, setTimer: (fn, ms) => { timers.push({ id: ++timerId, fn, ms }); return timerId; }, clearTimer: (id) => { const i = timers.findIndex((t) => t.id === id); if (i >= 0) timers.splice(i, 1); } });
+  const hit = (...els) => ios[0].cb(els.map((target) => ({ target, isIntersecting: true })));
+  const added = (...nodes) => mos[0].cb([{ addedNodes: nodes }]);
+  const end = (el, animationName = 'lvIn') => listeners.animationend && listeners.animationend({ target: el, animationName });
+  return { main, doc, reveal, observed, ios, mos, timers, listeners, hit, added, end };
+};
+const card = (parent, top, extra = {}) => new FakeEl(`card@${top}`, { card: true, parent, rect: { top, height: 120 }, ...extra });
+
+describe('reveal.js: výběr prvků', () => {
+  test('selektory: karty, sekce, články a rámečkové rámečky; ukazatele; přeskakují se okna, přilepené a lišty', () => {
+    for (const part of ['section', 'article', '.border', '.rounded-xl', '.rounded-2xl', '.rounded-3xl']) assert.ok(CARD_SELECTOR.includes(part), part);
+    assert.ok(CARD_SELECTOR.startsWith('main '), 'jen obsah stránky, ne lišta ani okna mimo main');
+    assert.ok(!/button|input|select|textarea/.test(CARD_SELECTOR), 'tlačítka a políčka se nehýbou');
+    assert.equal(GROW_SELECTOR, 'main [data-lv-grow]');
+    assert.equal(REVEAL_SELECTOR, `${CARD_SELECTOR}, ${GROW_SELECTOR}`);
+    for (const part of ['[role="dialog"]', '.fixed', '.sticky', 'nav', '[data-lv-skip]']) assert.ok(SKIP_SELECTOR.includes(part), part);
+  });
+  test('isCandidate: velká karta ano; malá, přeskočená, absolutní, už označená a cizí prvky ne; ukazatel vždy', () => {
+    const main = new FakeEl('main');
+    assert.equal(isCandidate(card(main, 0)), true);
+    assert.equal(isCandidate(card(main, 0, { rect: { top: 0, width: 100, height: 120 } })), false, 'úzká');
+    assert.equal(isCandidate(card(main, 0, { rect: { top: 0, width: 300, height: 30 } })), false, 'nízká');
+    assert.equal(isCandidate(card(main, 0, { absolute: true })), false, 'absolutně položená ozdoba');
+    const dialog = new FakeEl('dialog', { skip: true, parent: main });
+    assert.equal(isCandidate(card(dialog, 0)), false, 'uvnitř okna nebo přilepeného prvku');
+    const marked = card(main, 0); marked.setAttribute('data-lv', 'wait');
+    assert.equal(isCandidate(marked), false, 'už označená');
+    assert.equal(isCandidate(new FakeEl('div', { parent: main })), false, 'obyčejný prvek');
+    assert.equal(isCandidate(new FakeEl('bar', { grow: true, parent: main, rect: { top: 0, width: 10, height: 6 } })), true, 'ukazatel je malý, ale hýbe se');
+    assert.equal(isCandidate(null), false); assert.equal(isCandidate({ nodeType: 3 }), false);
+  });
+});
+
+describe('reveal.js: objevování', () => {
+  test('bez IntersectionObserveru, MutationObserveru nebo main se nic neděje a nic se neskryje', () => {
+    for (const opts of [{ io: false }, { mo: false }, { withMain: false }]) {
+      const t = setup(opts); const c = card(t.main, 0);
+      assert.equal(t.reveal.start(), false);
+      assert.equal(c.lv, undefined, JSON.stringify(opts));
+    }
+  });
+  test('start: velké karty se hned skryjí (wait) a sledují se; malé a v oknech ne', () => {
+    const t = setup(); const a = card(t.main, 0); const b = card(t.main, 200); const tiny = card(t.main, 400, { rect: { top: 400, width: 50, height: 20 } });
+    const dlg = new FakeEl('dlg', { skip: true, parent: t.main }); const inDlg = card(dlg, 600);
+    assert.equal(t.reveal.start(), true);
+    assert.deepEqual([a.lv, b.lv, tiny.lv, inDlg.lv], ['wait', 'wait', undefined, undefined]);
+    assert.ok(t.observed.has(a) && t.observed.has(b) && !t.observed.has(tiny));
+    assert.equal(t.ios[0].opts.threshold, 0, 'vysoký prvek se objeví, jakmile do okna zasáhne');
+    assert.deepEqual(t.mos[0].opts, { childList: true, subtree: true });
+    assert.equal(t.reveal.start(), true, 'druhé spuštění nic nezdvojí'); assert.equal(t.ios.length, 1);
+  });
+  test('objeví se v pořadí na stránce (shora dolů, zleva doprava) a se zpožděním po krocích, i když přijdou zamíchané', () => {
+    const t = setup(); const c = [card(t.main, 300), card(t.main, 0), card(t.main, 150), card(t.main, 150, { rect: { top: 150, left: 400, height: 120 } })];
+    t.reveal.start(); t.hit(...c);
+    const order = [...c].sort((x, y) => x.props['--lv-d'].localeCompare(y.props['--lv-d'])).map((e) => e.name);
+    assert.deepEqual(order, ['card@0', 'card@150', 'card@150', 'card@300']);
+    assert.deepEqual(c.map((e) => e.lv), ['in', 'in', 'in', 'in']);
+    assert.equal(c[1].props['--lv-d'], '0.00s'); assert.equal(c[2].props['--lv-d'], '0.06s'); assert.equal(c[3].props['--lv-d'], '0.12s'); assert.equal(c[0].props['--lv-d'], '0.18s');
+    assert.equal(t.observed.size, 0, 'objevené se už nesledují');
+  });
+  test('víc než devět prvků naráz: zpoždění se zastaví na stropu', () => {
+    const t = setup(); const c = Array.from({ length: 14 }, (_, i) => card(t.main, i * 150));
+    t.reveal.start(); t.hit(...c);
+    assert.equal(c[13].props['--lv-d'], `${(REVEAL_MAX_STEPS * REVEAL_STEP).toFixed(2)}s`);
+    assert.equal(c[9].props['--lv-d'], c[13].props['--lv-d']);
+  });
+  test('vnořený prvek (řádek, ukazatel) čeká zaparkovaný, dokud se neobjeví karta, a začne chvíli po ní', () => {
+    const t = setup(); const outer = card(t.main, 0); const row1 = card(outer, 10, { rect: { top: 10, height: 50 } }); const bar = new FakeEl('bar', { grow: true, parent: outer, rect: { top: 80, width: 80, height: 8 } });
+    t.reveal.start();
+    assert.deepEqual([outer.lv, row1.lv, bar.lv], ['wait', 'parked', 'parked']);
+    assert.ok(!t.observed.has(row1) && !t.observed.has(bar), 'zaparkované se nesledují');
+    t.hit(outer);
+    assert.deepEqual([outer.lv, row1.lv, bar.lv], ['in', 'wait', 'wait']);
+    assert.ok(t.observed.has(row1) && t.observed.has(bar), 'po objevení karty se začnou sledovat');
+    t.hit(row1, bar);
+    assert.ok(parseFloat(row1.props['--lv-d']) >= NESTED_BASE - 1e-9, `řádek začne po kartě (${row1.props['--lv-d']})`);
+    assert.ok(parseFloat(bar.props['--lv-d']) > parseFloat(row1.props['--lv-d']) - 1e-9);
+  });
+  test('prvek přidaný později (načtená data, přepnutá záložka) se skryje ještě v témže okamžiku a objeví se normálně', () => {
+    const t = setup(); t.reveal.start();
+    const late = card(t.main, 0); const lateRow = card(late, 5, { rect: { top: 5, height: 50 } });
+    t.added(late);
+    assert.deepEqual([late.lv, lateRow.lv], ['wait', 'parked'], 'skryté synchronicky, před prvním vykreslením');
+    t.hit(late); assert.equal(late.lv, 'in');
+    t.end(late); assert.equal(late.lv, undefined);
+    t.hit(lateRow); assert.equal(lateRow.lv, 'in');
+  });
+  test('řádek přidaný do už objevené a dohrané karty se objeví sám (přepnutí záložky žebříčku)', () => {
+    const t = setup(); const outer = card(t.main, 0); t.reveal.start(); t.hit(outer); t.end(outer);
+    const row = card(outer, 10, { rect: { top: 10, height: 50 } });
+    t.added(row);
+    assert.equal(row.lv, 'wait'); assert.ok(t.observed.has(row));
+    t.hit(row); assert.equal(row.lv, 'in');
+  });
+  test('po dohrání animace se atribut i zpoždění odeberou: prvek je zase úplně obyčejný a znovu se nehýbe', () => {
+    const t = setup(); const c = card(t.main, 0); t.reveal.start(); t.hit(c);
+    assert.equal(c.lv, 'in');
+    t.end(c, 'jinaAnimace'); assert.equal(c.lv, 'in', 'cizí animace prvek neuvolní');
+    t.end(new FakeEl('x'), 'lvIn'); assert.equal(c.lv, 'in', 'animationend jiného prvku také ne');
+    t.end(c, 'lvIn');
+    assert.equal(c.lv, undefined); assert.equal(c.props['--lv-d'], undefined);
+    t.added(c); assert.equal(c.lv, undefined, 'přesunutý už jednou objevený prvek se znovu nehýbe');
+    assert.deepEqual(REVEAL_ANIMATIONS, ['lvIn', 'lvGrow']);
+  });
+  test('pojistka: kdyby animationend nedorazil, prvek se uvolní sám po uplynutí animace', () => {
+    const t = setup(); const c = card(t.main, 0); t.reveal.start(); t.hit(c);
+    const timer = t.timers.find((x) => x.ms > 1000 && x.ms !== 1500);
+    assert.ok(timer && timer.ms >= 2000 && timer.ms < 5000, `časovač ${timer && timer.ms}`);
+    timer.fn();
+    assert.equal(c.lv, undefined);
+  });
+  test('pojistka: když IntersectionObserver nic nehlásí, po chvíli se objeví vše, co je v okně; mimo okno ne; odpojené se zahodí', () => {
+    const t = setup(); const inView = card(t.main, 100); const below = card(t.main, 5000); const gone = card(t.main, 200);
+    t.reveal.start(); gone.isConnected = false;
+    const sweep = t.timers.find((x) => x.ms === 1500); assert.ok(sweep, 'kontrola je naplánovaná');
+    sweep.fn();
+    assert.equal(inView.lv, 'in'); assert.equal(below.lv, 'wait'); assert.equal(gone.lv, 'wait', 'odpojený se nesvítí, jen se zapomene');
+    assert.deepEqual(t.reveal.counts(), { wait: 1, parked: 0, in: 1 });
+  });
+  test('stop: všechno se vrátí do původního stavu, pozorovatelé se odpojí, druhé volání nic nerozbije', () => {
+    const t = setup(); const a = card(t.main, 0); const inner = card(a, 10, { rect: { top: 10, height: 50 } }); const b = card(t.main, 200);
+    t.reveal.start(); t.hit(b);
+    t.reveal.stop();
+    assert.deepEqual([a.lv, inner.lv, b.lv], [undefined, undefined, undefined]);
+    assert.equal(b.props['--lv-d'], undefined);
+    assert.ok(t.ios[0].disconnected && t.mos[0].disconnected);
+    assert.equal(t.listeners.animationend, undefined, 'posluchač je pryč');
+    assert.equal(t.timers.length, 0, 'žádný zapomenutý časovač');
+    assert.doesNotThrow(() => t.reveal.stop());
+    assert.deepEqual(t.reveal.counts(), { wait: 0, parked: 0, in: 0 });
+  });
+});
+
+describe('tilt.js: naklánění karet', () => {
+  const fakeWin = (hover = true) => ({ matchMedia: (q) => ({ matches: hover && q === '(hover: hover) and (pointer: fine)' }) });
+  const card = () => { const props = {}; return { props, style: { setProperty: (k, v) => { props[k] = v; }, removeProperty: (k) => { delete props[k]; } }, getBoundingClientRect: () => ({ left: 100, top: 100, width: 200, height: 300 }), closest(sel) { return sel === TILT_SELECTOR ? this : null; } }; };
+  const mkDoc = (lively = '1', reduce = '0') => { const l = {}; return { l, documentElement: { dataset: { lively, reduceMotion: reduce } }, addEventListener: (t, fn) => { l[t] = fn; }, removeEventListener: (t) => { delete l[t]; } }; };
+  // requestAnimationFrame jako ve skutečnosti: funkce se spustí později (flush), ne uvnitř volání
+  const run = (extra) => { const doc = mkDoc(...(extra || [])); const queue = []; const off = installTilt({ doc, win: fakeWin(), raf: (fn) => { queue.push(fn); return queue.length; }, cancel: () => { queue.length = 0; } }); const flush = () => { while (queue.length) queue.shift()(); }; return { doc, off, flush }; };
+  test('karta knihy se nakloní za kurzorem a po odjetí se vrátí; jiná karta ho převezme', () => {
+    const { doc, flush } = run(); const c1 = card(); const c2 = card();
+    doc.l.pointermove({ pointerType: 'mouse', target: c1, clientX: 280, clientY: 120 }); flush();
+    assert.deepEqual(c1.props, { '--rx': `${tiltFor(180, 20, { width: 200, height: 300 }).rx}deg`, '--ry': `${tiltFor(180, 20, { width: 200, height: 300 }).ry}deg`, '--mx': '90%', '--my': '7%' });
+    doc.l.pointermove({ pointerType: 'mouse', target: c2, clientX: 200, clientY: 250 }); flush();
+    assert.deepEqual(c1.props, {}, 'předchozí karta se uklidí');
+    assert.ok('--rx' in c2.props);
+    doc.l.pointermove({ pointerType: 'mouse', target: { closest: () => null }, clientX: 1, clientY: 1 });
+    assert.deepEqual(c2.props, {}, 'mimo kartu se uklidí');
+  });
+  test('na dotyku, bez Živého režimu a při omezeném pohybu se nic neděje (a rozjetý náklon se uklidí)', () => {
+    let { doc } = run(); let c = card();
+    doc.l.pointermove({ pointerType: 'touch', target: c, clientX: 150, clientY: 150 });
+    assert.deepEqual(c.props, {});
+    ({ doc } = run(['0'])); c = card(); doc.l.pointermove({ pointerType: 'mouse', target: c, clientX: 150, clientY: 150 }); assert.deepEqual(c.props, {}, 'režim vypnutý');
+    ({ doc } = run(['1', '1'])); c = card(); doc.l.pointermove({ pointerType: 'mouse', target: c, clientX: 150, clientY: 150 }); assert.deepEqual(c.props, {}, 'omezený pohyb');
+  });
+  test('bez myši (telefon) se posluchač vůbec nezapne; vypnutí posluchače karty uklidí', () => {
+    const doc = mkDoc(); installTilt({ doc, win: fakeWin(false) });
+    assert.deepEqual(Object.keys(doc.l), []);
+    const { doc: d2, off, flush: f2 } = run(); const c = card(); d2.l.pointermove({ pointerType: 'pen', target: c, clientX: 150, clientY: 150 }); f2();
+    assert.ok('--rx' in c.props, 'pero se počítá jako ukazatel');
+    off(); assert.deepEqual(c.props, {}); assert.deepEqual(Object.keys(d2.l), []);
+    assert.equal(typeof installTilt({ doc: null }), 'function');
+  });
+  test('selektor karty odpovídá kartě v knihovně', () => {
+    assert.equal(TILT_SELECTOR, '[data-testid="library-card"]');
+    assert.ok(read('src', 'browse', 'LibraryBrowser.jsx').includes('data-testid="library-card"'));
+  });
+});
+
+// ---- kruh po kliknutí ----
 const fakeEl = (hasAnimate = true) => {
   const el = { style: {}, attrs: {}, removed: false, animations: [], setAttribute(k, v) { this.attrs[k] = v; }, remove() { this.removed = true; } };
   if (hasAnimate) el.animate = (frames, opts) => { let done; const finished = new Promise((r) => { done = r; }); el.animations.push({ frames, opts, finish: done }); return { finished }; };
@@ -326,109 +434,224 @@ const fakeEl = (hasAnimate = true) => {
 };
 const fakeDoc = ({ lively = '1', reduce = '0', hasAnimate = true } = {}) => {
   const listeners = {}; const created = [];
-  return {
-    created, listeners,
-    documentElement: { dataset: { lively, reduceMotion: reduce } },
-    body: { children: [], appendChild(e) { this.children.push(e); } },
-    createElement: () => { const e = fakeEl(hasAnimate); created.push(e); return e; },
-    addEventListener(t, fn, o) { listeners[t] = { fn, o }; },
-    removeEventListener(t) { delete listeners[t]; },
-  };
+  return { created, listeners, documentElement: { dataset: { lively, reduceMotion: reduce } }, body: { children: [], appendChild(e) { this.children.push(e); } }, createElement: () => { const e = fakeEl(hasAnimate); created.push(e); return e; }, addEventListener(t, fn, o) { listeners[t] = { fn, o }; }, removeEventListener(t) { delete listeners[t]; } };
 };
 const target = (props = {}) => ({ closest: () => ({ disabled: false, getAttribute: () => null, ...props }) });
 const flush = () => new Promise((r) => setImmediate(r));
 
-describe('jiskřičky po kliknutí', () => {
-  test('směry: správný počet, opakovatelné, v rozumném dosahu a opravdu do všech stran', () => {
-    assert.equal(BURST_SIZE, SPARKLE_COUNT + 1, 'výbuch = jiskřičky a rázový kruh');
-    const a = sparkleSpecs(SPARKLE_COUNT, 5); const b = sparkleSpecs(SPARKLE_COUNT, 5);
-    assert.deepEqual(a, b);
-    assert.notDeepEqual(a, sparkleSpecs(SPARKLE_COUNT, 6), 'jiné semínko = jiný výbuch');
-    assert.equal(a.length, SPARKLE_COUNT);
-    for (const s of a) {
-      assert.ok(Math.hypot(s.dx, s.dy) >= 22 && Math.hypot(s.dx, s.dy) <= 62, 'dosah');
-      assert.ok(s.size >= 6 && s.size <= 12 && s.ms >= 520 && s.ms <= 800);
-    }
-    assert.ok(a.some((s) => s.dx > 0) && a.some((s) => s.dx < 0) && a.some((s) => s.dy > 0) && a.some((s) => s.dy < 0));
-    for (let seed = 1; seed < 60; seed++) for (const s of sparkleSpecs(SPARKLE_COUNT, seed * 7919 + 13)) assert.ok(Number.isFinite(s.dx) && Number.isFinite(s.dy));
+describe('ripple.js: kruh po kliknutí', () => {
+  test('cílem je tlačítko, odkaz, přepínač i přepínač voleb, ne vypnutý prvek ani holý text', () => {
+    assert.ok(rippleTarget(target()));
+    assert.equal(rippleTarget(target({ disabled: true })), null);
+    assert.equal(rippleTarget(target({ getAttribute: (k) => (k === 'aria-disabled' ? 'true' : null) })), null);
+    assert.equal(rippleTarget({ closest: () => null }), null); assert.equal(rippleTarget(null), null); assert.equal(rippleTarget({}), null);
+    const sel = fs.readFileSync(path.join(ROOT, 'src', 'lively', 'ripple.js'), 'utf8').match(/const INTERACTIVE = '([^']*)'/)[1];
+    for (const part of ['button', 'a[href]', '[role="radio"]', '[role="switch"]']) assert.ok(sel.includes(part), part);
   });
-  test('cílem je tlačítko/odkaz/přepínač, ne vypnutý prvek ani holý text', () => {
-    assert.ok(sparkleTarget(target()));
-    assert.equal(sparkleTarget(target({ disabled: true })), null);
-    assert.equal(sparkleTarget(target({ getAttribute: (k) => (k === 'aria-disabled' ? 'true' : null) })), null);
-    assert.equal(sparkleTarget({ closest: () => null }), null);
-    assert.equal(sparkleTarget(null), null);
-    assert.equal(sparkleTarget({}), null);
-  });
-  test('výbuch vytvoří jiskřičky, nastaví je na pozici kliknutí a po dohrání je uklidí', async () => {
+  test('kruh se vykreslí na místě kliknutí, rozšíří se a zmizí a po dohrání se uklidí', async () => {
     const doc = fakeDoc(); const live = { n: 0 };
-    assert.equal(burstAt(100, 200, { doc, seed: 3, live }), BURST_SIZE);
-    assert.equal(live.n, BURST_SIZE);
-    assert.equal(doc.body.children.length, BURST_SIZE, 'rázový kruh a jiskřičky');
-    assert.equal(doc.created[0].style.borderRadius, '50%', 'první je rázový kruh');
-    assert.equal(doc.created[0].animations[0].frames.at(-1).opacity, 0, 'kruh se rozšíří a zmizí');
-    for (const el of doc.created) {
-      assert.equal(el.style.left, '100px'); assert.equal(el.style.top, '200px');
-      assert.equal(el.style.pointerEvents, 'none');
-      assert.equal(el.attrs['aria-hidden'], 'true');
-      assert.equal(el.animations.length, 1);
-      assert.equal(el.animations[0].frames.at(-1).opacity, 0, 'jiskra na konci zmizí');
-      assert.ok(el.animations[0].frames[0].opacity >= 0.9, 'a na začátku je dobře vidět');
-    }
-    doc.created.forEach((el) => el.animations[0].finish());
-    await flush();
-    assert.ok(doc.created.every((el) => el.removed), 'všechny jiskřičky se uklidí');
-    assert.equal(live.n, 0);
+    assert.equal(rippleAt(100, 200, { doc, live }), 1);
+    const el = doc.created[0];
+    assert.equal(el.style.left, '100px'); assert.equal(el.style.top, '200px'); assert.equal(el.style.pointerEvents, 'none'); assert.equal(el.style.borderRadius, '50%');
+    assert.equal(el.attrs['aria-hidden'], 'true');
+    const f = el.animations[0].frames; assert.ok(f[0].opacity > 0.5 && f.at(-1).opacity === 0, 'zmizí'); assert.match(f.at(-1).transform, /scale\(([3-9]|\d{2})/, 'rozšíří se');
+    el.animations[0].finish(); await flush();
+    assert.equal(el.removed, true); assert.equal(live.n, 0);
   });
-  test('strop současných jiskřiček: rychlé klikání stránku nezahltí', () => {
+  test('strop současných kruhů: rychlé klikání stránku nezahltí', () => {
     const doc = fakeDoc(); const live = { n: 0 };
-    for (let i = 0; i < 20; i++) burstAt(10, 10, { doc, seed: i + 1, live });
-    assert.ok(live.n <= MAX_LIVE_SPARKLES);
-    assert.equal(doc.created.length, MAX_LIVE_SPARKLES);
+    for (let i = 0; i < 20; i++) rippleAt(10, 10, { doc, live });
+    assert.equal(doc.created.length, MAX_RIPPLES); assert.equal(live.n, MAX_RIPPLES);
   });
   test('prohlížeč bez Web Animations API a nesmyslné souřadnice: nic se nevykreslí a nic nespadne', () => {
     const doc = fakeDoc({ hasAnimate: false });
-    assert.equal(burstAt(1, 1, { doc }), 0);
-    assert.equal(doc.body.children.length, 0, 'bez animace se nic nepřidá do stránky');
+    assert.equal(rippleAt(1, 1, { doc }), 0); assert.equal(doc.body.children.length, 0);
     const ok = fakeDoc();
-    assert.equal(burstAt(NaN, 5, { doc: ok }), 0);
-    assert.equal(burstAt(5, undefined, { doc: ok }), 0);
-    assert.equal(burstAt(5, 5, { doc: null }), 0);
+    assert.equal(rippleAt(NaN, 5, { doc: ok }), 0); assert.equal(rippleAt(5, undefined, { doc: ok }), 0); assert.equal(rippleAt(5, 5, { doc: null }), 0);
   });
-  test('posluchač: kliknutí na tlačítko spustí výbuch, vypnutí posluchače ho odebere', () => {
+  test('posluchač: kliknutí na tlačítko spustí kruh, vypnutí posluchače ho odebere; jinak nic', () => {
     const doc = fakeDoc();
-    const off = installClickSparkles({ doc, getScope: () => ({ sparkles: true }) });
-    assert.ok(doc.listeners.pointerdown, 'poslouchá pointerdown');
+    const off = installClickRipple({ doc, getScope: () => ({ motion: true }) });
     assert.equal(doc.listeners.pointerdown.o.passive, true, 'nezdržuje posouvání na dotykových zařízeních');
     doc.listeners.pointerdown.fn({ button: 0, clientX: 50, clientY: 60, target: target() });
-    assert.equal(doc.created.length, BURST_SIZE);
-    off();
-    assert.equal(doc.listeners.pointerdown, undefined);
-  });
-  test('posluchač: nic se nestane při vypnutém režimu, omezeném pohybu, klidné stránce, pravém tlačítku ani u textu', () => {
-    const click = (doc, e = {}, scope = { sparkles: true }) => {
-      installClickSparkles({ doc, getScope: () => scope });
-      doc.listeners.pointerdown.fn({ button: 0, clientX: 1, clientY: 1, target: target(), ...e });
-      return doc.created.length;
-    };
+    assert.equal(doc.created.length, 1);
+    off(); assert.equal(doc.listeners.pointerdown, undefined);
+    const click = (d, e = {}, scope = { motion: true }) => { installClickRipple({ doc: d, getScope: () => scope }); d.listeners.pointerdown.fn({ button: 0, clientX: 1, clientY: 1, target: target(), ...e }); return d.created.length; };
     assert.equal(click(fakeDoc({ lively: '0' })), 0, 'režim vypnutý');
     assert.equal(click(fakeDoc({ reduce: '1' })), 0, 'omezený pohyb');
-    assert.equal(click(fakeDoc(), {}, { sparkles: false }), 0, 'čtečka a hry');
+    assert.equal(click(fakeDoc(), {}, { motion: false }), 0, 'čtečka a hry');
     assert.equal(click(fakeDoc(), { button: 2 }), 0, 'pravé tlačítko');
     assert.equal(click(fakeDoc(), { target: { closest: () => null } }), 0, 'klik mimo ovladací prvek');
     assert.equal(click(fakeDoc(), { target: target({ disabled: true }) }), 0, 'vypnuté tlačítko');
-    assert.equal(click(fakeDoc()), BURST_SIZE, 'kontrola: za normálních podmínek funguje');
+    assert.equal(click(fakeDoc()), 1, 'kontrola: za normálních podmínek funguje');
+    assert.equal(typeof installClickRipple({ doc: null }), 'function');
   });
-  test('každé kliknutí má jiné semínko (výbuchy nejsou stejné razítko)', () => {
-    const doc = fakeDoc();
-    installClickSparkles({ doc });
-    doc.listeners.pointerdown.fn({ button: 0, clientX: 1, clientY: 1, target: target() });
-    doc.listeners.pointerdown.fn({ button: 0, clientX: 1, clientY: 1, target: target() });
-    const first = doc.created.slice(1, BURST_SIZE).map((e) => JSON.stringify(e.animations[0].frames.at(-1)));
-    const second = doc.created.slice(BURST_SIZE + 1).map((e) => JSON.stringify(e.animations[0].frames.at(-1)));
-    assert.notDeepEqual(first, second);
+});
+
+describe('reduced.js: omezený pohyb už při prvním vykreslení', () => {
+  test('atribut na <html> rozhoduje; když chybí (první vykreslení), vyhodnotí se nastavení hned a atribut se nastaví', () => {
+    assert.equal(prefersReducedMotion({ documentElement: { dataset: { reduceMotion: '1' } } }), true);
+    assert.equal(prefersReducedMotion({ documentElement: { dataset: { reduceMotion: '0' } } }), false);
+    setStorage(makeStorage({ [T.MOTION_KEY]: 'reduce' }));
+    assert.equal(prefersReducedMotion(), true, 'uživatel zvolil Omezit, atribut ještě není');
+    assert.equal(document.documentElement.dataset.reduceMotion, '1');
+    setDocument({ documentElement: { dataset: {} } }); setStorage(makeStorage({ [T.MOTION_KEY]: 'full' }));
+    assert.equal(prefersReducedMotion(), false, 'Plné');
+    setDocument({ documentElement: { dataset: {} } }); setStorage(makeStorage());
+    assert.equal(prefersReducedMotion(), false, 'výchozí (podle zařízení, tady bez omezení)');
+    assert.equal(prefersReducedMotion(null), false, 'bez dokumentu nespadne');
   });
-  test('bez dokumentu (mimo prohlížeč) se nic nezapne', () => {
-    assert.equal(typeof installClickSparkles({ doc: null }), 'function');
+});
+
+describe('viewTransition.js: kruhový přechod při změně motivu', () => {
+  const doc = (extra = {}) => ({ documentElement: { dataset: { reduceMotion: '0' }, style: { props: {}, setProperty(k, v) { this.props[k] = v; } } }, addEventListener(t, fn, o) { this.l = { t, fn, o }; }, removeEventListener() { this.l = null; }, ...extra });
+  test('s podporou prohlížeče se změna provede uvnitř přechodu a přes flush (v Reactu flushSync)', () => {
+    let ran = 0; let flushed = 0; let cb;
+    const d = doc({ startViewTransition: (fn) => { cb = fn; } });
+    assert.equal(withViewTransition(() => { ran += 1; }, { doc: d, flush: (fn) => { flushed += 1; fn(); } }), true);
+    assert.equal(ran, 0, 'změna se provede až uvnitř přechodu (prohlížeč nejdřív pořídí starý snímek)');
+    cb(); assert.deepEqual([ran, flushed], [1, 1]);
+  });
+  test('bez podpory, s vypnutým režimem nebo omezeným pohybem se změna provede hned a normálně', () => {
+    for (const [d, enabled] of [[doc(), true], [doc({ startViewTransition: () => {} }), false], [{ ...doc({ startViewTransition: () => {} }), documentElement: { dataset: { reduceMotion: '1' }, style: {} } }, true], [null, true]]) {
+      let ran = 0;
+      assert.equal(withViewTransition(() => { ran += 1; }, { doc: d, enabled }), false);
+      assert.equal(ran, 1);
+    }
+    assert.equal(supportsViewTransition(doc({ startViewTransition: () => {} })), true); assert.equal(supportsViewTransition(doc()), false); assert.equal(supportsViewTransition(null), false);
+  });
+  test('když přechod selže, změna se přesto provede (motiv se nikdy nezasekne)', () => {
+    let ran = 0;
+    assert.equal(withViewTransition(() => { ran += 1; }, { doc: doc({ startViewTransition: () => { throw new Error('nejde'); } }) }), false);
+    assert.equal(ran, 1);
+  });
+  test('kruh vyroste z místa posledního kliknutí (--vt-x a --vt-y), nesmyslné souřadnice se ignorují', () => {
+    const d = doc(); const off = trackPointerOrigin(d);
+    d.l.fn({ clientX: 120.6, clientY: 80.2 });
+    assert.deepEqual(d.documentElement.style.props, { '--vt-x': '121px', '--vt-y': '80px' });
+    d.l.fn({ clientX: NaN, clientY: 3 }); assert.equal(d.documentElement.style.props['--vt-y'], '80px');
+    off(); assert.equal(d.l, null); assert.equal(typeof trackPointerOrigin(null), 'function');
+  });
+  test('App: změna motivu i akcentu jde přes přechod a barvy se mění v layout effectu (před snímkem)', () => {
+    const app = read('src', 'App.jsx');
+    assert.match(app, /changeTheme: \(t\) => withViewTransition\(/);
+    assert.match(app, /changeAccent: \(a\) => withViewTransition\(/);
+    assert.match(app, /flush: flushSync/);
+    assert.match(app, /useLayoutEffect\(\(\) => \{\s*const base = resolveTheme\(currentTheme\)/);
+    assert.match(app, /<LivelyMotion enabled=\{lively\} \/>/);
+  });
+});
+
+describe('zapojení do stránek', () => {
+  const stats = read('src', 'pages', 'UserStats.jsx');
+  test('Statistiky: čísla se dotáčejí, ukazatele se plní, řádky žebříčku se při přepnutí záložky znovu objeví', () => {
+    for (const v of ['stats.jomaridCoins', 'stats.level', 'stats.xp', 'stats.streak', 'stats.monthlyRead', 'stats.totalRead']) assert.match(stats, new RegExp(`<CountUp value=\\{${v.replace('.', '\\.')}\\} />`), v);
+    assert.match(stats, /<CountUp value=\{row\[activeTab\]\} format=\{\(n\) => n\.toLocaleString\(\)\}/);
+    assert.equal((stats.match(/data-lv-grow/g) || []).length, 2, 'ukazatel úrovně a měsíčního cíle');
+    assert.match(stats, /key=\{`\$\{activeTab\}-\$\{index\}`\}/);
+  });
+  test('Odznaky: ukazatel splnění se plní', () => assert.match(read('src', 'components', 'BadgesSection.jsx'), /data-lv-grow className="h-full rounded-full/));
+  test('CountUp: mimo Živý režim, při omezeném pohybu a u nečísla ukáže hodnotu rovnou; v režimu počítá z poslední zobrazené hodnoty', () => {
+    const src = read('src', 'lively', 'CountUp.jsx');
+    assert.match(src, /const lively = !!\(ctx && ctx\.lively\)/);
+    assert.match(src, /const animated = lively && Number\.isFinite\(target\) && !prefersReducedMotion\(\)/);
+    assert.match(src, /if \(!animated\) \{[^}]*el\.textContent = format\(value\)/);
+    assert.match(src, /const from = shown\.current == null \? 0 : shown\.current/);
+    assert.match(src, /clearTimeout\(timer\); cancelAnimationFrame\(raf\)/, 'úklid při změně a odpojení');
+    assert.match(src, /useLayoutEffect/, 'text je správně ještě před prvním vykreslením');
+  });
+  test('LivelyMotion: objevování se spouští v layout effectu (před vykreslením) a jen mimo klidné stránky; naklánění taky', () => {
+    const src = read('src', 'lively', 'LivelyMotion.jsx');
+    assert.match(src, /useLayoutEffect\(\(\) => \{\s*if \(!on \|\| prefersReducedMotion\(\)\) return undefined;\s*const reveal = createReveal\(\);/);
+    assert.match(src, /const on = enabled && scope\.motion;/);
+    assert.match(src, /if \(on\) off\.push\(installTilt\(\)\)/);
+    assert.match(src, /installClickRipple\(\{ getScope: \(\) => scopeRef\.current \}\)/);
+  });
+});
+
+describe('lively.css', () => {
+  const keyframes = new Set([...css.matchAll(/@keyframes (lv\w+)/g)].map((m) => m[1]));
+  const used = new Set([...css.matchAll(/animation(?:-name)?:([^;}]*)[;}]/g)].flatMap((m) => [...m[1].matchAll(/\b(lv[A-Z]\w*)/g)].map((x) => x[1])));
+  const line = (start) => css.split('\n').find((l) => l.startsWith(start));
+  test('každá použitá animace má klíčové snímky a každé klíčové snímky se používají', () => {
+    assert.ok(keyframes.size >= 18, `klíčových snímků je dost (${keyframes.size})`);
+    for (const name of used) assert.ok(keyframes.has(name), `chybí @keyframes ${name}`);
+    for (const name of keyframes) assert.ok(used.has(name), `nepoužité @keyframes ${name}`);
+    for (const name of REVEAL_ANIMATIONS) assert.ok(keyframes.has(name), `${name} z reveal.js`);
+  });
+  test('čekající prvky se skryjí (průhledné a posunuté), objevující se jedou přes lvIn se zpožděním --lv-d; přechody se po dobu čekání vypínají', () => {
+    assert.match(line('html[data-lively="1"] [data-lv="wait"]'), /\[data-lv="parked"\] \{ opacity: 0; transform: translateY\(30px\) scale\(0\.97\); transition: none !important; \}/);
+    assert.match(line('html[data-lively="1"] [data-lv="in"]'), /animation: lvIn 0\.75s cubic-bezier\([^)]*\) var\(--lv-d, 0s\) backwards; transition: none !important;/);
+    assert.match(line('@keyframes lvIn'), /to \{ opacity: 1; transform: none; \}/);
+  });
+  test('ukazatele: čekají s nulovou šířkou zleva, plní se přes lvGrow a bez posunu; pravidla jsou až za obecnými (přebijí je)', () => {
+    assert.match(line('html[data-lively="1"] [data-lv-grow][data-lv="wait"]'), /opacity: 1; transform: scaleX\(0\); transform-origin: left center;/);
+    assert.match(line('html[data-lively="1"] [data-lv-grow][data-lv="in"]'), /animation: lvGrow [\d.]+s [^;]*var\(--lv-d, 0s\) backwards/);
+    assert.match(line('@keyframes lvGrow'), /to \{ transform: none; \}/);
+    assert.ok(css.indexOf('[data-lv-grow][data-lv="wait"]') > css.indexOf('[data-lv="wait"], html'), 'pravidla ukazatelů jsou za obecnými');
+  });
+  test('žádná animace objevování nezanechá transformaci (jinak by prvky s position: fixed uvnitř přestaly sedět): končí transform: none a jen výplň „backwards“', () => {
+    for (const name of ['lvIn', 'lvGrow']) assert.match(line(`@keyframes ${name}`), /to \{[^}]*transform: none/, name);
+    for (const l of css.split('\n').filter((x) => /\[data-lv="in"\]/.test(x))) assert.match(l, /backwards/, 'bez výplně po konci');
+    const fade = line('@keyframes lvFadeIn'); assert.ok(!/transform|translate|scale/.test(fade), 'rozsvícení celé stránky mění jen průhlednost');
+    assert.match(css, /html\[data-lively="1"\] main > \* \{ animation: lvFadeIn/);
+  });
+  test('karty knih mají transformaci jen při najetí myší (v klidu žádnou) a jen v prohlížečích s myší', () => {
+    const rest = css.split('\n').filter((l) => /^html\[data-lively="1"\] \[data-testid="library-card"\] \{/.test(l));
+    assert.ok(rest.length >= 1);
+    for (const l of rest) assert.ok(!/(^|[;{ ])transform:/.test(l), 'v klidu bez transform');
+    const hover = css.match(/@media \(hover: hover\) and \(pointer: fine\) \{([\s\S]*?)\n\}/);
+    assert.ok(hover, 'hover jen s myší');
+    assert.match(hover[1], /library-card"\]:hover \{[^}]*transform: perspective\(900px\) rotateX\(var\(--rx, 0deg\)\) rotateY\(var\(--ry, 0deg\)\)/);
+    assert.match(hover[1], /library-card"\]::after \{[^}]*radial-gradient\(circle at var\(--mx, 50%\) var\(--my, 50%\)/);
+  });
+  test('okna: pozadí se rozsvítí, okno vyskočí (boční panel vyjede zprava), prohlídka appky se nechává; používají se individuální translate a scale', () => {
+    assert.match(line('html[data-lively="1"] .fixed.inset-0.backdrop-blur-sm'), /animation: lvFadeIn/);
+    assert.match(line('html[data-lively="1"] [role="dialog"]:not([data-testid="tour-card"])'), /animation: lvModal [\d.]+s [^;]*backwards/);
+    assert.match(line('html[data-lively="1"] .justify-end > [role="dialog"]'), /animation-name: lvDrawer/);
+    for (const name of ['lvModal', 'lvDrawer']) { const k = line(`@keyframes ${name}`); assert.ok(/translate:/.test(k) && !/transform:/.test(k), `${name} nepřepisuje vlastní transform okna`); }
+  });
+  test('přepnutí motivu: nový vzhled se rozlije kruhem z --vt-x a --vt-y a stará strana se nehýbe', () => {
+    assert.match(css, /::view-transition-old\(root\), html\[data-lively="1"\]::view-transition-new\(root\) \{ animation: none; mix-blend-mode: normal; \}/);
+    assert.match(css, /::view-transition-new\(root\) \{ animation: lvThemeReveal/);
+    assert.match(line('@keyframes lvThemeReveal'), /circle\(0 at var\(--vt-x, 50%\) var\(--vt-y, 50%\)\).*circle\(150vmax at var\(--vt-x, 50%\) var\(--vt-y, 50%\)\)/);
+  });
+  test('tlačítka: každá vlastnost má vlastní průběh (barvy nesmějí přestřelit), lesk u barevných, přepínač se pružně přelévá', () => {
+    const t = css.match(/button:is\(\.rounded-lg, \.rounded-xl, \.rounded-full\):not\(:disabled\) \{\s*transition: ([^;]*);/)[1];
+    assert.match(t, /translate [\d.]+s cubic-bezier\(0\.34, 1\.56/); assert.match(t, /background-color [\d.]+s ease/); assert.match(t, /color [\d.]+s ease/);
+    assert.ok(!/background-color [\d.]+s cubic-bezier\(0\.34, 1\.56/.test(t), 'barva nepřestřeluje');
+    assert.match(css, /\[style\*="background-color: var\(--bg-primary\)"\]:hover:not\(:disabled\) \{ background-position: -60% 0; \}/);
+    assert.match(css, /\[role="switch"\] > span \{ transition: transform [\d.]+s cubic-bezier\(0\.34, 1\.56/);
+  });
+  test('horní lišta: podtržení a poskok ikony, jen u odkazů s data-tour', () => {
+    assert.match(css, /nav a\[data-tour\]::after \{[^}]*transform: scaleX\(0\)/);
+    assert.match(css, /nav a\[data-tour\]:hover::after \{ transform: scaleX\(1\); \}/);
+    assert.match(css, /nav a\[data-tour\]:hover svg \{ transform: translateY\(-2px\) scale\(1\.18\); \}/);
+  });
+  test('zmrzlý řádek žebříčku: přechod se vlní, vločka se třpytí', () => {
+    assert.match(css, /\[data-frozen="true"\] \{ background-size: 220% 100%; animation: lvIce/);
+    assert.match(css, /\[data-testid="lb-frozen"\] \{ animation: lvSnow/);
+    assert.ok(read('src', 'pages', 'UserStats.jsx').includes('data-testid="lb-frozen"') && read('src', 'pages', 'UserStats.jsx').includes("data-frozen={frozenRow ? 'true' : undefined}"));
+  });
+  test('Omezit pohyb a tisk: nic se neskrývá ani nehýbe, i kdyby atribut data-lv zůstal; vynucené barvy Windows a tisk ozdoby skryjí', () => {
+    assert.match(css, /html\[data-reduce-motion="1"\] \[data-lv\] \{ opacity: 1 !important; transform: none !important; animation: none !important; \}/);
+    assert.match(css, /@media print \{ \[data-lv\] \{ opacity: 1 !important; transform: none !important; animation: none !important; \} \}/);
+    assert.match(css, /@media \(forced-colors: active\), print \{[^}]*display: none/);
+    assert.match(css, /html\[data-reduce-motion="1"\] :is\(\.lv-dot, \.lv-shoot\) \{ display: none; \}/);
+  });
+  test('ozdoby jsou jen dekorace: nikdy nezachytí klik a mají vlastní vrstvy; ikonky po stranách jen tam, kde je místo', () => {
+    for (const sel of ['.lv-bg', '.lv-sides', '.lv-progress']) {
+      const m = css.match(new RegExp(`${sel.replace('.', '\\.')} \\{([^}]*)\\}`));
+      assert.ok(m, sel); assert.match(m[1], /pointer-events: none/, sel); assert.match(m[1], /position: fixed/, sel);
+    }
+    assert.match(css, /\.lv-bg \{[^}]*z-index: -1/, 'pozadí je pod obsahem');
+    assert.match(css, /@media \(min-width: 1280px\) \{ \.lv-sides \{ display: block; \} \}/);
+    assert.match(css, /width: calc\(\(100% - 72rem\) \/ 2\)/);
+    assert.equal(read('src', 'pages', 'HomePage.jsx').includes('max-w-6xl'), true, 'obsah stránek je opravdu max-w-6xl (72rem)');
+  });
+  test('každé pravidlo pro prvky stránky je za data-lively="1" (vypnutý režim nic nemění)', () => {
+    const rules = css.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => /^\s*html\b/.test(l) && !/^\s*html\[data-reduce-motion/.test(l));
+    assert.ok(rules.length > 25);
+    for (const l of rules) assert.match(l.trim(), /^html\[data-lively="1"\]/, l.slice(0, 80));
   });
 });

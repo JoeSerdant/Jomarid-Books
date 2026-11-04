@@ -1,285 +1,139 @@
-/* Živý režim (Nastavení -> Vzhled): animované postavičky po stranách na širokých obrazovkách, tvorové přelétající obrazovku, pohyblivé
-   pozadí, světlo za myší, vstupní animace stránek a karet, odhalování při scrollu, jiskřičky po kliknutí, pružnější tlačítka a karty.
-   Zapíná ho data-lively="1" na <html> (src/theme.js) a komponenta src/lively/LivelyScenery.jsx, postavičky kreslí src/lively/Scenes.jsx.
-   Barvy se berou z motivu. „Omezit pohyb“ (data-reduce-motion="1", index.html) vypne všechny animace: postavičky pak stojí v hezké
-   výchozí póze (výchozí stav každého pravidla je obrázek, animace jsou jen nadstavba), tvorové se skryjí.
-   Čtečka a hry jsou klidné: LivelyScenery jim dá data-lively-calm="1" a vstupní animace se vypnou.
-   Záměrně se nepoužívá transform na kartách a stránkách, které trvale obsahují position: fixed (animace končí bez transformace). */
+/* Živý režim (Nastavení -> Vzhled). Hlavní část je pohyb samotného rozhraní: karty, sekce a řádky se objevují postupně a s odrazem, čísla
+   se dotáčejí, ukazatele se plní, karty knih se naklánějí za myší, okna naskakují, tlačítka a navigace pružně reagují a nový motiv se
+   rozlije kruhem z místa kliknutí. K tomu jemné pozadí a na širokých obrazovkách ikonky po stranách.
+   Zapíná ho data-lively="1" na <html> (src/theme.js). Postupné objevování řídí src/lively/reveal.js atributem data-lv (wait/parked/in),
+   tady je jen jeho vzhled. „Omezit pohyb“ (data-reduce-motion="1", index.html) vypne všechny animace a prvky zůstanou na místě.
+   Záměrně se nepoužívá trvalý transform na kartách a stránkách: animace končí bez transformace (jinak by prvky s position: fixed
+   uvnitř přestaly sedět na obrazovce) a hover a přechody po dohrání fungují jako dřív. */
 
-/* =============================== pozadí =============================== */
+/* ---- pozadí: tři měkké barevné skvrny, stoupající tečky a občas padající hvězda (pod obsahem, nad pozadím stránky) ---- */
 .lv-bg { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
-.lv-blob { position: absolute; display: block; border-radius: 50%; background: radial-gradient(circle at center, var(--blob, var(--bg-primary)) 0%, transparent 68%); opacity: 0.2; will-change: transform; translate: calc(var(--px, 0) * var(--pd, -34px)) calc(var(--py, 0) * var(--pd, -34px)); transition: translate 0.8s ease-out; }
-.lv-blob-a { width: 56vmax; height: 56vmax; left: -16vmax; top: -18vmax; --pd: -40px; animation: lvBlobA 26s ease-in-out infinite alternate; }
-.lv-blob-b { --blob: #38bdf8; width: 46vmax; height: 46vmax; right: -14vmax; top: 14vh; --pd: 50px; opacity: 0.15; animation: lvBlobB 32s ease-in-out infinite alternate; }
-.lv-blob-c { --blob: #fb7185; width: 42vmax; height: 42vmax; left: 20vw; bottom: -24vmax; --pd: -60px; opacity: 0.12; animation: lvBlobC 38s ease-in-out infinite alternate; }
-@keyframes lvBlobA { from { transform: translate(0, 0) scale(1); } to { transform: translate(16vmax, 12vmax) scale(1.22); } }
-@keyframes lvBlobB { from { transform: translate(0, 0) scale(1.1); } to { transform: translate(-14vmax, 14vmax) scale(0.88); } }
-@keyframes lvBlobC { from { transform: translate(0, 0) scale(0.95); } to { transform: translate(18vmax, -10vmax) scale(1.18); } }
+.lv-blob { position: absolute; display: block; border-radius: 50%; background: radial-gradient(circle at center, var(--bg-primary) 0%, transparent 68%); opacity: 0.18; will-change: transform; }
+.lv-blob-a { width: 52vmax; height: 52vmax; left: -14vmax; top: -16vmax; animation: lvBlobA 38s ease-in-out infinite alternate; }
+.lv-blob-b { width: 44vmax; height: 44vmax; right: -12vmax; top: 18vh; animation: lvBlobB 46s ease-in-out infinite alternate; opacity: 0.14; }
+.lv-blob-c { width: 40vmax; height: 40vmax; left: 22vw; bottom: -22vmax; animation: lvBlobC 52s ease-in-out infinite alternate; opacity: 0.12; }
+@keyframes lvBlobA { from { transform: translate(0, 0) scale(1); } to { transform: translate(9vmax, 7vmax) scale(1.15); } }
+@keyframes lvBlobB { from { transform: translate(0, 0) scale(1.1); } to { transform: translate(-8vmax, 9vmax) scale(0.9); } }
+@keyframes lvBlobC { from { transform: translate(0, 0) scale(0.95); } to { transform: translate(10vmax, -6vmax) scale(1.12); } }
 
-/* světlo, které se pomalu vleče za myší (jen s myší nebo touchpadem; pohyb zapisuje LivelyScenery) */
-.lv-spot { position: absolute; left: -280px; top: -280px; width: 560px; height: 560px; border-radius: 50%; background: radial-gradient(circle at center, var(--bg-primary) 0%, transparent 66%); opacity: 0; will-change: transform; transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.3, 1), opacity 0.6s ease; }
-@media (hover: none), (pointer: coarse) { .lv-spot { display: none; } }
+.lv-dot { position: absolute; display: block; left: var(--x); bottom: -12px; width: var(--s); height: var(--s); border-radius: 50%; background: var(--bg-primary); opacity: 0; animation: lvRise var(--dur) linear var(--del) infinite; }
+@keyframes lvRise { 0% { transform: translate(0, 0); opacity: 0; } 10% { opacity: 0.5; } 50% { transform: translate(14px, -55vh); } 90% { opacity: 0.4; } 100% { transform: translate(-10px, -112vh); opacity: 0; } }
+@media (max-width: 639px) { .lv-dot:nth-child(n + 11) { display: none; } } /* na telefonu méně teček (baterie, přehlednost) */
 
-/* stoupající jiskry, kroužky a tečky */
-.lv-dot { position: absolute; display: block; left: var(--x); bottom: -16px; width: var(--s); height: var(--s); background: var(--bg-primary); opacity: 0; will-change: translate, opacity; animation: lvRise var(--dur) linear var(--del) infinite; }
-.lv-dot-dot { border-radius: 50%; }
-.lv-dot-ring { border-radius: 50%; background: transparent; border: 2px solid var(--bg-primary); box-sizing: border-box; width: calc(var(--s) * 1.8); height: calc(var(--s) * 1.8); }
-.lv-dot-star { width: calc(var(--s) * 2.2); height: calc(var(--s) * 2.2); clip-path: polygon(50% 0%, 61% 35%, 98% 38%, 68% 59%, 79% 91%, 50% 72%, 21% 91%, 32% 59%, 2% 38%, 39% 35%); animation: lvRise var(--dur) linear var(--del) infinite, lvSpinSlow 7s linear infinite; }
-@keyframes lvRise { 0% { translate: 0 0; opacity: 0; } 10% { opacity: 0.6; } 50% { translate: 22px -55vh; } 90% { opacity: 0.5; } 100% { translate: -14px -112vh; opacity: 0; } }
-@keyframes lvSpinSlow { to { rotate: 360deg; } }
-@media (max-width: 639px) { .lv-dot:nth-child(n + 12) { display: none; } } /* na telefonu méně teček (baterie, přehlednost) */
+.lv-shoot { position: absolute; display: block; top: 9%; right: 8%; width: 90px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--bg-primary)); opacity: 0; animation: lvShoot 19s ease-out 4s infinite; }
+@keyframes lvShoot { 0% { opacity: 0; transform: translate(0, 0) rotate(28deg); } 1.5% { opacity: 0.85; } 6% { opacity: 0; transform: translate(-46vw, 24vw) rotate(28deg); } 100% { opacity: 0; transform: translate(-46vw, 24vw) rotate(28deg); } }
 
-/* padající hvězda */
-.lv-shoot { position: absolute; display: block; top: 9%; right: 8%; width: 130px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--bg-primary)); box-shadow: 0 0 10px var(--bg-primary); opacity: 0; animation: lvShoot 14s ease-out 3s infinite; }
-@keyframes lvShoot { 0% { opacity: 0; transform: translate(0, 0) rotate(28deg); } 1.5% { opacity: 1; } 7% { opacity: 0; transform: translate(-52vw, 28vw) rotate(28deg); } 100% { opacity: 0; transform: translate(-52vw, 28vw) rotate(28deg); } }
-
-/* =============================== pruhy po stranách =============================== */
-.lv-sides { display: none; position: fixed; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; --k: 0.8; } /* velikost postaviček podle šířky pruhu: u 1280 px má pruh jen ~64 px */
+/* ---- ozdoby po stranách: jen když je vedle obsahu (max-w-6xl = 72rem) místo ---- */
+.lv-sides { display: none; position: fixed; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; }
 @media (min-width: 1280px) { .lv-sides { display: block; } }
+.lv-sides { --k: 0.8; } /* velikost ozdob podle šířky pruhu: u 1280 px je pruh jen ~64 px */
 @media (min-width: 1440px) { .lv-sides { --k: 1; } }
-@media (min-width: 1600px) { .lv-sides { --k: 1.25; } }
-@media (min-width: 1800px) { .lv-sides { --k: 1.55; } }
-@media (min-width: 2200px) { .lv-sides { --k: 1.85; } }
+@media (min-width: 1760px) { .lv-sides { --k: 1.3; } }
 .lv-side { position: absolute; top: 0; bottom: 0; width: calc((100% - 72rem) / 2); }
 .lv-side-left { left: 0; }
 .lv-side-right { right: 0; }
-/* lv-item se při posouvání stránky houpe (sinus, takže se nikdy neodpoutá), lv-art se posouvá podle myši a při zapnutí „vyskočí“ */
 .lv-item { position: absolute; left: var(--x); top: var(--y); display: block; width: 0; height: 0; translate: 0 calc(sin(calc(var(--lv-scroll, 0) * var(--f, 0.002) * 1rad)) * 28px); }
-.lv-art { position: absolute; left: 0; top: 0; display: block; width: calc(var(--sz) * var(--k, 1)); height: calc(var(--sz) * var(--k, 1)); translate: calc(-50% + var(--px, 0) * var(--dp, 1) * -16px) calc(-50% + var(--py, 0) * var(--dp, 1) * -11px); transition: translate 0.45s ease-out; filter: drop-shadow(0 5px 7px rgba(0, 0, 0, 0.16)); animation: lvAppear 0.9s cubic-bezier(0.3, 1.5, 0.5, 1) backwards; animation-delay: calc(var(--i, 0) * 110ms); }
-@keyframes lvAppear { from { transform: scale(0) rotate(-30deg); opacity: 0; } to { transform: none; opacity: 1; } }
+.lv-icon { position: absolute; left: 0; top: 0; width: calc(var(--sz) * var(--k)); height: calc(var(--sz) * var(--k)); translate: -50% -50%; color: var(--bg-primary); opacity: 0.62; filter: drop-shadow(0 0 10px var(--bg-primary)); animation-duration: var(--dur); animation-delay: var(--del); animation-iteration-count: infinite; animation-timing-function: ease-in-out; }
+.lv-bob { animation-name: lvBob; }
+.lv-drift { animation-name: lvDrift; }
+.lv-twinkle { animation-name: lvTwinkle; }
+.lv-flicker { animation-name: lvFlicker; }
+@keyframes lvBob { 0%, 100% { transform: translateY(0) rotate(-5deg); } 50% { transform: translateY(-16px) rotate(5deg); } }
+@keyframes lvDrift { 0%, 100% { transform: translate(0, 0) rotate(-8deg); } 33% { transform: translate(12px, -18px) rotate(6deg); } 66% { transform: translate(-10px, -8px) rotate(-3deg); } }
+@keyframes lvTwinkle { 0%, 100% { transform: scale(0.8) rotate(0deg); opacity: 0.3; } 50% { transform: scale(1.15) rotate(14deg); opacity: 0.85; } }
+@keyframes lvFlicker { 0%, 100% { transform: scale(1); opacity: 0.45; } 20% { transform: scale(1.08, 1.14); opacity: 0.8; } 45% { transform: scale(0.96); opacity: 0.55; } 70% { transform: scale(1.05, 1.1); opacity: 0.75; } }
 
-/* =============================== postavičky =============================== */
-.lv-scene { display: block; width: 100%; height: 100%; overflow: visible; }
-.lv-scene[class*="lv-float-"] { animation-duration: var(--dur, 7s); animation-delay: var(--del, 0s); animation-iteration-count: infinite; animation-timing-function: ease-in-out; }
-.lv-float-bob { animation-name: lvBob; }
-.lv-float-sway { animation-name: lvSway; transform-origin: 50% 90%; }
-.lv-float-drift { animation-name: lvDrift; }
-@keyframes lvBob { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-14px) rotate(2deg); } }
-@keyframes lvSway { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
-@keyframes lvDrift { 0%, 100% { transform: translate(0, 0) rotate(-6deg); } 33% { transform: translate(10px, -16px) rotate(5deg); } 66% { transform: translate(-9px, -7px) rotate(-3deg); } }
-/* barvy: akcent motivu a pár pevných doplňků */
-.lv-scene .a { fill: var(--bg-primary); }
-.lv-scene .a2 { fill: var(--bg-primary); fill-opacity: 0.6; }
-.lv-scene .gold { fill: #fbbf24; }
-.lv-scene .gold2 { fill: #f59e0b; }
-.lv-scene .sky { fill: #38bdf8; }
-.lv-scene .pink { fill: #fb7185; }
-.lv-scene .orange { fill: #fb923c; }
-.lv-scene .yellow { fill: #fde047; }
-.lv-scene .brown { fill: #7c4a21; }
-.lv-scene .ink { fill: #1f2937; }
-.lv-scene .white { fill: #fff; stroke: rgba(15, 23, 42, 0.16); stroke-width: 0.8px; }
-.lv-scene :is(.st-a, .st-w, .st-ink, .st-gold, .st-gold2, .st-brown) { fill: none; stroke-linecap: round; stroke-linejoin: round; }
-.lv-scene .st-a { stroke: var(--bg-primary); }
-.lv-scene .st-w { stroke: #fff; }
-.lv-scene .st-ink { stroke: #1f2937; }
-.lv-scene .st-gold { stroke: #fbbf24; }
-.lv-scene .st-gold2 { stroke: #f59e0b; }
-.lv-scene .st-brown { stroke: #92400e; }
+/* ---- pruh průběhu stránky ---- */
+.lv-progress { position: fixed; left: 0; right: 0; top: 0; height: 3px; z-index: 45; transform: scaleX(0); transform-origin: 0 50%; background: linear-gradient(90deg, var(--bg-primary), #fbbf24, #38bdf8); overflow: hidden; pointer-events: none; }
+.lv-progress::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent); background-size: 160px 100%; background-repeat: no-repeat; animation: lvBar 1.8s linear infinite; }
+@keyframes lvBar { from { background-position: -160px 0; } to { background-position: calc(100% + 160px) 0; } }
 
-/* společné: jiskra, která se rozsvítí a zmizí, a drahokam, který se zalesknne */
-.lv-scene .spark { transform-box: fill-box; transform-origin: center; animation: lvSpark 2.4s ease-in-out infinite; }
-.lv-scene .sk2 { animation-delay: -0.8s; }
-.lv-scene .sk3 { animation-delay: -1.6s; }
-@keyframes lvSpark { 0%, 100% { transform: scale(0.2) rotate(0deg); opacity: 0; } 50% { transform: scale(1.1) rotate(90deg); opacity: 1; } }
-@keyframes lvGem { 0%, 100% { transform: scale(1); opacity: 0.85; } 50% { transform: scale(1.35); opacity: 1; } }
-
-/* sova: houpe se, mrká, rozhlíží se a zornice sledují kurzor */
-.lv-scene .owl-body { transform-origin: 32px 60px; animation: lvRock 6s ease-in-out infinite; }
-.lv-scene .owl-lid { transform-box: fill-box; transform-origin: 50% 0%; transform: scaleY(0); animation: lvBlink 5.2s infinite; }
-.lv-scene .owl-pupil { translate: calc(var(--px, 0) * 2.6px) calc(var(--py, 0) * 2px); transition: translate 0.2s ease-out; animation: lvLook 8s ease-in-out infinite; }
-@keyframes lvRock { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
-@keyframes lvBlink { 0%, 86%, 100% { transform: scaleY(0); } 89%, 93% { transform: scaleY(1); } }
-@keyframes lvLook { 0%, 100% { transform: translate(0, 0); } 20% { transform: translate(-2px, 0); } 45% { transform: translate(2px, -1px); } 70% { transform: translate(1px, 1px); } }
-
-/* kniha: stránka se otáčí, jiskry nad ní blikají */
-.lv-scene .book-wrap { transform-origin: 32px 40px; animation: lvBreath 4.4s ease-in-out infinite; }
-.lv-scene .book-flip { transform-origin: 32px 36px; animation: lvFlip 4.4s ease-in-out infinite; }
-@keyframes lvBreath { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
-@keyframes lvFlip { 0%, 6% { transform: scaleX(1) skewY(0deg); opacity: 1; } 22% { transform: scaleX(0.05) skewY(-9deg); } 38% { transform: scaleX(-1) skewY(0deg); opacity: 1; } 42%, 94% { transform: scaleX(-1); opacity: 0; } 95%, 100% { transform: scaleX(1); opacity: 1; } }
-
-/* káva: stoupá pára */
-.lv-scene .coffee-steam { stroke-dasharray: 38 100; opacity: 0.75; animation: lvSteam 3s ease-in-out infinite; }
-.lv-scene .cs2 { animation-delay: -1s; }
-.lv-scene .cs3 { animation-delay: -2s; }
-@keyframes lvSteam { 0% { stroke-dashoffset: 38; opacity: 0; transform: translateY(5px); } 25% { opacity: 0.9; } 100% { stroke-dashoffset: -62; opacity: 0; transform: translateY(-5px); } }
-
-/* lampa: kývá se a světlo pulzuje */
-.lv-scene .lamp-head { transform-origin: 32px 27px; animation: lvSwing 5.5s ease-in-out infinite; }
-.lv-scene .lamp-cone { fill-opacity: 0.32; transform-box: fill-box; transform-origin: 50% 0%; animation: lvCone 3.2s ease-in-out infinite; }
-.lv-scene .lamp-bulb { animation: lvGem 3.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-@keyframes lvSwing { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
-@keyframes lvCone { 0%, 100% { opacity: 0.55; transform: scaleY(0.94); } 50% { opacity: 1; transform: scaleY(1.05); } }
-
-/* měsíc: dýchá a stoupají z něj „z“ */
-.lv-scene .moon-face { transform-box: fill-box; transform-origin: 50% 70%; animation: lvBreath 4s ease-in-out infinite; }
-.lv-scene .moon-z { transform-box: fill-box; transform-origin: center; opacity: 0.85; animation: lvZ 3.8s ease-in infinite; }
-.lv-scene .mz2 { animation-delay: -1.9s; }
-@keyframes lvZ { 0% { transform: translate(-3px, 8px) scale(0.5); opacity: 0; } 20% { opacity: 1; } 100% { transform: translate(8px, -12px) scale(1.15); opacity: 0; } }
-
-/* brk: píše čáru a postupuje spolu s ní */
-.lv-scene .quill-line { stroke-dasharray: 100; stroke-dashoffset: 0; animation: lvWrite 5s ease-in-out infinite; }
-.lv-scene .quill-pen { transform-origin: 22px 54px; animation: lvPen 5s ease-in-out infinite; }
-@keyframes lvWrite { 0% { stroke-dashoffset: 100; opacity: 1; } 65%, 88% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
-@keyframes lvPen { 0% { transform: translate(-14px, 3px) rotate(-6deg); } 12% { transform: translate(-8px, 0) rotate(2deg); } 24% { transform: translate(-2px, 2px) rotate(-3deg); } 36% { transform: translate(5px, 0) rotate(2deg); } 50% { transform: translate(11px, 2px) rotate(-2deg); } 65%, 88% { transform: translate(16px, 0) rotate(1deg); } 100% { transform: translate(-14px, 3px) rotate(-6deg); } }
-
-/* raketa: zatřese se, vzlétne, zmizí a vrátí se zespodu */
-.lv-scene .rocket-wrap { transform-origin: 32px 40px; animation: lvLaunch 9s ease-in-out infinite; }
-.lv-scene .rocket-flame { transform-box: fill-box; transform-origin: 50% 0%; animation: lvFlame 0.16s ease-in-out infinite alternate; }
-.lv-scene .rocket-flame-in { animation-duration: 0.12s; }
-.lv-scene .rocket-puff { opacity: 0; transform-box: fill-box; transform-origin: center; animation: lvPuff 9s ease-out infinite; }
-.lv-scene .rp2 { animation-delay: 0.25s; }
-.lv-scene .rp3 { animation-delay: 0.5s; }
-@keyframes lvFlame { from { transform: scale(0.95, 0.8); } to { transform: scale(1.05, 1.22); } }
-@keyframes lvLaunch { 0% { transform: translate(0, 0); opacity: 1; } 4% { transform: translate(-1px, 0); } 8% { transform: translate(1px, 0); } 12% { transform: translate(-1px, 1px); } 16% { transform: translate(1px, 0); } 20% { transform: translate(-1.5px, 0); } 24% { transform: translate(1.5px, 0); } 28% { transform: translate(0, 0); } 34% { transform: translate(0, -8px); opacity: 1; } 58% { transform: translate(0, -170px); opacity: 1; } 60% { transform: translate(0, -190px); opacity: 0; } 61% { transform: translate(0, 110px); opacity: 0; } 78% { transform: translate(0, 110px); opacity: 0; } 92% { transform: translate(0, 0); opacity: 1; } 100% { transform: translate(0, 0); opacity: 1; } }
-@keyframes lvPuff { 0%, 28% { opacity: 0; transform: translate(0, 0) scale(0.4); } 34% { opacity: 0.85; } 60% { opacity: 0; transform: translate(0, 18px) scale(1.9); } 100% { opacity: 0; transform: translate(0, 18px) scale(1.9); } }
-
-/* mince: točí se a poskakuje */
-.lv-scene .coin-hop { transform-origin: 32px 53px; animation: lvHop 2.4s cubic-bezier(0.3, 0, 0.5, 1) infinite; }
-.lv-scene .coin-spin { transform-box: fill-box; transform-origin: 50% 50%; animation: lvCoin 1.8s ease-in-out infinite; }
-.lv-scene .coin-shadow { transform-box: fill-box; transform-origin: center; animation: lvShadow 2.4s cubic-bezier(0.3, 0, 0.5, 1) infinite; }
-@keyframes lvHop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-@keyframes lvCoin { 0%, 100% { transform: scaleX(1); } 25%, 75% { transform: scaleX(0.05); } 50% { transform: scaleX(-1); } }
-@keyframes lvShadow { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(0.7); opacity: 0.5; } }
-
-/* pohár: pružně poskakuje, přes něj přejede lesk */
-.lv-scene .trophy-wrap { transform-origin: 32px 58px; animation: lvSquash 3.8s ease-in-out infinite; }
-.lv-scene .trophy-shine { opacity: 0; transform: translateX(0) skewX(-18deg); animation: lvShine 3.8s ease-in-out infinite; }
-@keyframes lvSquash { 0%, 100% { transform: scale(1, 1); } 20% { transform: scale(1.05, 0.95); } 40% { transform: scale(0.97, 1.05); } 60% { transform: scale(1, 1); } }
-@keyframes lvShine { 0%, 40% { transform: translateX(0) skewX(-18deg); opacity: 0; } 45% { opacity: 0.8; } 72% { transform: translateX(78px) skewX(-18deg); opacity: 0.8; } 76%, 100% { transform: translateX(78px) skewX(-18deg); opacity: 0; } }
-
-/* plamen: tři vrstvy se chvějí každá jinak, nahoru lítají jiskry */
-.lv-scene .fl1 { transform-origin: 32px 62px; animation: lvFl1 1.1s ease-in-out infinite alternate; }
-.lv-scene .fl2 { transform-origin: 32px 60px; animation: lvFl2 0.7s ease-in-out infinite alternate; }
-.lv-scene .fl3 { transform-origin: 32px 60px; animation: lvFl3 0.5s ease-in-out infinite alternate; }
-.lv-scene .flame-glow { fill-opacity: 0.35; transform-box: fill-box; transform-origin: center; animation: lvGlowPulse 1.4s ease-in-out infinite alternate; }
-.lv-scene .flame-ember { opacity: 0; animation: lvEmber 2.2s ease-in infinite; }
-.lv-scene .fe2 { animation-delay: -0.7s; }
-.lv-scene .fe3 { animation-delay: -1.4s; }
-@keyframes lvFl1 { from { transform: scale(1, 1) skewX(0deg); } to { transform: scale(0.93, 1.08) skewX(-4deg); } }
-@keyframes lvFl2 { from { transform: scale(1, 1) skewX(2deg); } to { transform: scale(1.06, 0.92) skewX(-3deg); } }
-@keyframes lvFl3 { from { transform: scale(0.95, 1); } to { transform: scale(1.08, 1.12); } }
-@keyframes lvGlowPulse { from { transform: scale(0.85); opacity: 0.6; } to { transform: scale(1.15); opacity: 1; } }
-@keyframes lvEmber { 0% { transform: translate(0, 12px) scale(1); opacity: 0; } 20% { opacity: 1; } 100% { transform: translate(5px, -26px) scale(0.3); opacity: 0; } }
-
-/* gamepad: tlačítka se střídavě mačkají a ovladač se občas zatřese */
-.lv-scene .pad-wrap { transform-origin: 32px 40px; animation: lvPad 3.4s ease-in-out infinite; }
-.lv-scene .pad-btn { transform-box: fill-box; transform-origin: center; animation: lvBtn 0.9s ease-in-out infinite; }
-.lv-scene .pb2 { animation-delay: -0.3s; }
-.lv-scene .pb3 { animation-delay: -0.6s; }
-@keyframes lvPad { 0%, 58%, 100% { transform: rotate(0deg); } 62% { transform: rotate(-6deg); } 66% { transform: rotate(6deg); } 70% { transform: rotate(-4deg); } 74% { transform: rotate(3deg); } 78% { transform: rotate(0deg); } }
-@keyframes lvBtn { 0%, 60%, 100% { transform: scale(1); } 30% { transform: scale(0.68); } }
-
-/* koruna: houpe se a drahokamy se lesknou */
-.lv-scene .crown-wrap { transform-origin: 32px 56px; animation: lvCrown 4s ease-in-out infinite; }
-.lv-scene .crown-gem { transform-box: fill-box; transform-origin: center; animation: lvGem 1.8s ease-in-out infinite; }
-.lv-scene .cg2 { animation-delay: -0.6s; }
-.lv-scene .cg3 { animation-delay: -1.2s; }
-.lv-scene .crown-shine { animation: lvCrownShine 3s ease-in-out infinite; }
-@keyframes lvCrown { 0%, 100% { transform: rotate(-5deg) translateY(0); } 50% { transform: rotate(5deg) translateY(-4px); } }
-@keyframes lvCrownShine { 0%, 100% { opacity: 0.2; } 50% { opacity: 0.8; } }
-
-/* =============================== tvorové, kteří přelétají obrazovku (i na telefonu) =============================== */
-.lv-roamers { position: fixed; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; }
-.lv-roam { position: absolute; left: 0; top: var(--top, 50%); width: var(--w, 40px); will-change: transform; animation: lvCrossX var(--dur, 40s) linear var(--del, 0s) infinite; }
-.lv-roam-worm { top: auto; bottom: 1px; }
-.lv-roam-plane { animation-name: lvPlane; }
-.lv-wander { width: 100%; }
-.lv-roam-wander .lv-wander { animation: lvWander 3.4s ease-in-out infinite alternate; }
-.lv-roam-wander .lv-scene { animation: lvWobble 1.7s ease-in-out infinite alternate; }
-.lv-roam-plane .lv-wander { animation: lvBank 3s ease-in-out infinite alternate; }
-.lv-scene .bf-wing { transform-origin: 20px 16px; animation: lvFlap 0.38s ease-in-out infinite alternate; }
-.lv-scene .bf1 { fill: var(--c1, #fb7185); }
-.lv-scene .bf2 { fill: var(--c2, #fbbf24); }
-.lv-scene .plane-top { fill: #fff; stroke: var(--bg-primary); stroke-width: 1.4px; stroke-linejoin: round; }
-.lv-scene .plane-bot { fill: #e2e8f0; stroke: var(--bg-primary); stroke-width: 1.4px; stroke-linejoin: round; }
-.lv-scene .plane-keel { fill: var(--bg-primary); fill-opacity: 0.55; }
-.lv-scene .worm-seg { transform-box: fill-box; transform-origin: 50% 100%; animation: lvWorm 0.9s ease-in-out infinite; animation-delay: calc(var(--i, 0) * -0.14s); }
-.lv-roam-plane .lv-scene, .lv-roam-worm .lv-scene { filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.18)); }
-.lv-desktop-only { display: none; }
-@media (min-width: 768px) { .lv-desktop-only { display: block; } }
-@keyframes lvCrossX { from { transform: translateX(-14vw); } to { transform: translateX(114vw); } }
-@keyframes lvWander { from { transform: translateY(-48px) rotate(-10deg); } to { transform: translateY(48px) rotate(12deg); } }
-@keyframes lvWobble { from { transform: translateY(-12px); } to { transform: translateY(12px) rotate(6deg); } }
-@keyframes lvFlap { from { transform: scaleX(1); } to { transform: scaleX(0.18); } }
-@keyframes lvBank { from { transform: rotate(-6deg); } to { transform: rotate(6deg) translateY(8px); } }
-@keyframes lvPlane { 0% { transform: translate(-12vw, 6vh) rotate(8deg); } 18% { transform: translate(22vw, -4vh) rotate(-14deg); } 36% { transform: translate(50vw, 14vh) rotate(16deg); } 54% { transform: translate(78vw, 2vh) rotate(-12deg); } 66%, 100% { transform: translate(114vw, 12vh) rotate(8deg); } }
-@keyframes lvWorm { 0%, 100% { transform: translateY(0) scaleY(1); } 50% { transform: translateY(-5px) scaleY(1.1); } }
-
-/* =============================== pruh průběhu stránky =============================== */
-.lv-progress { position: fixed; left: 0; right: 0; top: 0; height: 4px; z-index: 45; transform: scaleX(0); transform-origin: 0 50%; background: linear-gradient(90deg, var(--bg-primary), #fbbf24, #38bdf8); box-shadow: 0 0 10px var(--bg-primary); overflow: hidden; pointer-events: none; }
-.lv-progress::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent); background-size: 180px 100%; background-repeat: no-repeat; animation: lvBar 1.7s linear infinite; }
-@keyframes lvBar { from { background-position: -180px 0; } to { background-position: calc(100% + 180px) 0; } }
-
-/* =============================== vstupy, karty a ovládání =============================== */
-/* stránka se při otevření rozsvítí (jen průhlednost: transform by na chvíli změnil polohu prvků s position: fixed) */
-html[data-lively="1"] main > * { animation: lvFadeIn 0.45s ease-out backwards; }
+/* =============================== pohyb rozhraní =============================== */
+/* stránka se při otevření jemně rozsvítí (jen průhlednost: transform by na chvíli změnil polohu prvků s position: fixed) */
+html[data-lively="1"] main > * { animation: lvFadeIn 0.35s ease-out backwards; }
 @keyframes lvFadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-/* části stránky naskakují jedna po druhé; čtečka a hry jsou klidné */
-html[data-lively="1"]:not([data-lively-calm="1"]) main > * > * { animation: lvEnter 0.65s cubic-bezier(0.2, 0.9, 0.3, 1.15) backwards; }
-html[data-lively="1"]:not([data-lively-calm="1"]) main > * > *:nth-child(2) { animation-delay: 0.07s; }
-html[data-lively="1"]:not([data-lively-calm="1"]) main > * > *:nth-child(3) { animation-delay: 0.14s; }
-html[data-lively="1"]:not([data-lively-calm="1"]) main > * > *:nth-child(4) { animation-delay: 0.21s; }
-html[data-lively="1"]:not([data-lively-calm="1"]) main > * > *:nth-child(5) { animation-delay: 0.28s; }
-html[data-lively="1"]:not([data-lively-calm="1"]) main > * > *:nth-child(6) { animation-delay: 0.35s; }
-html[data-lively="1"]:not([data-lively-calm="1"]) main > * > *:nth-child(n + 7) { animation-delay: 0.42s; }
-@keyframes lvEnter { from { opacity: 0; transform: translateY(34px) scale(0.97); } to { opacity: 1; transform: none; } }
+/* karty, sekce a řádky: čekají průhledné a posunuté, pak vyjedou s odrazem (zpoždění --lv-d dává reveal.js). Přechody se po dobu čekání
+   vypínají (prvek by se jinak mohl na chvíli „rozblikat“), po dohrání se atribut odebere a vše je jako dřív. */
+html[data-lively="1"] [data-lv="wait"], html[data-lively="1"] [data-lv="parked"] { opacity: 0; transform: translateY(30px) scale(0.97); transition: none !important; }
+html[data-lively="1"] [data-lv="in"] { animation: lvIn 0.75s cubic-bezier(0.2, 0.9, 0.3, 1.12) var(--lv-d, 0s) backwards; transition: none !important; }
+@keyframes lvIn { from { opacity: 0; transform: translateY(30px) scale(0.97); } 55% { opacity: 1; } to { opacity: 1; transform: none; } }
 
-/* karty knih naskakují s odrazem; zpoždění roste jen u prvních dvanácti, ať se nečeká na stovky karet */
-html[data-lively="1"]:not([data-lively-calm="1"]) [data-testid="library-card"] { animation: lvPop 0.6s cubic-bezier(0.3, 1.4, 0.5, 1) backwards; }
-html[data-lively="1"]:not([data-lively-calm="1"]) [data-testid="library-card"]:nth-child(2) { animation-delay: 0.04s; }
-html[data-lively="1"]:not([data-lively-calm="1"]) [data-testid="library-card"]:nth-child(3) { animation-delay: 0.08s; }
-html[data-lively="1"]:not([data-lively-calm="1"]) [data-testid="library-card"]:nth-child(4) { animation-delay: 0.12s; }
-html[data-lively="1"]:not([data-lively-calm="1"]) [data-testid="library-card"]:nth-child(5) { animation-delay: 0.16s; }
-html[data-lively="1"]:not([data-lively-calm="1"]) [data-testid="library-card"]:nth-child(6) { animation-delay: 0.2s; }
-html[data-lively="1"]:not([data-lively-calm="1"]) [data-testid="library-card"]:nth-child(n + 7) { animation-delay: 0.24s; }
-@keyframes lvPop { from { opacity: 0; transform: translateY(40px) scale(0.86) rotate(-2.5deg); } to { opacity: 1; transform: none; } }
+/* ukazatele: roztáhnou se zleva doprava (data-lv-grow je v UserStats a BadgesSection, začnou až po své kartě) */
+html[data-lively="1"] [data-lv-grow][data-lv="wait"], html[data-lively="1"] [data-lv-grow][data-lv="parked"] { opacity: 1; transform: scaleX(0); transform-origin: left center; }
+html[data-lively="1"] [data-lv-grow][data-lv="in"] { animation: lvGrow 1.1s cubic-bezier(0.2, 0.85, 0.25, 1) var(--lv-d, 0s) backwards; transform-origin: left center; }
+@keyframes lvGrow { from { transform: scaleX(0); } to { transform: none; } }
 
-/* sekce se odhalují, jak do nich při posouvání vjíždíš (jen prohlížeče se scroll-driven animacemi; jinde je vše hned vidět) */
-@supports (animation-timeline: view()) {
-  html[data-lively="1"]:not([data-lively-calm="1"]):not([data-reduce-motion="1"]) main section { animation: lvReveal linear both; animation-timeline: view(); animation-range: entry 0% entry 60%; }
-}
-@keyframes lvReveal { from { opacity: 0; transform: translateY(46px) scale(0.96); } to { opacity: 1; transform: none; } }
+/* okna: pozadí se rozsvítí, okno vyskočí; boční panel vyjede zprava. Individuální translate a scale se sečtou s případným vlastním transformem okna. */
+html[data-lively="1"] .fixed.inset-0.backdrop-blur-sm { animation: lvFadeIn 0.28s ease-out backwards; }
+html[data-lively="1"] [role="dialog"]:not([data-testid="tour-card"]) { animation: lvModal 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.18) backwards; }
+html[data-lively="1"] .justify-end > [role="dialog"] { animation-name: lvDrawer; animation-duration: 0.42s; }
+@keyframes lvModal { from { opacity: 0; scale: 0.9; translate: 0 28px; } to { opacity: 1; scale: 1; translate: 0 0; } }
+@keyframes lvDrawer { from { opacity: 0; translate: 64px 0; } to { opacity: 1; translate: 0 0; } }
 
-/* tlačítka: pružný zdvih a stisknutí */
+/* tlačítka: pružný zdvih a stisknutí; každá vlastnost má svůj průběh (barvy nesmějí „přestřelit“) */
 html[data-lively="1"] button:is(.rounded-lg, .rounded-xl, .rounded-full):not(:disabled) {
-  transition-property: translate, scale, rotate, transform, box-shadow, background-color, background-position, color, border-color, opacity;
-  transition-duration: 0.18s;
-  transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: translate 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), scale 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), rotate 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, opacity 0.2s ease, background-position 0.7s ease;
 }
 html[data-lively="1"] button:is(.rounded-lg, .rounded-xl, .rounded-full):hover:not(:disabled) { translate: 0 -2px; }
 html[data-lively="1"] button:is(.rounded-lg, .rounded-xl, .rounded-full):active:not(:disabled) { translate: 0 1px; scale: 0.94; }
 
 /* barevná tlačítka a odkazy: při najetí přejede přes ně lesk */
-html[data-lively="1"] :is(button, a)[style*="background-color: var(--bg-primary)"]:not(:disabled) { background-image: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.42) 50%, transparent 65%); background-size: 260% 100%; background-position: 160% 0; background-repeat: no-repeat; transition: background-position 0.7s ease, translate 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), scale 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease; }
+html[data-lively="1"] :is(button, a)[style*="background-color: var(--bg-primary)"]:not(:disabled) { background-image: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.42) 50%, transparent 65%); background-size: 260% 100%; background-position: 160% 0; background-repeat: no-repeat; }
 html[data-lively="1"] :is(button, a)[style*="background-color: var(--bg-primary)"]:hover:not(:disabled) { background-position: -60% 0; }
 
-/* karty knih: při najetí se zvednou a obálka se přiblíží */
-html[data-lively="1"] [data-testid="library-card"] { transition: translate 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease; }
-html[data-lively="1"] [data-testid="library-card"]:hover { translate: 0 -6px; box-shadow: 0 16px 32px -14px var(--bg-primary); }
+/* přepínač: kulička se pružně přelévá a při stisknutí se natáhne */
+html[data-lively="1"] [role="switch"] > span { transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), scale 0.2s ease; }
+html[data-lively="1"] [role="switch"]:active > span { scale: 1.3 1; }
+
+/* políčka: při zaostření se kolem nich rozsvítí měkký proužek */
+html[data-lively="1"] :is(input, textarea, select) { transition: box-shadow 0.25s ease, border-color 0.25s ease, outline-offset 0.2s ease; }
+html[data-lively="1"] :is(input, textarea, select):focus-visible { box-shadow: 0 0 0 5px var(--bg-badge); outline-offset: 3px; }
+
+/* horní lišta: odkazům se při najetí podtrhne proužek a ikona poskočí; ozubené kolo se otočí */
+html[data-lively="1"] nav a[data-tour] { position: relative; }
+html[data-lively="1"] nav a[data-tour]::after { content: ''; position: absolute; left: 22%; right: 22%; bottom: 3px; height: 2px; border-radius: 2px; background: var(--bg-primary); transform: scaleX(0); transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.2); pointer-events: none; }
+html[data-lively="1"] nav a[data-tour]:hover::after { transform: scaleX(1); }
+html[data-lively="1"] nav a[data-tour] svg { transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+html[data-lively="1"] nav a[data-tour]:hover svg { transform: translateY(-2px) scale(1.18); }
+html[data-lively="1"] a[href^="/settings"] svg { transition: transform 0.7s cubic-bezier(0.3, 1.4, 0.5, 1); }
+html[data-lively="1"] a[href^="/settings"]:hover svg { transform: rotate(120deg); }
+html[data-lively="1"] .app-logo:hover { animation: lvWiggle 0.6s ease-in-out; }
+@keyframes lvWiggle { 0%, 100% { transform: rotate(0deg); } 20% { transform: rotate(-12deg) scale(1.08); } 45% { transform: rotate(10deg) scale(1.08); } 70% { transform: rotate(-6deg); } }
+
+/* karty knih: při najetí se zvednou, naklánějí se za myší (--rx a --ry zapisuje src/lively/tilt.js), přes ně přejede odlesk a obálka se přiblíží.
+   Transform je jen při najetí, v klidu mají karty žádný. Na dotyku (bez najetí) se nic z toho nedělá. */
+html[data-lively="1"] [data-testid="library-card"] { position: relative; transition: translate 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease, transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); }
 html[data-lively="1"] [data-testid="library-card"] .aspect-\[3\/4\] { transition: scale 0.35s ease; }
-html[data-lively="1"] [data-testid="library-card"]:hover .aspect-\[3\/4\] { scale: 1.06; }
+@media (hover: hover) and (pointer: fine) {
+  html[data-lively="1"] [data-testid="library-card"]:hover { translate: 0 -6px; box-shadow: 0 18px 34px -14px var(--bg-primary); transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition-duration: 0.25s, 0.25s, 0.12s; }
+  html[data-lively="1"] [data-testid="library-card"]:hover .aspect-\[3\/4\] { scale: 1.06; }
+  html[data-lively="1"] [data-testid="library-card"]::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.28), transparent 55%); opacity: 0; transition: opacity 0.3s ease; pointer-events: none; }
+  html[data-lively="1"] [data-testid="library-card"]:hover::after { opacity: 1; }
+}
 
 /* ostatní karty: při najetí se ozve barva motivu (kreslený styl má vlastní odsazený stín) */
 html[data-lively="1"]:not([data-style="sketchy"]) :is(.rounded-2xl, .rounded-3xl).border:not([data-testid="library-card"]) { transition: box-shadow 0.25s ease, border-color 0.25s ease; }
 html[data-lively="1"]:not([data-style="sketchy"]) :is(a, button, [role="button"], [tabindex="0"]).rounded-2xl.border:hover { box-shadow: 0 10px 26px -14px var(--bg-primary); border-color: var(--bg-primary); }
 
-/* logo: občas poskočí, při najetí zakývá; ozubené kolo se při najetí otočí */
-html[data-lively="1"] .app-logo { animation: lvLogoHop 7s ease-in-out infinite; }
-html[data-lively="1"] .app-logo:hover { animation: lvWiggle 0.6s ease-in-out; }
-html[data-lively="1"] a[href^="/settings"] svg { transition: transform 0.7s cubic-bezier(0.3, 1.4, 0.5, 1); }
-html[data-lively="1"] a[href^="/settings"]:hover svg { transform: rotate(120deg); }
-@keyframes lvLogoHop { 0%, 86%, 100% { transform: translateY(0) scale(1, 1); } 90% { transform: translateY(2px) scale(1.12, 0.88); } 94% { transform: translateY(-6px) scale(0.92, 1.1); } 97% { transform: translateY(0) scale(1.05, 0.95); } }
-@keyframes lvWiggle { 0%, 100% { transform: rotate(0deg); } 20% { transform: rotate(-12deg) scale(1.08); } 45% { transform: rotate(10deg) scale(1.08); } 70% { transform: rotate(-6deg); } }
+/* zmrzlý řádek v žebříčku: modrý přechod se pomalu vlní a vločka se třpytí */
+html[data-lively="1"] [data-frozen="true"] { background-size: 220% 100%; animation: lvIce 7s ease-in-out infinite alternate; }
+html[data-lively="1"] [data-testid="lb-frozen"] { animation: lvSnow 3.6s ease-in-out infinite; }
+@keyframes lvIce { from { background-position: 0% 0; } to { background-position: 100% 0; } }
+@keyframes lvSnow { 0%, 100% { transform: rotate(0deg) scale(1); opacity: 0.85; } 50% { transform: rotate(60deg) scale(1.2); opacity: 1; } }
 
-/* Omezení pohybu: postavičky stojí v hezké výchozí póze (animace vypíná obecné pravidlo v index.html), tvorové, tečky a světlo za myší
-   se skryjí úplně: zastavený motýl uprostřed obrazovky by jen překážel. Pruh průběhu zůstává, je to informace, ne pohyb. */
-html[data-reduce-motion="1"] :is(.lv-dot, .lv-shoot, .lv-roamers, .lv-spot) { display: none; }
+/* přepnutí motivu: nový vzhled se rozlije kruhem z místa kliknutí (--vt-x a --vt-y zapisuje src/lively/viewTransition.js) */
+html[data-lively="1"]::view-transition-old(root), html[data-lively="1"]::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+html[data-lively="1"]::view-transition-new(root) { animation: lvThemeReveal 0.75s cubic-bezier(0.3, 0.7, 0.2, 1); z-index: 2; }
+html[data-lively="1"]::view-transition-old(root) { z-index: 1; }
+@keyframes lvThemeReveal { from { clip-path: circle(0 at var(--vt-x, 50%) var(--vt-y, 50%)); } to { clip-path: circle(150vmax at var(--vt-x, 50%) var(--vt-y, 50%)); } }
+
+/* Omezení pohybu a tisk: nic se neskrývá ani nehýbe. Atribut data-lv pak může zůstat (pojistka), ale nemá žádný účinek. */
+html[data-reduce-motion="1"] [data-lv] { opacity: 1 !important; transform: none !important; animation: none !important; }
+html[data-reduce-motion="1"] :is(.lv-dot, .lv-shoot) { display: none; }
 html[data-reduce-motion="1"] .lv-progress::after { display: none; }
+@media print { [data-lv] { opacity: 1 !important; transform: none !important; animation: none !important; } }
 
-/* Vynucené barvy Windows a tisk: ozdoby by jen překážely a odhalované sekce by se vytiskly prázdné */
-@media (forced-colors: active), print { .lv-bg, .lv-sides, .lv-roamers, .lv-progress { display: none !important; } }
-@media print {
-  html[data-lively="1"] :is(main > *, main > * > *, main section, [data-testid="library-card"]) { animation: none !important; opacity: 1 !important; transform: none !important; }
-}
+/* Vynucené barvy Windows a tisk: ozdoby by jen překážely */
+@media (forced-colors: active), print { .lv-bg, .lv-sides, .lv-progress { display: none !important; } }

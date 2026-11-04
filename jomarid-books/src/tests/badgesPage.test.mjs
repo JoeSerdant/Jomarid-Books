@@ -345,7 +345,7 @@ test('UserStats: zmrzlý řádek ukazuje sněhovou vločku a hodnotu (ne nulu), 
   const src = fs.readFileSync(new URL('../pages/UserStats.jsx', import.meta.url), 'utf8');
   assert.match(src, /boardRowStyle\(row, activeTab\)/);
   assert.match(src, /data-testid="lb-frozen"/);
-  assert.match(src, /\{row\[activeTab\]\.toLocaleString\(\)\}/, 'hodnota se ukazuje vždy');
+  assert.match(src, /<CountUp value=\{row\[activeTab\]\} format=\{\(n\) => n\.toLocaleString\(\)\}/, 'hodnota se ukazuje vždy (v Živém režimu se dotočí)');
   assert.match(src, /data-testid="lb-frozen-legend"/);
   assert.match(src, /activeTab === 'streak' && leaderboards\.streak\?\.some\(r => isFrozenRow\(r, 'streak'\)\)/);
 });
