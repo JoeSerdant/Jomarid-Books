@@ -668,3 +668,14 @@ test('ovládání je vidět i v pauze, ze stejného textu jako v menu (dotyk a k
   assert.match(how[2], /Shift = skok/);
   assert.match(how[2], /P pauza/);
 });
+
+test('omezený pohyb: kamera se neotřásá, když to systém nechce (živý dotaz na nastavení, ne jednorázové čtení)', () => {
+  const src = (f) => fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8');
+  const state = src('state.js'), render = src('render.js');
+  assert.match(state, /const motionMQ = typeof window !== 'undefined' && window\.matchMedia \? window\.matchMedia\('\(prefers-reduced-motion: reduce\)'\) : null;/);
+  assert.match(render, /const quake = shake > 0 && q > 0 && !\(motionMQ && motionMQ\.matches\);/);
+  // posun kamery vzniká jen přes quake, jinde se shake v kreslení nepoužívá
+  assert.equal((render.match(/\* shake \* 2/g) || []).length, 2);
+  assert.match(render, /const shx = quake \? \(Math\.random\(\) - 0\.5\) \* shake \* 2 : 0, shy = quake \? \(Math\.random\(\) - 0\.5\) \* shake \* 2 : 0;/);
+  assert.equal((render.match(/\bshake\b/g) || []).length, 3, 'shake je v render.js jen v definici quake a ve dvou posunech');
+});

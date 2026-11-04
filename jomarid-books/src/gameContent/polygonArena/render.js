@@ -105,7 +105,8 @@ function renderScene() {
   const ghostK = 1 - Math.exp(-3.7 * rdt);                                   // doběh bílého "ducha" zdraví nezávisí na snímkování
   g.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
   g.fillStyle = theme.bg; g.fillRect(0, 0, W, H);
-  const shx = shake > 0 && q > 0 ? (Math.random() - 0.5) * shake * 2 : 0, shy = shake > 0 && q > 0 ? (Math.random() - 0.5) * shake * 2 : 0;
+  const quake = shake > 0 && q > 0 && !(motionMQ && motionMQ.matches);
+  const shx = quake ? (Math.random() - 0.5) * shake * 2 : 0, shy = quake ? (Math.random() - 0.5) * shake * 2 : 0;
   g.setTransform(view.dpr * z, 0, 0, view.dpr * z, view.dpr * (W / 2 - cam.x * z + shx), view.dpr * (H / 2 - cam.y * z + shy));
   const mg = 16 * px;                                                         // okraj navíc: otřes kamery a přesahy záře
   const vx0 = cam.x - W / 2 * px - mg, vx1 = cam.x + W / 2 * px + mg, vy0 = cam.y - H / 2 * px - mg, vy1 = cam.y + H / 2 * px + mg;

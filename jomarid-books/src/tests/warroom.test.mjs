@@ -247,3 +247,25 @@ test('záhlaví hry: štítky scénáře, doktríny a dne se na úzkém displeji
   assert.match(css, /\.header > div \{ display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; \}/);
   assert.match(css, /\.header > div \.badge \{ margin-left: 0; \}/);
 });
+
+test('omezený pohyb: radar, otřes, pulzování a částice se při nastavení systému vypnou, čísla nad polem se jen zprůhlední', () => {
+  const start = css.indexOf('@media (prefers-reduced-motion: reduce) {');
+  assert.ok(start > 0, 'blok pro omezený pohyb existuje');
+  const block = css.slice(start, css.indexOf('\n        }', start) + 10);
+  for (const rule of [
+    /body::before \{ animation: none; \}/,
+    /\.shake, \.crisis, \.wizard-screen\.active \{ animation: none !important; \}/,
+    /#gauge::after, \.target-zone \{ animation: none; \}/,
+    /button:hover:not\(:disabled\)::before \{ animation: none; \}/,
+    /\.float-text \{ animation: floatFadeCalm 1\.2s linear forwards; \}/,
+    /\.particle \{ display: none; \}/,
+  ]) assert.match(block, rule);
+  assert.doesNotMatch(css.match(/@keyframes floatFadeCalm [^\n]*/)[0], /transform/, 'klidná varianta se nehýbe');
+  // hlídač: každé nekonečné pulzování nebo otáčení v CSS musí být v bloku vypnuté (jinak by přibylo něco, co omezený pohyb obejde)
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const infinite = [...new Set([...bare.matchAll(/([^{}]+)\{[^{}]*animation:[^;}]*infinite[^;}]*[;}]/g)].map((m) => m[1].trim().split(/\s*,\s*/)).flat())];
+  assert.deepEqual([...infinite].sort(), ['#gauge::after', '.crisis', '.target-zone', 'body::before'], 'známé nekonečné animace: ' + infinite.join(' | '));
+  // blok je na konci stylů (přebíjí pozdější pravidla se stejnou přesností)
+  assert.ok(css.lastIndexOf('@media (prefers-reduced-motion: reduce) {') > css.lastIndexOf('animation: zonePulse'), 'blok je za posledním pravidlem s animací');
+  for (const sel of infinite) assert.ok(block.includes(sel), `${sel} má nekonečnou animaci a v bloku pro omezený pohyb chybí`);
+});
