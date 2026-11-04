@@ -266,6 +266,49 @@ const groupBy = (rows, key) => {
   return map;
 };
 
+// Souhrny pro žebříček přicházejí ze serveru (db/security-hardening.sql): čtenář nesmí číst cizí řádky user_books ani user_daily_activity,
+// server vrací jen počty přečtených knih a dny čtení těch, kdo smějí být v žebříčku. Dokud SQL v databázi neběží (funkce chybí),
+// čtou se tabulky po staru; jakákoli jiná chyba žebříček neukáže radši vůbec, než aby ukázal špatná čísla.
+const isMissingRpc = (err) => err?.code === 'PGRST202' || err?.code === '42883' || /could not find the function/i.test(err?.message || '');
+
+// Map(id účtu -> {total: přečtené knihy, monthly: dočtené v měsíci [from, to)}).
+async function loadBoardReads(client, from, to) {
+  const { data, error } = await client.rpc('leaderboard_reads', { p_from: from.toISOString(), p_to: to.toISOString() });
+  if (error) {
+    if (!isMissingRpc(error)) throw error;
+    const rows = await fetchAllRows(() => client.from('user_books').select('user_id, updated_at, first_completed_at').eq('is_read', true).order('user_id').order('book_id'));
+    const map = new Map();
+    for (const [id, list] of groupBy(rows, 'user_id')) {
+      map.set(id, { total: list.length, monthly: list.filter((b) => { if (!b.first_completed_at) return false; const d = new Date(b.first_completed_at); return d >= from && d < to; }).length });
+    }
+    return map;
+  }
+  const map = new Map();
+  for (const row of Array.isArray(data) ? data : []) {
+    if (row?.user_id) map.set(row.user_id, { total: Math.max(0, parseInt(row.total_read, 10) || 0), monthly: Math.max(0, parseInt(row.monthly_read, 10) || 0) });
+  }
+  return map;
+}
+
+// Map(id účtu -> Set dní čtení RRRR-MM-DD). Server dává jen posledních 60 dní: pro sérii stačí (dál do minulosti sahá série vyhodnocená serverem).
+async function loadBoardActivity(client) {
+  const { data, error } = await client.rpc('leaderboard_activity', { p_days: 60 });
+  let rows;
+  if (error) {
+    if (!isMissingRpc(error)) throw error;
+    rows = await fetchAllRows(() => client.from('user_daily_activity').select('user_id, activity_date').order('user_id').order('activity_date'));
+  } else {
+    rows = Array.isArray(data) ? data : [];
+  }
+  const map = new Map();
+  for (const row of rows) {
+    if (!row?.user_id) continue;
+    const set = map.get(row.user_id);
+    if (set) set.add(row.activity_date); else map.set(row.user_id, new Set([row.activity_date]));
+  }
+  return map;
+}
+
 // Série čtení všech čtenářů, jak je vyhodnotil server (db/leaderboard-streaks.sql): Map(id účtu -> {streak, frozen: Set dní zachráněných pojistkou, freezes: pojistky v zásobě}).
 // null, dokud SQL v databázi neběží (nebo když volání selže): žebříček pak počítá sérii jen ze dnů čtení.
 async function loadStreakBase(client) {
@@ -352,37 +395,37 @@ export async function loadLeaderboards(client, user, mine = null) {
   if (lbRes.error) console.error('Nepodařilo se načíst žebříček:', lbRes.error);
   else if (Array.isArray(lbRes.data)) allProfiles = lbRes.data;
   if (allProfiles && allProfiles.length > 0) {
-    const [allBooks, allActs, boardTitles, streakBase] = await Promise.all([
-      fetchAllRows(() => client.from('user_books').select('user_id, updated_at, first_completed_at').eq('is_read', true).order('user_id').order('book_id')),
-      fetchAllRows(() => client.from('user_daily_activity').select('user_id, activity_date').order('user_id').order('activity_date')),
-      loadEquippedTitles(client, allProfiles.map(p => p.id)),
-      loadStreakBase(client)
-    ]);
+    let readsByUser; let actsByUser; let boardTitles; let streakBase;
+    try {
+      [readsByUser, actsByUser, boardTitles, streakBase] = await Promise.all([
+        loadBoardReads(client, new Date(currentYear, currentMonth, 1), new Date(currentYear, currentMonth + 1, 1)),
+        loadBoardActivity(client),
+        loadEquippedTitles(client, allProfiles.map(p => p.id)),
+        loadStreakBase(client)
+      ]);
+    } catch (err) {
+      console.error('Nepodařilo se načíst souhrny do žebříčku:', err);
+      return null;
+    }
 
-    const booksByUser = groupBy(allBooks, 'user_id');
-    const actsByUser = groupBy(allActs, 'user_id');
     const todayStr = new Date().toLocaleDateString('sv');
     const yest = new Date(); yest.setDate(yest.getDate() - 1);
     const yestStr = yest.toLocaleDateString('sv');
 
     const mappedUsers = allProfiles.map(p => {
-      const uBooks = booksByUser.get(p.id) || [];
-      const uActs = new Set((actsByUser.get(p.id) || []).map(a => a.activity_date));
+      const reads = readsByUser.get(p.id) || { total: 0, monthly: 0 };
+      const uActs = actsByUser.get(p.id) || new Set();
 
       const streakInfo = boardStreakInfo({ base: streakBase?.get(p.id) || null, acts: uActs, todayStr, yestStr });
       const uStreak = streakInfo.streak;
 
-      const uMRead = uBooks.filter(b => {
-        if (!b.first_completed_at) return false;
-        const d = new Date(b.first_completed_at);
-        return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
-      }).length;
+      const uMRead = reads.monthly;
 
       // Stejný vzorec jako pro přihlášeného uživatele výš (včetně XP z odznáčků
       // a násobku za splněný cíl), aby žebříček podle XP/úrovně nepodhodnocoval
       // nikoho se sbírkou odznáčků nebo zvýšeným splněným cílem.
       const uXpTotal = computeTotalXp({
-        totalRead: uBooks.length,
+        totalRead: reads.total,
         highestGoalCompleted: p.highest_goal_completed,
         fakeXp: p.fake_xp,
         bonusXp: p.bonus_xp,
@@ -404,7 +447,7 @@ export async function loadLeaderboards(client, user, mine = null) {
         streak: own ? own.streak : uStreak,
         streakFrozen: own ? ownFrozen : streakInfo.frozen,
         level: own ? own.level : uLvl,
-        totalRead: own ? own.totalRead : uBooks.length,
+        totalRead: own ? own.totalRead : reads.total,
         monthlyRead: own ? own.monthlyRead : uMRead,
         xp: own ? own.totalXp : uXpTotal,
         featuredBadge: p.featured_badge || null,

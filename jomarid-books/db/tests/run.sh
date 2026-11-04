@@ -18,6 +18,8 @@ HELP_SQL="$HERE/../help-bot.sql"
 STREAKS_SQL="$HERE/../leaderboard-streaks.sql"
 LOGINCODE_SQL="$HERE/../login-code.sql"
 SECDIAG_SQL="$HERE/../security-diagnostics.sql"
+HARDEN_SQL="$HERE/../security-hardening.sql"
+UNDO_SQL="$HERE/../security-hardening-undo.sql"
 
 BIN=""
 for d in $(command -v initdb >/dev/null 2>&1 && dirname "$(command -v initdb)") /usr/lib/postgresql/*/bin; do
@@ -29,7 +31,7 @@ TMP="$(mktemp -d)"
 RUNAS=""
 if [ "$(id -u)" = "0" ]; then
   id postgres >/dev/null 2>&1 || { echo "Jako root je potřeba uživatel postgres." >&2; rm -rf "$TMP"; exit 77; }
-  chown postgres "$TMP"; chmod 755 "$HERE" "$HERE"/*.sql "$SQL" "$EMAIL_SQL" "$GAME_SQL" "$SHOP_SQL" "$SAVES_SQL" "$COINS_SQL" "$SHORTS_SQL" "$HELP_SQL" "$STREAKS_SQL" "$LOGINCODE_SQL" "$SECDIAG_SQL" 2>/dev/null || true
+  chown postgres "$TMP"; chmod 755 "$HERE" "$HERE"/*.sql "$SQL" "$EMAIL_SQL" "$GAME_SQL" "$SHOP_SQL" "$SAVES_SQL" "$COINS_SQL" "$SHORTS_SQL" "$HELP_SQL" "$STREAKS_SQL" "$LOGINCODE_SQL" "$SECDIAG_SQL" "$HARDEN_SQL" "$UNDO_SQL" 2>/dev/null || true
   RUNAS="runuser -u postgres --"
 fi
 run() { $RUNAS "$@"; }
@@ -185,6 +187,11 @@ if [ $STATUS -eq 0 ]; then
       "create or replace function public.update_user_coins_balance() returns trigger language plpgsql as \$f\$ begin update public.profiles set coins = coins + new.amount where id = new.user_id; return new; end \$f\$;"
   MARK=$(PSQL -At -c "select coalesce(proconfig::text, '') like '%statement_timeout%' from pg_proc where oid = 'public.award_game_coins(text, integer, text)'::regprocedure" 2>&1)
   [ "$MARK" = "f" ] || { echo "SELÁHALO: po úklidu zkoušek db/game-coins.sql zůstala na funkci značka ($MARK)" >>"$OUT"; STATUS=1; }
+fi
+
+# Zpevnění (db/security-hardening.sql): až úplně nakonec, protože test smaže a znovu založí schéma public (zkušební databáze s děravými právy jako ve skutečné).
+if [ $STATUS -eq 0 ]; then
+  { PSQLQ -f "$HERE/mock_schema.sql" && PSQLQ -f "$HERE/security_hardening.test.sql"; } >>"$OUT" 2>&1 || STATUS=1
 fi
 
 OK=$(grep -c "OK   " "$OUT")

@@ -367,9 +367,20 @@ export function compose(kind: unknown, data: Data | null | undefined, rnd: () =>
 }
 export const MESSAGE_KINDS = ['streak_risk', 'streak_milestone', 'praise', 'comeback', 'continue_book', 'goal_progress', 'coins_to_spend', 'gentle_nudge', 'new_book'];
 
+/** Porovná sdílené heslo v konstantním čase: čas porovnání nezávisí na tom, v kolikátém znaku se hesla liší (obyčejné === by to prozradilo). */
+export async function secretMatches(given: string | null, expected: string): Promise<boolean> {
+  if (!given || !expected) return false;
+  const enc = new TextEncoder();
+  const [a, b] = await Promise.all([crypto.subtle.digest('SHA-256', enc.encode(given)), crypto.subtle.digest('SHA-256', enc.encode(expected))]);
+  const x = new Uint8Array(a); const y = new Uint8Array(b);
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
+  return diff === 0;
+}
+
 export async function handle(req: Request, deps: PushDeps): Promise<Response> {
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
-  if (!deps.secret || req.headers.get('x-push-secret') !== deps.secret) return json({ error: 'unauthorized' }, 401);
+  if (!deps.secret || !(await secretMatches(req.headers.get('x-push-secret'), deps.secret))) return json({ error: 'unauthorized' }, 401);
   let input: Record<string, unknown>;
   try { input = await req.json(); } catch { return json({ error: 'bad_json' }, 400); }
 

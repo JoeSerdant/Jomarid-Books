@@ -64,7 +64,7 @@ declare
   v_standard_roles text[] := array['postgres','anon','authenticated','service_role','authenticator','supabase_admin','supabase_auth_admin','supabase_storage_admin','supabase_read_only_user','dashboard_user','pgbouncer','supabase_replication_admin','supabase_etl_admin','supabase_functions_admin','supabase_realtime_admin','supabase_privileged_role','supabase_realtime_admin','pgsodium_keyholder','pgsodium_keyiduser','pgsodium_keymaker','cli_login_postgres'];
   r record; t record; c record;
   v_n bigint; v_m bigint; v_txt text; v_txt2 text; v_flag text; v_list text; v_list2 text;
-  v_u uuid; v_v uuid; v_adminrole text; v_other uuid;
+  v_u uuid; v_v uuid; v_adminrole text; v_other uuid; v_adm uuid; v_triv_u text; v_triv_a text;
   v_has_profiles boolean; v_has_role boolean;
   v_src text; v_has_uid boolean; v_has_admin boolean; v_has_sp boolean; v_dyn boolean; v_secret boolean; v_email boolean; v_userarg boolean;
   v_acc_anon_w text := ''; v_acc_trunc text := ''; v_priv_anon text; v_priv_auth text; v_pol_n int; v_res text; v_expr text; v_kind text; v_tab text; v_owner text;
@@ -196,8 +196,8 @@ begin
   loop
     v_tab := r.nspname || '.' || r.proname || '(' || left(r.args, 60) || ')';
     v_src := coalesce(r.src, '');
-    v_has_uid := v_src ~* 'auth\.uid\(\)|auth\.jwt\(\)|request\.jwt';
-    v_has_admin := v_src ~* 'admin|správ|require_role|is_staff';
+    v_has_uid := v_src ~* 'auth\.uid\(\)|auth\.jwt\(\)|request\.jwt|short_uid\(\)|publisher_require|admin_require|notif_require_admin';
+    v_has_admin := v_src ~* 'admin|správ|require_role|is_staff|publisher_require|short_require_writer|short_is_admin|app_current_role|app_is_book_author|app_owns_book';
     v_has_sp := r.proconfig is not null and exists (select 1 from unnest(r.proconfig) cfg where cfg like 'search_path=%');
     v_dyn := v_src ~* '\mexecute\M' and (v_src ~ '\|\|' or v_src ~* 'format\s*\([^)]*%s');
     v_secret := v_src ~ 'eyJ[A-Za-z0-9_-]{20,}' or v_src ~* 'sb_secret_|service_role_key|sbp_[a-z0-9]{20,}|BEGIN (RSA |EC )?PRIVATE KEY';
@@ -216,7 +216,7 @@ begin
         perform pg_temp._d(3, 'D. Funkce', v_tab, 'Bez přihlášení (anon) jde funkci zavolat (kontroluje auth.uid(), ale má být zavřená)', 'doporučení: revoke execute from anon');
       end if;
     end if;
-    if r.prosecdef and r.auth_x and r.rtype <> 'trigger' and not v_has_uid and not v_has_admin then
+    if r.prosecdef and r.auth_x and r.rtype <> 'trigger' and not v_has_uid and not v_has_admin and r.proname not in ('username_available_public', 'request_password_help') then
       perform pg_temp._d(case when r.provolatile = 'v' then 2 else 3 end, 'D. Funkce', v_tab, 'Přihlášený smí zavolat funkci SECURITY DEFINER, která nekontroluje ani uživatele, ani roli', case when r.provolatile = 'v' then 'ZAPISUJE (volatile)' else 'jen čte' end);
     end if;
     if r.prosecdef and r.auth_x and v_userarg and not v_has_uid then
@@ -359,7 +359,7 @@ begin
       if r.file_size_limit is null then perform pg_temp._d(4, 'H. Storage', 'bucket ' || r.name, 'Bez limitu velikosti souboru', null); end if;
       if r.mimes is null then perform pg_temp._d(4, 'H. Storage', 'bucket ' || r.name, 'Bez omezení typů souborů (lze nahrát cokoli, i HTML/skript)', null); end if;
     end loop;
-    if to_regclass('storage.objects') is not null and not (select relrowsecurity from pg_class where oid = 'storage.objects'::regclass) then
+    if to_regclass('storage.objects') is not null and not coalesce((select relrowsecurity from pg_class where oid = to_regclass('storage.objects')), false) then
       perform pg_temp._d(1, 'H. Storage', 'storage.objects', 'RLS na souborech je VYPNUTÉ', null);
     end if;
   end if;
@@ -492,9 +492,10 @@ begin
   -- N. ZKOUŠKY: co by útočník skutečně mohl (vše se vrací zpět)
   -- =================================================================================================================
   begin
-  v_adminrole := null; v_u := null; v_v := null;
+  v_adminrole := null; v_u := null; v_v := null; v_adm := null;
   if v_has_role then
     execute 'select role from public.profiles where role ~* ''admin|správ'' limit 1' into v_adminrole;
+    execute 'select id from public.profiles where role ~* ''admin|správ'' order by id limit 1' into v_adm;
     execute 'select id from public.profiles where coalesce(role, '''') !~* ''admin|správ|nakladatel|publisher'' order by id limit 1' into v_u;
     execute 'select id from public.profiles where coalesce(role, '''') !~* ''admin|správ|nakladatel|publisher'' and id is distinct from $1 order by id limit 1' into v_v using v_u;
   elsif v_has_profiles then
@@ -646,7 +647,18 @@ begin
       if v_txt like 'ok:%' then perform pg_temp._d(case when r.proname ~ '^admin_' then 1 else 3 end, 'N. Zkoušky: funkce', r.nspname || '.' || r.proname || '()', 'Funkci bez parametrů jde zavolat bez přihlášení a vrátí odpověď', null); end if;
       if r.proname ~ '^admin_' then
         v_txt := pg_temp._probe('authenticated', v_u, format('select %I.%I()', r.nspname, r.proname), 'dml');
-        if v_txt like 'ok:%' then perform pg_temp._d(1, 'N. Zkoušky: funkce', r.nspname || '.' || r.proname || '()', 'Funkce správce vrátí odpověď i běžnému čtenáři', null); end if;
+        if v_txt like 'ok:%' then
+          -- Odpověď sama o úniku nic neříká (funkce může čtenáři vracet 0 nebo prázdno). Rozhodne srovnání: co vrátí čtenáři a co správci.
+          v_triv_u := pg_temp._probe('authenticated', v_u, format('select case when %1$I.%2$I() is null or %1$I.%2$I()::text in (''0'', ''f'', ''false'', ''[]'', ''{}'', '''') then 0 else 1 end', r.nspname, r.proname), 'n');
+          v_triv_a := case when v_adm is null then null else pg_temp._probe('authenticated', v_adm, format('select case when %1$I.%2$I() is null or %1$I.%2$I()::text in (''0'', ''f'', ''false'', ''[]'', ''{}'', '''') then 0 else 1 end', r.nspname, r.proname), 'n') end;
+          if v_triv_u = 'ok:0' and v_triv_a = 'ok:1' then
+            perform pg_temp._d(5, 'N. Zkoušky: funkce', r.nspname || '.' || r.proname || '()', 'V pořádku: čtenáři vrátí prázdnou odpověď (0), správci skutečný výsledek', null);
+          elsif v_triv_u = 'ok:0' then
+            perform pg_temp._d(3, 'N. Zkoušky: funkce', r.nspname || '.' || r.proname || '()', 'Funkce správce vrátí čtenáři prázdnou odpověď, ale nejde to odlišit od odpovědi správce (ten ji má momentálně taky prázdnou)', 'ověř ručně, že čtenář nedostane skutečný výsledek');
+          else
+            perform pg_temp._d(1, 'N. Zkoušky: funkce', r.nspname || '.' || r.proname || '()', 'Funkce správce vrátí odpověď i běžnému čtenáři', null);
+          end if;
+        end if;
       end if;
     end loop;
   end if;
