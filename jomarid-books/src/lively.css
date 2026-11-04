@@ -16,8 +16,8 @@
 @keyframes lvBlobB { from { transform: translate(0, 0) scale(1.1); } to { transform: translate(-8vmax, 9vmax) scale(0.9); } }
 @keyframes lvBlobC { from { transform: translate(0, 0) scale(0.95); } to { transform: translate(10vmax, -6vmax) scale(1.12); } }
 
-.lv-dot { position: absolute; display: block; left: var(--x); bottom: -12px; width: var(--s); height: var(--s); border-radius: 50%; background: var(--bg-primary); opacity: 0; animation: lvRise var(--dur) linear var(--del) infinite; }
-@keyframes lvRise { 0% { transform: translate(0, 0); opacity: 0; } 10% { opacity: 0.5; } 50% { transform: translate(14px, -55vh); } 90% { opacity: 0.4; } 100% { transform: translate(-10px, -112vh); opacity: 0; } }
+.lv-dot { position: absolute; display: block; left: var(--x); bottom: -12px; width: var(--s); height: var(--s); border-radius: 50%; background: var(--bg-primary); opacity: 0; animation: lvDotRise var(--dur) linear var(--del) infinite; }
+@keyframes lvDotRise { 0% { transform: translate(0, 0); opacity: 0; } 10% { opacity: 0.5; } 50% { transform: translate(14px, -55vh); } 90% { opacity: 0.4; } 100% { transform: translate(-10px, -112vh); opacity: 0; } }
 @media (max-width: 639px) { .lv-dot:nth-child(n + 11) { display: none; } } /* na telefonu méně teček (baterie, přehlednost) */
 
 .lv-shoot { position: absolute; display: block; top: 9%; right: 8%; width: 90px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--bg-primary)); opacity: 0; animation: lvShoot 19s ease-out 4s infinite; }
@@ -53,15 +53,35 @@
 html[data-lively="1"] main > * { animation: lvFadeIn 0.35s ease-out backwards; }
 @keyframes lvFadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-/* karty, sekce a řádky: čekají průhledné a posunuté, pak vyjedou s odrazem (zpoždění --lv-d dává reveal.js). Přechody se po dobu čekání
-   vypínají (prvek by se jinak mohl na chvíli „rozblikat“), po dohrání se atribut odebere a vše je jako dřív. */
-html[data-lively="1"] [data-lv="wait"], html[data-lively="1"] [data-lv="parked"] { opacity: 0; transform: translateY(30px) scale(0.97); transition: none !important; }
-html[data-lively="1"] [data-lv="in"] { animation: lvIn 0.75s cubic-bezier(0.2, 0.9, 0.3, 1.12) var(--lv-d, 0s) backwards; transition: none !important; }
-@keyframes lvIn { from { opacity: 0; transform: translateY(30px) scale(0.97); } 55% { opacity: 1; } to { opacity: 1; transform: none; } }
+/* karty, sekce a řádky: čekají průhledné a posunuté, pak vyjedou s odrazem (zpoždění --lv-d dává reveal.js). Každý prvek má variantu
+   (data-lv-v): sloupce vyjedou z krajů k sobě, články (karty knih) se překlopí, řádky uvnitř karty vjedou zleva, ostatní vyjedou zespodu.
+   Přechody se po dobu čekání vypínají (prvek by se jinak mohl na chvíli „rozblikat“), po dohrání se atributy odeberou a vše je jako dřív. */
+html[data-lively="1"] [data-lv="wait"], html[data-lively="1"] [data-lv="parked"] { opacity: 0; transition: none !important; }
+html[data-lively="1"] [data-lv="in"] { transition: none !important; }
+html[data-lively="1"] [data-lv-v="rise"]:not([data-lv="in"]) { transform: translateY(56px) scale(0.94); }
+html[data-lively="1"] [data-lv-v="left"]:not([data-lv="in"]) { transform: translateX(-84px) rotate(-2deg); }
+html[data-lively="1"] [data-lv-v="right"]:not([data-lv="in"]) { transform: translateX(84px) rotate(2deg); }
+html[data-lively="1"] [data-lv-v="flip"]:not([data-lv="in"]) { transform: perspective(900px) translateY(52px) rotateX(-32deg) scale(0.88); }
+html[data-lively="1"] [data-lv-v="row"]:not([data-lv="in"]) { transform: translateX(-52px); }
+html[data-lively="1"] [data-lv-v="flip"] { transform-origin: 50% 100%; }
+html[data-lively="1"] [data-lv="in"][data-lv-v="rise"] { animation: lvRise 0.9s cubic-bezier(0.2, 0.9, 0.3, 1.15) var(--lv-d, 0s) backwards; }
+html[data-lively="1"] [data-lv="in"][data-lv-v="left"] { animation: lvLeft 0.95s cubic-bezier(0.2, 0.9, 0.3, 1.15) var(--lv-d, 0s) backwards; }
+html[data-lively="1"] [data-lv="in"][data-lv-v="right"] { animation: lvRight 0.95s cubic-bezier(0.2, 0.9, 0.3, 1.15) var(--lv-d, 0s) backwards; }
+html[data-lively="1"] [data-lv="in"][data-lv-v="flip"] { animation: lvFlip 0.9s cubic-bezier(0.2, 0.9, 0.3, 1.15) var(--lv-d, 0s) backwards; }
+html[data-lively="1"] [data-lv="in"][data-lv-v="row"] { animation: lvRow 0.75s cubic-bezier(0.2, 0.9, 0.3, 1.15) var(--lv-d, 0s) backwards; }
+@keyframes lvRise { from { opacity: 0; transform: translateY(56px) scale(0.94); } 50% { opacity: 1; } to { opacity: 1; transform: none; } }
+@keyframes lvLeft { from { opacity: 0; transform: translateX(-84px) rotate(-2deg); } 50% { opacity: 1; } to { opacity: 1; transform: none; } }
+@keyframes lvRight { from { opacity: 0; transform: translateX(84px) rotate(2deg); } 50% { opacity: 1; } to { opacity: 1; transform: none; } }
+@keyframes lvFlip { from { opacity: 0; transform: perspective(900px) translateY(52px) rotateX(-32deg) scale(0.88); } 50% { opacity: 1; } to { opacity: 1; transform: none; } }
+@keyframes lvRow { from { opacity: 0; transform: translateX(-52px); } 60% { opacity: 1; } to { opacity: 1; transform: none; } }
+
+/* nadpisy v objevující se kartě se zaostří a vyjedou o chvíli později než karta */
+html[data-lively="1"] [data-lv="in"] h1 { animation: lvTitle 0.75s cubic-bezier(0.2, 0.9, 0.3, 1.1) calc(var(--lv-d, 0s) + 0.12s) backwards; }
+@keyframes lvTitle { from { opacity: 0; transform: translateY(26px) scale(0.96); filter: blur(7px); } to { opacity: 1; transform: none; filter: none; } }
 
 /* ukazatele: roztáhnou se zleva doprava (data-lv-grow je v UserStats a BadgesSection, začnou až po své kartě) */
 html[data-lively="1"] [data-lv-grow][data-lv="wait"], html[data-lively="1"] [data-lv-grow][data-lv="parked"] { opacity: 1; transform: scaleX(0); transform-origin: left center; }
-html[data-lively="1"] [data-lv-grow][data-lv="in"] { animation: lvGrow 1.1s cubic-bezier(0.2, 0.85, 0.25, 1) var(--lv-d, 0s) backwards; transform-origin: left center; }
+html[data-lively="1"] [data-lv-grow][data-lv="in"] { animation: lvGrow 1.4s cubic-bezier(0.2, 0.9, 0.3, 1.12) var(--lv-d, 0s) backwards; transform-origin: left center; }
 @keyframes lvGrow { from { transform: scaleX(0); } to { transform: none; } }
 
 /* okna: pozadí se rozsvítí, okno vyskočí; boční panel vyjede zprava. Individuální translate a scale se sečtou s případným vlastním transformem okna. */
@@ -76,8 +96,8 @@ html[data-lively="1"] button:is(.rounded-lg, .rounded-xl, .rounded-full):not(:di
   transition: translate 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), scale 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), rotate 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
     background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, opacity 0.2s ease, background-position 0.7s ease;
 }
-html[data-lively="1"] button:is(.rounded-lg, .rounded-xl, .rounded-full):hover:not(:disabled) { translate: 0 -2px; }
-html[data-lively="1"] button:is(.rounded-lg, .rounded-xl, .rounded-full):active:not(:disabled) { translate: 0 1px; scale: 0.94; }
+html[data-lively="1"] button:is(.rounded-lg, .rounded-xl, .rounded-full):hover:not(:disabled) { translate: 0 -3px; }
+html[data-lively="1"] button:is(.rounded-lg, .rounded-xl, .rounded-full):active:not(:disabled) { translate: 0 1px; scale: 0.9; }
 
 /* barevná tlačítka a odkazy: při najetí přejede přes ně lesk */
 html[data-lively="1"] :is(button, a)[style*="background-color: var(--bg-primary)"]:not(:disabled) { background-image: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.42) 50%, transparent 65%); background-size: 260% 100%; background-position: 160% 0; background-repeat: no-repeat; }
@@ -107,15 +127,20 @@ html[data-lively="1"] .app-logo:hover { animation: lvWiggle 0.6s ease-in-out; }
 html[data-lively="1"] [data-testid="library-card"] { position: relative; transition: translate 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease, transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); }
 html[data-lively="1"] [data-testid="library-card"] .aspect-\[3\/4\] { transition: scale 0.35s ease; }
 @media (hover: hover) and (pointer: fine) {
-  html[data-lively="1"] [data-testid="library-card"]:hover { translate: 0 -6px; box-shadow: 0 18px 34px -14px var(--bg-primary); transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition-duration: 0.25s, 0.25s, 0.12s; }
+  html[data-lively="1"] [data-testid="library-card"]:hover { translate: 0 -10px; box-shadow: 0 22px 38px -14px var(--bg-primary); transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition-duration: 0.25s, 0.25s, 0.12s; }
   html[data-lively="1"] [data-testid="library-card"]:hover .aspect-\[3\/4\] { scale: 1.06; }
   html[data-lively="1"] [data-testid="library-card"]::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.28), transparent 55%); opacity: 0; transition: opacity 0.3s ease; pointer-events: none; }
   html[data-lively="1"] [data-testid="library-card"]:hover::after { opacity: 1; }
 }
 
 /* ostatní karty: při najetí se ozve barva motivu (kreslený styl má vlastní odsazený stín) */
-html[data-lively="1"]:not([data-style="sketchy"]) :is(.rounded-2xl, .rounded-3xl).border:not([data-testid="library-card"]) { transition: box-shadow 0.25s ease, border-color 0.25s ease; }
-html[data-lively="1"]:not([data-style="sketchy"]) :is(a, button, [role="button"], [tabindex="0"]).rounded-2xl.border:hover { box-shadow: 0 10px 26px -14px var(--bg-primary); border-color: var(--bg-primary); }
+html[data-lively="1"]:not([data-style="sketchy"]) :is(.rounded-2xl, .rounded-3xl).border:not([data-testid="library-card"]) { transition: translate 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease, border-color 0.25s ease; }
+html[data-lively="1"]:not([data-style="sketchy"]) :is(a, button, [role="button"], [tabindex="0"]).rounded-2xl.border:hover { translate: 0 -4px; box-shadow: 0 14px 30px -14px var(--bg-primary); border-color: var(--bg-primary); }
+
+/* číslo, které se dotočilo, na konci pružně dosedne */
+html[data-lively="1"] [data-lv-count] { display: inline-block; }
+html[data-lively="1"] [data-lv-count].lv-landed { animation: lvLand 0.6s cubic-bezier(0.3, 1.7, 0.5, 1); }
+@keyframes lvLand { 0% { transform: scale(1); } 35% { transform: scale(1.28); } 100% { transform: scale(1); } }
 
 /* zmrzlý řádek v žebříčku: modrý přechod se pomalu vlní a vločka se třpytí */
 html[data-lively="1"] [data-frozen="true"] { background-size: 220% 100%; animation: lvIce 7s ease-in-out infinite alternate; }
@@ -123,11 +148,19 @@ html[data-lively="1"] [data-testid="lb-frozen"] { animation: lvSnow 3.6s ease-in
 @keyframes lvIce { from { background-position: 0% 0; } to { background-position: 100% 0; } }
 @keyframes lvSnow { 0%, 100% { transform: rotate(0deg) scale(1); opacity: 0.85; } 50% { transform: rotate(60deg) scale(1.2); opacity: 1; } }
 
-/* přepnutí motivu: nový vzhled se rozlije kruhem z místa kliknutí (--vt-x a --vt-y zapisuje src/lively/viewTransition.js) */
-html[data-lively="1"]::view-transition-old(root), html[data-lively="1"]::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
-html[data-lively="1"]::view-transition-new(root) { animation: lvThemeReveal 0.75s cubic-bezier(0.3, 0.7, 0.2, 1); z-index: 2; }
-html[data-lively="1"]::view-transition-old(root) { z-index: 1; }
+/* přepnutí motivu: nový vzhled se rozlije kruhem z místa kliknutí (--vt-x a --vt-y zapisuje src/lively/viewTransition.js, data-vt="theme") */
+html[data-lively="1"][data-vt="theme"]::view-transition-old(root), html[data-lively="1"][data-vt="theme"]::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+html[data-lively="1"][data-vt="theme"]::view-transition-new(root) { animation: lvThemeReveal 0.75s cubic-bezier(0.3, 0.7, 0.2, 1); z-index: 2; }
+html[data-lively="1"][data-vt="theme"]::view-transition-old(root) { z-index: 1; }
 @keyframes lvThemeReveal { from { clip-path: circle(0 at var(--vt-x, 50%) var(--vt-y, 50%)); } to { clip-path: circle(150vmax at var(--vt-x, 50%) var(--vt-y, 50%)); } }
+
+/* přechod mezi stránkami (data-vt="page"): stará stránka odjede nahoru a zmenší se, nová se rozsvítí a její karty si vyjedou samy (reveal.js).
+   Jméno přechodu má main jen po dobu přechodu: jinak by uvnitř přilepené prvky a okna přestaly sedět na obrazovce. Horní lišta a pozadí zůstávají. */
+html[data-lively="1"][data-vt="page"] main { view-transition-name: lv-main; }
+html[data-lively="1"][data-vt="page"]::view-transition-old(lv-main) { animation: lvPageOut 0.36s cubic-bezier(0.5, 0, 0.9, 0.6) both; }
+html[data-lively="1"][data-vt="page"]::view-transition-new(lv-main) { animation: lvPageIn 0.4s ease-out both; }
+@keyframes lvPageOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-40px) scale(0.95); } }
+@keyframes lvPageIn { from { opacity: 0; } to { opacity: 1; } }
 
 /* Omezení pohybu a tisk: nic se neskrývá ani nehýbe. Atribut data-lv pak může zůstat (pojistka), ale nemá žádný účinek. */
 html[data-reduce-motion="1"] [data-lv] { opacity: 1 !important; transform: none !important; animation: none !important; }

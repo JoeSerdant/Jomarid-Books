@@ -855,7 +855,7 @@ const AppearanceTab = () => {
         )}
       </Section>
 
-      <Section title="Živý režim" description="Experimentální. Appka je živější: karty, sekce a seznamy vyjíždějí postupně a s odrazem, čísla se dotáčejí, ukazatele se plní, karty knih se naklánějí za myší, okna naskakují, tlačítka a lišta pružně reagují a nový motiv se rozlije kruhem z místa kliknutí. Na pozadí a po stranách širokých obrazovek jsou jemné ozdoby.">
+      <Section title="Živý režim" description="Experimentální. Appka je živější: stránky se přepínají odjezdem a příjezdem, karty a seznamy vyjíždějí postupně a z různých stran, čísla se dotáčejí a dosednou, ukazatele se plní, karty knih se naklánějí za myší a při filtrování plynule přeskakují na nová místa, okna naskakují, tlačítka a lišta pružně reagují a nový motiv se rozlije kruhem z místa kliknutí. Na pozadí a po stranách širokých obrazovek jsou jemné ozdoby.">
         <ToggleRow
           title="Zapnout živý režim"
           description="Čtečka, hry a krátké knihy zůstávají klidné. Barvy se berou z motivu, takže se hodí ke všem, i k Vlastnímu. Na telefonu jsou jen animace rozhraní a pozadí, bez ozdob po stranách."
