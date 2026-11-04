@@ -9,7 +9,7 @@ export const GAME_SAVE_LIMITS = Object.freeze({ maxKeys: 40, maxKeyLength: 100, 
 // (sync.js) a ke kontrole, že hry žádný klíč navíc nepoužívají.
 export const LEGACY_KEYS = Object.freeze({
   rocket: ['space_shooter_v2_9'],
-  warroom: ['warroom_frontlines_save_v1', 'warroom_muted', 'warroom_tutorial_done'],
+  warroom: ['warroom_frontlines_save_v1', 'warroom_muted', 'warroom_tutorial_done', 'warroom_run_v1'],
   cityclicker: ['cityClickerSaveV1'],
   polygonarena: ['polygon-arena-v1'],
   chess: ['chessLeague.save.v1', 'chessLeague.game.v1'],

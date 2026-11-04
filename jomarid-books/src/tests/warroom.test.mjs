@@ -113,3 +113,137 @@ test('hra hlásí přesně statistiky z katalogu a cheat Všechny odznaky je dot
   }
   assert.ok(e.records.get('scenarios_unlocked') === e.scenarios.length, 'odemknuty všechny scénáře');
 });
+
+/* ---------------------------------------------------------------- rozehrané tažení, šance na kritický zásah, záhlaví */
+function makeRunEnv(extra = {}) {
+  const storage = makeStorage();
+  const timers = [];
+  const els = { 'game-screen': { style: { display: 'block' } } };
+  const baseState = () => ({
+    scenario: '', doctrine: '', front: 250, maxFront: 500, supplies: 10, cp: 0, day: 1, sector: 1, baseEnemyPush: 6, isAiming: false, currentPointerPos: 50, enemyStunned: 0,
+    exclusiveBought1: false, exclusiveBought2: false, exclusiveBought3: false, gamePaused: false, fanaticUsed: false, alienShield: 0, godMode: false, pendingSector: false,
+    ww1_trenchPrep: 0, ww2_momentumPlayer: 0, ww2_momentumEnemy: 0, viet_revealed: 0, modern_counterTimer: 0, zombie_mutation: 0, costArt: 30, costAir: 20, costSkill: 0,
+    upgrades: { supply: { name: 'Logistika', level: 1, cost: 15 }, radar: { name: 'Optika', level: 1, cost: 25 }, dmg: { name: 'Zbraně', level: 1, cost: 40 }, cpGain: { name: 'Velení', level: 1, cost: 20 },
+      armor: { name: 'Pancíř', level: 1, cost: 30 }, recon: { name: 'Průzkum', level: 1, cost: 35 }, critical: { name: 'Kritika', level: 1, cost: 30 }, intel_gain: { name: 'Rozvědka', level: 1, cost: 25 }, engineering: { name: 'Ženisté', level: 1, cost: 35 } },
+  });
+  const code = `const RUN_KEY = 'warroom_run_v1'; let runSaveTimer = null;\n${['runIsActive', 'saveRunNow', 'scheduleRunSave', 'clearRun', 'normalizeRun', 'loadRun', 'getCritChance'].map(fnSrc).join('\n')}`;
+  const ctx = vm.createContext({
+    state: baseState(), localStorage: storage, el: (id) => els[id], SCENARIOS: [{ id: 'default' }, { id: 'ww2_pacific' }, { id: 'falklands' }, { id: 'vietnam' }],
+    DOCTRINES: [{ id: 'blitz' }, { id: 'fortress' }, { id: 'intel' }, { id: 'artillery' }], JSON, Math, Object, Number, Date, isFinite, Array,
+    setTimeout: (f, ms) => { timers.push([f, ms]); return timers.length; }, clearTimeout() {}, getSynergyBonus: () => 0, ...extra,
+  });
+  vm.runInContext(code, ctx);
+  return { ctx, storage, timers, els, fresh: baseState };
+}
+const plain = (v) => JSON.parse(JSON.stringify(v));
+
+test('šance na kritický zásah: základ doktríny, scénáře, výzkum Kritika a synergie se sčítají a ukazatel nahoře ukazuje totéž, s čím se hází', () => {
+  const crit = (patch, bonus = 0) => { const e = makeRunEnv({ getSynergyBonus: (t) => (t === 'crit' ? bonus : 0) }); Object.assign(e.ctx.state, patch); return Math.round(vm.runInContext('getCritChance()', e.ctx) * 100); };
+  assert.equal(crit({ doctrine: 'blitz', scenario: 'default' }), 15);
+  assert.equal(crit({ doctrine: 'intel', scenario: 'default' }), 40);
+  assert.equal(crit({ doctrine: 'artillery', scenario: 'default' }), 5);
+  assert.equal(crit({ doctrine: 'blitz', scenario: 'falklands' }), 25, 'Falklandy +10 %');
+  assert.equal(crit({ doctrine: 'blitz', scenario: 'vietnam', exclusiveBought2: true, viet_revealed: 2 }), 35, 'Tunelové krysy +20 %');
+  assert.equal(crit({ doctrine: 'blitz', scenario: 'vietnam', exclusiveBought2: true, viet_revealed: 0 }), 15, 'bez odhalené džungle ne');
+  assert.equal(crit({ doctrine: 'blitz', scenario: 'default' }, 0.15), 30, 'synergie');
+  const e = makeRunEnv(); e.ctx.state.doctrine = 'blitz'; e.ctx.state.scenario = 'default'; e.ctx.state.upgrades.critical.level = 5;
+  assert.equal(Math.round(vm.runInContext('getCritChance()', e.ctx) * 100), 35, 'výzkum Kritika +5 % za úroveň');
+  // ukazatel se překresluje při každém updateUI, ne jen při volbě doktríny
+  assert.match(game, /el\('val-crit'\)\.innerText = `\$\{Math\.round\(Math\.max\(0, Math\.min\(1, getCritChance\(\)\)\) \* 100\)\}%`;/);
+  assert.match(game, /let critChance = getCritChance\(\);/);
+  assert.doesNotMatch(fnSrc('resolveAttack'), /state\.doctrine === 'intel' \? 0\.40/, 'výpočet už není rozepsaný podruhé');
+});
+
+test('rozehrané tažení: uloží se jen za hry, ne při míření a ne při pauze, a debounce nezahltí úložiště', () => {
+  const e = makeRunEnv();
+  Object.assign(e.ctx.state, { scenario: 'default', doctrine: 'blitz', day: 7 });
+  e.ctx.scheduleRunSave(); e.ctx.scheduleRunSave(); e.ctx.scheduleRunSave();
+  assert.equal(e.timers.length, 1, 'jedno odložené uložení');
+  e.timers[0][0]();
+  const saved = JSON.parse(e.storage.getItem('warroom_run_v1'));
+  assert.equal(saved.v, 1);
+  assert.equal(saved.state.day, 7);
+  e.storage.removeItem('warroom_run_v1');
+  e.ctx.state.isAiming = true; e.ctx.saveRunNow(false);
+  assert.equal(e.storage.getItem('warroom_run_v1'), null, 'při míření se neukládá (zásoby za útok už jsou strženy)');
+  e.ctx.state.isAiming = false; e.ctx.state.gamePaused = true; e.ctx.saveRunNow(false);
+  assert.equal(e.storage.getItem('warroom_run_v1'), null, 'při pauze ne');
+  e.ctx.saveRunNow(true);
+  assert.equal(e.storage.getItem('warroom_run_v1'), null, 'vynucené uložení jen pro zabraný sektor');
+  e.ctx.state.pendingSector = true; e.ctx.saveRunNow(true);
+  assert.equal(JSON.parse(e.storage.getItem('warroom_run_v1')).state.pendingSector, true);
+  e.ctx.clearRun();
+  assert.equal(e.storage.getItem('warroom_run_v1'), null);
+  // před výběrem doktríny (hra se ještě nezobrazila) nic
+  const f = makeRunEnv(); f.els['game-screen'].style.display = 'none'; Object.assign(f.ctx.state, { scenario: 'default', doctrine: 'blitz' }); f.ctx.saveRunNow(false);
+  assert.equal(f.storage.getItem('warroom_run_v1'), null);
+});
+
+test('rozehrané tažení: uložení se při načtení ověří (poškozená, upravená a cizí data se zahodí), neznámá pole se nepřenesou a přechodné stavy se vynulují', () => {
+  const e = makeRunEnv();
+  const good = () => { const s = plain(e.fresh()); Object.assign(s, { scenario: 'ww2_pacific', doctrine: 'fortress', front: 120, maxFront: 230, supplies: 9, cp: 55, day: 14, sector: 3 }); s.upgrades.dmg.level = 4; s.upgrades.dmg.cost = 164; return { v: 1, t: 1700000000000, state: s }; };
+  const run = e.ctx.normalizeRun(JSON.stringify(good()));
+  assert.ok(run);
+  assert.equal(run.state.sector, 3); assert.equal(run.state.upgrades.dmg.level, 4); assert.equal(run.state.upgrades.dmg.cost, 164);
+  assert.equal(run.savedAt, 1700000000000);
+  // zahozené případy
+  const bad = [];
+  const mut = (fn) => { const g = good(); fn(g); return JSON.stringify(g); };
+  bad.push('nesmysl', '{', 'null', '[]', '{"v":2}', JSON.stringify({ v: 1 }), JSON.stringify({ v: 1, state: 5 }));
+  bad.push(mut((g) => { g.state.scenario = 'neexistuje'; }), mut((g) => { g.state.doctrine = 'neexistuje'; }), mut((g) => { g.state.front = 'x'; }), mut((g) => { g.state.front = NaN; }),
+    mut((g) => { g.state.front = 0; }), mut((g) => { g.state.maxFront = 0; }), mut((g) => { g.state.front = 5000; }), mut((g) => { g.state.supplies = -1; }), mut((g) => { g.state.cp = -3; }),
+    mut((g) => { g.state.day = 0; }), mut((g) => { g.state.sector = 1e9; }), mut((g) => { delete g.state.upgrades.radar; }), mut((g) => { g.state.upgrades.radar.level = 0; }), mut((g) => { g.state.upgrades.radar.cost = 'x'; }));
+  for (const text of bad) assert.equal(e.ctx.normalizeRun(text), null, text.slice(0, 60));
+  // neznámá pole a přechodné stavy
+  const extra = good(); extra.state.hax = 'x'; extra.state.isAiming = true; extra.state.godMode = true; extra.state.currentPointerPos = 3; extra.state.alienShield = 'x';
+  const n = e.ctx.normalizeRun(extra).state;
+  assert.equal(n.hax, undefined);
+  assert.equal(n.isAiming, false); assert.equal(n.godMode, false); assert.equal(n.currentPointerPos, 50);
+  assert.equal(n.alienShield, undefined, 'špatný typ pole se nepřevezme (zůstane hodnota z nové hry)');
+  // sektor zabraný před zavřením: po obnovení čeká na potvrzení
+  const pend = good(); pend.state.pendingSector = true;
+  assert.equal(e.ctx.normalizeRun(pend).state.gamePaused, true);
+  assert.equal(e.ctx.normalizeRun(good()).state.gamePaused, false);
+  // loadRun zahodí poškozené uložení i z úložiště
+  e.storage.setItem('warroom_run_v1', '{"v":1,"state":{"scenario":"default"}}');
+  assert.equal(e.ctx.loadRun(), null);
+  assert.equal(e.storage.getItem('warroom_run_v1'), null);
+  e.storage.setItem('warroom_run_v1', JSON.stringify(good()));
+  assert.ok(e.ctx.loadRun());
+  assert.ok(e.storage.getItem('warroom_run_v1'), 'platné uložení zůstane');
+});
+
+test('rozehrané tažení: napojení do hry (uložení po každé změně, smazání při porážce a resetu, obnovení bez dvojího započítání sektoru, odkaz zpět po porážce)', async () => {
+  assert.match(game, /checkWinLoss\(\); \n        scheduleRunSave\(\);\n    \}/);
+  assert.match(game, /state\.pendingSector = true;\n\s*saveRunNow\(true\);/, 'zabraný sektor se uloží hned');
+  assert.match(game, /state\.gamePaused = true;\n\s*clearRun\(\);\n\s*warTrack\(\{ defeats: 1 \}/, 'porážka maže uložení');
+  assert.match(game, /localStorage\.removeItem\('warroom_frontlines_save_v1'\); localStorage\.removeItem\(RUN_KEY\);/, 'reset postupu maže i rozehrané tažení');
+  assert.match(game, /state\.gamePaused = false; \n\s*state\.pendingSector = false;/, 'nový sektor zruší čekání');
+  const resume = fnSrc('resumeRun');
+  assert.match(resume, /if \(state\.pendingSector\) \{[\s\S]*?showSectorOverlay\(\);[\s\S]*?state\.gamePaused = true;[\s\S]*?\} else \{[\s\S]*?updateUI\(\);/, 'u zabraného sektoru se updateUI nevolá (výhra se nesmí započítat podruhé)');
+  assert.match(game, /window\.addEventListener\('pagehide', \(\) => saveRunNow\(false\)\);/);
+  assert.match(game, /document\.addEventListener\('visibilitychange', \(\) => \{ if \(document\.hidden\) saveRunNow\(false\); \}\);/);
+  // odkaz zpět do appky přežije obrazovku porážky
+  assert.match(game, /const backLink = document\.getElementById\('btn-back-to-jomarid'\);[\s\S]*?document\.body\.innerHTML = backHtml \+ `<div id="vignette-flash">/);
+  // tlačítka na výběru scénáře a nový klíč v katalogu uložení
+  assert.match(html, /<button class="btn-main resume-btn" id="btn-resume" onclick="resumeRun\(\)">/);
+  assert.match(html, /onclick="discardRun\(\)"/);
+  const { LEGACY_KEYS } = await import('../gameSave/catalog.js');
+  assert.ok(LEGACY_KEYS.warroom.includes('warroom_run_v1'));
+  assert.match(game, /const RUN_KEY = 'warroom_run_v1';/);
+  // štítky z výběru doktríny a obnovení pocházejí ze stejných tabulek
+  assert.match(game, /const scMap = SCENARIO_SHORT;/);
+  assert.match(fnSrc('resumeRun'), /SCENARIO_SHORT\[state\.scenario\]/);
+  const tags = vm.runInNewContext(`${game.match(/const SCENARIO_SHORT = \{[\s\S]*?\n    \};/)[0]}\nSCENARIO_SHORT`);
+  const docs = vm.runInNewContext(`${game.match(/const DOCTRINE_SHORT = \{[\s\S]*?\n    \};/)[0]}\nDOCTRINE_SHORT`);
+  const scIds = ids('const RAW_SCENARIOS', /\{ id: '([a-z0-9_]+)', tag:/g).slice(0, 24);
+  const docIds = ids('const DOCTRINES', /\{ id: '([a-z_]+)', name:/g);
+  for (const id of scIds) assert.ok(tags[id], 'štítek scénáře ' + id);
+  for (const id of docIds) assert.ok(docs[id], 'štítek doktríny ' + id);
+});
+
+test('záhlaví hry: štítky scénáře, doktríny a dne se na úzkém displeji zalomí a nepřekrývají', () => {
+  assert.match(css, /\.header \{ flex-wrap: wrap; gap: 8px 12px; \}/);
+  assert.match(css, /\.header > div \{ display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; \}/);
+  assert.match(css, /\.header > div \.badge \{ margin-left: 0; \}/);
+});
