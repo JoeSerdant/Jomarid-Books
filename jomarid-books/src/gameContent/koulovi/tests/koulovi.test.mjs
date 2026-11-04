@@ -755,3 +755,8 @@ test('omezený pohyb: kývání koulí se při nastavení systému vypne a v CSS
   const infinite = [...css.matchAll(/([^{}]+)\{[^{}]*animation:[^;}]*infinite/g)].map((m) => m[1].trim());
   assert.deepEqual(infinite, ['.b'], 'jediná nekonečná animace je kývání koulí, a ta je v bloku vypnutá');
 });
+
+test('tlačítko zvuku: má popisek podle stavu a je stejně velké jako Obchod (ne drobná ikona)', () => {
+  assert.match(shell, /<button id="snd" class="sec" title="Vypnout zvuk">🔊<\/button>/, 'bez vlastní zmenšené velikosti písma');
+  assert.match(game, /\$\('snd'\)\.textContent=S\.mute\?'🔇':'🔊';\$\('snd'\)\.title=S\.mute\?'Zapnout zvuk':'Vypnout zvuk';/);
+});
