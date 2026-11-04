@@ -202,6 +202,21 @@
             #sound-toggle { width: 40px; height: 40px; font-size: 1rem; top: 10px; left: 10px; }
         }
 
+        /* Rozehrané tažení (tlačítko Pokračovat na výběru scénáře) */
+        .resume-box { margin: 0 0 24px; padding: 16px; border: 1px solid var(--accent); border-radius: 10px; background: linear-gradient(180deg, rgba(16,185,129,0.14), rgba(0,0,0,0.3)); text-align: center; }
+        .resume-btn { width: 100%; max-width: 520px; padding: 14px 18px; font-size: 1.05rem; }
+        .resume-info { margin: 10px 0 6px; color: #cbd5e1; font-size: 0.85rem; letter-spacing: 1px; }
+        .btn-link { background: none; border: none; color: #8a99ad; text-decoration: underline; cursor: pointer; font-family: inherit; font-size: 0.78rem; padding: 6px; text-shadow: none; }
+        .btn-link:hover { color: #fff; }
+
+        /* Záhlaví hry: na úzkém displeji se štítky zalomí pod název, místo aby se překrývaly */
+        .header { flex-wrap: wrap; gap: 8px 12px; }
+        .header > div { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+        .header > div .badge { margin-left: 0; }
+        @media (max-width: 550px) {
+            .header > div { justify-content: flex-start; width: 100%; }
+        }
+
         /* Skryté pole pro cheat kód - vypadá jako neškodné číslo verze */
         #cheat-input {
             position: fixed; bottom: 4px; left: 50%; transform: translateX(-50%);
@@ -523,6 +538,12 @@
     <h1 class="t-white" style="letter-spacing:5px; margin-top:0; font-size: 2.2rem; text-shadow: 0 0 8px var(--tech);">WARROOM: FRONTLINES</h1>
     <p style="color: #8a99ad; margin-bottom: 25px;">Zvol dějiště konfliktu. Pro odemčení dalšího scénáře musíš v předchozím dosáhnout <b>Sektoru 10</b>.</p>
     
+    <div id="resume-box" class="resume-box" style="display:none;">
+        <button class="btn-main resume-btn" id="btn-resume" onclick="resumeRun()">▶ POKRAČOVAT V ROZEHRANÉM TAŽENÍ</button>
+        <div class="resume-info" id="resume-info"></div>
+        <button class="btn-link" onclick="discardRun()">Zahodit rozehrané tažení</button>
+    </div>
+
     <div class="scenarios-grid" id="scenarios-container">
         <!-- Generováno dynamicky pomocí JS -->
     </div>
@@ -1121,6 +1142,7 @@
         baseEnemyPush: 6, isAiming: false, currentPointerPos: 50, enemyStunned: 0,
         exclusiveBought1: false, exclusiveBought2: false, exclusiveBought3: false,
         gamePaused: false, fanaticUsed: false, alienShield: 0, godMode: false,
+        pendingSector: false,
         
         ww1_trenchPrep: 0, ww2_momentumPlayer: 0, ww2_momentumEnemy: 0,
         viet_revealed: 0, modern_counterTimer: 0, zombie_mutation: 0,
@@ -1208,7 +1230,7 @@
 
     function resetSave() {
         if (confirm("Opravdu chceš kompletně vymazat veškerý dosavadní postup kampaně?")) {
-            try { localStorage.removeItem('warroom_frontlines_save_v1'); } catch (e) { /* ignore */ }
+            try { localStorage.removeItem('warroom_frontlines_save_v1'); localStorage.removeItem(RUN_KEY); } catch (e) { /* ignore */ }
             location.reload();
         }
     }
@@ -1316,6 +1338,7 @@
 
     function initWizards() {
         let prog = loadProgress();
+        renderResumeBox();
         
         // Zobrazení scénářů
         let sCont = el('scenarios-container');
@@ -1546,6 +1569,20 @@
         }
     }
 
+    // Krátké názvy pro štítky v záhlaví hry (používá je výběr doktríny i obnovení rozehraného tažení)
+    const SCENARIO_SHORT = {
+        'default': 'ZÁKLAD', 'napoleon_siege': 'OBLÉHÁNÍ', 'ww1_west': 'ZÁKOPY', 'ww1_east': 'VÝCHOD', 'ww2_blitz': 'BLITZ',
+        'ww2_pacific': 'PACIFIK', 'winter_war': 'ZIMA', 'korea': 'KOREA', 'vietnam': 'VIETNAM', 'yom_kippur': 'JOM KIPUR',
+        'falklands': 'FALKLANDY', 'modern_ew': 'KYBER',
+        'desert': 'POUŠŤ', 'urban': 'MĚSTO', 'guerilla': 'ODBOJ', 'drone': 'DRONY',
+        'zombie': 'NÁKAZA', 'space': 'VESMÍR', 'blockade': 'BLOKÁDA', 'attrition': 'MLÝNEK',
+        'cyber_rebel': 'POVSTÁNÍ', 'nuke_winter': 'NUKE_ZIMA', 'alien_inv': 'INVAZE', 'mars_colony': 'MARS'
+    };
+    const DOCTRINE_SHORT = {
+        fortress: 'PEVNOST', blitz: 'BLITZ', intel: 'INTEL', quartermaster: 'ZÁSOBY', tech: 'TECH', artillery: 'SHOCK', partisan: 'ODBOJ',
+        propaganda: 'OSVĚTA', fanatic: 'VÍRA', fleet: 'FLEET', mercenary: 'ŽOLDÁCI', chemical: 'TOXIC'
+    };
+
     function setScenario(scen) { 
         Sound.unlock();
         Sound.click();
@@ -1597,14 +1634,7 @@
         let engBonus = 1 + ((state.upgrades.engineering.level - 1) * 0.05);
         state.front = Math.floor(state.maxFront * 0.5 * engBonus);
 
-        const scMap = { 
-            'default': 'ZÁKLAD', 'napoleon_siege': 'OBLÉHÁNÍ', 'ww1_west': 'ZÁKOPY', 'ww1_east': 'VÝCHOD', 'ww2_blitz': 'BLITZ', 
-            'ww2_pacific': 'PACIFIK', 'winter_war': 'ZIMA', 'korea': 'KOREA', 'vietnam': 'VIETNAM', 'yom_kippur': 'JOM KIPUR', 
-            'falklands': 'FALKLANDY', 'modern_ew': 'KYBER', 
-            'desert': 'POUŠŤ', 'urban': 'MĚSTO', 'guerilla': 'ODBOJ', 'drone': 'DRONY', 
-            'zombie': 'NÁKAZA', 'space': 'VESMÍR', 'blockade': 'BLOKÁDA', 'attrition': 'MLÝNEK',
-            'cyber_rebel': 'POVSTÁNÍ', 'nuke_winter': 'NUKE_ZIMA', 'alien_inv': 'INVAZE', 'mars_colony': 'MARS'
-        };
+        const scMap = SCENARIO_SHORT;
         el('lbl-scenario').innerText = scMap[state.scenario] || state.scenario.toUpperCase();
 
         if (state.scenario === 'ww2_pacific') { 
@@ -1651,6 +1681,124 @@
 
         updateUI();
         tutorialAdvanceIf('doctrine');
+    }
+
+    // --- ROZEHRANÉ TAŽENÍ ---
+    // Stav jednoho tažení se průběžně ukládá, takže zavřená stránka nebo přepnutá záložka o postup nepřipraví. Na výběru scénáře pak
+    // přibude tlačítko Pokračovat. Uložení se maže při porážce, při resetu postupu a když ho hráč zahodí.
+    const RUN_KEY = 'warroom_run_v1';
+    let runSaveTimer = null;
+
+    function runIsActive() {
+        const gs = el('game-screen');
+        return !!(state.scenario && state.doctrine && gs && gs.style.display === 'block');
+    }
+
+    function saveRunNow(force) {
+        runSaveTimer = null;
+        if (!runIsActive() || state.isAiming) return;
+        if (state.gamePaused && !(force && state.pendingSector)) return;
+        try { localStorage.setItem(RUN_KEY, JSON.stringify({ v: 1, t: Date.now(), state: state })); } catch (e) { /* ignore */ }
+    }
+
+    function scheduleRunSave() {
+        if (runSaveTimer) return;
+        runSaveTimer = setTimeout(() => saveRunNow(false), 400);
+    }
+
+    function clearRun() {
+        if (runSaveTimer) { clearTimeout(runSaveTimer); runSaveTimer = null; }
+        try { localStorage.removeItem(RUN_KEY); } catch (e) { /* ignore */ }
+    }
+
+    // Vezme text z úložiště a vrátí ověřený stav, nebo null (poškozená, cizí nebo upravená data se zahodí)
+    function normalizeRun(raw) {
+        let parsed = null;
+        try { parsed = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { return null; }
+        if (!parsed || typeof parsed !== 'object' || parsed.v !== 1 || !parsed.state || typeof parsed.state !== 'object') return null;
+        const st = parsed.state;
+        if (!SCENARIOS.some(sc => sc.id === st.scenario) || !DOCTRINES.some(d => d.id === st.doctrine)) return null;
+        const num = (v, lo, hi) => typeof v === 'number' && isFinite(v) && v >= lo && v <= hi;
+        if (!num(st.maxFront, 1, 1e9) || !num(st.front, 1, 1e9) || st.front > st.maxFront * 3) return null;
+        if (!num(st.supplies, 0, 1e9) || !num(st.cp, 0, 1e9) || !num(st.day, 1, 1e6) || !num(st.sector, 1, 1e5)) return null;
+        const out = {};
+        for (const k of Object.keys(state)) {
+            if (k === 'upgrades' || !(k in st)) continue;
+            if (typeof st[k] === typeof state[k]) out[k] = st[k];
+        }
+        out.upgrades = {};
+        for (const k of Object.keys(state.upgrades)) {
+            const u = st.upgrades && st.upgrades[k];
+            if (!u || !num(u.level, 1, 1e4) || !num(u.cost, 1, 1e15)) return null;
+            out.upgrades[k] = { name: state.upgrades[k].name, level: Math.floor(u.level), cost: Math.floor(u.cost) };
+        }
+        out.isAiming = false;
+        out.currentPointerPos = 50;
+        out.godMode = false;
+        out.gamePaused = !!out.pendingSector;
+        return { state: out, savedAt: Number(parsed.t) || 0 };
+    }
+
+    function loadRun() {
+        let raw = null;
+        try { raw = localStorage.getItem(RUN_KEY); } catch (e) { raw = null; }
+        if (!raw) return null;
+        const run = normalizeRun(raw);
+        if (!run) clearRun();
+        return run;
+    }
+
+    function applyScenarioButtons() {
+        if (state.scenario === 'ww2_pacific') el('btn-sup').innerHTML = "RYBOLOV<br><small>Tlak</small>";
+        else if (state.scenario === 'guerilla') el('btn-sup').innerHTML = "PAŠOVÁNÍ<br><small>Tlak</small>";
+        if (state.scenario === 'attrition') el('btn-atk').innerHTML = "MASOVÝ ÚTOK<br><small>-1 Z</small>";
+    }
+
+    function showSectorOverlay() {
+        el('os-title').innerText = state.scenario === 'ww2_pacific' ? `OSTROV ${state.sector} DOBYT` : `SEKTOR ${state.sector} ZABRÁN`;
+        el('overlay-sector').style.display = 'flex';
+    }
+
+    function resumeRun() {
+        const run = loadRun();
+        if (!run) { initWizards(); return false; }
+        Sound.unlock();
+        Sound.click();
+        Object.assign(state, run.state);
+        el('screen-scenario').classList.remove('active');
+        el('screen-doctrine').classList.remove('active');
+        el('lbl-scenario').innerText = SCENARIO_SHORT[state.scenario] || state.scenario.toUpperCase();
+        el('lbl-doctrine').innerText = DOCTRINE_SHORT[state.doctrine] || state.doctrine.toUpperCase();
+        applyScenarioButtons();
+        el('game-screen').style.display = 'block';
+        logMessage(`TAŽENÍ OBNOVENO: sektor ${state.sector}, den ${state.day}.`, "t-green");
+        if (state.pendingSector) {
+            // sektor už byl zabrán: ukáže se přehled sektoru a hra pokračuje tlačítkem (výhra se podruhé nepočítá)
+            showSectorOverlay();
+            state.gamePaused = true;
+        } else {
+            state.gamePaused = false;
+            updateUI();
+        }
+        return true;
+    }
+
+    function discardRun() {
+        if (!confirm("Opravdu zahodit rozehrané tažení? Tohle nejde vrátit.")) return;
+        clearRun();
+        renderResumeBox();
+    }
+
+    function renderResumeBox() {
+        const box = el('resume-box');
+        if (!box) return;
+        const run = loadRun();
+        if (!run) { box.style.display = 'none'; return; }
+        const st = run.state;
+        const sc = SCENARIOS.find(x => x.id === st.scenario);
+        const dc = DOCTRINES.find(x => x.id === st.doctrine);
+        el('resume-info').innerText = `${sc ? sc.name : st.scenario} · ${dc ? dc.name : st.doctrine} · sektor ${st.sector}, den ${st.day}`;
+        box.style.display = 'block';
     }
 
     function logMessage(msg, col = "t-white") {
@@ -1788,6 +1936,7 @@
         }
 
         el('val-day').innerText = state.day; 
+        el('val-crit').innerText = `${Math.round(Math.max(0, Math.min(1, getCritChance())) * 100)}%`;
         el('val-sup').innerText = state.supplies; 
         el('val-cp').innerText = state.cp;
         el('val-push').innerText = `-${getEnemyPush()}`;
@@ -1888,6 +2037,7 @@
 
         updateScenarioModule(); 
         checkWinLoss(); 
+        scheduleRunSave();
     }
 
     function triggerShake() { 
@@ -2060,6 +2210,17 @@
         tutorialAdvanceIf('radarClick');
     });
 
+    // Šance na kritický zásah: doktrína, scénář, synergie a výzkum Kritika. Počítá se tady na jednom místě, aby ukazatel nahoře
+    // ukazoval to, s čím se opravdu hází (dřív se zobrazila jen základní hodnota doktríny a výzkum ani scénář se nepromítly).
+    function getCritChance() {
+        let critChance = state.doctrine === 'intel' ? 0.40 : (state.doctrine === 'artillery' ? 0.05 : 0.15);
+        if (state.scenario === 'vietnam' && state.exclusiveBought2 && state.viet_revealed > 0) critChance += 0.20;
+        if (state.scenario === 'falklands') critChance += 0.10;
+        critChance += getSynergyBonus('crit');
+        critChance += (state.upgrades.critical.level - 1) * 0.05;
+        return critChance;
+    }
+
     function resolveAttack(isAuto, dist, costSpent) {
         let threshold = getRadarWidth() / 2;
         let dmgMult = getDmgMult();
@@ -2069,13 +2230,7 @@
         let dmg = 0, cp = 0, msg = "", col = "t-orange", isHit = false, sndType = 'hit';
 
         // Výpočet šance na kritický zásah
-        let critChance = state.doctrine === 'intel' ? 0.40 : (state.doctrine === 'artillery' ? 0.05 : 0.15);
-        if (state.scenario === 'vietnam' && state.exclusiveBought2 && state.viet_revealed > 0) critChance += 0.20;
-        if (state.scenario === 'falklands') critChance += 0.10;
-        critChance += getSynergyBonus('crit');
-        
-        // Přičtení globálního výzkumu kritiky
-        critChance += (state.upgrades.critical.level - 1) * 0.05;
+        let critChance = getCritChance();
 
         if (isAuto || dist <= threshold) {
             let isCrit = Math.random() < critChance;
@@ -2611,6 +2766,8 @@
             flashPanel(true);
             el('overlay-sector').style.display = 'flex';
             spawnParticles('#10b981', 26, 'overlay-sector');
+            state.pendingSector = true;
+            saveRunNow(true);
         } else if (state.front <= 0 && !state.gamePaused) {
             if (state.doctrine === 'fanatic' && !state.fanaticUsed) { 
                 state.front = 1; 
@@ -2622,6 +2779,7 @@
                 return; 
             }
             state.gamePaused = true;
+            clearRun();
             warTrack({ defeats: 1 }, { best_day: state.day });
             Sound.defeat();
             try { state.reportScenario = el('lbl-scenario').innerText; state.reportDoctrine = el('lbl-doctrine').innerText; } catch (e) {}
@@ -2630,7 +2788,9 @@
             if(state.scenario === 'space') msg = "ORBITÁLNÍ KOLAPS";
             if(state.scenario === 'alien_inv') msg = "KAPITULACE LIDSTVA";
             
-            document.body.innerHTML = `<div id="vignette-flash"></div>
+            const backLink = document.getElementById('btn-back-to-jomarid');
+            const backHtml = backLink ? backLink.outerHTML : '';
+            document.body.innerHTML = backHtml + `<div id="vignette-flash"></div>
             <button id="sound-toggle" class="${Sound.isMuted() ? 'muted' : ''}" onclick="toggleSound()" title="Zapnout/vypnout zvuk">${Sound.isMuted() ? '🔇' : '🔊'}</button>
             <div class="wizard-screen active glass-panel" style="border-color:var(--danger)">
                 <h1 class="t-red">${msg}</h1>
@@ -2671,6 +2831,7 @@
         state.ww2_momentumPlayer = 0; 
         state.viet_revealed = 0;
         state.gamePaused = false; 
+        state.pendingSector = false;
         state.fanaticUsed = false;
         
         state.exclusiveBought1 = false;
@@ -2687,6 +2848,9 @@
 
     window.onload = () => {
         initWizards();
+        // Rozehrané tažení se uloží i při zavření nebo schování stránky (telefon při přepnutí jinam často nezavolá nic jiného)
+        window.addEventListener('pagehide', () => saveRunNow(false));
+        document.addEventListener('visibilitychange', () => { if (document.hidden) saveRunNow(false); });
     };
 </script>
 </body>
