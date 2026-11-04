@@ -27,7 +27,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 #hud .pe{pointer-events:auto}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
 
-#mini{position:absolute;top:10px;left:max(10px,env(safe-area-inset-left,0px));width:96px;height:96px;border-radius:12px;background:var(--panel);border:1px solid var(--line)}
+#mini{position:absolute;top:calc(46px + env(safe-area-inset-top,0px));left:max(10px,env(safe-area-inset-left,0px));width:96px;height:96px;border-radius:12px;background:var(--panel);border:1px solid var(--line)}
 #feed{position:absolute;top:114px;left:max(10px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:3px;font-size:12px;max-width:44vw}
 #feed div{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:3px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #feed div.me{border-color:var(--accent);color:var(--accent)}
@@ -133,26 +133,29 @@ h1{margin:0 0 6px;font-size:clamp(30px,9vw,44px);line-height:1;font-weight:700;l
   #classes{top:60%}
 }
 @media (max-width:520px){
-  #topbtns{left:116px;transform:none;gap:6px}
+  /* odkaz zpět do appky je na úzkém displeji jen šipka (jeho text vlastní stylem přebíjí !important), ať nezakrývá tlačítka nahoře */
+  #btn-back-to-jomarid{font-size:0 !important;padding:0 !important;width:38px;height:30px;display:inline-flex !important;align-items:center;justify-content:center;box-sizing:border-box}
+  #btn-back-to-jomarid::before{content:'←';font-size:16px;line-height:1}
+  #topbtns{left:58px;transform:none;gap:6px}
   #topbtns .chip{height:38px;min-width:38px;padding:0 10px}
   #lb{width:118px;padding:6px 8px;font-size:11px}
   #lb .lbrow{gap:6px}
   #feed{top:auto;bottom:68px;left:50%;transform:translateX(-50%);align-items:center;max-width:calc(100vw - 20px)}
-  #stats{top:116px;transform:none;width:142px} #statHead{font-size:11px}
+  #stats{top:146px;transform:none;width:142px} #statHead{font-size:11px}
   #app.touch .srow{height:29px}
   #xp{width:min(280px,calc(100vw - 24px))}
   #classes{gap:6px;top:max(60%,410px)} .ccard{width:84px}
 }
 @media (max-width:360px){
   #mini{width:84px;height:84px}
-  #topbtns{left:102px;gap:4px} #topbtns .chip{padding:0 8px;min-width:36px;height:36px}
+  #topbtns{left:56px;gap:4px} #topbtns .chip{padding:0 8px;min-width:36px;height:36px}
   #lb{width:104px}
   #stats{width:132px}
   .ccard{width:70px;padding:6px 2px 7px} .ccard canvas{width:44px;height:44px} .ccard b{font-size:9.5px}
   #classes.many{gap:4px} #classes.many .ccard{width:57px;padding:4px 1px 5px} #classes.many .ccard canvas{width:38px;height:38px} #classes.many .ccard b{font-size:9px}
 }
 @media (max-height:480px){
-  #stats{top:86px;transform:none;width:150px} .srow{height:24px} #app.touch .srow{height:26px}
+  #stats{top:128px;transform:none;width:150px} .srow{height:24px} #app.touch .srow{height:26px}
   #mini{width:72px;height:72px} #classes{top:134px} .ccard{width:92px;padding:3px 4px 4px} .ccard canvas{width:40px;height:40px} .ccard small{display:none}
   #classes.many .ccard{width:76px;padding:3px 2px 4px} #classes.many .ccard canvas{width:34px;height:34px} #classes.many .ccard b{font-size:9.5px}
   .srow .sname{top:1px;font-size:10px} .srow .spips{bottom:3px} #statHead{padding:0 6px 3px;font-size:11px}
