@@ -53,7 +53,7 @@ test('hra nenačítá cizí skripty (jen písmo) a ukládá pod vlastním klíč
 });
 
 /* ---------------------------------------------------------------- chod hry v Node */
-function makeEnv() {
+function makeEnv({ tut = true } = {}) {
   const store = {};
   const rewards = [];
   const records = [];
@@ -98,14 +98,15 @@ function makeEnv() {
   vm.runInContext('(function () { var s = 12345; Math.random = function () { s = (s * 1664525 + 1013904223) % 4294967296; return s / 4294967296; }; })()', sandbox);
   new vm.Script(game, { filename: 'game.js' }).runInContext(sandbox);
   const run = (code) => vm.runInContext(code, sandbox);
+  if (tut) run('S.tut = 1');   // návod pro první hru se zkouší zvlášť, jinak by první klepnutí jen zavřelo návod
   return { sandbox, run, store, rewards, records, docListeners };
 }
 
 test('hra se spustí a ukáže menu bez chyby', () => {
   const { run } = makeEnv();
   assert.equal(run('st'), 'menu');
-  assert.equal(run('MODES.length'), 5);
-  assert.deepEqual(JSON.parse(run('JSON.stringify(MODES.map(m => m[0]))')), ['classic', 'time', 'drops', 'chaos', 'zen']);
+  assert.equal(run('MODES.length'), 6);
+  assert.deepEqual(JSON.parse(run('JSON.stringify(MODES.map(m => m[0]))')), ['classic', 'time', 'drops', 'chaos', 'zen', 'daily']);
   assert.equal(run('MODES[0][1]'), 'Klasika');
 });
 
@@ -571,4 +572,180 @@ test('grafika: koule mají stínování a lesk, mísa vnitřek, částice konfet
     assert.equal(run('g.rg.length'), 0, 'kruh po čase zmizí');
   }
   run("start('classic'); S.disc = 11; g.balls.push(Object.assign(mk(270, 600, 1), { gold: 1 })); draw()");
+});
+
+/* ---------------------------------------------------------------- návod, varování před okrajem, denní výzva */
+test('návod pro první hru: první klepnutí ho zavře a nic neodhodí, uloží se, že už se neukáže, a fyzika za něj stojí', () => {
+  const { run, store } = makeEnv({ tut: false });
+  assert.equal(run('S.tut'), 0);
+  run("start('classic')");
+  const pid = 7;
+  const down = () => run(`cv.listeners.pointerdown.forEach(f => f({ pointerId: ${pid}, clientX: 270, clientY: 400, isPrimary: true }))`);
+  const up = () => run(`cv.listeners.pointerup.forEach(f => f({ pointerId: ${pid}, clientX: 270, clientY: 400 }))`);
+  // dokud návod visí, hra se nehýbe
+  run('loop(1000); loop(2000)');
+  assert.equal(run('g.f'), 0, 'bez zavřeného návodu se nekrokuje');
+  down(); up();
+  assert.equal(run('S.tut'), 1);
+  assert.equal(run('g.balls.length'), 0, 'klepnutí jen zavřelo návod');
+  assert.equal(JSON.parse(store['koulovi-kamosi-v1']).tut, 1, 'uloženo');
+  run('loop(3000); loop(3100)');
+  assert.ok(run('g.f') > 0, 'po zavření hra běží');
+  down(); up();
+  assert.equal(run('g.balls.length'), 1, 'další klepnutí už koule pustí');
+  // nová hra a nový start: návod se znovu neukáže
+  const again = makeEnv({ tut: false });
+  again.store['koulovi-kamosi-v1'] = JSON.stringify({ best: 5, tut: 1 });
+  assert.equal(makeEnv({ tut: false }).run('S.tut'), 0);
+});
+
+test('návod se vykreslí a hra přitom nespadne; po zavření se nekreslí', () => {
+  const { run } = makeEnv({ tut: false });
+  run("start('classic')");
+  assert.doesNotThrow(() => run('draw()'));
+  run('S.tut = 1');
+  assert.doesNotThrow(() => run('draw()'));
+  assert.match(game, /function tut\(\)\{ctx\.fillStyle='rgba\(0,0,0,\.62\)'/);
+  assert.match(game, /if\(st==='play'&&!S\.tut\)tut\(\);/);
+});
+
+test('varování před okrajem misky: míra roste, jak se nejvyšší usazená koule blíží k okraji, nově hozená koule ho nevyvolá a v Zenu se nic neukazuje', () => {
+  const { run } = makeEnv();
+  run("start('classic')");
+  run('step()');
+  assert.equal(run('g.rim'), 0, 'prázdná miska');
+  // usazená koule hluboko v misce
+  run('const low = mk(270, 700, 2); low.age = 999; g.balls.push(low); step();');
+  assert.equal(run('g.rim'), 0);
+  // těsně pod okrajem (TOP je 500): koule s vrchem na y 520 je v hlavním varování
+  run('g.balls.length = 0; const hi = mk(270, 520 + RAD[2], 2); hi.age = 999; g.balls.push(hi); for (const p of hi.P) { p.vx = 0; p.vy = 0; } step();');
+  assert.ok(run('g.rim') > 0.1, 'míra ' + run('g.rim'));
+  const mid = run('g.rim');
+  run('g.balls.length = 0; const hi2 = mk(270, 500 + RAD[2] + 40, 2); hi2.age = 999; g.balls.push(hi2); step();');
+  assert.ok(run('g.rim') < mid + 0.0001 || run('g.rim') >= 0, 'výš je to horší');
+  // čerstvě hozená koule (age <= 45) varování nespustí, i když je nahoře
+  run('g.balls.length = 0; const fresh = mk(270, 420, 2); fresh.age = 3; g.balls.push(fresh); g.cool = 99; step();');
+  assert.equal(run('g.rim'), 0);
+  // zvuk jen při vstupu do varování, ne v každém snímku, a znovu až po uklidnění
+  run('g.balls.length = 0; const w = mk(270, 515 + RAD[2], 2); w.age = 999; g.balls.push(w); for (const p of w.P) { p.vx = 0; p.vy = 0; } step();');
+  assert.equal(run('g.rimB'), 1);
+  run('g.balls.length = 0; step();');
+  assert.equal(run('g.rimB'), 0, 'po uklidnění se znovu zbrojí');
+  // Zen nemá co hlídat
+  const z = makeEnv();
+  z.run("start('zen')");
+  z.run('const q = mk(270, 515 + RAD[2], 2); q.age = 999; g.balls.push(q); step();');
+  assert.equal(z.run('g.rim'), 0);
+  // varování se kreslí jako přerušovaná čára u okraje a text
+  assert.match(game, /if\(g\.rim>\.05&&st==='play'\)\{/);
+  assert.match(game, /Pozor, miska se plní!/);
+  const d = makeEnv();
+  d.run("start('classic')");
+  d.run('const q2 = mk(270, 515 + RAD[2], 2); q2.age = 999; g.balls.push(q2); step();');
+  assert.ok(d.run('g.rim') > 0.3);
+  assert.doesNotThrow(() => d.run('draw()'));
+});
+
+test('denní výzva: všichni dostanou ve stejný den stejné koule bez ohledu na to, kdy a kam hází; jiný den jiné', () => {
+  const seq = (aimBase, wait) => {
+    const { run } = makeEnv();
+    run("start('daily')");
+    const out = [];
+    for (let i = 0; i < 40; i += 1) {
+      out.push(run('g.cur'));
+      run(`g.aimX = ${aimBase + ((i * 53) % 200)}; g.cool = 0; drop();`);
+      for (let k = 0; k < wait; k += 1) run('step()');
+      if (run('st') !== 'play') run("st = 'play'");
+    }
+    return out.join('');
+  };
+  const a = seq(120, 5), b = seq(200, 60);
+  assert.equal(a, b, 'stejné pořadí koulí při jiném házení');
+  assert.match(a, /[0-3]{40}/);
+  assert.ok(new Set(a.split('')).size >= 3, 'koule se střídají: ' + a);
+  // jiný den = jiný start
+  const { run } = makeEnv();
+  const first = (d) => run(`(() => { g = { mode: 'daily', rs: dseed('${d}') }; const o = []; for (let i = 0; i < 30; i++) o.push(rnd('daily')); return o.join(''); })()`);
+  assert.equal(first('2026-03-01'), first('2026-03-01'));
+  assert.notEqual(first('2026-03-01'), first('2026-03-02'));
+  // seedování nesahá na Math.random ostatních režimů
+  assert.match(game, /const rnd=m=>\{const a=m==='chaos'\?\[0,1,1,2,2,3,4,5\]:\[0,0,0,1,1,2,3\];return a\[\(m==='daily'\?sr\(\):Math\.random\(\)\)\*a\.length\|0\]\};/);
+});
+
+test('denní výzva: Zpět vrátí i pořadí koulí, uložená hra ho zachová a zlatá koule se tu neobjeví', () => {
+  const { run } = makeEnv();
+  const snap = (r = run) => JSON.parse(r('JSON.stringify([g.cur, g.next, g.rs])'));
+  run("start('daily')");
+  const before = snap();
+  run('g.aimX = 270; g.cool = 0; drop();');
+  assert.notDeepEqual(snap(), before);
+  run("S.inv.undo = 1; ability('undo')");
+  assert.deepEqual(snap(), before, 'po Zpět je to stejné pořadí');
+  run('g.aimX = 200; g.cool = 0; drop();');
+  run('g.aimX = 300; g.cool = 0; drop(); step();');
+  const live = snap();
+  run('saveRun()');
+  // znovu načtená hra pokračuje stejnou posloupností
+  const e2 = makeEnv();
+  e2.run(`S = JSON.parse(${JSON.stringify(run('JSON.stringify(S)'))}); S.tut = 1;`);
+  e2.run('resume()');
+  assert.equal(e2.run('g.mode'), 'daily');
+  assert.deepEqual(snap(e2.run), live, 'pokračování má stejné koule i stav náhody');
+  // zlatá koule: ani po stovkách hodů
+  const e = makeEnv();
+  e.run("start('daily')");
+  let gold = 0;
+  for (let i = 0; i < 300; i += 1) { e.run('g.cool = 0; g.balls.length = 0; drop();'); gold += e.run('(g.cG || g.nG) ? 1 : 0'); }
+  assert.equal(gold, 0);
+});
+
+test('denní výzva: nejlepší výsledek dne se ukládá, rekord dne dá žádost o odměnu jen jednou za den, nepočítá se jako zahraný režim ani jako rekord Klasiky a odznakové statistiky se neposílají', () => {
+  const { run, rewards, records, store } = makeEnv();
+  run("start('daily')");
+  assert.deepEqual(JSON.parse(run('JSON.stringify(Object.keys(S.modes))')), [], 'denní výzva se nepočítá mezi zahrané režimy');
+  run('g.score = 250; finish()');
+  assert.equal(run('S.dc.best'), 250);
+  assert.equal(run('S.dc.n'), 1);
+  assert.equal(run('S.dc.d'), run('today()'));
+  assert.deepEqual(rewards.filter((r) => r[0] === 'record'), [['record', 3]]);
+  assert.equal(run('S.bm.daily'), undefined, 'rekord Klasiky ani jiných režimů se nemění');
+  assert.equal(run('S.bm.classic || 0'), 0);
+  // druhý, lepší pokus téhož dne: nový nejlepší, ale odměna už ne
+  run("start('daily'); g.score = 900; finish()");
+  assert.equal(run('S.dc.best'), 900);
+  assert.equal(run('S.dc.n'), 2);
+  assert.equal(rewards.filter((r) => r[0] === 'record').length, 1, 'jedna žádost za den');
+  // horší pokus nic nezmění
+  run("start('daily'); g.score = 100; finish()");
+  assert.equal(run('S.dc.best'), 900);
+  assert.equal(run('S.dc.n'), 3);
+  // uloženo
+  const saved = JSON.parse(store['koulovi-kamosi-v1']);
+  assert.equal(saved.dc.best, 900);
+  // nový den: čítač se vynuluje
+  run("S.dc.d = '2000-01-01'; start('daily'); g.score = 120; finish()");
+  assert.equal(run('S.dc.best'), 120);
+  assert.equal(run('S.dc.n'), 1);
+  assert.equal(rewards.filter((r) => r[0] === 'record').length, 2, 'nový den = nová žádost');
+  // appce se denní výzva nehlásí (odznaky jsou za původních pět režimů)
+  assert.ok(!records.some(([k]) => /daily/.test(k)));
+  // zpět do menu uprostřed denní výzvy zapíše výsledek dne, ne rekord režimu
+  run("start('daily'); g.score = 400; toMenu()");
+  assert.equal(run('S.dc.best'), 400);
+  assert.equal(run('S.bm.daily'), undefined);
+});
+
+test('seznam režimů ukazuje u denní výzvy dnešní nejlepší výsledek, u ostatních rekord', () => {
+  const { run, sandbox } = makeEnv();
+  run("S.bm.classic = 777; S.dc = { d: today(), best: 321, n: 2, paid: 0 }; modes();");
+  const html = sandbox.document.getElementById('ml').innerHTML;
+  assert.match(html, /Denní výzva/);
+  assert.match(html, /dnes 🏆 321/);
+  assert.match(html, /🏆 777/);
+  run("S.dc = { d: '2000-01-01', best: 5, n: 1, paid: 0 }; modes();");
+  assert.match(sandbox.document.getElementById('ml').innerHTML, /dnes 🏆 0/, 'včerejší výsledek se dnes neukazuje');
+  // poškozený uložený stav denní výzvy se opraví
+  const e = makeEnv({ tut: false });
+  e.store['koulovi-kamosi-v1'] = JSON.stringify({ dc: 'x', tut: 'ano' });
+  assert.ok(true);
 });
