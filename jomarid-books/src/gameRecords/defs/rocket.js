@@ -169,5 +169,5 @@ export const SECRET_STATS = [
 ];
 
 export const SECRET_BADGES = [
-  badge('rocket_beacon', 'story_end', 1, 16, 'Vlaštovky jsou doma', 'Poskládal jsi střepy Zrcadla, odpověděl jsi Majáku a třináct Vlaštovek přistálo doma. Titul Majákář je tvůj.'),
+  badge('rocket_beacon', 'story_end', 1, 16, 'Vlaštovky jsou doma', 'Poskládal jsi Zrcadlo, vrátil třináct Vlaštovek domů a dočetl příběh Majákáře. Titul Majákář je tvůj.'),
 ];
