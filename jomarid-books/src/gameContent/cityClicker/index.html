@@ -137,6 +137,55 @@
     .cheat-grid{ grid-template-columns:1fr; }
   }
 
+
+  /* ---------- Vylepšení: množství k nákupu, výhodnost zón, další cíl, deník, mobil ---------- */
+  .buy-amount{ display:flex; align-items:center; gap:6px; margin:0 0 12px; flex-wrap:wrap; }
+  .buy-amount.hidden{ display:none; }
+  .buy-amount .ba-label{ font-size:0.78rem; color:var(--text-dim); margin-right:2px; }
+  .buy-amount button{
+    min-width:46px; padding:7px 10px; border-radius:var(--radius); border:1px solid var(--border);
+    background:var(--panel-bg-alt); color:var(--text-dim); font-family:var(--font-mono); font-size:0.8rem; cursor:pointer;
+  }
+  .buy-amount button:hover{ border-color:var(--accent); color:var(--text); }
+  .buy-amount button.on{ border-color:var(--accent); color:var(--text); background:linear-gradient(180deg, var(--accent-glow), transparent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .ledger-name{ display:flex; flex-wrap:wrap; align-items:center; gap:2px 6px; }
+  .lr-key{ margin-left:2px !important; white-space:nowrap; }
+  .ledger-gain{ font-size:0.74rem; color:var(--accent-2); margin-top:3px; min-height:1.1em; }
+  .lr-key{ display:none; margin-left:8px; padding:0 5px; border:1px solid var(--border); border-radius:4px; font-family:var(--font-mono); font-size:0.66rem; color:var(--text-dim); }
+  @media (hover:hover) and (pointer:fine){ .lr-key{ display:inline-block; } }
+  .ledger-row.best .lr-name::after{ content:' ⭐'; font-size:0.8em; }
+  .ledger-row.best{ box-shadow:inset 3px 0 0 var(--accent-2); }
+  .policy-gain{ font-size:0.74rem; margin-top:3px; font-family:var(--font-mono); }
+  .policy-gain.up{ color:#4ade80; }
+  .policy-gain.down{ color:#f59e0b; }
+  .goal-box{
+    margin:0 0 14px; padding:11px 14px; border:1px solid var(--border); border-radius:var(--radius);
+    background:linear-gradient(180deg, var(--panel-bg-alt), var(--panel-bg)); display:flex; flex-direction:column; gap:6px; font-size:0.84rem;
+  }
+  .goal-box.hidden{ display:none; }
+  .goal-line{ display:flex; gap:8px; align-items:flex-start; line-height:1.35; }
+  .goal-ico{ flex:0 0 auto; }
+  .log-box{ margin-top:22px; border:1px solid var(--border); border-radius:var(--radius); background:var(--panel-bg-alt); }
+  .log-box > summary{ cursor:pointer; padding:10px 14px; font-family:var(--font-display); font-size:0.9rem; color:var(--text-dim); list-style:none; }
+  .log-box > summary::-webkit-details-marker{ display:none; }
+  .log-box[open] > summary{ border-bottom:1px solid var(--border); color:var(--text); }
+  .log-list{ max-height:210px; overflow:auto; padding:6px 14px 10px; font-size:0.78rem; }
+  .log-list div{ padding:4px 0; border-bottom:1px dashed var(--border); color:var(--text-dim); }
+  .log-list div:last-child{ border-bottom:0; }
+  .log-list time{ font-family:var(--font-mono); color:var(--accent-2); margin-right:8px; }
+  .skyline-banner .sk-window{ transition:opacity .6s ease; }
+  @media (max-width:900px){
+    .top-actions{ flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; gap:6px; padding-bottom:2px; }
+    .top-actions::-webkit-scrollbar{ display:none; }
+    .top-actions > *{ flex:0 0 auto; }
+    .btn-util{ padding-left:10px; padding-right:10px; white-space:nowrap; }
+    .buy-amount button{ min-height:40px; }
+  }
+  @media (max-width:560px){
+    .btn-util .bl{ display:none; }
+    .btn-util{ min-width:44px; }
+  }
+
   /* ---------- Left column: Town Hall ---------- */
   .theme-flavor{ font-size:0.8rem; color:var(--text-dim); margin-bottom:18px; line-height:1.5; }
   .theme-flavor .flavor-emoji{ font-size:1.1rem; margin-right:4px; }
@@ -667,12 +716,12 @@
         <option value="cyberpunk">Cyberpunk 2099</option>
         <option value="mars">Marsovská kolonie</option>
       </select>
-      <button type="button" class="btn-util" id="helpBtn" title="Nápověda" aria-label="Nápověda">❓ Nápověda</button>
+      <button type="button" class="btn-util" id="helpBtn" title="Nápověda" aria-label="Nápověda">❓<span class="bl"> Nápověda</span></button>
       <button type="button" class="btn-util" id="soundToggleBtn" title="Zvuk" aria-label="Přepnout zvuk">🔊</button>
-      <button type="button" class="btn-util" id="statsBtn">📊 Statistiky</button>
-      <button type="button" class="btn-util" id="saveBtn">💾 Uložit</button>
-      <button type="button" class="btn-util" id="loadBtn">📂 Načíst</button>
-      <button type="button" class="btn-util" id="resetBtn">🗑️ Hard Reset</button>
+      <button type="button" class="btn-util" id="statsBtn" title="Statistiky" aria-label="Statistiky">📊<span class="bl"> Statistiky</span></button>
+      <button type="button" class="btn-util" id="saveBtn" title="Uložit" aria-label="Uložit hru">💾<span class="bl"> Uložit</span></button>
+      <button type="button" class="btn-util" id="loadBtn" title="Načíst" aria-label="Načíst uloženou hru">📂<span class="bl"> Načíst</span></button>
+      <button type="button" class="btn-util" id="resetBtn" title="Hard Reset" aria-label="Hard Reset">🗑️<span class="bl"> Hard Reset</span></button>
     </div>
   </header>
 
@@ -744,6 +793,11 @@
         </div>
       </div>
 
+      <div class="goal-box" id="goalBox">
+        <div class="goal-line"><span class="goal-ico" aria-hidden="true">🎯</span><span id="goalNext">Klikej na radnici a postav první zóny.</span></div>
+        <div class="goal-line"><span class="goal-ico" aria-hidden="true">🏗️</span><span id="goalPrestige"></span></div>
+      </div>
+
       <div class="crisis-banner hidden" id="crisisBanner">
         <div class="crisis-top">
           <span class="crisis-icon" id="crisisIcon">🔥</span>
@@ -759,11 +813,23 @@
 
       <h3>Politická matice — Vyhlášky</h3>
       <div id="policyList"></div>
+
+      <details class="log-box" id="logBox">
+        <summary>📰 Deník města</summary>
+        <div id="logList" class="log-list"><div class="log-empty">Zatím se nic nestalo.</div></div>
+      </details>
     </section>
 
     <!-- RIGHT COLUMN -->
     <section class="column" data-col="right">
       <h2>Obchod se zónami</h2>
+      <div class="buy-amount" id="buyAmount" role="group" aria-label="Kolik zón koupit najednou">
+        <span class="ba-label">Kupovat</span>
+        <button type="button" data-amt="1" aria-pressed="true">×1</button>
+        <button type="button" data-amt="10" aria-pressed="false">×10</button>
+        <button type="button" data-amt="100" aria-pressed="false">×100</button>
+        <button type="button" data-amt="max" aria-pressed="false">Max</button>
+      </div>
       <div id="shopList"></div>
 
       <h3>Megaprojekty</h3>
@@ -887,6 +953,9 @@
     <div class="help-body">
       <h3>🏛️ Základy</h3>
       <p>Klikej na radnici vlevo — každé kliknutí přidá peníze do rozpočtu. V Obchodě vpravo stavíš zóny (Obytná, Komerční, Průmyslová, Tech/Eco, Park), které generují pasivní příjem podle populace a spokojenosti. Průmysl vydělává nejvíc, ale snižuje spokojenost — vyvažuj ho Parky a Tech/Eco zónami.</p>
+
+      <h3>🛒 Nákup zón</h3>
+      <p>Nad seznamem zón přepínáš, kolik kusů koupit najednou (×1, ×10, ×100, nebo Max podle rozpočtu). U každé zóny vidíš, kolik přidá a za jak dlouho se zaplatí; hvězdička ⭐ značí nejvýhodnější. Na počítači koupíš zóny klávesami 1 až 5 a množství přepneš klávesou B. Další cíl a odhad času najdeš v Přehledu a poslední události v Deníku města.</p>
 
       <h3>🔥 Combo Meter a Horečka výplat</h3>
       <p>Rychlé opakované klikání plní Combo Meter kolem tlačítka radnice. Při 100 % se spustí Horečka výplat — 15 vteřin s 50× vyšším ziskem z kliknutí. Meter mezitím pomalu klesá, takže je potřeba klikat v rytmu.</p>
@@ -1127,6 +1196,7 @@
       achievements: [],
       stats: {},
       soundEnabled: true,
+      buyAmount: 1,
       buildings: {
         residential: { count:0 },
         commercial:  { count:0 },
@@ -1275,14 +1345,53 @@
      VÝPOČTY EKONOMIKY
      ========================================================= */
 
-  function getBuildingCost(key){
+  function buildingCostAt(key, count){
     var def = buildingDefs[key];
-    var count = state.buildings[key].count;
     var growth = hasRelic('voidCompressor') ? 1.13 : 1.15;
     var cost = def.baseCost * Math.pow(growth, count);
     if(state.policies.taxCuts) cost *= 1.5;
     if(state.dimension === 'carefree') cost *= 2;
     return Math.ceil(cost);
+  }
+
+  function getBuildingCost(key){
+    return buildingCostAt(key, state.buildings[key].count);
+  }
+
+  // Množství, které tlačítko v obchodě koupí najednou: 1, 10, 100, nebo kolik se vejde do rozpočtu ('max')
+  var BUY_AMOUNTS = [1, 10, 100, 'max'];
+
+  function normalizeBuyAmount(v){
+    return BUY_AMOUNTS.indexOf(v) >= 0 ? v : 1;
+  }
+
+  // Kolik kusů a za kolik se při zvoleném množství koupí (Max bez peněz ukáže cenu jednoho kusu)
+  function planPurchase(key, amount){
+    var count = state.buildings[key].count;
+    var limit = amount === 'max' ? 1000 : amount;
+    var n = 0, total = 0;
+    for(var i = 0; i < limit; i++){
+      var c = buildingCostAt(key, count + i);
+      if(amount === 'max' && total + c > state.budget) break;
+      total += c;
+      n++;
+    }
+    if(n === 0){ n = 1; total = buildingCostAt(key, count); }
+    return { n: n, cost: total };
+  }
+
+  // Co by n dalších kusů zóny přidalo (pasivní příjem za sekundu a spokojenost); stav se nemění
+  function zoneGain(key, n){
+    var b = state.buildings[key];
+    var inc0 = computePassiveIncome();
+    var sat0 = computeSatisfaction();
+    var pop0 = computePopulation();
+    b.count += n;
+    var inc1 = computePassiveIncome();
+    var sat1 = computeSatisfaction();
+    var pop1 = computePopulation();
+    b.count -= n;
+    return { income: inc1 - inc0, sat: sat1 - sat0, pop: pop1 - pop0 };
   }
 
   function computePopulation(){
@@ -1349,11 +1458,11 @@
 
   function buyBuilding(key){
     if(state.endgame.active){ showToast('Nákup zón je během EndCraze uzamčen.', 'error'); return; }
-    var cost = getBuildingCost(key);
-    if(state.budget < cost){ showToast('Nedostatek rozpočtu na tuto stavbu.', 'error'); return; }
-    state.budget -= cost;
-    state.buildings[key].count++;
-    trk('zones_built'); trk(BUILD_STAT[key]);
+    var plan = planPurchase(key, normalizeBuyAmount(state.buyAmount));
+    if(state.budget < plan.cost){ showToast('Nedostatek rozpočtu na tuto stavbu.', 'error'); return; }
+    state.budget -= plan.cost;
+    state.buildings[key].count += plan.n;
+    trk('zones_built', plan.n); trk(BUILD_STAT[key], plan.n);
     playBuySound();
     renderAll();
   }
@@ -1452,20 +1561,36 @@
      HERNÍ SMYČKA
      ========================================================= */
 
+  // Tik hry. Běží po 100 ms, jenže záložka na pozadí se prohlížečem zpomaluje (na telefonu se zastaví úplně), takže se počítá skutečný čas od
+  // minulého tiku: příjem se připíše za celou dobu a město neztrácí výdělky, když hráč přepne na jinou stránku.
+  var lastTickAt = 0;
+  var AWAY_TOAST_MS = 60 * 1000;
+
   function mainTick(){
+    var now = Date.now();
+    var gap = lastTickAt ? now - lastTickAt : 100;
+    lastTickAt = now;
+    if(!(gap > 0)) gap = 100;
+    gap = Math.min(gap, getMaxOfflineMs());
+    var steps = gap / 100;
+
     var income = computePassiveIncome();
-    var delta = income / 10;
+    var delta = income * gap / 1000;
     state.budget += delta;
     state.lifetimeEarnings += delta;
-    state.totalPlaytimeSeconds += 0.1;
+    state.totalPlaytimeSeconds += Math.min(gap, 2000) / 1000;
+
+    if(gap >= AWAY_TOAST_MS && delta > 0){
+      showToast('⏱️ Za dobu, kdy jsi byl jinde (' + formatDuration(gap) + '), město vyneslo ' + formatCurrency(delta) + '.', 'success');
+    }
 
     if(!state.frenzyActive){
-      state.comboMeter = Math.max(0, state.comboMeter - 1.3);
-    } else if(Date.now() >= state.frenzyEnd){
+      state.comboMeter = Math.max(0, state.comboMeter - 1.3 * steps);
+    } else if(now >= state.frenzyEnd){
       deactivateFrenzy();
     }
 
-    if(state.endgame.active){ endgameTick(); }
+    if(state.endgame.active){ endgameTick(steps, gap); }
 
     renderFast();
   }
@@ -1818,14 +1943,16 @@
     renderAll();
   }
 
-  function endgameTick(){
+  function endgameTick(steps, gapMs){
     var e = state.endgame;
+    steps = steps > 0 ? steps : 1;
+    gapMs = gapMs > 0 ? gapMs : 100;
 
     if(e.hystericalActive && Date.now() >= e.hystericalEnd){
       deactivateHystericalBoost();
     }
     if(!e.hystericalActive){
-      e.madness = Math.max(0, e.madness - 1.3);
+      e.madness = Math.max(0, e.madness - 1.3 * steps);
     }
 
     if(e.ritualActive){
@@ -1833,12 +1960,12 @@
         e.ritualActive = false;
         showToast('Rituál rychlosti skončil.', 'info');
       } else {
-        e.darkMatter += getEndgameClickValue() * 0.5;
+        e.darkMatter += getEndgameClickValue() * 0.5 * Math.min(steps, Math.max(0, (e.ritualEnd - Date.now()) / 100 + 1));
       }
     }
 
     if(e.faction === 'technocrat'){
-      e.darkMatter += getTechnocratPassiveRate() / 10;
+      e.darkMatter += getTechnocratPassiveRate() * gapMs / 1000;
     }
 
     var clock = getDoomsdayClock();
@@ -2453,6 +2580,7 @@
   }
 
   function showToast(msg, type){
+    if(type !== 'error') pushLog(msg);
     var container = document.getElementById('toastContainer');
     var div = document.createElement('div');
     div.className = 'toast toast-' + (type || 'info');
@@ -2696,70 +2824,164 @@
     }
   }
 
-  function renderShop(){
-    var names = themeNames[state.theme];
-    var container = document.getElementById('shopList');
+  // Obsah se přepíše jen tehdy, když se skutečně změnil. Hra překresluje obchod každých 500 ms a bez téhle kontroly se tlačítko, na které hráč
+  // právě tisknul prst, uprostřed klepnutí nahradilo novým a klepnutí propadlo.
+  function setHtml(el, html){
+    if(el.__html === html) return false;
+    el.__html = html;
+    el.innerHTML = html;
+    return true;
+  }
+
+  function setText(el, txt){
+    if(el && el.textContent !== txt) el.textContent = txt;
+  }
+
+  // Čas návratnosti nákupu (v sekundách) stručně
+  function formatPayback(sec){
+    if(!isFinite(sec) || sec <= 0) return '';
+    if(sec < 60) return Math.max(1, Math.ceil(sec)) + ' s';
+    if(sec < 3600) return Math.round(sec / 60) + ' min';
+    if(sec < 86400) return (sec / 3600).toFixed(1).replace('.', ',') + ' h';
+    return 'přes den';
+  }
+
+  var shopRows = null;
+
+  // Řádky obchodu se vytvoří jednou a pak se jen přepisují texty, takže tlačítka zůstávají stejná
+  function ensureShopRows(container){
+    if(shopRows && container.getAttribute('data-mode') === 'rows') return;
     container.innerHTML = '';
-
-    if(state.endgame.active){
-      container.innerHTML = '<div class="endcraze-lock">🔒 Základní ekonomika je uzamčena.<br>Probíhá apokalyptická fáze EndCraze — nové zóny nelze stavět.</div>';
-      return;
-    }
-
-    buildingOrder.forEach(function(key){
+    container.__html = null;
+    container.setAttribute('data-mode', 'rows');
+    shopRows = {};
+    buildingOrder.forEach(function(key, idx){
       var def = buildingDefs[key];
-      var count = state.buildings[key].count;
-      var cost = getBuildingCost(key);
-      var afford = state.budget >= cost;
-
       var row = document.createElement('div');
       row.className = 'ledger-row';
       row.innerHTML =
         '<div class="ledger-icon">' + def.icon + '</div>' +
         '<div class="ledger-info">' +
-          '<div class="ledger-name">' + names[key] + ' <span style="color:var(--text-dim);font-family:var(--font-mono);font-size:0.8rem;">(' + count + ')</span></div>' +
+          '<div class="ledger-name"><span class="lr-name"></span> <span class="lr-count"></span><span class="lr-key" aria-hidden="true">' + (idx + 1) + '</span></div>' +
           '<div class="ledger-meta">' + def.desc + '</div>' +
+          '<div class="ledger-gain"></div>' +
         '</div>' +
-        '<button type="button" class="btn-build" data-key="' + key + '"' + (afford ? '' : ' disabled') + '>' +
-          '<span class="btn-build-label">Postavit</span>' +
-          '<span class="btn-build-cost">' + formatCurrency(cost) + '</span>' +
+        '<button type="button" class="btn-build" data-key="' + key + '">' +
+          '<span class="btn-build-label"></span><span class="btn-build-cost"></span>' +
         '</button>';
       container.appendChild(row);
+      shopRows[key] = {
+        row: row,
+        name: row.querySelector('.lr-name'),
+        count: row.querySelector('.lr-count'),
+        gain: row.querySelector('.ledger-gain'),
+        btn: row.querySelector('.btn-build'),
+        label: row.querySelector('.btn-build-label'),
+        cost: row.querySelector('.btn-build-cost')
+      };
     });
-    var btns = container.querySelectorAll('.btn-build');
-    for(var i=0;i<btns.length;i++){
-      btns[i].addEventListener('click', function(){ buyBuilding(this.getAttribute('data-key')); });
+  }
+
+  function renderShop(){
+    var names = themeNames[state.theme];
+    var container = document.getElementById('shopList');
+    var picker = document.getElementById('buyAmount');
+
+    if(state.endgame.active){
+      shopRows = null;
+      container.setAttribute('data-mode', 'lock');
+      setHtml(container, '<div class="endcraze-lock">🔒 Základní ekonomika je uzamčena.<br>Probíhá apokalyptická fáze EndCraze — nové zóny nelze stavět.</div>');
+      picker.classList.add('hidden');
+      return;
     }
+
+    ensureShopRows(container);
+    picker.classList.remove('hidden');
+    var amount = normalizeBuyAmount(state.buyAmount);
+    var pickBtns = picker.querySelectorAll('[data-amt]');
+    for(var pi = 0; pi < pickBtns.length; pi++){
+      var on = pickBtns[pi].getAttribute('data-amt') === String(amount);
+      if(pickBtns[pi].classList.contains('on') !== on) pickBtns[pi].classList.toggle('on', on);
+      pickBtns[pi].setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+
+    // Nejlepší návratnost jednoho kusu (kam se teď vyplatí investovat)
+    var bestKey = null, bestPay = Infinity;
+    buildingOrder.forEach(function(key){
+      var g1 = zoneGain(key, 1);
+      if(g1.income > 0){
+        var pay = getBuildingCost(key) / g1.income;
+        if(pay < bestPay){ bestPay = pay; bestKey = key; }
+      }
+    });
+
+    buildingOrder.forEach(function(key){
+      var r = shopRows[key];
+      var plan = planPurchase(key, amount);
+      var afford = state.budget >= plan.cost;
+      var g = zoneGain(key, plan.n);
+
+      setText(r.name, names[key]);
+      setText(r.count, '(' + state.buildings[key].count + ')');
+      setText(r.label, plan.n > 1 ? 'Postavit ×' + plan.n : 'Postavit');
+      setText(r.cost, formatCurrency(plan.cost));
+      if(r.btn.disabled === afford) r.btn.disabled = !afford;
+
+      var parts = [];
+      if(key === 'residential' && g.pop > 0) parts.push('+' + formatNumber(g.pop) + ' obyvatel');
+      if(g.income > 0.005) parts.push('+' + formatRate(g.income) + '/s');
+      else if(key !== 'residential' && g.sat > 0.005) parts.push('+' + (Math.round(g.sat * 10) / 10) + ' % spokojenosti');
+      else if(key === 'park' && g.sat <= 0.005) parts.push('spokojenost je na maximu, zatím bez účinku');
+      var pay = g.income > 0 ? formatPayback(plan.cost / g.income) : '';
+      if(pay) parts.push('návratnost ' + pay);
+      var gainTxt = parts.join(' · ');
+      setText(r.gain, gainTxt);
+      var isBest = key === bestKey;
+      if(r.row.classList.contains('best') !== isBest) r.row.classList.toggle('best', isBest);
+    });
+  }
+
+  // Čistý dopad vyhlášky na pasivní příjem (bez ohledu na cenu); stav se nemění
+  function policyGain(key){
+    var before = computePassiveIncome();
+    state.policies[key] = true;
+    var after = computePassiveIncome();
+    state.policies[key] = false;
+    return { income: after - before, pct: before > 0 ? (after - before) / before * 100 : 0 };
   }
 
   function renderPolicies(){
     var container = document.getElementById('policyList');
-    container.innerHTML = '';
+    var html = '';
     policyDefs.forEach(function(def){
       var purchased = state.policies[def.key];
       var afford = state.budget >= def.cost;
-      var row = document.createElement('div');
-      row.className = 'policy-row' + (purchased ? ' enacted' : '');
-      row.innerHTML =
-        '<div class="policy-info">' +
-          '<div class="policy-name">' + def.name + '</div>' +
-          '<div class="policy-desc">' + def.desc + '</div>' +
-        '</div>' +
-        '<button type="button" class="btn-policy" data-key="' + def.key + '"' + ((purchased || !afford) ? ' disabled' : '') + '>' +
-          (purchased ? 'Schváleno' : formatCurrency(def.cost)) +
-        '</button>';
-      container.appendChild(row);
+      var gainHtml = '';
+      if(!purchased){
+        var g = policyGain(def.key);
+        if(Math.abs(g.income) > 0.005){
+          gainHtml = '<div class="policy-gain ' + (g.income > 0 ? 'up' : 'down') + '">Dnes na příjem: ' + (g.income > 0 ? '+' : '−') + formatRate(Math.abs(g.income)) + '/s' +
+            (g.pct ? ' (' + (g.pct > 0 ? '+' : '−') + Math.round(Math.abs(g.pct)) + ' %)' : '') + '</div>';
+        }
+      }
+      html +=
+        '<div class="policy-row' + (purchased ? ' enacted' : '') + '">' +
+          '<div class="policy-info">' +
+            '<div class="policy-name">' + def.name + '</div>' +
+            '<div class="policy-desc">' + def.desc + '</div>' + gainHtml +
+          '</div>' +
+          '<button type="button" class="btn-policy" data-key="' + def.key + '"' + ((purchased || !afford) ? ' disabled' : '') + '>' +
+            (purchased ? 'Schváleno' : formatCurrency(def.cost)) +
+          '</button>' +
+        '</div>';
     });
-    var btns = container.querySelectorAll('.btn-policy');
-    for(var i=0;i<btns.length;i++){
-      btns[i].addEventListener('click', function(){ buyPolicy(this.getAttribute('data-key')); });
-    }
+    setHtml(container, html);
   }
 
   function renderMegaprojects(){
     var names = themeNames[state.theme];
     var container = document.getElementById('megaList');
-    container.innerHTML = '';
+    var html = '';
     megaprojectOrder.forEach(function(key){
       var def = megaprojectDefs[key];
       var mstate = state.megaprojects[key];
@@ -2783,18 +3005,14 @@
           '<button type="button" class="btn-mega" data-key="' + key + '"' + (afford ? '' : ' disabled') + '>Investovat ' + formatCurrency(phase.cost) + '</button>';
       }
 
-      var panel = document.createElement('div');
-      panel.className = 'mega-panel' + (mstate.completed ? ' completed' : '');
-      panel.innerHTML =
-        '<div class="mega-header"><span class="mega-icon">' + def.icon + '</span><span class="mega-title">' + names[key] + '</span></div>' +
-        '<div class="phase-track">' + phaseHtml + '</div>' +
-        actionHtml;
-      container.appendChild(panel);
+      html +=
+        '<div class="mega-panel' + (mstate.completed ? ' completed' : '') + '">' +
+          '<div class="mega-header"><span class="mega-icon">' + def.icon + '</span><span class="mega-title">' + names[key] + '</span></div>' +
+          '<div class="phase-track">' + phaseHtml + '</div>' +
+          actionHtml +
+        '</div>';
     });
-    var btns = container.querySelectorAll('.btn-mega');
-    for(var i=0;i<btns.length;i++){
-      btns[i].addEventListener('click', function(){ investMegaproject(this.getAttribute('data-key')); });
-    }
+    setHtml(container, html);
   }
 
   function renderEndcraze(){
@@ -2807,16 +3025,16 @@
 
       var status = checkEndgameUnlockable();
       var checklist = document.getElementById('endcrazeChecklist');
-      checklist.innerHTML =
+      setHtml(checklist,
         '<li>' + (status.policiesDone ? '✅' : '❌') + ' Všechny vyhlášky schváleny</li>' +
         '<li>' + (status.megaDone ? '✅' : '❌') + ' Oba megaprojekty dokončeny</li>' +
         '<li>' + (status.budgetDone ? '✅' : '❌') + ' Rozpočet ≥ ' + formatCurrency(MEGACITY_BUDGET) + ' (aktuálně ' + formatCurrency(state.budget) + ')</li>' +
-        '<li>' + (status.popDone ? '✅' : '❌') + ' Populace ≥ ' + formatNumber(MEGACITY_POPULATION) + ' (aktuálně ' + formatNumber(computePopulation()) + ')</li>';
+        '<li>' + (status.popDone ? '✅' : '❌') + ' Populace ≥ ' + formatNumber(MEGACITY_POPULATION) + ' (aktuálně ' + formatNumber(computePopulation()) + ')</li>');
 
       var accContainer = document.getElementById('acceleratorPanel');
       var e0 = state.endgame;
       if(!status.all){
-        accContainer.innerHTML = '<div class="endcraze-lock">🔒 Nejprve splň všechny podmínky výše — Částicový urychlovač poté půjde postavit.</div>';
+        setHtml(accContainer, '<div class="endcraze-lock">🔒 Nejprve splň všechny podmínky výše — Částicový urychlovač poté půjde postavit.</div>');
       } else {
         var accPhaseHtml = '';
         for(var pi = 0; pi < ACCELERATOR_PHASES.length; pi++){
@@ -2830,11 +3048,9 @@
         var accAction = accPhase ?
           ('<div class="mega-status">Fáze ' + (e0.acceleratorPhase + 1) + '/' + ACCELERATOR_PHASES.length + ': ' + accPhase.name + ' — cena ' + formatCurrency(accPhase.cost) + '</div>' +
           '<button type="button" class="btn-mega" id="acceleratorInvestBtn"' + (accAfford ? '' : ' disabled') + '>Investovat</button>') : '';
-        accContainer.innerHTML =
+        setHtml(accContainer,
           '<div class="mega-panel"><div class="mega-header"><span class="mega-icon">⚛️</span><span class="mega-title">Částicový urychlovač</span></div>' +
-          '<div class="phase-track">' + accPhaseHtml + '</div>' + accAction + '</div>';
-        var accBtn = document.getElementById('acceleratorInvestBtn');
-        if(accBtn) accBtn.addEventListener('click', investAccelerator);
+          '<div class="phase-track">' + accPhaseHtml + '</div>' + accAction + '</div>');
       }
       return;
     }
@@ -2845,19 +3061,17 @@
     var e = state.endgame;
     var area = document.getElementById('factionActionArea');
     if(e.faction === 'cultist'){
-      area.innerHTML =
+      setHtml(area,
         '<div class="policy-row"><div class="policy-info"><div class="policy-name">🩸 Obětuj populaci</div>' +
         '<div class="policy-desc">Sniž populaci a trvale zvyš TH násobitel z kliknutí. Aktuální násobitel: ×' + (1 + e.sacrificeMultiplier).toFixed(2) + '</div></div>' +
         '<button type="button" class="btn-policy" id="sacrificeBtn">Obětovat</button></div>' +
-        '<div class="mega-status">Rituál rychlosti: ' + e.clickStreak + '/100 kliknutí do dalšího rituálu.</div>';
-      var sacBtn = document.getElementById('sacrificeBtn');
-      if(sacBtn) sacBtn.addEventListener('click', sacrificePopulation);
+        '<div class="mega-status">Rituál rychlosti: ' + e.clickStreak + '/100 kliknutí do dalšího rituálu.</div>');
     } else if(e.faction === 'technocrat'){
-      area.innerHTML =
+      setHtml(area,
         '<div class="mega-status">🤖 AI štíty aktivní — trhliny nemohou zničit čtvrti.</div>' +
-        '<div class="mega-status">Pasivní produkce: +' + formatTH(getTechnocratPassiveRate()) + '/s</div>';
+        '<div class="mega-status">Pasivní produkce: +' + formatTH(getTechnocratPassiveRate()) + '/s</div>');
     } else {
-      area.innerHTML = '<div class="mega-status">Frakce bude nutné zvolit po dosažení 50 % na Hodinách apokalypsy.</div>';
+      setHtml(area, '<div class="mega-status">Frakce bude nutné zvolit po dosažení 50 % na Hodinách apokalypsy.</div>');
     }
 
     var archaContainer = document.getElementById('archaPanel');
@@ -2877,11 +3091,9 @@
         '<div class="mega-status">Fáze ' + (e.archaPhase + 1) + '/' + ARCHA_PHASES + ' — cena ' + formatTH(ARCHA_PHASE_COST) + '</div>' +
         '<button type="button" class="btn-mega" id="archaInvestBtn"' + (afford ? '' : ' disabled') + '>Investovat do Archy</button>';
     }
-    archaContainer.innerHTML =
+    setHtml(archaContainer,
       '<div class="mega-panel"><div class="mega-header"><span class="mega-icon">🚀</span><span class="mega-title">Dimenzionální Archa</span></div>' +
-      '<div class="phase-track">' + phaseHtml + '</div>' + archaAction + '</div>';
-    var archaBtn = document.getElementById('archaInvestBtn');
-    if(archaBtn) archaBtn.addEventListener('click', investArcha);
+      '<div class="phase-track">' + phaseHtml + '</div>' + archaAction + '</div>');
 
     var relicsContainer = document.getElementById('relicsArea');
     if(state.relics.length){
@@ -2893,9 +3105,9 @@
       if(allRelicsCollected()){
         relicsHtml += '<p style="font-size:0.8rem;color:var(--text-dim);">🌠 Všechny relikvie posbírány! Další skoky teď natrvalo sypou Hvězdný prach — viz Hvězdný trh níže.</p>';
       }
-      relicsContainer.innerHTML = relicsHtml;
+      setHtml(relicsContainer, relicsHtml);
     } else {
-      relicsContainer.innerHTML = '';
+      setHtml(relicsContainer, '');
     }
 
     document.getElementById('jumpBtn').classList.toggle('hidden', !e.archaCompleted);
@@ -2911,30 +3123,26 @@
     document.getElementById('stardustDisplay').textContent = formatNumber(state.stardust);
 
     var container = document.getElementById('stardustShopList');
-    container.innerHTML = '';
+    var html = '';
     STARDUST_UPGRADE_ORDER.forEach(function(key){
       var def = STARDUST_UPGRADE_DEFS[key];
       var level = (state.stardustUpgrades && state.stardustUpgrades[key]) || 0;
       var cost = getStardustUpgradeCost(key);
       var afford = state.stardust >= cost;
-      var row = document.createElement('div');
-      row.className = 'ledger-row';
-      row.innerHTML =
-        '<div class="ledger-icon">' + def.icon + '</div>' +
-        '<div class="ledger-info">' +
-          '<div class="ledger-name">' + def.name + ' <span style="color:var(--text-dim);font-family:var(--font-mono);font-size:0.8rem;">(Lv. ' + level + ')</span></div>' +
-          '<div class="ledger-meta">' + def.desc + '</div>' +
-        '</div>' +
-        '<button type="button" class="btn-build" data-key="' + key + '"' + (afford ? '' : ' disabled') + '>' +
-          '<span class="btn-build-label">Vylepšit</span>' +
-          '<span class="btn-build-cost">🌠 ' + formatNumber(cost) + '</span>' +
-        '</button>';
-      container.appendChild(row);
+      html +=
+        '<div class="ledger-row">' +
+          '<div class="ledger-icon">' + def.icon + '</div>' +
+          '<div class="ledger-info">' +
+            '<div class="ledger-name">' + def.name + ' <span style="color:var(--text-dim);font-family:var(--font-mono);font-size:0.8rem;">(Lv. ' + level + ')</span></div>' +
+            '<div class="ledger-meta">' + def.desc + '</div>' +
+          '</div>' +
+          '<button type="button" class="btn-build" data-key="' + key + '"' + (afford ? '' : ' disabled') + '>' +
+            '<span class="btn-build-label">Vylepšit</span>' +
+            '<span class="btn-build-cost">🌠 ' + formatNumber(cost) + '</span>' +
+          '</button>' +
+        '</div>';
     });
-    var btns = container.querySelectorAll('.btn-build');
-    for(var i = 0; i < btns.length; i++){
-      btns[i].addEventListener('click', function(){ buyStardustUpgrade(this.getAttribute('data-key')); });
-    }
+    setHtml(container, html);
   }
 
   function buyStardustUpgrade(key){
@@ -2948,8 +3156,132 @@
     renderAll();
   }
 
+
+  /* =========================================================
+     DALŠÍ CÍL, DENÍK MĚSTA, ŽIVÉ PANORAMA
+     ========================================================= */
+
+  function formatEta(sec){
+    if(!isFinite(sec) || sec < 0) return '';
+    if(sec < 1) return 'okamžik';
+    if(sec < 60) return Math.ceil(sec) + ' s';
+    if(sec < 3600) return Math.floor(sec / 60) + ' min ' + Math.floor(sec % 60) + ' s';
+    if(sec < 86400) return Math.floor(sec / 3600) + ' h ' + Math.round((sec % 3600) / 60) + ' min';
+    if(sec < 86400 * 365) return Math.floor(sec / 86400) + ' d';
+    return 'víc než rok';
+  }
+
+  // Malé částky (příjem za sekundu) se zaokrouhlují na desetiny, ať se z $0,4 nestane $0
+  function formatRate(x){
+    if(x >= 10) return formatCurrency(x);
+    return themeNames[state.theme].currency + x.toFixed(x < 1 ? 2 : 1);
+  }
+
+  // Za jak dlouho při dnešním příjmu naspoří hráč danou částku (bez klikání)
+  function etaText(cost){
+    var missing = cost - state.budget;
+    if(missing <= 0) return 'můžeš hned';
+    var income = computePassiveIncome();
+    if(income <= 0) return 'klikej na radnici';
+    return 'asi za ' + formatEta(missing / income);
+  }
+
+  function renderGoals(){
+    var box = document.getElementById('goalBox');
+    if(!box) return;
+    if(state.endgame.active){ box.classList.add('hidden'); return; }
+    box.classList.remove('hidden');
+    var names = themeNames[state.theme];
+
+    // Co se teď nejvíc vyplatí: zóna s nejlepší návratností jednoho kusu
+    var bestKey = null, bestPay = Infinity;
+    buildingOrder.forEach(function(key){
+      var g = zoneGain(key, 1);
+      if(g.income > 0){
+        var pay = getBuildingCost(key) / g.income;
+        if(pay < bestPay){ bestPay = pay; bestKey = key; }
+      }
+    });
+    // A nejbližší vyhláška nebo fáze megaprojektu
+    var bigName = null, bigCost = Infinity;
+    policyDefs.forEach(function(def){
+      if(!state.policies[def.key] && def.cost < bigCost){ bigCost = def.cost; bigName = 'vyhláška „' + def.name + '“'; }
+    });
+    megaprojectOrder.forEach(function(key){
+      var ms = state.megaprojects[key];
+      var ph = !ms.completed && megaprojectDefs[key].phases[ms.phase];
+      if(ph && ph.cost < bigCost){ bigCost = ph.cost; bigName = names[key] + ' (' + ph.name + ')'; }
+    });
+
+    var line = '';
+    if(bestKey){
+      var cost = getBuildingCost(bestKey);
+      line = 'Nejvýhodnější zóna: <strong>' + names[bestKey] + '</strong> za ' + formatCurrency(cost) + ' (' + etaText(cost) + ')';
+    } else {
+      line = 'Postav první komerční zónu, ať město začne vydělávat samo.';
+    }
+    if(bigName){
+      line += '<br>Pak: ' + bigName + ' za ' + formatCurrency(bigCost) + ' (' + etaText(bigCost) + ')';
+    }
+    var goalNext = document.getElementById('goalNext');
+    if(goalNext.__html !== line){ goalNext.__html = line; goalNext.innerHTML = line; }
+
+    var remain = PRESTIGE_THRESHOLD - state.lifetimeEarnings;
+    var presTxt;
+    if(remain <= 0) presTxt = 'Generální přestavba je k dispozici dole na stránce.';
+    else {
+      var inc = computePassiveIncome();
+      presTxt = 'Generální přestavba: ' + Math.floor(state.lifetimeEarnings / PRESTIGE_THRESHOLD * 100) + ' %' + (inc > 0 ? ' · při dnešním příjmu za ' + formatEta(remain / inc) : '');
+    }
+    setText(document.getElementById('goalPrestige'), presTxt);
+  }
+
+  // Deník města: posledních pár zpráv, které hráči zmizely z oznámení (jen v tomto sezení, neukládá se)
+  var eventLog = [];
+
+  function pushLog(msg){
+    var d = new Date();
+    function two(n){ return (n < 10 ? '0' : '') + n; }
+    eventLog.unshift({ t: two(d.getHours()) + ':' + two(d.getMinutes()) + ':' + two(d.getSeconds()), msg: String(msg) });
+    if(eventLog.length > 40) eventLog.length = 40;
+    var list = document.getElementById('logList');
+    if(!list) return;
+    var html = '';
+    for(var i = 0; i < eventLog.length; i++){
+      html += '<div><time>' + eventLog[i].t + '</time>' + eventLog[i].msg.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</div>';
+    }
+    setHtml(list, html);
+  }
+
+  // Panorama města: okna se rozsvěcují podle toho, kolik je ve městě zón
+  var skyWindows = null;
+  var skyFrac = -1;
+
+  function updateSkyline(){
+    if(!skyWindows){
+      var nodes = document.querySelectorAll('.skyline-banner .sk-window');
+      skyWindows = [];
+      for(var i = 0; i < nodes.length; i++){
+        // rozptýlené pořadí, aby se rozsvěcovalo po celé šířce, ne zleva doprava
+        var rank = ((i * 2654435761) % 1000) / 1000;
+        skyWindows.push({ el: nodes[i], rank: rank });
+      }
+    }
+    var total = 0;
+    for(var k in state.buildings){ total += state.buildings[k].count || 0; }
+    var frac = state.endgame.active ? 1 : 0.14 + 0.86 * (1 - Math.exp(-total / 70));
+    frac = Math.round(frac * 40) / 40;
+    if(frac === skyFrac) return;
+    skyFrac = frac;
+    for(var j = 0; j < skyWindows.length; j++){
+      skyWindows[j].el.style.display = skyWindows[j].rank <= frac ? '' : 'none';
+    }
+  }
+
   function renderSlow(){
     renderShop();
+    renderGoals();
+    updateSkyline();
     renderPolicies();
     renderMegaprojects();
     renderEndcraze();
@@ -3026,6 +3358,7 @@
     try{
       var loaded = JSON.parse(raw);
       state = deepMerge(defaultState(), loaded);
+      state.buyAmount = normalizeBuyAmount(state.buyAmount);
       state.activeCrisis = null;
       state.frenzyActive = false;
       state.endgame.activeRift = null;
@@ -3089,7 +3422,55 @@
     }
   }
 
+  // Tlačítka v seznamech se překreslují, proto se klikání zachytává jednou na obalu
+  function delegate(id, selector, handler){
+    var host = document.getElementById(id);
+    if(!host) return;
+    host.addEventListener('click', function(e){
+      var t = e.target && e.target.closest ? e.target.closest(selector) : null;
+      if(t && host.contains(t) && !t.disabled) handler(t);
+    });
+  }
+
+  function setBuyAmount(v){
+    state.buyAmount = normalizeBuyAmount(v);
+    renderShop();
+  }
+
+  function initHotkeys(){
+    document.addEventListener('keydown', function(ev){
+      if(ev.repeat || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+      var tag = ev.target && ev.target.tagName;
+      if(tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+      var open = document.querySelector('.modal:not(.hidden)');
+      if(open) return;
+      var m = /^(?:Digit|Numpad)([1-5])$/.exec(ev.code || '');
+      if(m){
+        var key = buildingOrder[Number(m[1]) - 1];
+        if(key && !state.endgame.active){ buyBuilding(key); }
+        return;
+      }
+      if(ev.code === 'KeyB'){
+        var idx = BUY_AMOUNTS.indexOf(normalizeBuyAmount(state.buyAmount));
+        setBuyAmount(BUY_AMOUNTS[(idx + 1) % BUY_AMOUNTS.length]);
+      }
+    });
+  }
+
   function bindEvents(){
+    delegate('shopList', '.btn-build', function(t){ buyBuilding(t.getAttribute('data-key')); });
+    delegate('policyList', '.btn-policy', function(t){ buyPolicy(t.getAttribute('data-key')); });
+    delegate('megaList', '.btn-mega', function(t){ investMegaproject(t.getAttribute('data-key')); });
+    delegate('stardustShopList', '.btn-build', function(t){ buyStardustUpgrade(t.getAttribute('data-key')); });
+    delegate('acceleratorPanel', '#acceleratorInvestBtn', function(){ investAccelerator(); });
+    delegate('factionActionArea', '#sacrificeBtn', function(){ sacrificePopulation(); });
+    delegate('archaPanel', '#archaInvestBtn', function(){ investArcha(); });
+    delegate('buyAmount', '[data-amt]', function(t){
+      var a = t.getAttribute('data-amt');
+      setBuyAmount(a === 'max' ? 'max' : Number(a));
+    });
+    initHotkeys();
+
     document.getElementById('townhallBtn').addEventListener('click', onTownHallClick);
     if(window.PointerEvent){
       var thBtn = document.getElementById('townhallBtn');
@@ -3165,6 +3546,7 @@
         state.endgame.activeRift = null;
         state.endgame.hystericalActive = false;
         state.endgame.ritualActive = false;
+        state.buyAmount = normalizeBuyAmount(state.buyAmount);
         isFreshGame = false;
         reportRecords();
       }catch(e){
@@ -3196,6 +3578,12 @@
     setInterval(function(){ saveGame(false); }, 10000);
 
     window.addEventListener('beforeunload', function(){ saveGame(false); });
+    // Na telefonu se stránka při přepnutí jinam často zavře bez 'beforeunload', proto se ukládá i při schování
+    window.addEventListener('pagehide', function(){ saveGame(false); });
+    document.addEventListener('visibilitychange', function(){
+      if(document.visibilityState === 'hidden') saveGame(false);
+      else mainTick();   // po návratu se hned připíše příjem za dobu pryč
+    });
   }
 
   if(document.readyState === 'loading'){
