@@ -315,4 +315,12 @@ select tt.ok(tt.as_('authenticated', tt.su(2), 'select 1', 'select count(*) from
 select tt.ok(not exists (select 1 from pg_temp._hard_log where stav in ('CHYBA', 'SELHALO', 'UPOZORNĚNÍ')), 'zpevnění po návratu zpět doběhne bez chyby');
 select tt.ok(tt.fp() = :'fp_hard', 'a dá přesně stejný stav jako poprvé');
 select tt.ok(exists (select 1 from pg_temp._hard_log where sekce = 'Záloha' and stav = 'ZMĚNA'), 'po návratu se uložila nová záloha');
+-- Skutečná databáze: všichni zkušební čtenáři mají knihy ve stavu active. Zkouška změny statusu musí hodnotu opravdu změnit, jinak by prošla naprázdno
+-- a hlásila by díru, která je zavřená (spoušť hlídá změnu, ne zápis stejné hodnoty).
+update public.user_books set status = 'active';
+\ir ../security-diagnostics.sql
+select tt.ok(not exists (select 1 from pg_temp._diag where sev = 1 and sekce = 'N. Zkoušky: mass assignment' and objekt = 'public.user_books'), 'zpevněná user_books: zkouška změny statusu nehlásí díru ani když jsou všechny řádky už active');
+drop trigger trg_00_guard_user_books_client on public.user_books;
+\ir ../security-diagnostics.sql
+select tt.ok(exists (select 1 from pg_temp._diag where sev = 1 and sekce = 'N. Zkoušky: mass assignment' and objekt = 'public.user_books' and nalez like '%status%'), 'bez ochranné spouště zkouška změnu statusu pozná (i když jsou všechny řádky active)');
 select tt.ok(current_user = session_user, 'po zkouškách je role spojení zase původní');
