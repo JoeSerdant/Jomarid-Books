@@ -7,6 +7,7 @@ import { BOOK_BADGES } from '../constants/badges';
 import { countGameBadges } from '../gameRecords/catalog';
 import { EMPTY_LEADERBOARDS, EMPTY_STATS, loadLeaderboards, loadMyStats } from '../stats/loadStats';
 import { FROZEN_ICON_COLOR, FROZEN_LABEL, boardRowStyle, isFrozenRow } from '../stats/boardRow';
+import { CountUp } from '../lively/CountUp';
 import { calculateGoalMultiplier, DEFAULT_MONTHLY_GOAL } from '../constants/leveling';
 import { STREAK_FREEZE_PRICE } from '../constants/economy';
 import { plural } from '../lib/plural';
@@ -185,7 +186,7 @@ export const UserStats = () => {
           {stats.levelName}
         </span>
         <span className="text-xs px-3 py-1 rounded-full font-black uppercase tracking-wider bg-amber-500/20 text-amber-400 flex items-center gap-1">
-          <Coins size={12} /> {stats.jomaridCoins} Coins
+          <Coins size={12} /> <CountUp value={stats.jomaridCoins} /> Coins
         </span>
         {myTitle && (
           <span data-testid="own-title" style={{ borderColor: 'var(--bg-primary)', color: 'var(--text-body)' }} className="text-xs px-3 py-1 rounded-full font-black uppercase tracking-wider border">
@@ -200,15 +201,15 @@ export const UserStats = () => {
     {/* LEVEL BAR */}
     <div style={{ backgroundColor: 'var(--bg-badge)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-4 flex items-center gap-4 min-w-[250px]">
       <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl font-black shadow-lg transition-all duration-300 ${stats.levelBoxClass}`}>
-        {stats.level}
+        <CountUp value={stats.level} />
       </div>
       <div className="flex-1 space-y-1 text-left">
         <div className="flex justify-between text-[0.625rem] font-black uppercase tracking-wider opacity-60" style={{ color: 'var(--text-body)' }}>
           <span>Úroveň čtenáře</span>
-          <span>{stats.xp} / {stats.xpNeededForNext} XP</span>
+          <span><CountUp value={stats.xp} /> / {stats.xpNeededForNext} XP</span>
         </div>
         <div className="w-full bg-black/20 dark:bg-white/10 h-2 rounded-full overflow-hidden">
-          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${xpPercent}%`, backgroundColor: 'var(--bg-primary)' }}></div>
+          <div data-lv-grow className="h-full rounded-full transition-all duration-500" style={{ width: `${xpPercent}%`, backgroundColor: 'var(--bg-primary)' }}></div>
         </div>
       </div>
     </div>
@@ -224,7 +225,7 @@ export const UserStats = () => {
           <div className="flex justify-between items-start">
             <div className="space-y-1 text-left">
               <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider">Aktuální Streak</h3>
-              <p className="text-4xl font-black text-amber-600 flex items-baseline gap-1 m-0">{stats.streak} <span style={{ color: 'var(--text-muted)' }} className="text-xs uppercase font-bold opacity-60">{plural(stats.streak, 'den', 'dny', 'dní')}</span></p>
+              <p className="text-4xl font-black text-amber-600 flex items-baseline gap-1 m-0"><CountUp value={stats.streak} /> <span style={{ color: 'var(--text-muted)' }} className="text-xs uppercase font-bold opacity-60">{plural(stats.streak, 'den', 'dny', 'dní')}</span></p>
             </div>
             <div className="p-3 bg-amber-500/10 text-amber-600 rounded-xl"><Flame size={24} className={stats.streak > 0 ? "fill-amber-500" : ""} /></div>
           </div>
@@ -241,13 +242,13 @@ export const UserStats = () => {
             <div className="flex justify-between items-start">
               <div className="space-y-1 text-left">
                 <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider">Výzva na {stats.currentMonthName}</h3>
-                <p style={{ color: 'var(--text-badge)' }} className="text-4xl font-black m-0">{stats.monthlyRead} <span style={{ color: 'var(--text-muted)' }} className="text-xs uppercase font-bold opacity-60">z {stats.monthlyGoal}</span></p>
+                <p style={{ color: 'var(--text-badge)' }} className="text-4xl font-black m-0"><CountUp value={stats.monthlyRead} /> <span style={{ color: 'var(--text-muted)' }} className="text-xs uppercase font-bold opacity-60">z {stats.monthlyGoal}</span></p>
               </div>
               <div style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' }} className="p-3 rounded-xl"><Calendar size={24} /></div>
             </div>
             <div className="space-y-1">
               <div className="w-full bg-black/5 h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--bg-secondary)' }}>
-                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${progressPercent}%`, backgroundColor: 'var(--bg-primary)' }}></div>
+                <div data-lv-grow className="h-full rounded-full transition-all duration-500" style={{ width: `${progressPercent}%`, backgroundColor: 'var(--bg-primary)' }}></div>
               </div>
               <div style={{ color: 'var(--text-muted)' }} className="flex justify-between text-[0.625rem] font-black uppercase opacity-80">
                 <span>{progressPercent}% splněno</span><span>{stats.daysRemainingInMonth === 0 ? "Poslední den!" : `${plural(stats.daysRemainingInMonth, 'Zbývá', 'Zbývají', 'Zbývá')} ${stats.daysRemainingInMonth} ${plural(stats.daysRemainingInMonth, 'den', 'dny', 'dní')}`}</span>
@@ -297,7 +298,7 @@ export const UserStats = () => {
           <div className="flex justify-between items-start">
             <div className="space-y-1 text-left">
               <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider">Celková knihovna</h3>
-              <p style={{ color: 'var(--text-body)' }} className="text-4xl font-black m-0">{stats.totalRead} <span style={{ color: 'var(--text-muted)' }} className="text-xs uppercase font-bold opacity-60">{plural(stats.totalRead, 'kniha', 'knihy', 'knih')}</span></p>
+              <p style={{ color: 'var(--text-body)' }} className="text-4xl font-black m-0"><CountUp value={stats.totalRead} /> <span style={{ color: 'var(--text-muted)' }} className="text-xs uppercase font-bold opacity-60">{plural(stats.totalRead, 'kniha', 'knihy', 'knih')}</span></p>
             </div>
             <div style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' }} className="p-3 rounded-xl"><CheckCircle size={24} /></div>
           </div>
@@ -397,7 +398,7 @@ export const UserStats = () => {
               const rowTitle = row.isMe ? myTitle : row.title;
               const frozenRow = isFrozenRow(row, activeTab);
               return (
-                <div key={index} data-testid={row.isMe ? 'lb-me' : undefined} data-frozen={frozenRow ? 'true' : undefined} style={{ marginTop: index === 10 ? '1rem' : undefined, ...boardRowStyle(row, activeTab) }} className={`flex items-center justify-between p-3 rounded-xl border transition-all ${row.isMe && 'font-bold shadow-sm'}`}>
+                <div key={`${activeTab}-${index}`} data-testid={row.isMe ? 'lb-me' : undefined} data-frozen={frozenRow ? 'true' : undefined} style={{ marginTop: index === 10 ? '1rem' : undefined, ...boardRowStyle(row, activeTab) }} className={`flex items-center justify-between p-3 rounded-xl border transition-all ${row.isMe && 'font-bold shadow-sm'}`}>
                   <div className="flex items-center gap-4 text-left">
                     <span className={medalStyle}>{rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}.`}</span>
                     {FeaturedIcon && (
@@ -410,7 +411,7 @@ export const UserStats = () => {
                   </div>
                   <div className="text-right font-black text-sm flex items-center gap-1">
                     {frozenRow && <Snowflake size={14} role="img" aria-label={FROZEN_LABEL} data-testid="lb-frozen" style={{ color: FROZEN_ICON_COLOR }} className="shrink-0"><title>{FROZEN_LABEL}</title></Snowflake>}
-                    <span>{row[activeTab].toLocaleString()}</span>
+                    <span><CountUp value={row[activeTab]} format={(n) => n.toLocaleString()} delay={400} /></span>
                     <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase opacity-60">{typeof cat?.suffix === 'function' ? cat.suffix(row[activeTab]) : cat?.suffix}</span>
                   </div>
                 </div>

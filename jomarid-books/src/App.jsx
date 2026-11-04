@@ -1,8 +1,11 @@
-import { Component, lazy, Suspense, useState, useEffect } from 'react';
+import { Component, lazy, Suspense, useState, useEffect, useLayoutEffect } from 'react';
+import { flushSync } from 'react-dom';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { resolveTheme, withAccent, loadAccent, saveAccent, applyUiPrefs, applyMotionPref, isDarkTheme, saveCustomColors, loadCustomColors, seedCustomColors, CUSTOM_THEME_KEY, EXPERIMENTAL_THEME_KEY, usesCustomColors, applyThemeStyle, THEME_KEY, initMotionPref, loadLively, saveLively, applyLively } from './theme';
 import { SettingsSyncRunner } from './settings/SettingsSyncRunner';
 import { LivelyScenery } from './lively/LivelyScenery';
+import { LivelyMotion } from './lively/LivelyMotion';
+import { withViewTransition } from './lively/viewTransition';
 import { SETTINGS_APPLIED, notifySettingsChanged } from './settings/settingsEvents';
 import { ThemeContext, AuthProvider, ProtectedAdminRoute, ProtectedUserRoute, useAuth } from './contexts/AuthContext';
 import { Navbar } from './components/Navbar';
@@ -99,7 +102,8 @@ export default function App() {
     return () => window.removeEventListener(SETTINGS_APPLIED, reread);
   }, []);
 
-  useEffect(() => {
+  // Layout effect (ne běžný): barvy se musí změnit uvnitř přechodu motivu v Živém režimu (src/lively/viewTransition.js), než prohlížeč pořídí nový snímek.
+  useLayoutEffect(() => {
     const base = resolveTheme(currentTheme);
     const vars = usesCustomColors(currentTheme) ? base : withAccent(base, accent);
     // Promenne patri na <html>, ne na <body>: pozadi <html> je to, co vidi uzivatel mimo obsah
@@ -116,12 +120,13 @@ export default function App() {
       <ThemeContext.Provider value={{
         currentTheme, customColors, accent, lively,
         changeLively: (on) => { saveLively(on); setLively(loadLively()); },
-        changeAccent: (a) => { saveAccent(a); setAccent(loadAccent()); },
-        changeTheme: (t) => {
+        // V Živém režimu se nový motiv „rozlije“ kruhem z místa kliknutí (jinak se přepne hned).
+        changeAccent: (a) => withViewTransition(() => { saveAccent(a); setAccent(loadAccent()); }, { enabled: lively, flush: flushSync }),
+        changeTheme: (t) => withViewTransition(() => {
           // První přepnutí na „Vlastní“ začne od barev, které uživatel právě vidí, ne od výchozí tyrkysové.
           if (usesCustomColors(t)) setCustomColors(seedCustomColors(currentTheme));
           setCurrentTheme(t); writeStored(THEME_KEY, t); notifySettingsChanged();
-        },
+        }, { enabled: lively, flush: flushSync }),
         // Úprava barev nechá motiv, ve kterém je uživatel („Vlastní“ nebo „Experimentální vlastní“), jinak přepne na „Vlastní“.
         changeCustomColors: (c) => { const keep = currentTheme === EXPERIMENTAL_THEME_KEY ? EXPERIMENTAL_THEME_KEY : CUSTOM_THEME_KEY; saveCustomColors(c); setCustomColors(loadCustomColors()); setCurrentTheme(keep); writeStored(THEME_KEY, keep); notifySettingsChanged(); },
       }}>
@@ -130,6 +135,7 @@ export default function App() {
           <TourProvider blocked={isSearchOpen}>
           <div style={{ background: 'var(--bg-body)', color: 'var(--text-body)' }} className={`min-h-screen flex flex-col font-sans antialiased transition-all duration-200 ${lively ? 'isolate' : ''}`}>
             <LivelyScenery enabled={lively} />
+            <LivelyMotion enabled={lively} />
             <RecoveryRedirect />
             <Navbar onOpenSearch={() => setIsSearchOpen(true)} />
             <OfflineBar />

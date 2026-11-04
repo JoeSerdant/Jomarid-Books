@@ -855,15 +855,15 @@ const AppearanceTab = () => {
         )}
       </Section>
 
-      <Section title="Živý režim" description="Experimentální. Appka je hravější a méně prázdná: po stranách širokých obrazovek žijí animované postavičky (sova, raketa, kniha, plamen...), přes obrazovku poletují motýli a papírové letadlo, stránky a karty naskakují, světlo se vleče za myší a po kliknutí vyletí jiskry.">
+      <Section title="Živý režim" description="Experimentální. Appka je živější: karty, sekce a seznamy vyjíždějí postupně a s odrazem, čísla se dotáčejí, ukazatele se plní, karty knih se naklánějí za myší, okna naskakují, tlačítka a lišta pružně reagují a nový motiv se rozlije kruhem z místa kliknutí. Na pozadí a po stranách širokých obrazovek jsou jemné ozdoby.">
         <ToggleRow
           title="Zapnout živý režim"
-          description="Čtečka, hry a krátké knihy zůstávají klidné. Barvy se berou z motivu, takže se hodí ke všem, i k Vlastnímu. Na telefonu je to menší, bez postaviček po stranách."
+          description="Čtečka, hry a krátké knihy zůstávají klidné. Barvy se berou z motivu, takže se hodí ke všem, i k Vlastnímu. Na telefonu jsou jen animace rozhraní a pozadí, bez ozdob po stranách."
           checked={!!lively} onChange={changeLively}
         />
         {lively && (typeof document !== 'undefined' && document.documentElement.dataset.reduceMotion === '1') && (
           <p data-testid="lively-motion-note" style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">
-            Máš omezený pohyb (níže v sekci Pohyb a animace), takže postavičky jen stojí, nic nelétá a jiskřičky se nespouštějí.
+            Máš omezený pohyb (níže v sekci Pohyb a animace), takže se nic nehýbe: karty se objeví hned, čísla se neroztáčejí a okna se jen zobrazí.
           </p>
         )}
       </Section>

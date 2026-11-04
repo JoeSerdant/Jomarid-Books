@@ -103,7 +103,7 @@ export const BadgesSection = ({ stats }) => {
 
         {/* PROGRESS BAR */}
         <div className="w-full sm:w-48 bg-black/5 dark:bg-white/10 h-3 rounded-full overflow-hidden">
-          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${progressPercent}%`, backgroundColor: 'var(--bg-primary)' }}></div>
+          <div data-lv-grow className="h-full rounded-full transition-all duration-500" style={{ width: `${progressPercent}%`, backgroundColor: 'var(--bg-primary)' }}></div>
         </div>
       </div>
 
