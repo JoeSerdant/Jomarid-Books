@@ -529,12 +529,14 @@ button.history-row:hover { background: var(--bg-soft); }
 @media (max-width: 350px) { .board-controls .btn .lbl { display: none; } }
 
 .bot-bubble {
-  position: absolute; z-index: 30; left: 8px; top: 62px; max-width: min(78%, 300px);
+  /* Bublina sedí v pruhu soupeře (vpravo od jména), ne na desce: dřív zakrývala nejvyšší řadu figur */
+  position: absolute; z-index: 30; right: 10px; top: 6px; max-width: min(62%, 280px);
   background: var(--card-bg); border: 2px solid var(--green); color: var(--ink);
-  font-family: var(--font-display); font-weight: 700; font-size: 14px; line-height: 1.3;
-  padding: 8px 12px; border-radius: 14px 14px 14px 4px; box-shadow: 0 6px 18px rgba(0,0,0,.28);
+  font-family: var(--font-display); font-weight: 700; font-size: 13px; line-height: 1.25;
+  padding: 6px 10px; border-radius: 14px 14px 4px 14px; box-shadow: 0 6px 18px rgba(0,0,0,.28);
   pointer-events: none; animation: bubbleIn .22s ease-out;
 }
+.board-col.timed .bot-bubble { right: 92px; max-width: min(52%, 240px); }
 .bot-bubble.out { animation: bubbleOut .3s ease-in forwards; }
 @keyframes bubbleIn { from { opacity: 0; transform: translateY(-6px) scale(.96); } to { opacity: 1; transform: none; } }
 @keyframes bubbleOut { from { opacity: 1; } to { opacity: 0; transform: translateY(-4px); } }
@@ -766,3 +768,12 @@ body.disco .board { animation: disco-hue 2.4s linear infinite; }
 .move-marker { background: radial-gradient(circle at 35% 30%, rgba(60,70,95,.38), rgba(20,25,40,.3)); box-shadow: 0 0 0 2px rgba(255,255,255,.18); }
 .capture-marker { border-color: rgba(220,50,50,.55); box-shadow: inset 0 0 12px rgba(220,50,50,.25); }
 .coord-label { font-size: 10.5px; opacity: .75; }
+
+/* ---------- Barva šachovnice (Nastavení) ---------- */
+:root[data-board="brown"] { --board-light: #F0D9B5; --board-dark: #B58863; }
+:root[data-board="blue"] { --board-light: #DEE3E6; --board-dark: #8CA2AD; }
+:root[data-board="purple"] { --board-light: #EFE6F7; --board-dark: #9B7BC1; }
+:root[data-board="gray"] { --board-light: #E8E8E8; --board-dark: #7D7D7D; }
+.seg .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin-right: 6px; vertical-align: -2px; border: 1px solid rgba(0,0,0,.28); }
+.settings-row.settings-col { flex-direction: column; align-items: flex-start; gap: 8px; }
+.board-seg { flex-wrap: wrap; }

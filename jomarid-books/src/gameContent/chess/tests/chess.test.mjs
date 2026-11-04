@@ -698,3 +698,120 @@ describe('grafika: sada figur jako SVG', () => {
     for (const sel of ['.square.check', '.square.hint-from', '.square.drop-target', '.piece.slide', '@keyframes pieceSlide', '.piece.lifted']) assert.ok(css.includes(sel), sel);
   });
 });
+
+/* ---------------------------------------------------------------- PGN, barva šachovnice, bublina soupeře */
+describe('kopírování partie jako PGN', () => {
+  const ui = fs.readFileSync(path.join(DIR, 'ui.js'), 'utf8');
+  const pgnSrc = ui.slice(ui.indexOf('  // ---------- PGN ----------'), ui.indexOf('  function PgnButton'));
+  get(pgnSrc);
+  const buildPgn = get('buildPgn'), copyText = get('copyText');
+  // zahraje partii ze SAN a vrátí souřadnice, jak je ukládá hra
+  const coordsOf = (sans) => { let st = E.initialState(); const out = []; for (const san of sans) { const m = findBySAN(st, san); assert.ok(m, 'legální tah ' + san); out.push(coord(m)); st = E.applyMove(st, m); } return out; };
+  const GAME = ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'a6', 'Ba4', 'Nf6', 'O-O', 'Be7'];
+  const base = { coords: coordsOf(GAME), color: 'w', result: 'win', reason: 'mate', botName: 'Pip', botRating: 500, myRating: 812.4, date: new Date(2026, 10, 4) };
+
+  test('hlavička a zápis tahů: 1. e4 e5 2. Nf3 ..., výsledek a Elo podle barvy', () => {
+    const pgn = buildPgn(base);
+    assert.match(pgn, /^\[Event "Chess League"\]\n\[Site "Jomarid Books"\]\n\[Date "2026\.11\.04"\]\n\[Round "-"\]\n\[White "Ty"\]\n\[Black "Pip \(bot\)"\]\n\[Result "1-0"\]\n\[WhiteElo "812"\]\n\[BlackElo "500"\]\n\[Termination "normal"\]\n\n/);
+    assert.match(pgn, /1\. e4 e5 2\. Nf3 Nc6 3\. Bb5 a6 4\. Ba4 Nf6 5\. O-O Be7 1-0\n$/);
+    const black = buildPgn({ ...base, color: 'b', result: 'loss' });
+    assert.match(black, /\[White "Pip \(bot\)"\]\n\[Black "Ty"\]\n\[Result "1-0"\]\n\[WhiteElo "500"\]\n\[BlackElo "812"\]/);
+  });
+
+  test('výsledek z pohledu hráče se správně převede na bílého a černého (výhra, prohra, remíza)', () => {
+    const res = (color, result) => buildPgn({ ...base, color, result }).match(/\[Result "([^"]+)"\]/)[1];
+    assert.equal(res('w', 'win'), '1-0'); assert.equal(res('w', 'loss'), '0-1');
+    assert.equal(res('b', 'win'), '0-1'); assert.equal(res('b', 'loss'), '1-0');
+    assert.equal(res('w', 'draw'), '1/2-1/2'); assert.equal(res('b', 'draw'), '1/2-1/2');
+    assert.equal(buildPgn({ ...base, result: 'nevim' }).match(/\[Result "([^"]+)"\]/)[1], '*');
+    assert.match(buildPgn({ ...base, reason: 'timeout', result: 'loss' }), /\[Termination "time forfeit"\]/);
+    assert.match(buildPgn({ ...base, reason: 'resign', result: 'loss' }), /\[Termination "abandoned"\]/);
+  });
+
+  test('jméno s uvozovkou a zpětným lomítkem se v hlavičce escapuje, chybějící hodnocení se vynechá a prázdná partie je jen výsledek', () => {
+    const odd = buildPgn({ ...base, botName: 'Pip "Rychlý" \\ Bot', botRating: null, myRating: undefined });
+    assert.match(odd, /\[Black "Pip \\"Rychlý\\" \\\\ Bot \(bot\)"\]/);
+    assert.doesNotMatch(odd, /Elo/);
+    const empty = buildPgn({ ...base, coords: [], result: 'loss', color: 'w' });
+    assert.match(empty, /\n\n0-1\n$/);
+  });
+
+  test('dlouhá partie se zalomí do řádků nejvýš 80 znaků a výsledný zápis jde přehrát stejným parserem tahů', () => {
+    const rnd = lcg(777);
+    let st = E.initialState(); const coords = [];
+    for (let i = 0; i < 120 && !E.isCheckmate(st) && !E.isStalemate(st); i += 1) {
+      const all = E.generateAllLegalMoves(st, st.turn); if (!all.length) break;
+      const m = all[Math.floor(rnd() * all.length)]; coords.push(coord(m)); st = E.applyMove(st, m);
+    }
+    const pgn = buildPgn({ ...base, coords });
+    const body = pgn.split('\n\n')[1];
+    for (const line of body.trim().split('\n')) assert.ok(line.length <= 80, 'řádek ' + line.length);
+    const tokens = body.replace(/\d+\.\s*/g, ' ').trim().split(/\s+/).filter((t) => !/^(1-0|0-1|1\/2-1\/2|\*)$/.test(t));
+    assert.equal(tokens.length, coords.length);
+    let s2 = E.initialState();
+    for (const san of tokens) { const m = findBySAN(s2, san); assert.ok(m, 'parser přijme ' + san); s2 = E.applyMove(s2, m); }
+    assert.equal(JSON.stringify(plain(s2.board)), JSON.stringify(plain(st.board)), 'stejná koncová pozice');
+  });
+
+  test('kopírování: nejdřív schránka prohlížeče, při odmítnutí nebo nepřítomnosti náhradní cesta, a vždy vrátí pravdivou odpověď', async () => {
+    const run = (nav, doc) => { const ctx = vm.createContext({ navigator: nav, document: doc, Promise, console }); vm.runInContext(pgnSrc.slice(pgnSrc.indexOf('  function copyText')), ctx); return ctx.copyText; };
+    const box = (copied) => ({ createElement: () => ({ style: {}, setAttribute() {}, select() {}, set value(v) { copied.push(v); } }), body: { appendChild() {}, removeChild() {} }, execCommand: () => true });
+    const written = [];
+    assert.equal(await run({ clipboard: { writeText: async (t) => { written.push(t); } } }, box([]))('abc'), true);
+    assert.deepEqual(written, ['abc']);
+    const fb = [];
+    const d1 = box(fb); d1.execCommand = () => true;
+    assert.equal(await run({ clipboard: { writeText: () => Promise.reject(new Error('zakázáno')) } }, Object.assign({}, d1, { body: d1.body }))('xyz'), true, 'zamítnutá schránka → náhradní cesta');
+    assert.deepEqual(fb, ['xyz']);
+    const d2 = box([]); d2.execCommand = () => false;
+    assert.equal(await run({}, d2)('q'), false, 'obě cesty selžou');
+    const d3 = box([]); d3.createElement = () => { throw new Error('bez DOM'); };
+    assert.equal(await run({}, d3)('q'), false, 'výjimka se zachytí');
+  });
+
+  test('napojení do rozhraní: tlačítko je na konci partie i v rozboru, jen když je co kopírovat', () => {
+    assert.match(ui, /info\.moves\.length >= 1 && h\(PgnButton, \{ getPgn: \(\) => buildPgn\(\{ coords: info\.moves, color: info\.color, result: info\.result, reason: info\.reason, botName: bot\.name, botRating: bot\.rating, myRating: s\.ratingBefore/);
+    assert.match(ui, /recs\.length >= 1 && h\(PgnButton, \{ getPgn: \(\) => buildPgn\(\{ coords: moves, color, result: review\.result/);
+    assert.match(ui, /"✓ PGN zkopírováno"/);
+  });
+});
+
+describe('barva šachovnice a bublina soupeře', () => {
+  const ui = fs.readFileSync(path.join(DIR, 'ui.js'), 'utf8');
+  const css = fs.readFileSync(path.join(DIR, 'style.css'), 'utf8');
+
+  test('výchozí postup má zelenou, starý postup bez barvy ji dostane a nesmyslná hodnota se v rozhraní nepoužije', () => {
+    assert.equal(L.defaultSave().board, 'green');
+    const old = L.migrate({ rating: 900, wins: {} }, [500, 850, 1200, 1550, 1900]);
+    assert.equal(old.board, 'green');
+    assert.equal(L.migrate({ board: 'brown' }, [500, 850, 1200, 1550, 1900]).board, 'brown');
+    const src = ui.slice(ui.indexOf('  const BOARD_COLORS'), ui.indexOf('  function ThemeSeg'));
+    const attrs = {};
+    const ctx = vm.createContext({ document: { documentElement: { setAttribute: (k, v) => { attrs[k] = v; }, removeAttribute: (k) => { delete attrs[k]; } } }, div() {}, button() {}, span() {} });
+    vm.runInContext(src, ctx);
+    ctx.applyBoard('purple'); assert.equal(attrs['data-board'], 'purple');
+    ctx.applyBoard('green'); assert.equal(attrs['data-board'], undefined, 'zelená je základ');
+    ctx.applyBoard('blue'); assert.equal(attrs['data-board'], 'blue');
+    ctx.applyBoard('<script>'); assert.equal(attrs['data-board'], undefined, 'neznámá hodnota se zahodí');
+    ctx.applyBoard(undefined); assert.equal(attrs['data-board'], undefined);
+  });
+
+  test('každá barva má v CSS dvě barvy polí a v nastavení přepínač s náhledem; změna se ukládá do postupu', () => {
+    for (const k of ['brown', 'blue', 'purple', 'gray']) assert.match(css, new RegExp(`:root\\[data-board="${k}"\\] \\{ --board-light: #[0-9A-Fa-f]{6}; --board-dark: #[0-9A-Fa-f]{6}; \\}`), k);
+    const colors = [...ui.matchAll(/\["(green|brown|blue|purple|gray)", "[^"]+", "(#[0-9A-Fa-f]{6})", "(#[0-9A-Fa-f]{6})"\]/g)];
+    assert.equal(colors.length, 5);
+    assert.match(ui, /h\(BoardSeg, \{ value: save\.board \|\| "green", onChange: \(v\) => onUpdate\(\{ board: v \}\) \}\)/);
+    assert.match(ui, /const boardColor = save\.board \|\| "green";\n\s*useEffect\(\(\) => \{ applyBoard\(boardColor\); \}, \[boardColor\]\);/);
+    // zelená v CSS (základ) a v přepínači je stejná
+    const base = css.match(/--board-light: (#[0-9A-Fa-f]{6});\n\s*--board-dark: (#[0-9A-Fa-f]{6});/);
+    assert.deepEqual([colors[0][2].toUpperCase(), colors[0][3].toUpperCase()], [base[1].toUpperCase(), base[2].toUpperCase()]);
+  });
+
+  test('bublina soupeře sedí v jeho pruhu, ne na desce; u partie s hodinami se posune vedle hodin', () => {
+    const b = css.match(/\.bot-bubble \{[^}]*\}/)[0];
+    assert.match(b, /right: 10px; top: 6px;/);
+    assert.doesNotMatch(b, /top: 62px/);
+    assert.match(css, /\.board-col\.timed \.bot-bubble \{ right: 92px;/);
+    assert.match(ui, /div\(\{ className: "board-col" \+ \(botTime != null \? " timed" : ""\) \},/);
+  });
+});
