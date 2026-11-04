@@ -457,6 +457,85 @@
     return val;
   }
 
+  // ---------- PGN ----------
+  // Partii jde zkopírovat jako PGN (běžný zápis šachových partií) a vložit do Lichess, Chess.com nebo jiného rozboru.
+  function sanList(coords) {
+    const out = [];
+    let st = ChessEngine.initialState();
+    for (const c of coords) {
+      const m = findMoveByCoord(st, c);
+      if (!m) break;
+      const all = ChessEngine.generateAllLegalMoves(st, st.turn);
+      const after = ChessEngine.applyMove(st, m);
+      out.push(toSAN(m, all, after));
+      st = after;
+    }
+    return out;
+  }
+  function buildPgn({ coords, color, result, reason, botName, botRating, myRating, date }) {
+    const two = (n) => (n < 10 ? "0" : "") + n;
+    const d = date instanceof Date ? date : new Date();
+    const dateStr = d.getFullYear() + "." + two(d.getMonth() + 1) + "." + two(d.getDate());
+    const mine = "Ty", theirs = botName ? botName + " (bot)" : "Bot";
+    let res = "*";
+    if (result === "draw") res = "1/2-1/2";
+    else if (result === "win" || result === "loss") res = (result === "win") === (color === "w") ? "1-0" : "0-1";
+    const tags = [["Event", "Chess League"], ["Site", "Jomarid Books"], ["Date", dateStr], ["Round", "-"],
+      ["White", color === "w" ? mine : theirs], ["Black", color === "w" ? theirs : mine], ["Result", res]];
+    const mineElo = Number.isFinite(myRating) ? String(Math.round(myRating)) : null, botElo = Number.isFinite(botRating) ? String(Math.round(botRating)) : null;
+    const whiteElo = color === "w" ? mineElo : botElo, blackElo = color === "w" ? botElo : mineElo;
+    if (whiteElo) tags.push(["WhiteElo", whiteElo]);
+    if (blackElo) tags.push(["BlackElo", blackElo]);
+    tags.push(["Termination", reason === "timeout" ? "time forfeit" : reason === "resign" ? "abandoned" : "normal"]);
+    const sans = sanList(coords);
+    let text = "";
+    sans.forEach((san, k) => { text += (k % 2 === 0 ? (k ? " " : "") + (k / 2 + 1) + ". " : " ") + san; });
+    const wrapped = (text + (text ? " " : "") + res).replace(/(.{1,78})(\s+|$)/g, "$1\n").trim();
+    return tags.map(([k, v]) => "[" + k + ' "' + String(v).replace(/(["\\])/g, "\\$1") + '"]').join("\n") + "\n\n" + wrapped + "\n";
+  }
+  function copyText(text) {
+    return new Promise((resolve) => {
+      const fallback = () => {
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = text; ta.setAttribute("readonly", "");
+          ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none";
+          document.body.appendChild(ta); ta.select();
+          const ok = document.execCommand("copy");
+          document.body.removeChild(ta);
+          resolve(!!ok);
+        } catch (e) { resolve(false); }
+      };
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => resolve(true), fallback);
+        else fallback();
+      } catch (e) { fallback(); }
+    });
+  }
+  function PgnButton({ getPgn, className }) {
+    const [state, setState] = useState("idle");
+    useEffect(() => { if (state === "idle") return; const t = setTimeout(() => setState("idle"), 2200); return () => clearTimeout(t); }, [state]);
+    const onClick = () => {
+      let text = "";
+      try { text = getPgn(); } catch (e) { text = ""; }
+      if (!text) { setState("fail"); return; }
+      copyText(text).then((ok) => { if (!ok) { try { window.prompt("Zkopíruj PGN (Ctrl+C)", text); } catch (e) { /* ignore */ } } setState(ok ? "ok" : "fail"); });
+    };
+    return button({ className: className || "btn btn-ghost btn-wide", onClick, "aria-live": "polite" }, state === "ok" ? "✓ PGN zkopírováno" : state === "fail" ? "Kopírování se nepovedlo" : "📋 Kopírovat PGN");
+  }
+
+  const BOARD_COLORS = [["green", "Zelená", "#F5EEDD", "#7CA982"], ["brown", "Hnědá", "#F0D9B5", "#B58863"], ["blue", "Modrá", "#DEE3E6", "#8CA2AD"], ["purple", "Fialová", "#EFE6F7", "#9B7BC1"], ["gray", "Šedá", "#E8E8E8", "#7D7D7D"]];
+  function BoardSeg({ value, onChange }) {
+    return div({ className: "seg board-seg", role: "radiogroup", "aria-label": "Barva šachovnice" }, BOARD_COLORS.map(([k, label, light, dark]) =>
+      button({ key: k, className: value === k ? "on" : "", role: "radio", "aria-checked": value === k, onClick: () => onChange(k) },
+        span({ className: "swatch", style: { background: "linear-gradient(135deg," + light + " 50%," + dark + " 50%)" } }), label)));
+  }
+  function applyBoard(board) {
+    const root = document.documentElement;
+    const ok = BOARD_COLORS.some(([k]) => k === board) && board !== "green";
+    if (ok) root.setAttribute("data-board", board); else root.removeAttribute("data-board");
+  }
+
   function ThemeSeg({ value, onChange }) {
     const opts = [["dark", "Tmavý"], ["light", "Světlý"], ["auto", "Podle zařízení"]];
     return div({ className: "seg", role: "radiogroup", "aria-label": "Motiv" }, opts.map(([k, label]) =>
@@ -683,6 +762,7 @@
             div({ className: "settings-row" }, span(null, "Hlášky soupeřů", small(null, "Boti občas něco prohodí k průběhu partie.")), h(Toggle, { on: save.botChat, label: "Hlášky soupeřů", onChange: (v) => onUpdate({ botChat: v }) })),
             div({ className: "settings-row" }, span(null, "Automaticky povyšovat na dámu", small(null, "Bez ptaní, když pěšec dojde na konec desky.")), h(Toggle, { on: save.autoQueen, label: "Automaticky povyšovat na dámu", onChange: (v) => onUpdate({ autoQueen: v }) })),
             div({ className: "settings-row" }, span(null, "Motiv"), h(ThemeSeg, { value: theme, onChange: setTheme })),
+            div({ className: "settings-row settings-col" }, span(null, "Barva šachovnice"), h(BoardSeg, { value: save.board || "green", onChange: (v) => onUpdate({ board: v }) })),
             div({ className: "settings-row" }, span(null, "Resetovat postup", small(null, "Smaže rating, rekordy, výhry i odemčené soupeře.")), button({ className: "btn btn-danger btn-sm", onClick: onResetProgress }, "Resetovat")))))));
   }
 
@@ -894,7 +974,7 @@
         button({ className: "icon-btn", onClick: onToggleSound, "aria-label": "Přepnout zvuk" }, soundOn ? "🔊" : "🔇")),
       div({ className: "container" },
         div({ className: "game-layout" },
-          div({ className: "board-col" },
+          div({ className: "board-col" + (botTime != null ? " timed" : "") },
             h(PlayerStrip, { who: "bot", bot, name: bot.name, rating: "≈ " + bot.rating, captured: capturedByBot, glyphColor: session.playerColor, advantage: -advPlayer, time: botTime, active: clockRunning === session.botColor, low: lowTime(botTime), turn: !session.over && session.state.turn === session.botColor }),
             bubble && div({ key: bubble.key, className: "bot-bubble" + (bubble.out ? " out" : ""), role: "status" }, bubble.text),
             h(Board, {
@@ -972,7 +1052,8 @@
       div({ className: "end-actions" },
         button({ className: "btn btn-ghost", onClick: onContinue }, "Menu"),
         button({ className: "btn btn-primary", onClick: onRematch }, "Odveta"),
-        info.moves.length >= 2 && button({ className: "btn btn-secondary btn-wide", onClick: onReview }, "🔍 Rozbor partie")));
+        info.moves.length >= 2 && button({ className: "btn btn-secondary btn-wide", onClick: onReview }, "🔍 Rozbor partie"),
+        info.moves.length >= 1 && h(PgnButton, { getPgn: () => buildPgn({ coords: info.moves, color: info.color, result: info.result, reason: info.reason, botName: bot.name, botRating: bot.rating, myRating: s.ratingBefore, date: new Date() }) })));
   }
 
   // ---------- Rozbor partie ----------
@@ -1042,7 +1123,8 @@
                   info && span({ className: "cat-chip" }, i({ className: "move-cat " + info.cat }), League.CATEGORY_LABELS[info.cat]),
                   bestSan && div({ style: { marginTop: 6 } }, "Lepší byl ", b(null, bestSan), ".")),
               !sum && analysisState && !analysisState.failed && div({ className: "rc-note" }, "Počítám rozbor… ", analysisState.done_n || 0, " / ", analysisState.total || "?")),
-            h(MoveListPanel, { moves: recs, viewIdx: idx, onView: setIdx, cats, title: "Tahy", showNav: false })))));
+            h(MoveListPanel, { moves: recs, viewIdx: idx, onView: setIdx, cats, title: "Tahy", showNav: false }),
+            recs.length >= 1 && h(PgnButton, { getPgn: () => buildPgn({ coords: moves, color, result: review.result, reason: review.reason, botName: bot ? bot.name : null, botRating: bot ? bot.rating : null, myRating: null, date: new Date() }) })))));
   }
 
   // ---------- Aplikace ----------
@@ -1099,6 +1181,9 @@
       if (!confettiKey || !confettiRef.current) return;
       return Confetti.burst(confettiRef.current, 3200);
     }, [confettiKey]);
+
+    const boardColor = save.board || "green";
+    useEffect(() => { applyBoard(boardColor); }, [boardColor]);
 
     const theme = save.theme || "dark";
     useEffect(() => {

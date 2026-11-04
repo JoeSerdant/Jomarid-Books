@@ -263,7 +263,7 @@ const League = (function () {
       unlockedIndex: 0,
       wins: { beginner: 0, easy: 0, medium: 0, hard: 0, expert: 0 },
       sound: true, theme: "dark", playerColor: "w", tc: "none",
-      highlights: true, botChat: true, autoQueen: false,
+      highlights: true, botChat: true, autoQueen: false, board: "green",
       recentGames: [],
       rating: START_RATING, peak: START_RATING, ratedGames: 0,
       ratingHistory: [], record: emptyRecord(), botStats,
