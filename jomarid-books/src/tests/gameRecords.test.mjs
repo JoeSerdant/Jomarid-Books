@@ -220,7 +220,7 @@ test('všude, kde se počítá úroveň, se přičítá XP z herních odznaků (
 /* ---------------------------------------------------------------- most ve hrách */
 const GAMES = {
   rocket: ['gameContent', 'rocket', 'index.html'], polygonarena: ['gameContent', 'polygonArena', 'index.html'], chess: ['gameContent', 'chess', 'index.html'],
-  koulovikamosi: ['gameContent', 'koulovi', 'index.html'], cityclicker: ['gameContent', 'cityClicker.js'], warroom: ['gameContent', 'warroom.js'],
+  koulovikamosi: ['gameContent', 'koulovi', 'index.html'], cityclicker: ['gameContent', 'cityClicker', 'index.html'], warroom: ['gameContent', 'warroom', 'index.html'],
 };
 const decode = (rel) => {
   const text = read(...rel);
@@ -282,8 +282,8 @@ test('každá hra hlásí všechny statistiky ze svého katalogu a ostatní hry 
     chess: [read('gameContent', 'chess', 'ui.js')],
     koulovikamosi: [read('gameContent', 'koulovi', 'game.js')],
     polygonarena: [read('gameContent', 'polygonArena', 'core.js')],
-    cityclicker: [decode(['gameContent', 'cityClicker.js'])],
-    warroom: [decode(['gameContent', 'warroom.js'])],
+    cityclicker: [decode(['gameContent', 'cityClicker', 'index.html'])],
+    warroom: [decode(['gameContent', 'warroom', 'index.html'])],
     hannibal: [read('gameContent', 'hannibal', 'index.html')],
   };
   for (const g of GAME_CATALOG) {
@@ -306,7 +306,7 @@ test('každá hra hlásí všechny statistiky ze svého katalogu a ostatní hry 
 });
 
 test('prahy odznaků za „všechno“ sedí na obsah her: 24 scénářů ve Warroom, 5 soupeřů v šachách', () => {
-  const war = decode(['gameContent', 'warroom.js']);
+  const war = decode(['gameContent', 'warroom', 'index.html']);
   const raw = war.slice(war.indexOf('const RAW_SCENARIOS'));
   const scenarios = [...raw.slice(0, raw.indexOf('];')).matchAll(/\{ id: '(\w+)'/g)].length;
   const badge = (id) => GAME_BADGES.find((b) => b.id === id);

@@ -8,8 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const file = fs.readFileSync(path.join(SRC, 'gameContent', 'cityClicker.js'), 'utf8');
-const html = JSON.parse(file.match(/^export const CITY_CLICKER_HTML = (".*");\s*$/s)[1]);
+const html = fs.readFileSync(path.join(SRC, 'gameContent', 'cityClicker', 'index.html'), 'utf8');
 const css = html.slice(html.indexOf('<style>') + 7, html.indexOf('</style>'));
 const THEMES = ['classic', 'steampunk', 'cyberpunk', 'mars'];
 

@@ -33,7 +33,7 @@ test('odměny mají české názvy, šachy podle výhry, neznámé a divné dův
 
 test('každý důvod, který hry posílají, má v liště vlastní název (nic nekončí na obecném)', () => {
   const reasons = new Set();
-  const dirs = [['gameContent', 'rocket', 'index.html'], ['gameContent', 'polygonArena', 'sim.js'], ['gameContent', 'koulovi', 'game.js'], ['gameContent', 'chess', 'ui.js'], ['gameContent', 'cityClicker.js'], ['gameContent', 'warroom.js']];
+  const dirs = [['gameContent', 'rocket', 'index.html'], ['gameContent', 'polygonArena', 'sim.js'], ['gameContent', 'koulovi', 'game.js'], ['gameContent', 'chess', 'ui.js'], ['gameContent', 'cityClicker', 'index.html'], ['gameContent', 'warroom', 'index.html']];
   for (const d of dirs) {
     for (const m of read(...d).matchAll(/jomaridReward\(\\?["']([a-z_]+)["']|jomaridReward\(\\?["']([a-z_]+)["'] \+/g)) reasons.add(m[1] || m[2]);
   }
@@ -80,7 +80,7 @@ test('více přečtených knih a delší série dávají vyšší nebo stejnou �
 /* ---------------------------------------------------------------- most ve hrách */
 const GAMES = {
   rocket: ['gameContent', 'rocket', 'index.html'], polygonarena: ['gameContent', 'polygonArena', 'index.html'], chess: ['gameContent', 'chess', 'index.html'],
-  koulovikamosi: ['gameContent', 'koulovi', 'index.html'], cityclicker: ['gameContent', 'cityClicker.js'], warroom: ['gameContent', 'warroom.js'],
+  koulovikamosi: ['gameContent', 'koulovi', 'index.html'], cityclicker: ['gameContent', 'cityClicker', 'index.html'], warroom: ['gameContent', 'warroom', 'index.html'],
   hannibal: ['gameContent', 'hannibal', 'index.html'],
 };
 const bridgeOf = (rel) => {
