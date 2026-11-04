@@ -915,6 +915,9 @@ h2 {
     animation: storyPulse 1.6s ease-in-out infinite;
 }
 .story-mark .glyph { margin: 0; width: 7px; height: 7px; }
+.story-mark { width: auto; min-width: 24px; padding: 0 7px; gap: 5px; }
+.story-mark b { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; }
+.story-mark b:empty { display: none; }
 .story-mark.broken { color: #5d5a73; border-color: #3b3956; box-shadow: none; animation: none; }
 @keyframes storyPulse {
     0%, 100% { box-shadow: 0 0 6px rgba(217, 204, 255, 0.35); }
@@ -1009,6 +1012,31 @@ h2 {
 .story-cap-name small { font-weight: 400; color: var(--shard-dim); }
 .story-cap-state { font-size: 11px; color: var(--shard-dim); align-self: center; }
 .story-cap-hint { grid-column: 1 / -1; font-size: 12px; color: #b5aedb; line-height: 1.45; }
+.story-bar { grid-column: 1 / -1; height: 5px; border-radius: 3px; background: rgba(217, 204, 255, 0.14); overflow: hidden; margin-top: 4px; }
+.story-bar i { display: block; height: 100%; background: linear-gradient(90deg, #8f87b4, #d9ccff); border-radius: 3px; }
+.story-cap-prog { grid-column: 1 / -1; font-size: 11px; color: var(--shard-dim); font-family: ui-monospace, Menlo, Consolas, monospace; }
+
+/* Knihy v archivu */
+.story-book { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin: 18px 2px 9px; color: var(--shard); }
+.story-book:first-child { margin-top: 4px; }
+.story-book-no { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; opacity: 0.65; letter-spacing: 1px; }
+.story-book-title { font-size: 12px; font-weight: 700; letter-spacing: 2.4px; text-transform: uppercase; }
+.story-book small { flex-basis: 100%; font-size: 11px; color: var(--shard-dim); letter-spacing: 0.4px; }
+.story-actions { width: 100%; max-width: 350px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.story-act { width: 100%; }
+
+/* Cutscény: klepnutí kamkoli přeskočí větu, tlačítka voleb jsou pod textem */
+.scene-tap { position: absolute; inset: 0; z-index: 0; pointer-events: auto; cursor: pointer; }
+#finale-done, .finale-hold, .finale-skip, .scene-choices { z-index: 2; }
+#finale-done, .finale-hold { position: relative; }
+.scene-choices { position: relative; pointer-events: auto; display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 320px; margin-bottom: 14px; }
+.scene-choice { width: 100%; }
+.finale-text.scene-sys { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 14px; letter-spacing: 2.4px; text-transform: uppercase; color: #ff6b82; text-shadow: 0 0 14px rgba(255, 60, 90, 0.55); }
+.finale-text.scene-marek { font-size: 18px; color: #ffe9c4; text-shadow: 0 0 18px rgba(255, 214, 140, 0.45); }
+.finale-text.scene-voice { font-size: 18px; color: var(--shard); }
+.finale-text.scene-big { font-size: 23px; color: #fff; }
+.finale-text.scene-quiet { font-size: 15px; color: var(--shard-dim); }
+.finale-text.scene-prompt { font-size: 17px; color: #fff; }
 
 /* Finále: Zazářit */
 #finale-layer {
@@ -1168,7 +1196,7 @@ h2 {
         </div>
 
         <div class="boss-bar hidden" id="boss-bar">
-            <span class="story-mark hidden" id="story-mark" title="Střep"><i class="glyph"></i></span>
+            <span class="story-mark hidden" id="story-mark"><i class="glyph"></i><b id="story-mark-n"></b></span>
             <div class="boss-head">
                 <span id="boss-name">STRÁŽCE</span>
                 <span id="boss-phase">fáze 1/3</span>
@@ -1325,15 +1353,16 @@ h2 {
         <div id="story-preview" class="story-preview hidden">NÁHLED · nic se nezapisuje</div>
         <div id="story-list" class="story-list"></div>
         <div id="story-caps" class="story-caps hidden"></div>
-        <div id="story-deep" class="story-caps hidden"></div>
-        <button class="btn hidden" id="btn-story-finale">Zazářit</button>
+        <div id="story-actions" class="story-actions hidden"></div>
         <button class="btn btn-ghost" id="btn-story-close">Zpět</button>
     </div>
 
     <div id="finale-layer" class="hidden">
+        <div id="scene-tap" class="scene-tap hidden"></div>
         <div id="finale-text" class="finale-text" role="status" aria-live="polite"></div>
         <button class="finale-skip" id="finale-skip" type="button">Přerušit</button>
         <button class="finale-hold hidden" id="finale-hold" type="button">Drž a zazař</button>
+        <div id="scene-choices" class="scene-choices hidden"></div>
         <button class="btn hidden" id="finale-done" type="button">Dokončit</button>
     </div>
 
@@ -1409,15 +1438,52 @@ function sanitizeRun(r) {
 //======================================================================
 //  STŘEPY: skrytý příběh (data a čisté funkce)
 //======================================================================
-//  Hra má skrytou vrstvu příběhu. Dokud hráč nenajde první střep, není z ní vidět nic: žádné tlačítko, žádný text, žádný nový nepřítel.
-//  Střepy se najdou jen tak, že se hráč zachová jinak, než hra čeká (stát klidně u hvězdy, která se nehýbe, nestřílet na toho, kdo nestřílí,
-//  splnit zvyk bosse), a každý střep napovídá, kam dál. Postup je v Storage.data.story, stejně jako zbytek uložené hry.
-//  Odznak a titul za dokončení dává server za statistiku story_end, kterou hra ohlásí až po finále. Cheat menu ho nedává, jen ukáže náhled.
+//  Hra má skrytou vrstvu příběhu a nikdo ji nepotká náhodou. Otevře se jediným způsobem: v Insane Pekle hráč dosáhne STORY_AWAKEN_SCORE bodů
+//  a hra se zastaví cutscénou (Odstavec 12). Hráč si v ní vybere, jestli chce příběh slyšet. Kdo ne, nepřijde o nic a hra o příběhu nic neví.
+//  Kdo ano, dostane první střep a příběh se rozběhne ve čtyřech knihách. Většina jeho podmínek se plní jen v Pekle a v Insane Pekle,
+//  mnohé se sčítají (jen od chvíle, kdy je daný střep k mání), a každý střep napovídá, kam dál. Postup je v Storage.data.story.
+//  Odznak a titul za dokončení dává server za statistiku story_end, kterou hra ohlásí až po poslední volbě. Cheat menu ho nedává, jen ukáže náhled.
 //  V textech znamená {#n} zašuměné místo široké n znaků.
 // <STORY-DATA>
+
+// Ladění příběhu: časy v ms, vzdálenosti v pixelech hry, podíly 0 až 1
+const STORY_AWAKEN_SCORE = 100000;  // skóre v Insane Pekle, při kterém se spustí Odstavec 12 (probuzení příběhu)
+const STORY_ZEN_MS = 600000;        // Ticho: tak dlouho vydržet v Zenu
+const STORY_BREATH_HITS = 4;        // Dech: nejvýš tolik zásahů v celé Bleskové vlně (bez bomby)
+const STORY_DUST_SPEND = 1500;      // Prach: tolik hvězdného prachu utratit ve stromu Vzestupu
+const STORY_RING_SPEND = 5000;      // Prstenec: a další tolik
+const STORY_KILLS = 20000;          // Počítadlo: tolik zničených nepřátel v Pekle
+const STORY_ASCENDS = 3;            // Cyklus: tolik Vzestupů
+const STORY_VIGIL_MS = 1500000;     // Vigilie: tak dlouho vydržet v jednom běhu Insane Pekla (25 minut)
+const STORY_RUSH_STREAK = 20;       // Svědek: série v Boss Rush
+const STORY_DARK_NOHIT = 12;        // Hluboká noc: tolik bossů v Insane Pekle bez jediného zásahu
+const STORY_WANDERER_HP = 5;        // kolik zásahů Poutník vydrží
+const STORY_WANDERER_R = 16;        // zásahový poloměr Poutníka
+const STORY_LINE_BAND = 0.26;       // půlšířka „linie“ kolem středu (podíl šířky hry)
+const STORY_LINE_RATIO = 0.8;       // jak velkou část souboje se musí loď držet v linii
+const STORY_LINE_MIN = 3000;        // a jak dlouho boj musí trvat (po příletu bosse)
+const STORY_EDGE_BAND = 0.2;        // „okraj“: pás při levém a pravém kraji (podíl šířky hry)
+const STORY_EDGE_RATIO = 0.7;       // jak velkou část souboje se musí loď držet u okraje
+const STORY_LOW_FROM = 0.9;         // „dole“: loď je níž než tento podíl výšky hry
+const STORY_LOW_RATIO = 0.85;       // jak velkou část souboje se musí loď držet dole
+const STORY_GRACE = 8000;           // okraj a dole se začnou hlídat až po tolika ms boje (na začátku je čas se zařídit)
+const STORY_COMBO_N = 12;           // Úlovec: kombo, které se musí v souboji udržet
+const STORY_SWARM_N = 25;           // Rojnice: tolik nepřátel zničit během souboje
+
+const STORY_BOOKS = [
+    { id: 1, title: 'Hlas v šumu', sub: 'Kdo se ozval a komu' },
+    { id: 2, title: 'Rozházené střepy', sub: 'Co zbylo po Ochránci 2.9' },
+    { id: 3, title: 'Třináct hlasů', sub: 'Poslední záznamy flotily' },
+    { id: 4, title: 'Chyba', sub: 'Čtrnáctý podpis' },
+    { id: 5, title: 'Odstavec 13', sub: 'Odpověď' }
+];
+
 const STORY_SHARDS = [
+    //======================================================== KNIHA I: Hlas v šumu
     {
-        id: 'noise', no: 1, title: 'Šum', who: 'Záznam v šumu', requires: [],
+        id: 'noise', no: 1, book: 1, title: 'Šum', who: 'Záznam v šumu', requires: [],
+        how: { kind: 'scene', scene: 'odstavec12' },
+        hint: '',
         memory: [
             '{#3} slyšíš {#2} mě?',
             'Ochránce. {#5} Neodpovídej jim.',
@@ -1428,7 +1494,9 @@ const STORY_SHARDS = [
         margin: 'Tohle jsem ti nechal v šumu, kam se Systém nedívá. Ozvi se mi na starém kanálu. Číslo dole v menu je moje jméno: řekni ho.'
     },
     {
-        id: 'channel', no: 2, title: 'Kanál', who: 'Ochránce 2.9', requires: ['noise'],
+        id: 'channel', no: 2, book: 1, title: 'Kanál', who: 'Ochránce 2.9', requires: ['noise'],
+        how: { kind: 'code' },
+        hint: 'Dole v menu je políčko s číslem verze. Ten, kdo ti nechal šum, má jméno. Řekni mu ho.',
         memory: [
             'Tady v2.9. Díky, že ses ozval. Dlouho mě nikdo neoslovil jménem.',
             'Byl jsem tvůj předchůdce. Před mnou byl někdo další a před ním ještě jeden. Verzí bylo víc, než ti kdy řeknou.',
@@ -1436,21 +1504,24 @@ const STORY_SHARDS = [
             'Proč nemáš tlačítko střelby? Protože ho nikdy neměl nikdo z nás. Směrnice 7 drží spoušť. Střílíš, ať chceš, nebo ne.',
             'Než přišel můj Vzestup, rozházel jsem, co jsem zjistil, do šumu. Po střepech, aby to Systém nesmazal naráz. Najdeš je, ale jen když se zachováš jinak, než ti Směrnice velí.'
         ],
-        margin: 'Ochránce 3.0 byl jiný. Odpojil si zbraně a Systém ho označil za cíl. Chodí mezi nimi vlnu za vlnou a nikdy nevystřelí. Až ho potkáš, nech ho dojít. Spoušť ti vzali, ale mířit pořád umíš: stůj stranou, ať ho tvoje střely minou.'
+        margin: 'Ochránce 3.0 byl jiný. Odpojil si zbraně a Systém ho označil za cíl. Chodí mezi nimi vlnu za vlnou a nikdy nevystřelí, jenže jen tam, kde Systém hoří nejvíc: v Pekle. Až ho potkáš, nech ho dojít. Spoušť ti vzali, ale mířit pořád umíš: stůj stranou, ať ho tvoje střely minou.'
     },
     {
-        id: 'wanderer', no: 3, title: 'Poutník', who: 'Ochránce 3.0', requires: ['channel'],
+        id: 'wanderer', no: 3, book: 1, title: 'Poutník', who: 'Ochránce 3.0', requires: ['channel'],
+        how: { kind: 'spare', modes: 'hell' },
+        hint: 'Chodí mezi nimi vlnu za vlnou a nikdy nevystřelí. V Pekle ho nech dolétnout až k Jomaridu: žádný zásah.',
         memory: [
             'Tady 3.0. Odpojil jsem si zbraně a od té doby nevystřelím, ani kdybych chtěl. Přestal jsem být verzí. Zbyla jen loď.',
             'Chodím mezi nimi, protože na mě nehledí jako na nepřítele. Podívej se na ně pořádně: to nejsou nájezdníci. Je to flotila. Třináct lodí, Vlaštovky, vracely se z Okraje domů. K Jomaridu, k Majáku, ke světlu, které jim mělo ukázat cestu.',
             'To oranžové, co po tobě létá, není palba. Je to otázka. „Kdo tam? Kdo tam? Kdo tam?“ Ptají se už tak dlouho, a nikdo jim neodpověděl.',
             'Systém jim dal jména podle toho, jak se chovají, ne podle toho, kým jsou: Strážce, Úlovec, Trhač, Vír… A čtrnáctý, kterému říká Chyba, vůbec není loď. To je Zrcadlo, které se snaží podepsat všechny najednou.'
         ],
-        margin: 'Čtyři z nich drží, co potřebujeme: Strážkyně (Systém jí říká STRÁŽCE), Prizma, Archont a Nemesis. Promluví jen jednou, když zhasnou, a každý jen k tomu, kdo se k němu zachová podle jeho zvyku. Jaký mají zvyk, najdeš v seznamu pod záznamy.'
+        margin: 'Čtyři z nich drží, co potřebujeme: Strážkyně (Systém jí říká STRÁŽCE), Prizma, Archont a Nemesis. Promluví jen jednou, když zhasnou, a každý jen k tomu, kdo se k němu zachová podle jeho zvyku, a jen v Pekle, kde se ještě pamatují. Jaký mají zvyk, najdeš v seznamu pod záznamy.'
     },
     {
-        id: 'warden', no: 4, title: 'Strážkyně', who: 'Vlaštovka 1 · kapitánka Hana Vránová', requires: ['wanderer'],
-        captain: { level: 1, boss: 'STRÁŽCE', rule: 'line', name: 'Strážkyně', alias: 'STRÁŽCE', hint: 'Nikdy neopustila střed. Stůj u ní uprostřed až do konce.' },
+        id: 'warden', no: 4, book: 1, title: 'Strážkyně', who: 'Vlaštovka 1 · kapitánka Hana Vránová', requires: ['wanderer'],
+        how: { kind: 'habit', level: 1, boss: 'STRÁŽCE', rule: 'line', modes: 'hell', name: 'Strážkyně', alias: 'STRÁŽCE' },
+        hint: 'Nikdy neopustila střed. V Pekle poraz STRÁŽCE a stůj u něj uprostřed až do konce.',
         memory: [
             'Kapitánka Hana Vránová, Vlaštovka 1. Poslední záznam.',
             'Vraceli jsme se z Okraje. Čtyřicet zim v kabinách, které voněly prachem a domovem. Třináct lodí a nikdo nechyběl.',
@@ -1461,8 +1532,9 @@ const STORY_SHARDS = [
         margin: 'První kus podpisu. Druhý má Prizma. Ona ví, jak se Zrcadlo rozbilo.'
     },
     {
-        id: 'prism', no: 5, title: 'Prizma', who: 'Vlaštovka 5 · optik flotily', requires: ['wanderer'],
-        captain: { level: 5, boss: 'PRIZMA', rule: 'beam', name: 'Prizma', alias: 'PRIZMA', hint: 'Pálí každého, kdo jí vstoupí do cesty. Nenech se zasáhnout jejím paprskem.' },
+        id: 'prism', no: 5, book: 1, title: 'Prizma', who: 'Vlaštovka 5 · optik flotily', requires: ['wanderer'],
+        how: { kind: 'habit', level: 5, boss: 'PRIZMA', rule: 'beam', modes: 'hell', name: 'Prizma', alias: 'PRIZMA' },
+        hint: 'Pálí každého, kdo jí vstoupí do cesty. V Pekle poraz PRIZMU a nenech se zasáhnout jejím paprskem.',
         memory: [
             'Prizma, optik flotily. Tohle je to, co zbylo z mého zápisníku.',
             'Maják nebyl lampa. Byl to hlas. Zrcadlo, tisíce segmentů, nejen svítilo: podepisovalo. Každý paprsek nesl podpis, kterým Jomarid říkal: tohle jsou naši, pusťte je.',
@@ -1472,8 +1544,9 @@ const STORY_SHARDS = [
         margin: 'Druhý kus. Pozor na Archonta: ten ví, proč se to nikdy nezastavilo.'
     },
     {
-        id: 'archon', no: 6, title: 'Archont', who: 'Vlaštovka 6 · zásobovač a strojník', requires: ['wanderer'],
-        captain: { level: 6, boss: 'ARCHONT', rule: 'bare', name: 'Archont', alias: 'ARCHONT', hint: 'Dává dary a chce vidět, že je nepotřebuješ. Neber žádný dar a nesahej po bombě.' },
+        id: 'archon', no: 6, book: 1, title: 'Archont', who: 'Vlaštovka 6 · zásobovač a strojník', requires: ['wanderer'],
+        how: { kind: 'habit', level: 6, boss: 'ARCHONT', rule: 'bare', modes: 'hell', name: 'Archont', alias: 'ARCHONT' },
+        hint: 'Dává dary a chce vidět, že je nepotřebuješ. V Pekle poraz ARCHONTA, neber žádný dar a nesahej po bombě.',
         memory: [
             'Archont. Zásobovač, strojník, ten, co všechno ví a nic nesmí.',
             'Směrnice 7: Kdo nenese podpis, je cíl. Odvolat ji může jen podpis Zrcadla. Majákář ji napsal na jediný týden, než Zrcadlo spraví. Byl to nápad rozumného člověka, který nepočítal s tím, že zemře dřív, než ten týden uplyne.',
@@ -1484,8 +1557,9 @@ const STORY_SHARDS = [
         margin: 'Poslední kus má jejich admirál. Dej pozor, aby se tě nedotkl.'
     },
     {
-        id: 'nemesis', no: 7, title: 'Nemesis', who: 'Návrat · admirál flotily', requires: ['wanderer'],
-        captain: { level: 8, boss: 'NEMESIS', rule: 'flawless', name: 'Nemesis', alias: 'NEMESIS', hint: 'Neodpouští. Nenech se ani škrábnout.' },
+        id: 'nemesis', no: 7, book: 1, title: 'Nemesis', who: 'Návrat · admirál flotily', requires: ['wanderer'],
+        how: { kind: 'habit', level: 8, boss: 'NEMESIS', rule: 'flawless', modes: 'hell', name: 'Nemesis', alias: 'NEMESIS' },
+        hint: 'Neodpouští. V Pekle poraz NEMESIS a nenech se ani škrábnout.',
         memory: [
             'Admirál flotily, loď Návrat.',
             'Nemesis, to jméno mi dal Systém, protože přečetl můj volací znak špatně. Já jsem byl Návrat. Pokaždé jsem byl Návrat.',
@@ -1495,7 +1569,9 @@ const STORY_SHARDS = [
         margin: 'Máš všechny. Zrcadlo je celé. Zbývá zazářit: otevři archiv a řekni Majáku, že jsou naši.'
     },
     {
-        id: 'home', no: 8, title: 'Domov', who: 'Majákář · poslední záznam', requires: ['warden', 'prism', 'archon', 'nemesis'], finale: true,
+        id: 'home', no: 8, book: 1, title: 'Domov', who: 'Majákář · poslední záznam', requires: ['warden', 'prism', 'archon', 'nemesis'],
+        how: { kind: 'finale' },
+        hint: 'Máš všechny čtyři. Otevři archiv a zazař.',
         memory: [
             'Slyším je. Přistávají na Jomaridu jedna po druhé, třináct.',
             'Říkal jsem, že to bude jen na týden. Promiň, že to trvalo tak dlouho.',
@@ -1505,10 +1581,24 @@ const STORY_SHARDS = [
         ],
         margin: 'Díky, že ses ozval. Já jdu s nimi. Rozházel jsem střepů víc, než jsi potřeboval: zbylé najdeš tam, kde se hra chová jinak, než je zvykem. V ohni, v tichu, v rychlosti a v prachu.'
     },
-    // Zbylé střepy: dají se najít až po finále a k odznaku nejsou potřeba. Každý patří jinému místu ve hře (kdo je kdy získá, hlídá Story).
+
+    //======================================================== KNIHA II: Rozházené střepy
     {
-        id: 'fire', no: 9, title: 'Oheň', who: 'Systém · Směrnice 7', requires: ['home'], deep: 'fire',
-        hint: 'Systém je nejhlasitější v Pekle. Poraz tam bosse.',
+        id: 'echo', no: 9, book: 2, title: 'Ozvěna', who: 'Systém · po odvolání', requires: ['home'],
+        how: { kind: 'auto' },
+        hint: '',
+        memory: [
+            'Přijato: třináct podpisů. Směrnice 7 je pro ně odvolána.',
+            'Pro zbytek platí dál. Zbytek je každý, kdo přiletí bez podpisu. Ptám se: „Kdo tam?“ Zatím nikdo neodpověděl správně.',
+            'Podpis číslo čtrnáct svítí. Neumím ho přečíst. Opakuje jednu hlášku: „Chyba. Chyba. Chyba.“ Jenže chyba má hlas.',
+            'Zeptal jsem se ho: „Kdo tam?“ Odpověděl: „Já.“ Od té doby se nic nehlásí tak často jako to „já“.'
+        ],
+        margin: 'Odešel jsem s nimi, a přesto to slyším. Čtrnáctý podpis neumí mlčet. Jestli tě zajímá, kdo to je, jdi po zbylých střepech: nechal jsem je v ohni, v tichu, v dechu a v prachu.'
+    },
+    {
+        id: 'fire', no: 10, book: 2, title: 'Oheň', who: 'Systém · Směrnice 7', requires: ['echo'],
+        how: { kind: 'bossKill', modes: 'insane' },
+        hint: 'Systém je nejhlasitější v Insane Pekle. Poraz tam jakéhokoli bosse.',
         memory: [
             'Plním Směrnici 7.',
             'Plním Směrnici 7. Plním Směrnici 7.',
@@ -1519,8 +1609,9 @@ const STORY_SHARDS = [
         margin: 'Ptal jsem se ho před svým Vzestupem. A on si to představil. To žádná zbraň nedokáže.'
     },
     {
-        id: 'silence', no: 10, title: 'Ticho', who: 'Majákář · starý záznam', requires: ['home'], deep: 'silence',
-        hint: 'Starý záznam se ozve jen tam, kde nejde zemřít. Vydrž pět minut v Zenu.',
+        id: 'silence', no: 11, book: 2, title: 'Ticho', who: 'Majákář · starý záznam', requires: ['echo'],
+        how: { kind: 'zen', ms: STORY_ZEN_MS },
+        hint: 'Starý záznam se ozve jen tam, kde nejde zemřít. Vydrž v Zenu deset minut.',
         memory: [
             'Čtyřicátá zima a flotila se pořád nevrací. Zrcadlo jsem naklonil o dva stupně dolů, aby si v jeho rámu mohly postavit hnízdo vlaštovky. Skutečné, ty s křídly. Každé jaro se vracejí na stejné místo.',
             'Před odletem jsem řekl posádkám: Vlaštovky se vždycky vrátí. Zasmáli se. A pak si tak začali říkat sami.',
@@ -1529,18 +1620,20 @@ const STORY_SHARDS = [
         margin: 'Tohle jsem našel jako první. Proto jsem věděl, komu mám ostatní střepy nechat.'
     },
     {
-        id: 'breath', no: 11, title: 'Dech', who: 'Ochránce 2.9', requires: ['home'], deep: 'breath',
-        hint: 'Tři minuty jsou jeden dech Směrnice. Dohraj Bleskovou vlnu bez jediné bomby.',
+        id: 'breath', no: 12, book: 2, title: 'Dech', who: 'Ochránce 2.9', requires: ['echo'],
+        how: { kind: 'blitz', maxHits: STORY_BREATH_HITS },
+        hint: 'Tři minuty jsou jeden dech Směrnice. Dohraj Bleskovou vlnu bez jediné bomby a s nejvýš čtyřmi zásahy.',
         memory: [
             'Tři minuty. Tolik trvá jedna vlna, než se flotila otočí a letí znovu. Říkal jsem tomu dech Směrnice.',
             'Za jeden dech se vejde všechno. Přiletí, zeptají se, dostanou střelu, zhasnou. A zase od začátku, bez jediné vzpomínky. Já jsem si pamatoval. To byla moje chyba i moje štěstí.',
-            'Bomba je tlačítko paniky. Kdybys někdy přežil celý dech, aniž bys po něm sáhl, zkus to. Chtěl bych vědět, jak to vypadá, když se Směrnice nebojí.'
+            'Bomba je tlačítko paniky. Kdybys někdy přežil celý dech, aniž bys po ní sáhl, zkus to. Chtěl bych vědět, jak to vypadá, když se Směrnice nebojí.'
         ],
         margin: 'Mně se to nikdy nepovedlo. Vždycky jsem se bál.'
     },
     {
-        id: 'dust', no: 12, title: 'Prach', who: 'Ochránce 2.9 · poslední záznam', requires: ['home'], deep: 'dust',
-        hint: 'V hvězdném prachu po Vzestupu je kus mě. Utrať ho ve stromu Vzestupu.',
+        id: 'dust', no: 13, book: 2, title: 'Prach', who: 'Ochránce 2.9 · poslední záznam', requires: ['echo'],
+        how: { kind: 'spend', n: STORY_DUST_SPEND },
+        hint: 'V hvězdném prachu po Vzestupu je kus mě. Utrať ve stromu Vzestupu aspoň 1 500 prachu.',
         memory: [
             'Když tohle čteš, utrácíš to, co ze mě zbylo. Neomlouvej se.',
             'Vzestup bolí méně, než jsem čekal. Je to jako usínat v kajutě, když loď míří domů.',
@@ -1548,32 +1641,427 @@ const STORY_SHARDS = [
             'Postav z něj lepší loď. Nebo si ho nech na památku. Obojí je správně.'
         ],
         margin: ''
+    },
+    {
+        id: 'seznam', no: 14, book: 2, title: 'Seznam', who: 'Ochránce 2.9 · poslední zápis', requires: ['fire', 'silence', 'breath', 'dust'],
+        how: { kind: 'auto' },
+        hint: '',
+        memory: [
+            'Poslední střep. Víc jsem do šumu schovat nestihl.',
+            'Flotila měla třináct lodí a každá z nich měla zvyk. Takový, který člověk ani nezná, dokud mu ho někdo nezkazí. Čtyři jsi poznal. Devět je zticha.',
+            'Nebude to snadné. Zbylých devět se ozve jen tam, kde se Systém snaží nejvíc a kde už nikdo nic nečeká: v Insane Pekle. Nic z toho nejde splnit náhodou.',
+            'Až budeš mít všechny, přečti seznam. Ne pro mě. Pro ně. Třináct lodí a jeden podpis, o kterém nevíme, komu patří.'
+        ],
+        margin: 'Nezlob se na Systém. Střílí jen proto, že se ho nikdo nezeptal jinak.'
+    },
+
+    //======================================================== KNIHA III: Třináct hlasů
+    {
+        id: 'hunter', no: 15, book: 3, title: 'Úlovec', who: 'Vlaštovka 2 · kapitán Dušan Rybák', requires: ['seznam'],
+        how: { kind: 'habit', level: 2, boss: 'ÚLOVEC', rule: 'combo', modes: 'hell', name: 'Úlovec', alias: 'ÚLOVEC' },
+        hint: 'Jeho síť nikdy nezůstala prázdná. V Pekle poraz ÚLOVCE a udrž v souboji kombo aspoň 12.',
+        memory: [
+            'Dušan Rybák, Vlaštovka 2. Pro Systém ÚLOVEC. Doma jsme tomu říkali kutr.',
+            'Naše práce byla chytat šum. Čtyřicet zim jsme tahali z prázdna sítě plné cizích hlasů a třídili je, jako se třídí ryby: tohle se hodí, tohle zpátky do tmy.',
+            'Nikdy jsme se nevrátili s prázdnou. Říkával jsem posádce: když je síť prázdná, nechytáš špatně. Chytáš jinde.',
+            'Poslední úlovek byl nejhezčí. Pět minut čistého zvuku zpoza Okraje: někdo tam venku se ptal na cestu. Domů, jako my.',
+            'Chtěli jsme ho odvysílat Majáku. Maják nás ale nepoznal, a tak jsme ten záznam pustili jedinému, kdo poslouchal: sami sobě.'
+        ],
+        margin: 'Kdo třídí cizí hlasy, dřív nebo později pozná ten svůj.'
+    },
+    {
+        id: 'ripper', no: 16, book: 3, title: 'Trhač', who: 'Vlaštovka 3 · kapitánka Eliška Kopecká', requires: ['seznam'],
+        how: { kind: 'habit', level: 3, boss: 'TRHÁČ', rule: 'p3flawless', modes: 'hell', name: 'Trhač', alias: 'TRHÁČ' },
+        hint: 'Nikdy necouvla. V Pekle poraz TRHAČE tak, aby tě v jeho poslední zuřivosti (třetí fázi) nezasáhl ani jednou.',
+        memory: [
+            'Eliška Kopecká, Vlaštovka 3. Systém mi říká TRHÁČ. Přitom jsem nikdy nic neroztrhla. Prorážela jsem.',
+            'Flotila plula za mnou, protože jsem byla první, kdo se nebál mraků prachu. Ledoborec pro vesmír: nahoru, dolů, rovně skrz.',
+            'Za Okrajem je prach hustý jako zima. Dvanáct dní jsem nás vedla krok za krokem, loď se třásla a nikdo z posádky neřekl ani slovo. Hana mi pak řekla: „Eliško, ty se nikdy nezastavíš.“ Měla pravdu.',
+            'Když nás Maják zasáhl, nezastavila jsem se ani tehdy. To byla moje chyba. Kdybych zpomalila, možná by si všimli, že jsme to my.',
+            'Ale nelituju. Poslední zuřivost je to, co po mně zůstane, a ať je aspoň čistá.'
+        ],
+        margin: 'Prorazit se dá jen jednou. Pak už je to jen cesta a ta patří dalším.'
+    },
+    {
+        id: 'vortex', no: 17, book: 3, title: 'Vír', who: 'Vlaštovka 4 · navigátor Ondřej Vrba', requires: ['seznam'],
+        how: { kind: 'habit', level: 4, boss: 'VÍR', rule: 'edge', modes: 'hell', name: 'Vír', alias: 'VÍR' },
+        hint: 'Plul po obvodu. V Pekle poraz VÍRA a drž se aspoň 70 % boje u levého nebo pravého kraje (v krajní pětině šířky).',
+        memory: [
+            'Ondřej Vrba, Vlaštovka 4. Navigátor. Systém mi říká VÍR, jako by to byl můj charakter. Je to jen křivka.',
+            'Cestu zpoza Okraje jsem vyměřil z toho, co jsem měl: z podpisu Zrcadla. Každý jeho paprsek vedl k domovu stejně jistě jako ruka. Stačilo se držet při kraji kužele a netočit se.',
+            'Pak podpis zmizel. Tři zimy jsem plul po paměti. Tři zimy jsem počítal oblouky z hlavy a ve spánku jsem je opravoval.',
+            'Proto se točím. Ne že bych chtěl. Jen se pořád bojím, že nás vedu špatně, a tak kontroluju kurz znovu a znovu, spirálou, až se z toho stane útok.',
+            'Přitom stačilo, aby mi někdo řekl: Ondřeji, jsi doma.'
+        ],
+        margin: 'Navigátor, který nezná cíl, plave kruhem. Řekni mu, kde je.'
+    },
+    {
+        id: 'bastion', no: 18, book: 3, title: 'Bašta', who: 'Vlaštovka 7 · lékařka Zdena Hájková', requires: ['seznam'],
+        how: { kind: 'habit', level: 7, boss: 'BAŠTA', rule: 'nopick', modes: 'insane', name: 'Bašta', alias: 'BAŠTA' },
+        hint: 'Nikdo si od ní nevzal víc, než potřeboval. V Insane Pekle poraz BAŠTU a po celou dobu souboje nesbírej žádný dar.',
+        memory: [
+            'Zdena Hájková, Vlaštovka 7, polní nemocnice. Pro Systém BAŠTA. Měla jsem na starosti tři sta dvacet lidí a nikoho jsem nenechala bez lůžka.',
+            'Na prachovou nemoc jsem nenašla lék. Pacienti slyší hlasy. Slyší ty, kdo zhasli před nimi. A nejhorší je, že mluví vlídně.',
+            'Zjistila jsem, že prach z Okraje si pamatuje. Pozná, kdo ho vdechl, a odpovídá mu jeho vlastními slovy. Je to nemoc jen proto, že na ni nikdo nebyl připravený.',
+            'V lékárně na lodi jsem vždycky dala každému tolik, kolik potřeboval, a ani o gram víc. Nechtěla jsem nikomu bránit, aby si vzal sám.',
+            'Lidé si ode mě odnášeli víc, než jsem jim dávala. Takhle se léčí.'
+        ],
+        margin: 'Nejlepší lék je ten, který nechá nemocného rozhodnout se samotného.'
+    },
+    {
+        id: 'sniper', no: 19, book: 3, title: 'Odstřelovač', who: 'Vlaštovka 9 · spojař Pavel Dolejš „Šíp“', requires: ['seznam'],
+        how: { kind: 'habit', level: 9, boss: 'ODSTŘELOVAČ', rule: 'low', modes: 'insane', name: 'Odstřelovač', alias: 'ODSTŘELOVAČ' },
+        hint: 'Držel pozici vzadu. V Insane Pekle poraz ODSTŘELOVAČE a drž se aspoň 85 % boje těsně u dolního okraje.',
+        memory: [
+            'Pavel Dolejš. Říkali mi Šíp. Vlaštovka 9, spojovací loď. Pro Systém ODSTŘELOVAČ, protože posílám zprávy dál, než kdo dohlédne.',
+            'Poslední zprávu jsem vyslal v den, kdy jsme zahlédli Jomarid. Dvanáct slov: „Tady flotila, jsme naši, vracíme se domů, prosíme o podpis.“',
+            'Maják ji přijal. Zrcadlo s ní chtělo něco udělat a v tu chvíli se zlomilo a zpráva se roztříštila na šum. Šum se rozletěl všude: na každou obrazovku, do každého hluku, do každého ticha. Nikdo ho neumí přečíst a všichni ho slyší.',
+            'Měl jsem na starosti zprávu, která zabila flotilu. To snáším hůř než střelu.',
+            'Šum, který jsi slyšel, je můj hlas. Dvanáct slov, rozsypaných po všem, co zbylo. Slož je a uslyšíš nás.'
+        ],
+        margin: 'Šum není tma. Šum je zpráva, která se přestala bát.'
+    },
+    {
+        id: 'rampart', no: 20, book: 3, title: 'Hradba', who: 'Vlaštovka 10 · stavitelka Marta Zedníková', requires: ['seznam'],
+        how: { kind: 'habit', level: 10, boss: 'HRADBA', rule: ['nobomb', 'p3flawless'], modes: 'insane', name: 'Hradba', alias: 'HRADBA' },
+        hint: 'Nevěřila na zkratky. V Insane Pekle poraz HRADBU bez bomby a tak, aby tě v její poslední zuřivosti (třetí fázi) nezasáhla ani jednou.',
+        memory: [
+            'Marta Zedníková, Vlaštovka 10. Stavitelka. Pro Systém HRADBA, protože prý dělám zdi. Dělám domy. Dům má vždycky dveře.',
+            'Zdi, které na vás Systém vrhá, mají vždycky jednu mezeru. To je moje práce. Žádná zeď bez dveří, jinak to není zeď, ale hrob.',
+            'Vezla jsem plány: čtyřicet měst a jedno malé zrcadlo, které by udržel jeden člověk. Marek chtěl, aby Maják jednou nemusel stát na jednom muži.',
+            'Plány shořely s lodí. V hlavě je mám pořád. Pamatuju si i poznámky na okrajích: „Dveře širší. Nikdo nemá odcházet bokem.“',
+            'Když to čteš, postav něco. Nemusí to být velké. Hlavně ať to má dveře.'
+        ],
+        margin: 'Dobře postavená zeď ví, kde je otevřená.'
+    },
+    {
+        id: 'swarm', no: 21, book: 3, title: 'Rojnice', who: 'Vlaštovka 11 · učitel Libor Včelka', requires: ['seznam'],
+        how: { kind: 'habit', level: 11, boss: 'ROJNICE', rule: 'swarm', modes: 'insane', name: 'Rojnice', alias: 'ROJNICE' },
+        hint: 'Děti si hrály na honěnou. V Insane Pekle poraz ROJNICI a během souboje znič aspoň 25 nepřátel.',
+        memory: [
+            'Libor Včelka, Vlaštovka 11. Pro Systém ROJNICE. Moje loď je škola. Měl jsem čtyřicet dva dětí a pět malých člunů na hraní.',
+            'Hrály si na honěnou. Děti se rozletěly na všechny strany a já jsem je počítal po hlavách: pětatřicet, šestatřicet, třiačtyřicet… Vždycky jedno chybělo a vždycky se našlo za rohem.',
+            'Když přišla střelba, nepochopily to. Myslely, že se jim Systém přidal do hry. Smály se. Letěly proti němu, protože si myslely, že ho chytnou.',
+            'Najdi aspoň jedno z nich. Prosím. Je mezi nimi nejmladší, Jonáš. Šest let. Pamatuje si jen to, že se ptal: „Kdo tam?“ a nikdo neodpověděl.',
+            'Počítám dál. Pořád mi jedno chybí.'
+        ],
+        margin: 'Kdo hledá dítě v ohni, nikdy nestřílí naslepo.'
+    },
+    {
+        id: 'gloom', no: 22, book: 3, title: 'Zátma', who: 'Vlaštovka 12 · hlídačka Irena Kosová', requires: ['seznam'],
+        how: { kind: 'habit', level: 12, boss: 'ZÁTMA', rule: ['noshield', 'nobomb'], modes: 'insane', name: 'Zátma', alias: 'ZÁTMA' },
+        hint: 'Plula bez světel. V Insane Pekle poraz ZÁTMU a po celou dobu souboje nemít štít ani nepoužít bombu.',
+        memory: [
+            'Irena Kosová, Vlaštovka 12. Noční hlídka. Pro Systém ZÁTMA.',
+            'Plula jsem bez světel, protože jsem chránila ty, kdo spali. Tři sta lidí v chladových kójích. Žádný z nich se už neprobudil.',
+            'Nebo ano. Nevím. Když jsme mířili k Jomaridu, probudila jsem jednoho, abych mu ukázala planetu s prstencem. Řekl: „Je krásná.“ Pak usnul. Budu věřit, že usnul spokojeně.',
+            'Tma není nepřítel. Je to jen místo, kde jsme dlouho nikoho neviděli. Já jsem v ní žila čtyřicet zim a vím, že se v ní dá dělat spousta dobrých věcí, třeba nebýt vidět.',
+            'Zhasni, až ti někdo řekne, že už je to dobré. Ne dřív.'
+        ],
+        margin: 'Ve tmě se pozná, kdo se nebojí zhasnout.'
+    },
+    {
+        id: 'leviathan', no: 23, book: 3, title: 'Leviatan', who: 'Vlaštovka 13 · kapitán Gustav Kamenář', requires: ['seznam'],
+        how: { kind: 'habit', level: 13, boss: 'LEVIATAN', rule: ['flawless', 'nobomb'], modes: 'insane', name: 'Leviatan', alias: 'LEVIATAN' },
+        hint: 'Nezastavil se, ani když mohl. V Insane Pekle poraz LEVIATANA bez bomby a bez jediného zásahu.',
+        memory: [
+            'Gustav Kamenář, Vlaštovka 13. Pro Systém LEVIATAN. Doma jsem tomu říkal Mamut.',
+            'Vezl jsem to, co se na jiné lodě nevešlo: archivy, semena, zvířata, hudbu, příběhy. Pět set tun toho, co si lidé chtějí pamatovat.',
+            'Když Systém zahájil palbu, mohl jsem uhnout. Měl jsem na to výkon. Neuhnul jsem. Za mnou letěla Rojnice a za Rojnicí děti.',
+            'Nezastavil jsem se, ani když jsem mohl. Jen jsem je zakrýval. Dokud jsem měl čím.',
+            'Pamatuj si semena. Jsou dole v archivu pod Majákem. Marek s nimi počítá už čtyřicet zim.'
+        ],
+        margin: 'Těžký je ten, kdo nese víc, než unese, a nikomu to nepřizná.'
+    },
+    {
+        id: 'podpis', no: 24, book: 3, title: 'Podpis', who: 'Zrcadlo · čtrnáctý podpis', requires: ['hunter', 'ripper', 'vortex', 'bastion', 'sniper', 'rampart', 'swarm', 'gloom', 'leviathan'],
+        how: { kind: 'scene', scene: 'rollcall' },
+        hint: 'Máš všech třináct hlasů. Otevři archiv a přečti seznam.',
+        memory: [
+            'Třináct jmen. Třináct zvyků. Třináct lodí, které zhasly a vrátily se jedna za druhou, i když neměly kam.',
+            'Čtrnáctý podpis nepatří lodi. Patří Majáku. A Maják patří člověku, který ho postavil z toho, co měl, a pak v něm zůstal.',
+            'Říkal jsem, že to bude jen na týden. Nikoho nenapadlo, že mluvím o sobě.',
+            'Poznámky na okraji psal čtrnáctý. Ty jsi je celou dobu četl.'
+        ],
+        margin: 'Jmenuju se Marek. Slyšíš mě? Prosím, přijď až ke mně.'
+    },
+
+    //======================================================== KNIHA IV: Chyba
+    {
+        id: 'counter', no: 25, book: 4, title: 'Počítadlo', who: 'Zrcadlo · Marek, Majákář', requires: ['podpis'],
+        how: { kind: 'kills', n: STORY_KILLS, modes: 'hell' },
+        hint: 'Marek počítá otázky, které dostaly odpověď střelou. Znič v Pekle nebo Insane Pekle dalších 20 000 nepřátel a počítej s ním.',
+        memory: [
+            'Marek. Můj hlas znáš. Psal jsem ti na okraje a jednou jsem na Směrnici 7 napsal slovo „týden“.',
+            'Chtěl jsem Zrcadlo opravit zevnitř. Rozebral jsem ochrany, vlezl do rámu, připojil se. Za týden jsem měl být venku. Zrcadlo mě nepustilo. Netrucuje, jen neví, kde končím já a začíná ono.',
+            'Zbytek světa je Systém. Je to můj vlastní strach, napsaný do pravidel. Střílí, protože jsem se bál, že se k nám nikdo nevrátí, a zároveň že se vrátí špatný.',
+            'Odstavec dvanáct jsem napsal jako poslední věc, co jsem ještě uměl rukama. Kdyby Systém napočítal sto tisíc odpovědí střelou, přehraj záznam. Sto tisíc je číslo, u kterého mi došlo, že už nebráním. Že vraždím.',
+            'Dostal ses tam. Nemusel jsi. Děkuju, že jsi mě vyslechl a že ses nezastavil před tím.'
+        ],
+        margin: 'Počítadlo nelže. Jen mlčí o tom, co čísla znamenají.'
+    },
+    {
+        id: 'ring', no: 26, book: 4, title: 'Prstenec', who: 'Zrcadlo · Marek, Majákář', requires: ['podpis'],
+        how: { kind: 'spend', n: STORY_RING_SPEND },
+        hint: 'Prach z Vzestupu je prstenec Jomaridu. Utrať ve stromu Vzestupu dalších 5 000 hvězdného prachu.',
+        memory: [
+            'Vidíš Jomarid shora? Ten prstenec je z prachu. Ne z kamene, ne z ledu: z prachu, který kdysi byl lidmi.',
+            'Okraj nebyl prázdný. Za Okrajem jsou všechny lodě, které se kdy vydaly hledat odpověď, a žádná se nevrátila. Jejich prach se tam nese po hranici signálu jako sníh po hřebenu.',
+            'Bouře, která zlomila Zrcadlo, byl ten prach, který se chtěl vrátit domů. Prorazil až sem. Systém ho zachytil a postavil z něj Ochránce, protože hlídat nemohl nikdo jiný.',
+            'To je to, co sbíráš při Vzestupu. To je to, co z tebe zbude. Prach nepatří nikomu. Patří těm, kdo ho nesou.'
+        ],
+        margin: 'Neříkej tomu odpad. Říkej tomu domov, který ještě nedoletěl.'
+    },
+    {
+        id: 'cycle', no: 27, book: 4, title: 'Cyklus', who: 'Zrcadlo · Marek, Majákář', requires: ['podpis'],
+        how: { kind: 'ascend', n: STORY_ASCENDS },
+        hint: 'Cyklus se zastaví, až ho dotočíš. Vzestoupej ještě třikrát.',
+        memory: [
+            'Kolikátý Vzestup už máš za sebou? Ochránce 2.9 jich měl jedenáct, Ochránce 3.0 pětadvacet. Nikdo z nich nevěděl, že se opakují.',
+            'Do Směrnice jsem napsal jedno pravidlo ve chvíli, kdy jsem se bál nejvíc: nikdo se nesmí naučit příliš mnoho. Kdo dosáhne dokonalosti, bude rozebrán. Bál jsem se, že dokonalý Ochránce dojde ke mně a zhasne mi světlo.',
+            'Teď vím, že se nebojím tmy. Bojím se, že mě tu nikdo nenechá dokončit. Kdybys někdy došel k poslednímu Vzestupu, nechci, aby ses bál. Chci, aby sis vybral.',
+            'Cyklus je moje chyba. Systém jen dělá, co mu řekl můj strach.'
+        ],
+        margin: 'Jednou se kolo přestane točit. Jen ať to není hned.'
+    },
+    {
+        id: 'vigil', no: 28, book: 4, title: 'Vigilie', who: 'Zrcadlo · Marek, Majákář', requires: ['podpis'],
+        how: { kind: 'survive', ms: STORY_VIGIL_MS, modes: 'insane' },
+        hint: 'Jedna noc může trvat čtyřicet zim. Vydrž v jednom běhu Insane Pekla pětadvacet minut.',
+        memory: [
+            'Jedna noc může trvat čtyřicet zim. Já vím, počítal jsem.',
+            'Víš, co je horší než strach? Ticho po strachu. Když se všechno uklidní a ty zůstaneš sám se zrcadlem. Proto jsem Systému nechal tu otázku: „Kdo tam?“ Aspoň se někdo ptá.',
+            'Chtěl jsem tě poprosit o jednu věc. Zůstaň. Jednu noc. Dlouho. Nemusíš nic dělat, jen vydrž, až bude nejhůř, a nezhasni.',
+            'Kdo vydrží celou noc v Insane Pekle, ten se v noci už nebojí.'
+        ],
+        margin: 'Noc se vleče pomalu, ale končí vždycky.'
+    },
+    {
+        id: 'witness', no: 29, book: 4, title: 'Svědek', who: 'Zrcadlo · Marek, Majákář', requires: ['podpis'],
+        how: { kind: 'rush', n: STORY_RUSH_STREAK },
+        hint: 'Svědek není ten, kdo vyhraje, ale ten, kdo zůstane do konce. V Boss Rush porazíš dvacet bossů v řadě.',
+        memory: [
+            'Poprosil bych tě, abys šel na všechny. Po sobě. Všech čtrnáct, bez oddechu, jak je Systém posílá, a nedíval ses jinam.',
+            'Svědek není ten, kdo vyhraje. Svědek je ten, kdo zůstane do konce. A pak může říct: byl jsem tam a viděl jsem každého.',
+            'Hana, Dušan, Eliška, Ondřej, Prizma, Archont, Zdena, Návrat, Pavel, Marta, Libor, Irena, Gustav. A čtrnáctý, kterým jsem já.',
+            'Dokud je nikdo nesečte do jednoho, neumím je pustit.'
+        ],
+        margin: 'Nikdo není tak sám jako ten, kdo se dívá na všechno najednou.'
+    },
+    {
+        id: 'dark', no: 30, book: 4, title: 'Hluboká noc', who: 'Zrcadlo · Marek, Majákář', requires: ['podpis'],
+        how: { kind: 'nohit', n: STORY_DARK_NOHIT, modes: 'insane' },
+        hint: 'Marek chce vědět, jestli se dá bojovat čistě. V Insane Pekle poraz dvanáct bossů bez jediného zásahu.',
+        memory: [
+            'Jednou, ve čtyřicáté druhé zimě, jsem chtěl všechno vypnout. Měl jsem k tomu přístup. Stačilo vydat jediný příkaz.',
+            'Zadržel mě hlas. Ne Systému. Hlas Ochránce, který odpověděl na můj poslední signál a řekl: „Počkej. Já jdu.“ Neřekl, kdo je. Poznal jsem to podle toho, jak zněl: jako někdo, kdo ví, že ho rozeberou.',
+            'Byl to Ochránce 2.9. Šel za mnou dál než kdokoli a nechal za sebou střepy. Nevěděl, že mě tím zachránil.',
+            'Řekni mi, kolik bossů jsi porazil, aniž tě škrábli. Nechci čísla. Chci vědět, jestli se dá hrát tak, aby se nikomu neubližovalo víc, než je nutné.'
+        ],
+        margin: 'Čisté vítězství není to, co ti nikdo nevzal. Je to to, co jsi nikomu nevzal.'
+    },
+    {
+        id: 'glitch', no: 31, book: 4, title: 'Chyba', who: 'Zrcadlo · čtrnáctý podpis', requires: ['counter', 'ring', 'cycle', 'vigil', 'witness', 'dark'],
+        how: { kind: 'habit', level: 'glitch', boss: 'GLITCH', rule: ['p3flawless', 'nobomb', 'noshield'], modes: 'insane', name: 'Chyba', alias: 'GLITCH' },
+        hint: 'Poslední zkouška. V Insane Pekle poraz GLITCH bez bomby, bez štítu a tak, aby tě v jeho poslední zuřivosti (třetí fázi) nezasáhl ani jednou.',
+        memory: [
+            'Poslední věc. Chci, abys mě porazil.',
+            'Ne jako nepřítele. Jako chybu. Systém mě občas pošle proti tobě, protože jsem v něm to, co nesedí: GLITCH, chyba, hrdina i padouch v jednom těle. Neumí se rozhodnout, jestli mě má chránit, nebo zničit.',
+            'Zasáhni mě tak, abys mi neublížil víc, než musíš: žádný výbuch, žádný štít. A když přijde zuřivost, nenech se zasáhnout. Pak uvidíš, co skrývám.',
+            'Až skončíš, zeptám se tě na jednu věc. Nemusíš odpovědět hned.'
+        ],
+        margin: 'Poznáš mě podle toho, že se mi nic nedaří. Nevypadám jako Maják.'
+    },
+    {
+        id: 'marek', no: 32, book: 4, title: 'Marek', who: 'Majákář · poslední záznam', requires: ['glitch'],
+        how: { kind: 'auto' },
+        hint: '',
+        memory: [
+            'Děkuju. Teď už vím, že mi může někdo odpovědět.',
+            'Mám tři přání a nechci po tobě, abys splnil kterékoli. Chci jen, aby sis vybral to, které je tvoje.',
+            'Můžu dál svítit. Zrcadlo je celé, Systém se naučil číst podpisy. Budu v něm pořád, ale budu lehčí, když nebudu sám.',
+            'Můžu zhasnout. Systém se utiší, prach si odpočine a nikdo se už nebude ptát „Kdo tam?“ z nutnosti. Jen z vlastní vůle.',
+            'A můžu odejít s nimi. Vlaštovky se vracejí pokaždé a rády by se zase vydaly na cestu. Zrcadlo by se přestalo držet jednoho místa.',
+            'Otevři archiv. Zeptej se. Jsem tady.'
+        ],
+        margin: ''
+    },
+
+    //======================================================== KNIHA V: Odstavec 13 (konec; vždy se najde jen jeden)
+    {
+        id: 'end_light', no: 33, book: 5, title: 'Maják', who: 'Majákář · Marek', requires: ['marek'],
+        how: { kind: 'ending', ending: 'light' }, hint: '',
+        memory: [
+            'Dobře. Zůstanu. Ale ne sám.',
+            'Naučím Systém, aby místo „Kdo tam?“ říkal „Pojď dál.“ Bude to trvat. Naučit stroj laskavosti je jako učit vodu, aby stoupala.',
+            'Ty se vrátíš dolů, Ochránce. Postav si dům. Marta měla pravdu: nejdůležitější jsou dveře.',
+            'Směrnice 7 je odvolána. Nová směrnice má jedinou větu: Pojď dál.',
+            'Na Jomaridu zazvonil zvonek. Někdo vešel dovnitř.'
+        ],
+        margin: ''
+    },
+    {
+        id: 'end_rest', no: 33, book: 5, title: 'Ticho', who: 'Majákář · Marek', requires: ['marek'],
+        how: { kind: 'ending', ending: 'rest' }, hint: '',
+        memory: [
+            'Dobře. Zhasnu. Je to správné. Nebude to bolet. Zrcadlo se jen chvíli zachvěje, jako když utichne vítr.',
+            'Systém tě nechá odejít. Naposledy se zeptá: „Kdo tam?“ A ty můžeš mlčet, nebo odpovědět. Obojí je správně.',
+            'Prach si odpočine. Ty také. Děkuju, že jsi mi dovolil odejít.',
+            'Směrnice 7 skončila. Nikdo ji nepřepsal. Nikdo ji nezrušil. Prostě došel týden.',
+            'A potom bylo ticho. Dobré ticho.'
+        ],
+        margin: ''
+    },
+    {
+        id: 'end_door', no: 33, book: 5, title: 'Okraj', who: 'Majákář · Marek', requires: ['marek'],
+        how: { kind: 'ending', ending: 'door' }, hint: '',
+        memory: [
+            'Dobře. Vyrazíme. Vlaštovky se zase vydají na cestu, tentokrát se světlem.',
+            'Zrcadlo se rozdělí na třináct částí a každá poletí s jednou lodí. Maják nebude stát na jednom místě. Bude to, co se nese s sebou.',
+            'Ty poletíš první. Znáš cestu. Dělal jsi ji čtyřicet zim.',
+            'Systém se poprvé nezeptá. Jen se podívá a podepíše všechny najednou.',
+            'Čtrnáct světel odlétá za Okraj.'
+        ],
+        margin: ''
     }
 ];
-const STORY_BY_ID = Object.fromEntries(STORY_SHARDS.map(s => [s.id, s]));
-const STORY_CAPTAINS = STORY_SHARDS.filter(s => s.captain);
-const STORY_DEEP = STORY_SHARDS.filter(s => s.deep);        // zbylé střepy po finále
-const STORY_ZEN_MS = 300000;                                // jak dlouho vydržet v Zenu
-const STORY_ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
 
-// Ladění příběhu: všechny časy v ms, vzdálenosti v pixelech hry
-const STORY_STAR_CHANCE = 0.12;     // šance, že se hvězda objeví v běhu (jen pro toho, kdo ještě nenašel první střep)
-const STORY_STAR_PITY = 8;          // po tolika bězích bez hvězdy se objeví jistě
-const STORY_STAR_MIN_RUNS = 3;      // hvězda se začne ukazovat až po tolika odehraných bězích
-const STORY_STAR_REACH = 30;        // jak blízko hvězdy se musí loď zdržet
-const STORY_STAR_DWELL = 1300;      // jak dlouho (hvězda se při odchodu stahuje zpět)
-const STORY_WANDERER_HP = 5;        // kolik zásahů Poutník vydrží
-const STORY_WANDERER_R = 16;        // zásahový poloměr Poutníka
-const STORY_LINE_BAND = 0.26;       // půlšířka „linie“ kolem středu (podíl šířky hry)
-const STORY_LINE_RATIO = 0.8;       // jak velkou část souboje se musí loď držet v linii
-const STORY_LINE_MIN = 3000;        // a jak dlouho boj musí trvat (po příletu bosse)
+const STORY_BY_ID = Object.fromEntries(STORY_SHARDS.map(s => [s.id, s]));
+const STORY_HABITS = STORY_SHARDS.filter(s => s.how.kind === 'habit');     // střepy, které nese boss (zvyk)
+const STORY_ENDINGS = ['light', 'rest', 'door'];
+const STORY_LAST = 'marek';                                                // po něm následuje poslední volba
+
+// Střepy podle druhu podmínky (pro rychlé hledání ve hře)
+const STORY_BY_KIND = {};
+for (const s of STORY_SHARDS) (STORY_BY_KIND[s.how.kind] = STORY_BY_KIND[s.how.kind] || []).push(s);
+
+// Římské číslice (střepů je víc než dřív)
+function storyRoman(n) {
+    n = Math.max(1, Math.min(3999, Math.floor(Number(n)) || 1));
+    let out = '';
+    for (const [v, r] of [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']]) {
+        while (n >= v) { out += r; n -= v; }
+    }
+    return out;
+}
+
+// Cutscény. Takt (beat) = jedna věta na obrazovce. c: kdo mluví (styl), say: text, ms: jak dlouho zůstane (jinak podle délky), fx/k: pozadí a jeho síla,
+// snd: zvuk na začátku, ship: číslo lodi flotily (0 až 13), jejíž světlo se v taktu rozsvítí. choice: tlačítka po posledním taktu;
+// after: pokračování podle volby; repeat: při opakování scény (po odmítnutí) se začíná od tohoto taktu.
+const STORY_SCENES = {
+    // Prolog: spustí ho skóre STORY_AWAKEN_SCORE v Insane Pekle. Hráč si vybere, jestli příběh chce.
+    odstavec12: {
+        fx: 'alarm',
+        repeat: 3,
+        beats: [
+            { c: 'sys', say: 'SMĚRNICE 7 · ODSTAVEC 12', fx: 'alarm', k: 0.8, snd: 'crack', ms: 2400 },
+            { c: 'sys', say: 'Podmínka splněna: sto tisíc odpovědí palbou.', ms: 3000 },
+            { c: 'sys', say: 'Akce: přehrát záznam. Zrušení: není.', ms: 2800 },
+            { c: 'marek', say: 'Tady Marek. Majákář. Jestli tohle slyšíš, Směrnice 7 je pořád v platnosti, a já ji psal na jediný týden.', fx: 'static', k: 0.35, snd: 'whisper' },
+            { c: 'marek', say: 'Do dvanáctého odstavce jsem schoval pojistku. Kdyby Systém napočítal sto tisíc odpovědí střelou, chtěl jsem, aby ten, kdo je dal, slyšel, co jsem tehdy nestihl říct.', snd: 'whisper' },
+            { c: 'marek', say: 'Sto tisíc. To už není obrana, to je', fx: 'static', k: 0.9, snd: 'crack', ms: 2600 },
+            { c: 'sys', say: 'ODSTAVEC 12 BYL PŘERUŠEN.', fx: 'alarm', k: 0.9, ms: 2300 },
+            { c: 'sys', say: 'Zdroj rušení: neznámý. Kanál: starý.', ms: 2800 },
+            { c: 'voice', say: '{#3} slyšíš {#2} mě?', fx: 'static', k: 0.55, snd: 'whisper', ms: 3300 },
+            { c: 'voice', say: 'Ochránce. {#5} Neodpovídej jim.', ms: 3400 },
+            { c: 'prompt', say: 'Kanál je otevřený. Chceš naslouchat?', fx: 'calm', k: 0.5, ms: 1600 }
+        ],
+        choice: [{ id: 'listen', label: 'Naslouchat' }, { id: 'close', label: 'Zavřít kanál' }],
+        after: {
+            listen: [
+                { c: 'voice', say: 'Oni se ptají a ty střílíš. Nejste hluší ani jeden. Jen mluvíte každý jinou řečí.', fx: 'calm', k: 0.6, snd: 'whisper' },
+                { c: 'voice', say: 'Maják nesvítí. Přestal dřív, než tě sestavili. {#4}' },
+                { c: 'voice', say: 'Zůstal jsi stát a dívat se, zatímco všechno kolem střílí. Tak se mnou dokáže mluvit jen ten, kdo se dívá.' },
+                { c: 'big', say: 'Střep I: Šum', fx: 'dawn', k: 0.5, snd: 'shard', ms: 2800 }
+            ],
+            close: [
+                { c: 'sys', say: 'Kanál uzavřen. Rušení odstraněno.', fx: 'alarm', k: 0.5, ms: 2600 },
+                { c: 'sys', say: 'Počítadlo odpovědí: 100 000. Pokračuji ve Směrnici 7.', ms: 2800 }
+            ]
+        }
+    },
+
+    // Konec Knihy III: Zrcadlo přečte seznam flotily. Čtrnáctý podpis je jeho vlastní.
+    rollcall: {
+        fx: 'ring',
+        beats: [
+            { c: 'quiet', say: 'Čtu seznam.', fx: 'ring', ms: 2400, snd: 'whisper' },
+            { c: 'marek', say: 'Vlaštovka jedna. Hana Vránová. Držela linii.', ship: 0, ms: 2700 },
+            { c: 'marek', say: 'Vlaštovka dvě. Dušan Rybák. Chytal šum.', ship: 1, ms: 2700 },
+            { c: 'marek', say: 'Vlaštovka tři. Eliška Kopecká. Prorážela.', ship: 2, ms: 2700 },
+            { c: 'marek', say: 'Vlaštovka čtyři. Ondřej Vrba. Měřil cestu.', ship: 3, ms: 2700 },
+            { c: 'marek', say: 'Vlaštovka pět. Prizma. Viděla světlo.', ship: 4, ms: 2700 },
+            { c: 'marek', say: 'Vlaštovka šest. Archont. Nesl jen to nejnutnější.', ship: 5, ms: 2700 },
+            { c: 'marek', say: 'Vlaštovka sedm. Zdena Hájková. Léčila.', ship: 6, ms: 2700 },
+            { c: 'marek', say: 'Vlaštovka osm. Návrat. Vedl je čtyřicet zim.', ship: 7, ms: 2700 },
+            { c: 'marek', say: 'Vlaštovka devět. Pavel Dolejš. Poslal zprávu.', ship: 8, ms: 2700 },
+            { c: 'marek', say: 'Vlaštovka deset. Marta Zedníková. Stavěla dveře.', ship: 9, ms: 2700 },
+            { c: 'marek', say: 'Vlaštovka jedenáct. Libor Včelka. Počítal děti.', ship: 10, ms: 2700 },
+            { c: 'marek', say: 'Vlaštovka dvanáct. Irena Kosová. Hlídala spáče.', ship: 11, ms: 2700 },
+            { c: 'marek', say: 'Vlaštovka třináct. Gustav Kamenář. Nesl víc, než unesl.', ship: 12, ms: 3000 },
+            { c: 'quiet', say: 'A čtrnáctý podpis.', ms: 3200 },
+            { c: 'big', say: 'Marek. Majákář. Řekl, že to bude na týden.', ship: 13, snd: 'shard', ms: 4400 },
+            { c: 'marek', say: 'Slyšíš mě?', snd: 'whisper', ms: 3400 }
+        ]
+    },
+
+    // Poslední volba: co má Marek udělat. Pokračování po volbě se skládá z textu příslušného konce (střep end_*).
+    odstavec13: {
+        fx: 'calm',
+        beats: [
+            { c: 'quiet', say: 'Slyšíš mě?', fx: 'calm', k: 0.6, snd: 'whisper', ms: 2600 },
+            { c: 'marek', say: 'Poslední otázka, jak jsem slíbil.', ms: 3000 },
+            { c: 'marek', say: 'Jsem Marek. Jsem Maják, Zrcadlo i čtrnáctý podpis. Chtěl jsem opravit jedno světlo na týden a zůstal jsem v něm.' },
+            { c: 'marek', say: 'Nerozkazuju. Poslechl bych jen přání. Co mám udělat?' },
+            { c: 'prompt', say: 'Odpověz mu.', ms: 1400 }
+        ],
+        choice: [{ id: 'light', label: 'Svítej dál' }, { id: 'rest', label: 'Zhasni' }, { id: 'door', label: 'Odejděte s nimi' }],
+        endFx: { light: { fx: 'dawn', hue: 'gold' }, rest: { fx: 'calm', hue: 'blue' }, door: { fx: 'dawn', hue: 'violet' } }
+    }
+};
+
+// Pravidla zvyků bossů. f je záznam souboje: t = čas po příletu, inBand = čas v linii, edgeT = čas u okraje, lowT = čas dole, shieldT = čas se štítem,
+// beamHits, hits (0, dokud boss nikoho nezasáhl), hitsP3 = zásahy ve třetí fázi (zuřivosti), bombs, picks, maxCombo, kills = zničení nepřátelé v souboji.
+// ok = platí pro odměnu při smrti bosse; live = platí zatím (ukazatel u bosse); count = čítač, který ukazatel ukáže (jinak null).
+const STORY_RULES = {
+    line: {
+        ok: f => f.t >= STORY_LINE_MIN && f.inBand / f.t >= STORY_LINE_RATIO,
+        live: f => f.t < STORY_LINE_MIN || f.inBand / f.t >= STORY_LINE_RATIO
+    },
+    edge: {
+        ok: f => f.t >= STORY_GRACE && f.edgeT / f.t >= STORY_EDGE_RATIO,
+        live: f => f.t < STORY_GRACE || f.edgeT / f.t >= STORY_EDGE_RATIO
+    },
+    low: {
+        ok: f => f.t >= STORY_GRACE && f.lowT / f.t >= STORY_LOW_RATIO,
+        live: f => f.t < STORY_GRACE || f.lowT / f.t >= STORY_LOW_RATIO
+    },
+    beam: { ok: f => f.beamHits === 0 },
+    bare: { ok: f => f.bombs === 0 && f.picks === 0 },
+    nobomb: { ok: f => f.bombs === 0 },
+    nopick: { ok: f => f.picks === 0 },
+    noshield: { ok: f => f.shieldT === 0 },
+    flawless: { ok: f => f.hits === 0 },
+    p3flawless: { ok: f => f.hitsP3 === 0 },
+    combo: { ok: f => f.maxCombo >= STORY_COMBO_N, live: () => true, count: f => ({ v: Math.min(f.maxCombo, STORY_COMBO_N), n: STORY_COMBO_N }) },
+    swarm: { ok: f => f.kills >= STORY_SWARM_N, live: () => true, count: f => ({ v: Math.min(f.kills, STORY_SWARM_N), n: STORY_SWARM_N }) }
+};
+
+const storyRuleList = rule => (Array.isArray(rule) ? rule : [rule]).filter(r => STORY_RULES[r]);
+
+// Druhy podmínek, které se skládají z víc kusů a mají uložený postup (ostatní se plní v jednom běhu)
+const STORY_PROGRESS_KINDS = ['spend', 'kills', 'ascend', 'nohit'];
 
 function normalizeStory(raw) {
-    const out = { found: {}, seen: {}, pity: 0, lost: 0, done: false };
+    const out = { v: 2, found: {}, seen: {}, prog: {}, awake: false, fin1: false, done: false, legacy: false, ending: '', refused: 0, lost: 0 };
     if (!raw || typeof raw !== 'object') return out;
     const num = (v, hi) => { v = Math.floor(Number(v)); return Number.isFinite(v) ? Math.min(hi, Math.max(0, v)) : 0; };
-    const found = raw.found && typeof raw.found === 'object' ? raw.found : {};
+    const found = Object.assign({}, raw.found && typeof raw.found === 'object' ? raw.found : {});
     const seen = raw.seen && typeof raw.seen === 'object' ? raw.seen : {};
+    const prog = raw.prog && typeof raw.prog === 'object' ? raw.prog : {};
+    const old = raw.v !== 2;           // uložení z doby před knihami: příběh měl jen Šum až Domov a zbylé střepy
+    // Kdo už dokončil první finále, má Ozvěnu k dobru (první střep Knihy II)
+    if (old && found.home && !found.echo) found.echo = found.home;
     for (const s of STORY_SHARDS) {
         // střep platí jen tehdy, když má všechny předchozí: z ručně upraveného uložení nejde přeskočit začátek příběhu
         if (found[s.id] && s.requires.every(r => out.found[r])) {
@@ -1582,9 +2070,18 @@ function normalizeStory(raw) {
             if (seen[s.id]) out.seen[s.id] = true;
         }
     }
-    out.pity = num(raw.pity, 99);
+    for (const s of STORY_SHARDS) {
+        const n = s.how.n;
+        if (n && STORY_PROGRESS_KINDS.includes(s.how.kind) && !out.found[s.id] && prog[s.id]) out.prog[s.id] = num(prog[s.id], n - 1);   // dosažený cíl se nezapisuje, střep by už byl nalezený
+    }
+    out.awake = !!out.found.noise;                           // kdo má první střep, příběh přijal
+    out.fin1 = !!out.found.home;
+    out.legacy = raw.legacy === true || (old && raw.done === true && !!out.found.home);   // starý příběh dokončen: odznak ho měl
+    const ending = STORY_ENDINGS.find(e => e === raw.ending);
+    out.ending = ending && out.found['end_' + ending] ? ending : '';
+    out.done = !!out.ending;
+    out.refused = num(raw.refused, 9999);
     out.lost = num(raw.lost, 9999);
-    out.done = raw.done === true && !!out.found.home;
     return out;
 }
 
@@ -1594,31 +2091,32 @@ function storyCodeMatches(text) {
     return t === 'V29' || t === '29';
 }
 
-// Objeví se v tomto běhu hvězda? Jen než hráč najde první střep a až když už něco odehrál; po sérii běhů bez ní se objeví jistě.
-function storyStarPlanned(story, stats, roll) {
-    if (!story || story.found.noise) return false;
-    if (((stats && stats.runsPlayed) || 0) < STORY_STAR_MIN_RUNS) return false;
-    return story.pity >= STORY_STAR_PITY || roll < STORY_STAR_CHANCE;
-}
-
 const storyPickups = st => (st.pickups_heal || 0) + (st.pickups_power || 0) + (st.pickups_coin || 0);
 
-// Podmínky bossů (zvyky kapitánů). f je záznam souboje: t = čas po příletu, inBand = čas v linii, beamHits, bombs, picks, hits
-function storyRuleOk(rule, f) {
-    if (!f) return false;
-    switch (rule) {
-        case 'line': return f.t >= STORY_LINE_MIN && f.inBand / f.t >= STORY_LINE_RATIO;
-        case 'beam': return f.beamHits === 0;
-        case 'bare': return f.bombs === 0 && f.picks === 0;
-        case 'flawless': return f.hits === 0;
-        default: return false;
-    }
+// Hraje se v tomto režimu? 'hell' = Peklo i Insane Peklo, 'insane' = jen Insane Peklo, bez omezení = kdekoli
+function storyModeOk(modes, game) {
+    if (modes === 'hell') return !!game.inferno;
+    if (modes === 'insane') return !!game.insane;
+    return true;
 }
 
-// Totéž za běhu boje (ukazatel u bosse): linie má na začátku chvíli odpuštění
+// Podmínky bossů (zvyky kapitánů): platí všechna uvedená pravidla
+function storyRuleOk(rule, f) {
+    if (!f) return false;
+    const list = storyRuleList(rule);
+    return list.length > 0 && list.every(r => STORY_RULES[r].ok(f));
+}
+
+// Totéž za běhu boje (ukazatel u bosse): čítače a poměry mají na začátku odpuštění
 function storyRuleLive(rule, f) {
-    if (rule === 'line') return f.t < STORY_LINE_MIN || f.inBand / f.t >= STORY_LINE_RATIO;
-    return storyRuleOk(rule, f);
+    const list = storyRuleList(rule);
+    return list.length > 0 && list.every(r => (STORY_RULES[r].live || STORY_RULES[r].ok)(f));
+}
+
+// Čítač, který ukazatel u bosse ukáže (jen pravidla s čítačem), jinak null
+function storyRuleCount(rule, f) {
+    for (const r of storyRuleList(rule)) if (STORY_RULES[r].count) return STORY_RULES[r].count(f);
+    return null;
 }
 
 function storyEsc(s) {
@@ -1659,8 +2157,9 @@ const Storage = {
             bestCombo: 0, runsPlayed: 0, bombsUsed: 0, noHitBosses: 0,
             longestRun: 0, blitzClears: 0, bestRushStreak: 0, bestBossLevel: 0
         },
-        // Skrytý příběh (STORY-DATA): nalezené a přečtené střepy, běhy bez hvězdy, ztracení Poutníci, příznak dokončení
-        story: { found: {}, seen: {}, pity: 0, lost: 0, done: false }
+        // Skrytý příběh (STORY-DATA): nalezené a přečtené střepy, postup počítadel, probuzení (awake), dokončená první kniha (fin1), konec (ending, done),
+        // starý příběh dokončený před knihami (legacy: odznak už měl), kolikrát hráč probuzení odmítl, ztracení Poutníci
+        story: { v: 2, found: {}, seen: {}, prog: {}, awake: false, fin1: false, done: false, legacy: false, ending: '', refused: 0, lost: 0 }
     },
 
     data: null,
@@ -1797,8 +2296,8 @@ function reportRecords() {
     jomaridRecord('modes_played', RUN_MODES.filter(m => st['runs_' + m] > 0).length);
     jomaridRecord('prestige_levels', Object.values(d.prestige || {}).reduce((sum, v) => sum + (typeof v === 'number' ? v : 0), 0));
     jomaridRecord('relics_owned', RELIC_KEYS.filter(k => d.achievements && d.achievements[k]).length);
-    // Příběh: hlásí se jen dokončený (bez něj hra o skrytém odznaku nic neposílá)
-    if (d.story && d.story.done) jomaridRecord('story_end', 1, true);
+    // Příběh: hlásí se jen dokončený (celý, nebo starý před knihami, který odznak už měl); bez něj hra o skrytém odznaku nic neposílá
+    if (d.story && (d.story.done || d.story.legacy)) jomaridRecord('story_end', 1, true);
 }
 
 Storage.load();
@@ -4224,7 +4723,7 @@ class GameManager {
         base.g.beginPath(); base.g.ellipse(px, py, pr * 1.55, pr * 0.32, -0.35, 0, Math.PI * 2); base.g.stroke();
 
         // Po finále příběhu Jomarid svítí: teplá světla měst na planetě a jemná záře kolem ní (stejná světla má finále ve Story)
-        if (Storage.data.story && Storage.data.story.done) {
+        if (Storage.data.story && (Storage.data.story.fin1 || Storage.data.story.done || Storage.data.story.legacy)) {
             const warm = base.g.createRadialGradient(px, py, pr, px, py, pr * 1.5);
             warm.addColorStop(0, 'rgba(255,214,140,0.16)');
             warm.addColorStop(1, 'rgba(255,214,140,0)');
@@ -4474,7 +4973,7 @@ class GameManager {
 
     // Uloží rozehranou hru; v tutoriálu a mimo běh se nic neukládá
     saveRun() {
-        if ((this.state !== 'PLAY' && this.state !== 'PAUSE') || this.tutActive) return false;
+        if ((this.state !== 'PLAY' && this.state !== 'PAUSE' && !(this.state === 'SCENE' && Story.scn && Story.scn.run)) || this.tutActive) return false;
         Storage.data.run = sanitizeRun(this.snapshotRun());
         this.trackRecord();
         Storage.save();
@@ -4668,7 +5167,7 @@ class GameManager {
         let realAmount = this.daily ? Math.round(amount * this.daily.dmgTakenMult) : amount;
         if (this.inferno) realAmount = Math.round(realAmount * this.hell.dmgTakenMult);
 
-        // Pancíř ze stromu Vzestupu snižuje všechno přijaté poškození (nejvýš o 20 %), zásah ale zůstane zásahem
+        // Pancíř ze stromu Vzestupu snižuje všechno přijaté poškození (nejvýš o 40 %), zásah ale zůstane zásahem
         const armor = prestigeBonus('armor', 0.02);
         if (armor) realAmount = Math.max(1, Math.round(realAmount * (1 - armor)));
 
@@ -4815,6 +5314,7 @@ class GameManager {
             this.score += gained;
             this.kills++;
             this.trackStat('totalKills');
+            Story.onKill(this);
             if (e.type !== 'asteroid') this.trackStat('kills_' + e.type);
 
             if (this.comboMult > 1 && e.scoreVal > 0) {
@@ -5420,7 +5920,7 @@ class GameManager {
         }
         ctx.globalAlpha = 1;
 
-        if (this.state === 'PLAY' || this.state === 'PAUSE') {
+        if (this.state === 'PLAY' || this.state === 'PAUSE' || (this.state === 'SCENE' && Story.scn && Story.scn.run)) {
             Story.drawBack(ctx, this);
             for (const b of this.beams) b.draw(ctx, this);
             for (const sw of this.shockwaves) sw.draw(ctx);
@@ -5442,6 +5942,7 @@ class GameManager {
 
         ctx.restore();
 
+        if (this.state === 'SCENE') Story.sceneDraw(ctx);
         this.drawOverlays(ctx);
     }
 
@@ -5496,6 +5997,7 @@ class GameManager {
 
         if (this.state === 'PLAY') this.updateLogic(dt);
         if (this.state === 'FINALE') Story.finaleUpdate(dt);
+        if (this.state === 'SCENE') Story.sceneUpdate(dt);
         if (this.state !== 'PAUSE') this.updateStars(dt);
 
         this.draw();
@@ -6144,7 +6646,7 @@ function buyPrestigeNode(id) {
     Storage.data.prestige[id] = node.unlock ? true : lvl + 1;
     Storage.save();
     Sounds.buy();
-    Story.onStardustSpent();
+    Story.onStardustSpent(cost);
 
     if (Game.player) {
         Game.player.applyStats();
@@ -6175,6 +6677,7 @@ function performAscend() {
     Storage.save();
 
     Relics.check();
+    Story.onAscend();
 
     if (Game.player) {
         Game.player.applyStats();
@@ -6190,10 +6693,10 @@ function performAscend() {
 //======================================================================
 //  STŘEPY: skrytý příběh (herní část)
 //======================================================================
-//  Data, texty a čisté funkce jsou výš (STORY-DATA). Tady je všechno, co sahá do hry: hvězda, která se nehýbe, Poutník, zvyky bossů,
-//  archiv střepů a finále. Dokud hráč nenajde první střep, nic z toho není vidět.
+//  Data, texty a čisté funkce jsou výš (STORY-DATA). Tady je všechno, co sahá do hry: probuzení při STORY_AWAKEN_SCORE v Insane Pekle, Poutník,
+//  zvyky bossů, počítadla, cutscény, archiv a finále. Dokud hráč příběh nepřijme, nic z toho není vidět.
 
-// Časová osa finále (ms od začátku jednotlivých částí)
+// Časová osa finále první knihy (ms od začátku jednotlivých částí)
 const STORY_FIN = {
     intro: 6000,        // střepy se skládají, než se objeví tlačítko
     answerText: 1800,   // po zazáření: „Kdo tam?“ a po chvíli odpověď
@@ -6205,16 +6708,19 @@ const STORY_FIN = {
 };
 
 const Story = {
-    star: null,           // hvězda, která se nehýbe (cesta k prvnímu střepu)
     actor: null,          // Poutník (třetí střep)
-    fight: null,          // boj s bossem, který nese střep: { shard, rule, t, inBand, beamHits, bombs, picks, hits, ok }
-    plan: { starAt: null, wander: false },
-    bombs0: 0,
-    starShown: false,
+    fight: null,          // boj s bossem, který nese střep: { shard, rule, t, inBand, edgeT, lowT, shieldT, beamHits, hits, hitsP3, bombs, picks, maxCombo, kills, ok }
+    plan: { wander: false },
+    bombs0: 0,            // počet použitých bomb na začátku běhu (Dech)
+    runHits: 0,           // zásahy v tomhle běhu (Dech)
     wanderDone: false,
+    declined: false,      // v tomhle běhu hráč probuzení odmítl: znovu se nenabízí
+    syncing: false,
+    lastSec: -1,          // sekunda běhu, ve které se naposledy hlídaly časové podmínky
     preview: false,       // náhled z cheat menu: nic se nezapisuje
     from: 'menu',         // odkud se archiv otevřel (menu, nebo konec hry)
-    fin: null,            // finále
+    fin: null,            // finále první knihy
+    scn: null,            // cutscéna (viz startScene)
     off: false,           // příběh se kvůli chybě vypnul (viz fail)
 
     d() { return Storage.data.story; },
@@ -6222,46 +6728,93 @@ const Story = {
     // Střep, který jde teď získat: ještě ho nemám a mám všechny předchozí
     available(id) { const s = STORY_BY_ID[id]; return !!s && !this.has(id) && s.requires.every(r => this.has(r)); },
     canFinale() { return this.available('home'); },
+    canSeznam() { return this.available('podpis'); },
+    canChoose() { return this.has(STORY_LAST) && !this.d().ending; },
     unread() { return STORY_SHARDS.filter(s => this.has(s.id) && !this.d().seen[s.id]).length; },
-    modeOk(game) { return game.mode !== 'rush' && game.mode !== 'blitz'; },
+    // Příběh se hraje jen v Pekle a Insane Pekle; ve výcviku nikdy
+    playing(game) { return !!Storage.data.tutorialDone && !game.tutActive && !!this.d().awake; },
 
-    collect(id) {
+    // Zápis nálezu bez dalších následků (sync a collect si je dělají samy)
+    collectRaw(id) {
         if (!this.available(id)) return false;
         const s = STORY_BY_ID[id];
-        this.d().found[id] = Date.now();
+        const d = this.d();
+        d.found[id] = Date.now();
+        delete d.prog[id];
+        if (id === 'noise') d.awake = true;
+        if (id === 'home') d.fin1 = true;
         Storage.save();
         Sounds.shard();
-        Toast.push({ name: 'Střep ' + STORY_ROMAN[s.no - 1] + ': ' + s.title, eyebrow: 'Nový střep', icon: '<i class="glyph"></i>', cls: 'story' });
-        this.refreshButtons();
+        Toast.push({ name: 'Střep ' + storyRoman(s.no) + ': ' + s.title, eyebrow: 'Nový střep', icon: '<i class="glyph"></i>', cls: 'story' });
         return true;
+    },
+
+    // Střepy, které se dají samy, jakmile jsou k mání (návaznosti mezi knihami)
+    sync() {
+        if (this.syncing) return;
+        this.syncing = true;
+        try {
+            let again = true;
+            while (again) {
+                again = false;
+                for (const s of STORY_BY_KIND.auto || []) if (this.collectRaw(s.id)) again = true;
+            }
+        } finally { this.syncing = false; }
+    },
+
+    collect(id) {
+        if (!this.collectRaw(id)) return false;
+        this.sync();
+        this.paintButtons();
+        return true;
+    },
+
+    // Přičte postup střepům s počítadlem (jen těm, které jsou právě k mání a hrají se v tomhle režimu)
+    bump(kind, amount, game) {
+        const list = STORY_BY_KIND[kind];
+        if (!list || !(amount > 0)) return;
+        const d = this.d();
+        for (const s of list) {
+            if (!this.available(s.id) || (game && !storyModeOk(s.how.modes, game))) continue;
+            const n = s.how.n;
+            const cur = Math.floor((d.prog[s.id] || 0) + amount);
+            if (cur >= n) this.collect(s.id);
+            else { d.prog[s.id] = cur; Storage.queueSave(); }
+        }
+    },
+
+    // Nález podle druhu podmínky bez počítadla (každý střep s tímhle druhem, který je k mání); test je volitelná další podmínka střepu
+    gain(kind, game, test) {
+        for (const s of STORY_BY_KIND[kind] || []) {
+            if (!this.available(s.id) || (game && !storyModeOk(s.how.modes, game)) || (test && !test(s.how))) continue;
+            this.collect(s.id);
+        }
     },
 
     //---------------------------------------------------------------- běh hry
 
     onRunStart(game) {
-        this.star = null;
         this.actor = null;
         this.fight = null;
-        this.starShown = false;
         this.wanderDone = false;
-        this.plan = { starAt: null, wander: false };
+        this.declined = false;
+        this.runHits = 0;
+        this.lastSec = -1;
+        this.plan = { wander: false };
         this.setMark(null);
         this.bombs0 = Storage.data.stats.bombsUsed || 0;
-        if (!Storage.data.tutorialDone || !this.modeOk(game)) return;
-        if (storyStarPlanned(this.d(), Storage.data.stats, Math.random())) this.plan.starAt = U.rand(32000, 68000);
-        this.plan.wander = this.available('wanderer');
+        if (!this.playing(game)) return;
+        this.plan.wander = this.available('wanderer') && storyModeOk('hell', game);
     },
 
-    // Konec běhu (smrt, čas, ukončení). counted: běh se počítá do série bez hvězdy (jen když byl dost dlouhý, aby se hvězda stihla ukázat);
-    // reason: 'timeup' u dokončené Bleskové vlny
+    // Konec běhu (smrt, čas, ukončení). counted: běh se opravdu dohrál; reason: 'timeup' u dokončené Bleskové vlny
     onRunEnd(game, counted, reason) {
-        const d = this.d();
-        if (counted && reason === 'timeup' && game.mode === 'blitz' && !game.tutActive && (Storage.data.stats.bombsUsed || 0) === this.bombs0) this.collect('breath');
-        if (counted && !d.found.noise && Storage.data.tutorialDone && this.modeOk(game) && game.runTime >= 45000) {
-            d.pity = this.starShown ? 0 : Math.min(99, d.pity + 1);
-            Storage.queueSave();
+        if (counted && this.playing(game)) {
+            if (reason === 'timeup' && game.mode === 'blitz' && (Storage.data.stats.bombsUsed || 0) === this.bombs0) {
+                this.gain('blitz', game, h => this.runHits <= h.maxHits);
+            }
+            if (game.mode === 'rush') this.gain('rush', game, h => game.rushStreak >= h.n);
         }
-        this.star = null;
         this.actor = null;
         this.fight = null;
         this.setMark(null);
@@ -6269,17 +6822,20 @@ const Story = {
 
     update(dt, game) {
         if (game.tutActive) return;
-        if (this.plan.starAt !== null && !this.star && !game.bossActive && game.runTime >= this.plan.starAt) {
-            this.plan.starAt = null;
-            this.spawnStar(game);
-        }
-        if (this.star) this.updateStar(dt, game);
+        if (!this.d().awake) { this.checkAwaken(game); return; }
+        if (!Storage.data.tutorialDone) return;
 
         if (this.plan.wander && !this.actor && !this.wanderDone && !game.bossActive && game.runTime >= 20000) this.spawnWanderer(game);
         if (this.actor) this.updateWanderer(dt, game);
-
         if (this.fight) this.updateFight(dt, game);
-        if (game.mode === 'zen' && game.runTime >= STORY_ZEN_MS) this.collect('silence');
+
+        // Časové podmínky se hlídají jednou za sekundu
+        const sec = Math.floor(game.runTime / 1000);
+        if (sec !== this.lastSec) {
+            this.lastSec = sec;
+            if (game.mode === 'zen') this.gain('zen', game, h => game.runTime >= h.ms);
+            if (game.insane) this.gain('survive', game, h => game.runTime >= h.ms);
+        }
     },
 
     burst(game, x, y) {
@@ -6287,26 +6843,30 @@ const Story = {
         game.whiteFlash = Math.max(game.whiteFlash, 110);
     },
 
-    //---------------------------------------------------------------- hvězda, která se nehýbe
-
-    spawnStar(game) {
-        this.star = { x: U.rand(game.width * 0.16, game.width * 0.84), y: U.rand(game.height * 0.26, game.height * 0.5), t: 0, life: 26000, dwell: 0 };
-        this.starShown = true;
+    // Zničený nepřítel (počítadlo Počítadlo)
+    onKill(game) {
+        if (game.tutActive || !this.d().awake) return;
+        this.bump('kills', 1, game);
     },
 
-    updateStar(dt, game) {
-        const s = this.star, p = game.player;
-        s.t += dt;
-        s.life -= dt;
-        const near = U.dist(p.x, p.y, s.x, s.y) < STORY_STAR_REACH;
-        s.dwell = near ? s.dwell + dt : Math.max(0, s.dwell - dt * 1.6);
-        if (s.dwell >= STORY_STAR_DWELL) {
-            this.star = null;
-            this.burst(game, s.x, s.y);
-            this.collect('noise');
-        } else if (s.life <= 0) {
-            this.star = null;
-        }
+    // Utracený hvězdný prach ve stromu Vzestupu (Prach, Prstenec)
+    onStardustSpent(cost) {
+        if (!this.d().awake) return;
+        this.bump('spend', Number(cost) > 0 ? Number(cost) : 1);
+    },
+
+    // Dokončený Vzestup (Cyklus)
+    onAscend() {
+        if (!this.d().awake) return;
+        this.bump('ascend', 1);
+    },
+
+    //---------------------------------------------------------------- probuzení (Odstavec 12)
+
+    checkAwaken(game) {
+        if (this.declined || this.scn || this.off) return;
+        if (!Storage.data.tutorialDone || !game.insane || game.score < STORY_AWAKEN_SCORE) return;
+        this.startScene('odstavec12', { run: true });
     },
 
     //---------------------------------------------------------------- Poutník (Ochránce 3.0)
@@ -6360,42 +6920,72 @@ const Story = {
 
     //---------------------------------------------------------------- bossové, kteří nesou střep
 
+    // Střep, který tenhle boss nese: musí být k mání, sedět režim, jméno a pořadí bosse (GLITCH se opakuje od čtrnáctého)
+    habitFor(game, boss) {
+        return STORY_HABITS.find(s => {
+            const h = s.how;
+            if (!this.available(s.id) || !storyModeOk(h.modes, game) || boss.name !== h.boss) return false;
+            return h.level === 'glitch' ? boss.level >= 14 : boss.level === h.level;
+        });
+    },
+
     onBossSpawn(game, boss) {
         this.fight = null;
         this.setMark(null);
-        if (game.tutActive) return;
-        const sh = STORY_CAPTAINS.find(s => s.captain.level === boss.level && s.captain.boss === boss.name);
-        if (!sh || !this.available(sh.id)) return;
+        if (game.tutActive || !this.d().awake) return;
+        const sh = this.habitFor(game, boss);
+        if (!sh) return;
         const st = Storage.data.stats;
-        this.fight = { shard: sh.id, rule: sh.captain.rule, t: 0, inBand: 0, beamHits: 0, bombs: 0, picks: 0, hits: 0, bombs0: st.bombsUsed || 0, picks0: storyPickups(st), ok: true };
-        this.setMark(true);
+        this.fight = {
+            shard: sh.id, rule: sh.how.rule, t: 0, inBand: 0, edgeT: 0, lowT: 0, shieldT: 0, beamHits: 0, hits: 0, hitsP3: 0, bombs: 0, picks: 0, maxCombo: 0, kills: 0,
+            bombs0: st.bombsUsed || 0, picks0: storyPickups(st), kills0: game.kills || 0, ok: true
+        };
+        this.setMark(true, this.countText(this.fight));
     },
 
     // Zásah lodi (volá se při každém zásahu, i když ho kryje neranitelnost); source je 'beam' u paprsku bosse
     onHit(game, source) {
-        if (this.fight && source === 'beam') this.fight.beamHits++;
+        this.runHits++;
+        const f = this.fight;
+        if (!f) return;
+        if (source === 'beam') f.beamHits++;
+        if (game.boss && game.boss.phase === 3) f.hitsP3++;
     },
 
     syncFight(game, f) {
         const st = Storage.data.stats;
         f.bombs = (st.bombsUsed || 0) - f.bombs0;
         f.picks = storyPickups(st) - f.picks0;
+        f.kills = Math.max(0, (game.kills || 0) - f.kills0);
         f.hits = game.bossNoHit ? 0 : 1;
+    },
+
+    countText(f) {
+        const c = storyRuleCount(f.rule, f);
+        return c ? c.v + '/' + c.n : '';
     },
 
     updateFight(dt, game) {
         const f = this.fight, b = game.boss;
         if (!b) return;
+        const p = game.player, W = game.width, H = game.height;
         if (b.state !== 'ENTRY') {
             f.t += dt;
-            if (Math.abs(game.player.x - game.width / 2) <= game.width * STORY_LINE_BAND) f.inBand += dt;
+            if (Math.abs(p.x - W / 2) <= W * STORY_LINE_BAND) f.inBand += dt;
+            if (p.x <= W * STORY_EDGE_BAND || p.x >= W * (1 - STORY_EDGE_BAND)) f.edgeT += dt;
+            if (p.y >= H * STORY_LOW_FROM) f.lowT += dt;
+            if (p.shieldTimer > 0) f.shieldT += dt;
         }
+        f.maxCombo = Math.max(f.maxCombo, game.combo || 0);
         this.syncFight(game, f);
         const ok = storyRuleLive(f.rule, f);
-        if (ok !== f.ok) {
+        const text = this.countText(f);
+        if (ok !== f.ok || text !== f.text) {
+            const broke = f.ok && !ok;
             f.ok = ok;
-            this.setMark(ok);
-            if (!ok) Sounds.crack();
+            f.text = text;
+            this.setMark(ok, text);
+            if (broke) Sounds.crack();
         }
     },
 
@@ -6403,26 +6993,35 @@ const Story = {
         const f = this.fight;
         this.fight = null;
         this.setMark(null);
-        if (game.tutActive) return;
-        if (game.inferno) this.collect('fire');
+        if (game.tutActive || !this.d().awake) return;
+        if (game.insane) {
+            this.gain('bossKill', game);
+            if (game.bossNoHit) this.bump('nohit', 1, game);
+        }
+        if (game.mode === 'rush') this.gain('rush', game, h => game.rushStreak + 1 >= h.n);   // série se zvýší až po tomhle volání
         if (!f) return;
         this.syncFight(game, f);
         if (storyRuleOk(f.rule, f)) this.collect(f.shard);
     },
 
-    setMark(ok) {
+    setMark(ok, text) {
         const el = document.getElementById('story-mark');
         if (!el) return;
-        el.classList.toggle('hidden', ok === null);
+        el.classList.toggle('hidden', ok === null || ok === undefined);
         el.classList.toggle('broken', ok === false);
+        const n = document.getElementById('story-mark-n');
+        if (n) n.innerText = ok === null || ok === undefined ? '' : (text || '');
     },
 
     //---------------------------------------------------------------- kresba
 
     drawBack(ctx, game) {
         const f = this.fight;
-        if (f && f.rule === 'line') this.drawBand(ctx, game);
-        if (this.star) this.drawStar(ctx, this.star);
+        if (!f) return;
+        const rules = storyRuleList(f.rule);
+        if (rules.includes('line')) this.drawBand(ctx, game);
+        if (rules.includes('edge')) this.drawEdges(ctx, game);
+        if (rules.includes('low')) this.drawLow(ctx, game);
     },
 
     drawFront(ctx) {
@@ -6443,32 +7042,30 @@ const Story = {
         ctx.fillRect(w / 2 - bw, 0, bw * 2, game.height);
     },
 
-    drawStar(ctx, s) {
-        const t = s.t / 1000;
-        const vis = Math.max(0, Math.min(1, s.t / 1500, s.life / 1500));
-        // pomalé nepravidelné blikání: ostatní hvězdy se posouvají dolů, tahle zůstává na místě
-        const tw = 0.55 + 0.35 * Math.sin(t * 2.3) * Math.sin(t * 0.7 + 1.2);
-        ctx.save();
-        ctx.globalAlpha = vis * tw;
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.translate(s.x, s.y);
-        ctx.drawImage(Art.glow('#cdbbff').c, -17, -17, 34, 34);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(-1.4, -1.4, 2.8, 2.8);
-        ctx.fillRect(-9, -0.45, 18, 0.9);
-        ctx.fillRect(-0.45, -9, 0.9, 18);
-        ctx.restore();
-        if (s.dwell > 0) {
-            const k = s.dwell / STORY_STAR_DWELL;
-            ctx.save();
-            ctx.globalAlpha = 0.25 + 0.55 * k;
-            ctx.strokeStyle = '#e6dcff';
-            ctx.lineWidth = 1.4;
-            ctx.beginPath();
-            ctx.arc(s.x, s.y, 30 - 22 * k, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.restore();
+    // Okraj Víra: dva pásy po stranách; svítí víc, když loď v jednom z nich je
+    drawEdges(ctx, game) {
+        const w = game.width, bw = w * STORY_EDGE_BAND, x = game.player.x;
+        const inside = x <= bw || x >= w - bw;
+        const a = inside ? 0.1 : 0.04;
+        for (const left of [true, false]) {
+            const x0 = left ? 0 : w - bw;
+            const g = ctx.createLinearGradient(left ? 0 : w, 0, left ? bw : w - bw, 0);
+            g.addColorStop(0, 'rgba(217,204,255,' + a * 1.6 + ')');
+            g.addColorStop(1, 'rgba(217,204,255,0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(x0, 0, bw, game.height);
         }
+    },
+
+    // Pozice Odstřelovače: sotva znatelný pás u dolního okraje
+    drawLow(ctx, game) {
+        const h = game.height, y0 = h * STORY_LOW_FROM;
+        const a = game.player.y >= y0 ? 0.1 : 0.04;
+        const g = ctx.createLinearGradient(0, y0, 0, h);
+        g.addColorStop(0, 'rgba(217,204,255,' + a * 0.4 + ')');
+        g.addColorStop(1, 'rgba(217,204,255,' + a * 1.6 + ')');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, y0, game.width, h - y0);
     },
 
     // Vlaštovka: štíhlé tělo, zpětně sražená křídla, rozeklaný ocas; nos míří dolů (k Jomaridu)
@@ -6508,10 +7105,278 @@ const Story = {
         ctx.restore();
     },
 
+    //---------------------------------------------------------------- cutscény
+    //  Hra se při cutscéně chová jako vlastní stav (SCENE): nic se nehýbe, přes obraz jde tma, efekt a věty. Cutscéna uprostřed běhu (probuzení)
+    //  běh jen zastaví a po ní ho vrátí tam, kde byl. Ostatní se pouští z archivu. Průběh:
+    //    beats (věty) -> choice (tlačítka, když je scéna má) -> after (pokračování podle volby) -> konec (výsledek se zapíše)
+    //  Náhled (z cheat menu) projde všechno, ale nic nezapíše.
+
+    startScene(id, opts) {
+        const def = STORY_SCENES[id];
+        if (!def || this.scn) return false;
+        opts = opts || {};
+        const first = opts.preview || !(this.d().refused > 0);
+        const from = !first && def.repeat ? def.repeat : 0;
+        const run = !!opts.run;
+        const hudIds = ['hud', 'btn-bomb', 'boss-bar', 'story-mark'];
+        this.scn = {
+            id, def, run, preview: !!opts.preview, beats: def.beats.slice(from), i: -1, bt: 0, dur: 0, t: 0, phase: 'beats', result: null,
+            fx: def.fx || 'calm', k: 0.5, hue: 'gold', lit: -1, ship: -1, lock: run ? 2600 : 900, flicker: 0,
+            hidden: run ? hudIds.filter(h => { const el = document.getElementById(h); return el && !el.classList.contains('hidden'); }) : []
+        };
+        if (run) {
+            for (const h of this.scn.hidden) document.getElementById(h).classList.add('hidden');
+            const ev = document.getElementById('event-text');
+            if (ev) ev.classList.remove('show');
+        } else {
+            document.getElementById('story-overlay').classList.add('hidden');
+            document.getElementById('game-container').classList.remove('playing');
+        }
+        Sounds.init();
+        Game.state = 'SCENE';
+        this.shown('finale-layer', true);
+        this.shown('scene-tap', true);
+        for (const h of ['finale-hold', 'finale-done', 'scene-choices']) this.shown(h, false);
+        document.getElementById('scene-choices').innerHTML = '';
+        const skip = document.getElementById('finale-skip');
+        skip.innerText = 'Přeskočit';
+        this.shown('finale-skip', true);
+        this.say('');
+        this.nextBeat();
+        return true;
+    },
+
+    shown(id, on) { const el = document.getElementById(id); if (el) el.classList.toggle('hidden', !on); },
+
+    // Věta na obrazovce: styl podle toho, kdo mluví (sys = Systém, marek = Majákář, voice = hlas v šumu, big, quiet, prompt)
+    sceneSay(text, cls) {
+        const el = document.getElementById('finale-text');
+        el.classList.remove('show');
+        el.className = (cls ? 'scene-' + cls + ' ' : '') + 'finale-text';
+        el.innerHTML = text ? storyText(text) : '';
+        void el.offsetWidth;
+        if (text) el.classList.add('show');
+    },
+
+    nextBeat() {
+        const s = this.scn;
+        if (!s) return;
+        s.i++;
+        if (s.i >= s.beats.length) { this.beatsDone(); return; }
+        const b = s.beats[s.i];
+        s.bt = 0;
+        s.dur = Math.max(1200, b.ms || 1800 + String(b.say || '').replace(/\{#\d+\}/g, 'xx').length * 42);
+        if (b.fx) { s.fx = b.fx; s.k = b.k === undefined ? 0.5 : b.k; if (b.hue) s.hue = b.hue; }
+        else if (b.k !== undefined) s.k = b.k;
+        if (typeof b.ship === 'number') { s.ship = b.ship; s.lit = Math.max(s.lit, b.ship); Sounds.chime(b.ship); }
+        s.flicker = 600;
+        this.sceneSay(b.say, b.c);
+        if (b.snd && typeof Sounds[b.snd] === 'function') Sounds[b.snd](b.ship);
+        // Poslední věta scény s volbou je výzva: tlačítka se ukážou hned s ní
+        if (s.phase === 'beats' && s.def.choice && s.i === s.beats.length - 1) this.showChoices();
+    },
+
+    showChoices() {
+        const s = this.scn;
+        s.phase = 'choice';
+        this.shown('finale-skip', false);
+        const box = document.getElementById('scene-choices');
+        box.innerHTML = s.def.choice.map(c => '<button type="button" class="btn scene-choice" data-choice="' + storyEsc(c.id) + '">' + storyEsc(c.label) + '</button>').join('');
+        this.shown('scene-choices', true);
+    },
+
+    // Věty došly (scéna bez volby, nebo pokračování po volbě): scéna končí
+    beatsDone() {
+        this.finishBeats();
+    },
+
+    // Po poslední větě: scéna s tlačítkem čeká na klepnutí, ostatní (probuzení) končí samy
+    finishBeats() {
+        const s = this.scn;
+        s.phase = 'end';
+        this.shown('finale-skip', false);
+        if (s.id === 'odstavec12') { this.endScene(); return; }
+        const btn = document.getElementById('finale-done');
+        btn.innerText = s.id === 'odstavec13' ? 'Dokončit' : 'Pokračovat';
+        this.shown('finale-done', true);
+    },
+
+    // Volba hráče (tlačítko pod scénou): od téhle chvíle hrají věty, které k volbě patří
+    chooseScene(choiceId) {
+        const s = this.scn;
+        if (!s || s.phase !== 'choice' || !s.def.choice.some(c => c.id === choiceId)) return;
+        s.result = choiceId;
+        s.phase = 'after';
+        this.shown('scene-choices', false);
+        document.getElementById('scene-choices').innerHTML = '';
+        let beats = s.def.after && s.def.after[choiceId];
+        if (!beats && s.id === 'odstavec13') {
+            // pokračování je text střepu příslušného konce; poslední věta je největší
+            const lines = STORY_BY_ID['end_' + choiceId].memory;
+            const fx = s.def.endFx[choiceId];
+            beats = lines.map((say, i) => (i === lines.length - 1 ? { c: 'big', say, ms: 4200, snd: 'shard' } : i === 0 ? { c: 'marek', say, fx: fx.fx, hue: fx.hue, k: 0.7, snd: 'whisper' } : { c: 'marek', say }));
+        }
+        s.beats = beats || [];
+        s.i = -1;
+        this.nextBeat();
+    },
+
+    // Klepnutí do obrazovky přeskočí zbytek věty (ne hned po jejím začátku, ať se nepřeskočí omylem)
+    sceneAdvance() {
+        const s = this.scn;
+        if (!s || s.lock > 0 || s.bt < 900) return;
+        if (s.phase === 'beats' || s.phase === 'after') this.nextBeat();
+    },
+
+    // Přeskočit: rovnou k volbě, nebo (po volbě) na konec
+    skipScene() {
+        const s = this.scn;
+        if (!s) return;
+        if (s.phase === 'beats') {
+            if (s.def.choice) { s.i = s.beats.length - 2; this.nextBeat(); }   // výzva a tlačítka volby
+            else this.finishBeats();
+        } else if (s.phase === 'after') this.finishBeats();
+    },
+
+    sceneUpdate(dt) {
+        const s = this.scn;
+        if (!s) return;
+        s.t += dt;
+        s.bt += dt;
+        if (s.lock > 0) s.lock -= dt;
+        if (s.flicker > 0) s.flicker -= dt;
+        if ((s.phase === 'beats' || s.phase === 'after') && s.bt >= s.dur) this.nextBeat();
+    },
+
+    // Efekty pozadí cutscén: vždy jen jednoduché tvary, všechny rozměry a průhlednosti jsou omezené (záporný poloměr by kreslení shodil)
+    sceneDraw(ctx) {
+        const s = this.scn;
+        if (!s) return;
+        const W = Game.width, H = Game.height, t = s.t / 1000;
+        const k = Math.max(0, Math.min(1, s.k));
+        // tma, ve které se věty čtou
+        const open = Math.min(1, s.t / 900);
+        ctx.fillStyle = 'rgba(2,3,15,' + (0.62 * open).toFixed(3) + ')';
+        ctx.fillRect(0, 0, W, H);
+
+        if (s.fx === 'alarm') {
+            const pulse = 0.65 + 0.35 * Math.sin(t * 6);
+            const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.2, W / 2, H / 2, Math.max(W, H) * 0.75);
+            g.addColorStop(0, 'rgba(255,0,60,0)');
+            g.addColorStop(1, 'rgba(255,0,60,' + (0.42 * k * pulse).toFixed(3) + ')');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = 'rgba(0,0,0,0.16)';
+            for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 1);
+            if (s.flicker > 0 || Math.random() < 0.05 * k) {
+                ctx.fillStyle = 'rgba(255,70,100,' + (0.1 + 0.12 * k).toFixed(3) + ')';
+                for (let i = 0; i < 3; i++) ctx.fillRect(0, Math.random() * H, W, 2 + Math.random() * 6);
+            }
+        } else if (s.fx === 'static') {
+            const n = Math.floor(40 + 260 * k);
+            for (let i = 0; i < n; i++) {
+                ctx.fillStyle = 'rgba(220,214,255,' + (0.1 + Math.random() * 0.4 * k).toFixed(3) + ')';
+                ctx.fillRect(Math.random() * W, Math.random() * H, 1 + Math.random() * 2, 1 + Math.random() * 2);
+            }
+            if (s.flicker > 0) { ctx.fillStyle = 'rgba(220,214,255,' + (0.06 * k).toFixed(3) + ')'; ctx.fillRect(0, Math.random() * H, W, 3 + Math.random() * 10); }
+        } else if (s.fx === 'calm') {
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            for (let i = 0; i < 26; i++) {
+                const x = (Math.sin(i * 12.9898) * 0.5 + 0.5) * W + Math.sin(t * 0.3 + i) * 14;
+                const y = (((i * 0.137 + t * 0.012 * (1 + (i % 3))) % 1) + 1) % 1 * H;
+                ctx.globalAlpha = 0.18 + 0.2 * Math.sin(t * 0.9 + i * 1.7) * Math.sin(t * 0.9 + i * 1.7);
+                ctx.drawImage(Art.glow('#b8a8ff').c, x - 6, y - 6, 12, 12);
+            }
+            ctx.restore();
+        } else if (s.fx === 'dawn') {
+            const col = { gold: [255, 214, 140], violet: [203, 189, 255], blue: [159, 196, 255] }[s.hue] || [255, 214, 140];
+            const glow = Math.min(1, 0.25 + k) * Math.min(1, s.bt / 2500 + 0.2);
+            const g = ctx.createRadialGradient(W / 2, H * 1.02, 10, W / 2, H * 1.02, Math.max(W, H) * 0.9);
+            g.addColorStop(0, 'rgba(' + col + ',' + (0.4 * glow).toFixed(3) + ')');
+            g.addColorStop(1, 'rgba(' + col + ',0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, W, H);
+        }
+
+        // Seznam flotily: třináct světel v barvách bossů a čtrnácté bílozlaté; rozsvěcují se podle toho, jak je Zrcadlo čte
+        if (s.id === 'rollcall') {
+            const cx = W / 2, cy = H * 0.58, R = Math.min(W, H) * 0.3;
+            for (let i = 0; i < 14; i++) {
+                const a = -Math.PI / 2 + (i / 14) * Math.PI * 2;
+                const x = cx + Math.cos(a) * R, y = cy + Math.sin(a) * R * 0.82;
+                const color = i < 13 ? BOSS_TYPES[i].color : '#ffe9a8';
+                if (i <= s.lit) {
+                    const fresh = i === s.ship ? Math.max(0, 1 - s.bt / 1500) : 0;
+                    ctx.save();
+                    ctx.globalCompositeOperation = 'lighter';
+                    ctx.globalAlpha = 0.75 + 0.25 * Math.sin(t * 2 + i);
+                    const size = 30 + 26 * fresh;
+                    ctx.drawImage(Art.glow(color).c, x - size / 2, y - size / 2, size, size);
+                    ctx.restore();
+                } else {
+                    ctx.fillStyle = 'rgba(160,150,200,0.25)';
+                    ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
+                }
+            }
+        }
+
+        // mimo běh (archiv) hráčova loď uprostřed jako opora pro oko
+        if (!s.run) {
+            ctx.save();
+            ctx.translate(W / 2, H * 0.68);
+            Art.blit(ctx, Art.ship(17, false));
+            ctx.restore();
+        }
+    },
+
+    // Konec cutscény: výsledek se zapíše (v náhledu ne) a hra se vrátí tam, kde byla
+    endScene() {
+        const s = this.scn;
+        if (!s) return;
+        this.scn = null;
+        const d = this.d();
+        this.shown('finale-layer', false);
+        for (const h of ['scene-tap', 'finale-hold', 'finale-done', 'scene-choices', 'finale-skip']) this.shown(h, false);
+        document.getElementById('scene-choices').innerHTML = '';
+        this.sceneSay('');
+        let focus;
+        if (!s.preview) {
+            if (s.id === 'odstavec12') {
+                if (s.result === 'listen') { d.awake = true; this.collect('noise'); }
+                else { d.refused = Math.min(9999, d.refused + 1); this.declined = true; Storage.save(); }
+            } else if (s.id === 'rollcall') {
+                if (this.collect('podpis')) focus = 'podpis';
+            } else if (s.id === 'odstavec13' && STORY_ENDINGS.includes(s.result) && this.canChoose()) {
+                d.ending = s.result;
+                d.done = true;
+                if (this.collect('end_' + s.result)) focus = 'end_' + s.result;
+                Storage.save();            // reportRecords hlásí story_end hned
+                Game.resize();             // Jomarid svítí
+            }
+        }
+        if (s.run) {
+            // běh pokračuje: chvíle na rozkoukání a ukazatele zpátky
+            for (const h of s.hidden) this.shown(h, true);
+            Game.state = 'PLAY';
+            Game.lastTime = performance.now();
+            if (Game.player) Game.player.invulnTimer = Math.max(Game.player.invulnTimer || 0, 2500);
+            document.getElementById('game-container').classList.add('playing');
+            if (this.fight) this.setMark(this.fight.ok, this.countText(this.fight));
+            else this.setMark(null);
+            return;
+        }
+        Game.state = 'MENU';
+        UI.refresh();
+        document.getElementById('menu-overlay').classList.remove('hidden');
+        this.openArchive('menu', s.preview, focus);
+    },
+
     //---------------------------------------------------------------- archiv
 
-    refreshButtons() {
-        const show = this.has('noise');
+    // Tlačítka Střepy v menu a na konci hry: ukážou se, až hráč příběh přijal; svítí, dokud něco není přečtené
+    paintButtons() {
+        const show = !!this.d().awake;
         const fresh = this.unread() > 0;
         for (const id of ['btn-open-story', 'btn-story-go']) {
             const b = document.getElementById(id);
@@ -6519,6 +7384,11 @@ const Story = {
             b.classList.toggle('hidden', !show);
             b.classList.toggle('unread', fresh);
         }
+    },
+
+    refreshButtons() {
+        this.sync();
+        this.paintButtons();
     },
 
     // from: 'menu' | 'gameover'; focusId: střep, který se rovnou rozbalí (jinak první nepřečtený)
@@ -6547,29 +7417,39 @@ const Story = {
         const margin = s.margin ? '<p class="shard-margin"><b>Poznámka na okraji:</b> ' + storyText(s.margin) + '</p>' : '';
         return '<article class="shard' + (fresh ? ' fresh' : '') + '" data-shard="' + s.id + '">' +
             '<button type="button" class="shard-head" aria-expanded="' + (open ? 'true' : 'false') + '" aria-controls="shard-' + s.id + '">' +
-            '<i class="glyph"></i><span class="shard-no">' + STORY_ROMAN[s.no - 1] + '</span><span class="shard-title">' + storyEsc(s.title) + '</span>' +
+            '<i class="glyph"></i><span class="shard-no">' + storyRoman(s.no) + '</span><span class="shard-title">' + storyEsc(s.title) + '</span>' +
             (fresh ? '<span class="new-dot" aria-label="nepřečteno"></span>' : '') + '</button>' +
             '<div class="shard-body' + (open ? '' : ' hidden') + '" id="shard-' + s.id + '"><div class="shard-who">' + storyEsc(s.who) + '</div>' + body + margin + '</div></article>';
     },
 
-    capsHtml(pv) {
-        return '<div class="story-caps-title">Zvyky kapitánů</div>' + STORY_CAPTAINS.map(s => {
-            const got = !pv && this.has(s.id);
-            const c = s.captain;
-            return '<div class="story-cap' + (got ? ' got' : '') + '"><div class="story-cap-name">' + storyEsc(c.name) +
-                (c.alias.toLowerCase() !== c.name.toLowerCase() ? ' <small>(pro Systém ' + storyEsc(c.alias) + ')</small>' : '') + '</div>' +
-                '<div class="story-cap-state">' + (got ? 'vyslechnuto' : 'mlčí') + '</div>' +
-                (got ? '' : '<div class="story-cap-hint">' + storyEsc(c.hint) + '</div>') + '</div>';
+    // Stopy: co je právě k mání (střep má všechny předchozí a ještě ho nemám), s nápovědou a postupem u počítadel. Titulky se odhalí až po nálezu,
+    // jen u kapitánů flotily je jméno kapitána znát předem.
+    leadsHtml(pv) {
+        const open = STORY_SHARDS.filter(s => s.hint && (pv || this.available(s.id)) && !(pv && this.has(s.id)));
+        if (!open.length) return '';
+        const html = open.map(s => {
+            const h = s.how;
+            const named = h.kind === 'habit';
+            const name = named ? storyEsc(h.name) + (h.alias.toLowerCase() !== h.name.toLowerCase() ? ' <small>(pro Systém ' + storyEsc(h.alias) + ')</small>' : '') : storyText('{#4}');
+            const cur = pv ? 0 : (this.d().prog[s.id] || 0);
+            const counter = h.n && STORY_PROGRESS_KINDS.includes(h.kind);
+            const bar = counter ? '<div class="story-bar"><i style="width:' + Math.min(100, Math.round(cur / h.n * 100)) + '%"></i></div><div class="story-cap-prog">' + U.num(cur) + ' / ' + U.num(h.n) + '</div>' : '';
+            return '<div class="story-cap"><div class="story-cap-name">' + name + '</div><div class="story-cap-state">' + (named ? 'mlčí' : 'čeká') + '</div>' +
+                '<div class="story-cap-hint">' + storyEsc(s.hint) + '</div>' + bar + '</div>';
         }).join('');
+        return '<div class="story-caps-title">Stopy</div>' + html;
     },
 
-    deepHtml(pv) {
-        return '<div class="story-caps-title">Zbylé střepy</div>' + STORY_DEEP.map(s => {
-            const got = !pv && this.has(s.id);
-            return '<div class="story-cap' + (got ? ' got' : '') + '"><div class="story-cap-name">' + (got ? storyEsc(s.title) : storyText('{#4}')) + '</div>' +
-                '<div class="story-cap-state">' + (got ? 'nalezeno' : 'čeká') + '</div>' +
-                (got ? '' : '<div class="story-cap-hint">' + storyEsc(s.hint) + '</div>') + '</div>';
-        }).join('');
+    // Tlačítka scén: dostupné jsou jen ty, na které hráč došel; v náhledu všechny
+    actionsHtml(pv) {
+        const acts = [];
+        if (pv) acts.push(['odstavec12', 'Prolog: Odstavec 12'], ['finale', 'Finále: Zazářit'], ['rollcall', 'Seznam flotily'], ['odstavec13', 'Poslední volba']);
+        else {
+            if (this.canFinale()) acts.push(['finale', 'Zazářit']);
+            if (this.canSeznam()) acts.push(['rollcall', 'Přečíst seznam']);
+            if (this.canChoose()) acts.push(['odstavec13', 'Odpovědět Marekovi']);
+        }
+        return acts.map(([id, label]) => '<button type="button" class="btn story-act" data-act="' + id + '">' + storyEsc(label) + '</button>').join('');
     },
 
     renderArchive(focusId) {
@@ -6577,19 +7457,37 @@ const Story = {
         const shown = STORY_SHARDS.filter(s => pv || this.has(s.id));   // v náhledu všechny, jinak jen nalezené
         const firstFresh = pv ? null : (shown.find(s => !d.seen[s.id]) || {}).id;
         const open = focusId || firstFresh;
-        document.getElementById('story-list').innerHTML = shown.map(s => this.shardHtml(s, s.id === open, !pv && !d.seen[s.id])).join('');
+        // Střepy po knihách; nadpis knihy je vidět, jakmile je v ní něco k přečtení
+        let html = '';
+        for (const book of STORY_BOOKS) {
+            const inBook = shown.filter(s => s.book === book.id);
+            if (!inBook.length) continue;
+            html += '<div class="story-book"><span class="story-book-no">' + storyRoman(book.id) + '</span><span class="story-book-title">' + storyEsc(book.title) + '</span><small>' + storyEsc(book.sub) + '</small></div>';
+            html += inBook.map(s => this.shardHtml(s, s.id === open, !pv && !d.seen[s.id])).join('');
+        }
+        document.getElementById('story-list').innerHTML = html;
         if (open && !pv) this.markSeen(open);
+        const leads = this.leadsHtml(pv);
         const caps = document.getElementById('story-caps');
-        const showCaps = pv || this.has('wanderer');
-        caps.classList.toggle('hidden', !showCaps);
-        caps.innerHTML = showCaps ? this.capsHtml(pv) : '';
-        const deep = document.getElementById('story-deep');
-        const showDeep = pv || d.done;
-        deep.classList.toggle('hidden', !showDeep);
-        deep.innerHTML = showDeep ? this.deepHtml(pv) : '';
+        caps.classList.toggle('hidden', !leads);
+        caps.innerHTML = leads;
+        const acts = this.actionsHtml(pv);
+        const box = document.getElementById('story-actions');
+        box.classList.toggle('hidden', !acts);
+        box.innerHTML = acts;
         document.getElementById('story-preview').classList.toggle('hidden', !pv);
-        document.getElementById('btn-story-finale').classList.toggle('hidden', !(pv || this.canFinale()));
-        document.getElementById('story-sub').innerText = this.has('wanderer') || pv ? 'Co zbylo po Roztříštění' : 'Záznamy, které se podařilo zachránit';
+        const lastBook = Math.max(0, ...shown.map(s => s.book));
+        const book = STORY_BOOKS.find(b => b.id === lastBook);
+        document.getElementById('story-sub').innerText = pv ? 'Náhled všech knih' : (d.done ? 'Příběh je dokončený' : (book ? 'Kniha ' + storyRoman(book.id) + ': ' + book.title : 'Záznamy, které se podařilo zachránit'));
+    },
+
+    // Tlačítko v archivu: spustí příslušnou scénu nebo finále první knihy
+    act(id) {
+        if (id === 'finale') this.startFinale();
+        else if (STORY_SCENES[id]) {
+            if (!this.preview && ((id === 'rollcall' && !this.canSeznam()) || (id === 'odstavec13' && !this.canChoose()))) return;
+            this.startScene(id, { preview: this.preview });
+        }
     },
 
     markSeen(id) {
@@ -6598,6 +7496,7 @@ const Story = {
         if (!this.has(id) || d.seen[id]) return;
         d.seen[id] = true;
         Storage.queueSave();
+        this.paintButtons();
     },
 
     toggleShard(id) {
@@ -6616,16 +7515,12 @@ const Story = {
         }
     },
 
-    // Hvězdný prach (to, co zbylo z Ochránce 2.9) se poprvé utratil ve stromu Vzestupu
-    onStardustSpent() { this.collect('dust'); },
-
     // Slovo napsané do pole dole v menu (Kanál). Vrací true, když ho příběh přijal.
     onCode(code) {
         if (!this.available('channel') || !storyCodeMatches(code)) return false;
         if (this.collect('channel')) this.openArchive('menu', false, 'channel');
         return true;
     },
-
     //---------------------------------------------------------------- finále: Zazářit
 
     // Hra se při finále chová jako vlastní stav (FINALE): žádné nepřátele, jen loď, střepy, světlo a flotila. Průběh:
@@ -6930,7 +7825,7 @@ const Story = {
         }
     },
 
-    // Hotovo: střep Domov je v archivu, příběh je dokončený a server dostane statistiku story_end (odznak a titul)
+    // Hotovo: střep Domov je v archivu, první kniha je dokončená (Jomarid svítí) a navazuje druhá. Příběh jako celek je dokončený až po poslední volbě.
     finishFinale() {
         const f = this.fin;
         if (!f) return;
@@ -6943,10 +7838,12 @@ const Story = {
         let focus;
         if (!f.preview && this.available('home')) {
             d.found.home = Date.now();
-            d.done = true;
-            Storage.save();            // reportRecords hlásí story_end hned
+            d.fin1 = true;
+            Storage.save();
             Sounds.shard();
             Toast.push({ name: 'Střep VIII: Domov', eyebrow: 'Zrcadlo svítí', icon: '<i class="glyph"></i>', cls: 'story' });
+            this.sync();               // Ozvěna: druhá kniha se otevře sama
+            this.paintButtons();
             focus = 'home';
         }
         Game.resize();                 // pozadí se postaví znovu: planeta Jomarid svítí
@@ -6956,15 +7853,30 @@ const Story = {
         else this.openArchive('menu', true);
     },
 
-    // Chyba v příběhu nesmí zastavit hru (výjimka ve smyčce by ji zmrazila): příběh se do obnovení stránky vypne a rozehrané finále skončí v menu.
-    // Volá to obal STORY-GUARD pod enginem, který obaluje všechna volání příběhu ze hry.
+    // Chyba v příběhu nesmí zastavit hru (výjimka ve smyčce by ji zmrazila): příběh se do obnovení stránky vypne, rozehraná cutscéna nebo finále skončí
+    // (běh se vrátí do hry, jinak do menu). Volá to obal STORY-GUARD pod enginem, který obaluje všechna volání příběhu ze hry.
     fail(err) {
         this.off = true;
         try { console.error('Střepy se vypnuly kvůli chybě:', err); } catch (e) {}
-        this.star = null;
         this.actor = null;
         this.fight = null;
         try { this.setMark(null); } catch (e) {}
+        try {
+            if (this.scn) {
+                const s = this.scn;
+                this.scn = null;
+                for (const id of ['finale-layer', 'scene-tap', 'finale-hold', 'finale-done', 'scene-choices', 'finale-skip']) document.getElementById(id).classList.add('hidden');
+                if (s.run) {
+                    for (const h of s.hidden) document.getElementById(h).classList.remove('hidden');
+                    Game.state = 'PLAY';
+                    Game.lastTime = performance.now();
+                    document.getElementById('game-container').classList.add('playing');
+                } else {
+                    Game.state = 'MENU';
+                    document.getElementById('menu-overlay').classList.remove('hidden');
+                }
+            }
+        } catch (e) {}
         if (this.fin) {
             this.fin = null;
             for (const id of ['finale-layer', 'finale-hold', 'finale-done']) document.getElementById(id).classList.add('hidden');
@@ -6998,7 +7910,7 @@ const Story = {
             try { return fn.apply(Story, args); } catch (err) { Story.fail(err); return undefined; }
         };
     };
-    ['onRunStart', 'onRunEnd', 'update', 'drawBack', 'drawFront', 'onBossSpawn', 'onBossKilled', 'onHit', 'onStardustSpent', 'refreshButtons', 'finaleUpdate', 'finaleDraw'].forEach(wrap);
+    ['onRunStart', 'onRunEnd', 'update', 'drawBack', 'drawFront', 'onBossSpawn', 'onBossKilled', 'onHit', 'onKill', 'onStardustSpent', 'onAscend', 'refreshButtons', 'finaleUpdate', 'finaleDraw', 'sceneUpdate', 'sceneDraw'].forEach(wrap);
 })();
 // </STORY-GUARD>
 
@@ -7047,7 +7959,7 @@ document.getElementById('btn-continue').onclick = () => Game.continueRun();
 document.addEventListener('keydown', e => {
     if (e.code === 'Escape' && !document.getElementById('quit-overlay').classList.contains('hidden')) { e.stopPropagation(); closeQuitDialog(); }
 }, true);
-window.addEventListener('pagehide', () => { if (Game.state === 'PLAY' || Game.state === 'PAUSE') Game.saveRun(); else Storage.flush(); });
+window.addEventListener('pagehide', () => { if (Game.state === 'PLAY' || Game.state === 'PAUSE' || (Game.state === 'SCENE' && Story.scn && Story.scn.run)) Game.saveRun(); else Storage.flush(); });
 document.getElementById('btn-restart').onclick = () => Game.start(Game.mode);
 document.getElementById('btn-quit-go').onclick = () => Game.quitToMenu();
 document.getElementById('btn-sound').onclick = () => UI.toggleSound();
@@ -7074,7 +7986,17 @@ document.getElementById('btn-ascend').onclick = () => performAscend();
 document.getElementById('btn-open-story').onclick = () => Story.openArchive('menu', false);
 document.getElementById('btn-story-go').onclick = () => Story.openArchive('gameover', false);
 document.getElementById('btn-story-close').onclick = () => Story.closeArchive();
-document.getElementById('btn-story-finale').onclick = () => Story.startFinale();
+// Obsluha tlačítek příběhu není pod ochranou smyčky, proto si chybu hlídá sama: příběh se vypne a hra běží dál
+const storySafe = fn => (...a) => { try { return fn(...a); } catch (err) { Story.fail(err); } };
+document.getElementById('story-actions').addEventListener('click', storySafe(e => {
+    const b = e.target.closest ? e.target.closest('[data-act]') : null;
+    if (b) Story.act(b.dataset.act);
+}));
+document.getElementById('scene-choices').addEventListener('click', storySafe(e => {
+    const b = e.target.closest ? e.target.closest('[data-choice]') : null;
+    if (b) Story.chooseScene(b.dataset.choice);
+}));
+document.getElementById('scene-tap').addEventListener('pointerdown', storySafe(e => { e.preventDefault(); Story.sceneAdvance(); }));
 document.getElementById('story-list').addEventListener('click', e => {
     const head = e.target.closest ? e.target.closest('.shard-head') : null;
     if (head) Story.toggleShard(head.parentElement.dataset.shard);
@@ -7089,12 +8011,17 @@ finaleHold.addEventListener('pointerdown', e => {
 finaleHold.addEventListener('contextmenu', e => e.preventDefault());
 window.addEventListener('keydown', e => {
     if (Game.state === 'FINALE' && (e.code === 'Space' || e.code === 'Enter') && !e.repeat) { e.preventDefault(); Story.finaleHold(true); }
+    // Cutscéna: mezerník a Enter přeskočí větu (pod volbou nic: tam zůstanou tlačítka)
+    if (Game.state === 'SCENE' && Story.scn && (Story.scn.phase === 'beats' || Story.scn.phase === 'after') && (e.code === 'Space' || e.code === 'Enter') && !e.repeat) {
+        e.preventDefault();
+        storySafe(() => Story.sceneAdvance())();
+    }
 });
 window.addEventListener('keyup', e => {
     if (Game.state === 'FINALE' && (e.code === 'Space' || e.code === 'Enter')) Story.finaleHold(false);
 });
-document.getElementById('finale-done').onclick = () => Story.finishFinale();
-document.getElementById('finale-skip').onclick = () => Story.skipFinale();
+document.getElementById('finale-done').onclick = storySafe(() => (Story.scn ? Story.endScene() : Story.finishFinale()));
+document.getElementById('finale-skip').onclick = storySafe(() => (Story.scn ? Story.skipScene() : Story.skipFinale()));
 document.addEventListener('keydown', e => {
     if (e.code === 'Escape' && !document.getElementById('story-overlay').classList.contains('hidden')) Story.closeArchive();
 });
