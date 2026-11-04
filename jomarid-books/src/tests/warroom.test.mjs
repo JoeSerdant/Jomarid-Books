@@ -69,7 +69,7 @@ function makeEnv() {
     Sound: { buy() {} }, el: () => ({ style: { display: 'none' }, innerText: '' }), showUnlockNotification: (t) => toasts.push(t), updateUI() {}, checkWinLoss() {},
     state: {},
   });
-  vm.runInContext(`${fnSrc('loadProgress')}\n${fnSrc('reportRecords')}\n${fnSrc('saveProgress')}\n${fnSrc('warTrack')}\nconst CHEAT_STATS = ${cheatLit};\n${fnSrc('cheatAction')}`, ctx);
+  vm.runInContext(`${fnSrc('cleanProgress')}\n${fnSrc('loadProgress')}\n${fnSrc('reportRecords')}\n${fnSrc('saveProgress')}\n${fnSrc('warTrack')}\nconst CHEAT_STATS = ${cheatLit};\n${fnSrc('cheatAction')}`, ctx);
   return { ctx, records, storage, scenarios, doctrines, run: (code) => vm.runInContext(code, ctx) };
 }
 
@@ -268,4 +268,23 @@ test('omezený pohyb: radar, otřes, pulzování a částice se při nastavení 
   // blok je na konci stylů (přebíjí pozdější pravidla se stejnou přesností)
   assert.ok(css.lastIndexOf('@media (prefers-reduced-motion: reduce) {') > css.lastIndexOf('animation: zonePulse'), 'blok je za posledním pravidlem s animací');
   for (const sel of infinite) assert.ok(block.includes(sel), `${sel} má nekonečnou animaci a v bloku pro omezený pohyb chybí`);
+});
+
+test('uložený postup: vadné seznamy, rekordy a čítače se při čtení opraví, platný postup zůstane beze změny', () => {
+  const src = game.match(/    function cleanProgress\(raw\) \{[\s\S]*?\n    \}\n/)[0];
+  const clean = vm.runInNewContext(`(${src.trim().replace(/^function cleanProgress/, 'function')})`, { Array, Object, Set, Number, isFinite });
+  const plain = (v) => JSON.parse(JSON.stringify(v));
+  const valid = { unlockedScenarios: ['default', 'ww1_west'], unlockedDoctrines: ['blitz', 'fortress', 'intel'], highScores: { default: 7, ww1_west: 3 }, stats: { attacks: 12, best_day: 40.5, scen: { default: 1, ww1_west: 1 }, docts: { blitz: 1 } }, budoucí: { a: 1 } };
+  assert.deepEqual(plain(clean(valid)), valid, 'platný postup (i s neznámým klíčem) se nezmění');
+  assert.notEqual(clean(valid), valid);
+  // nic použitelného: výchozí postup, žádná výjimka
+  for (const junk of [null, undefined, 5, 'x', [], true, {}]) assert.deepEqual(plain(clean(junk)), { unlockedScenarios: ['default'], unlockedDoctrines: ['blitz', 'fortress'], highScores: {}, stats: {} }, String(junk));
+  const bad = plain(clean({ unlockedScenarios: { a: 1 }, unlockedDoctrines: 'intel', highScores: [1, 2], stats: [3] }));
+  assert.deepEqual(bad, { unlockedScenarios: ['default'], unlockedDoctrines: ['blitz', 'fortress'], highScores: {}, stats: {} }, 'objekt, text a pole místo seznamů či map');
+  const mixed = plain(clean({ unlockedScenarios: ['ww1_east', 5, null, {}, '', 'x'.repeat(41), 'ww1_east'], unlockedDoctrines: ['intel', 'intel', 7], highScores: { a: '12', b: 'x', c: -1, d: null, e: 1e999, f: 4 }, stats: { attacks: 'x', crits: -3, misses: NaN, saves: 5, scen: { a: 1, b: 0, c: 'ano' }, docts: [1], jiný: { a: 1 }, turns_total: 1e308 } }));
+  assert.deepEqual(mixed.unlockedScenarios, ['ww1_east', 'default'], 'jen neprázdné texty, bez opakování, vždy se základním scénářem');
+  assert.deepEqual(mixed.unlockedDoctrines, ['intel', 'blitz', 'fortress']);
+  assert.deepEqual(mixed.highScores, { a: 12, d: 0, f: 4 }, 'rekordy jako čísla od nuly (null je číslo 0, nekonečno a text ne)');
+  assert.deepEqual(mixed.stats, { saves: 5, scen: { a: 1, c: 1 }, turns_total: 1e308 }, 'čítače jen jako nezáporná čísla, scen a docts jako mapy');
+  assert.match(game, /return cleanProgress\(JSON\.parse\(saved\)\);/, 'loadProgress používá čištění');
 });
