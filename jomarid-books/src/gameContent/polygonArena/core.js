@@ -22,6 +22,10 @@ function gauss() { return (Math.random() + Math.random() + Math.random() - 1.5) 
 const STORE_KEY = 'polygon-arena-v1';
 const save = { best: 0, name: '', diff: 'normal', sound: false, mode: 'ffa', skin: 'teal', set: {}, codex: {}, ach: {}, st: {} };
 try { const raw = localStorage.getItem(STORE_KEY); if (raw) Object.assign(save, JSON.parse(raw)); } catch (e) { /* storage nemusí být dostupné */ }
+// Vadné typy z poškozeného nebo ručně upraveného uložení (jinak by se v rozhraní ukázalo "[object Object]" nebo NaN)
+if (typeof save.name !== 'string') save.name = '';
+if (typeof save.best !== 'number' || !isFinite(save.best)) save.best = 0;
+if (typeof save.sound !== 'boolean') save.sound = false;
 save.set = Object.assign({ vib: true, lefty: false, ctl: 1, fx: 1 }, save.set || {});
 save.st = Object.assign({ games: 0, kills: 0, deaths: 0, shapes: 0, bosses: 0, secs: 0, bestLevel: 1, wins: 0, perks: 0, crystals: 0, bossKinds: {}, mapsSeen: {}, modesPlayed: {}, bestWave: 0, survWins: 0, hillWins: 0, royaleWins: 0, rushWins: 0, rushBest: 0, bestGold: 0, goldWins: 0, bestTier: 0, hellBest: 0 }, save.st || {});
 save.st.bossKinds = save.st.bossKinds || {}; save.st.mapsSeen = save.st.mapsSeen || {}; save.st.modesPlayed = save.st.modesPlayed || {};
