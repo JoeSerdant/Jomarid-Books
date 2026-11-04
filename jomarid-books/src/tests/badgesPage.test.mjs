@@ -77,7 +77,7 @@ function fakeClient({ profile = {}, books = [], activity = [], rpc = {} } = {}) 
     rpc: async (fn, args) => {
       calls.push([fn, args]);
       const handler = rpc[fn];
-      return handler ? handler(args) : { data: null, error: { message: `chybí funkce ${fn}` } };
+      return handler ? handler(args) : { data: null, error: { code: 'PGRST202', message: `Could not find the function public.${fn} in the schema cache` } };
     },
   };
 }
@@ -171,7 +171,7 @@ function pagingClient({ books, activity, profiles, rpc = {} }) {
   return {
     seen,
     from: (name) => (name === 'user_books' ? table(books, 'books') : table(activity, 'activity')),
-    rpc: async (fn) => (fn === 'leaderboard_profiles' ? { data: profiles, error: null } : rpc[fn] ? rpc[fn]() : { data: null, error: { message: 'chybí' } }),
+    rpc: async (fn, args) => (fn === 'leaderboard_profiles' ? { data: profiles, error: null } : rpc[fn] ? rpc[fn](args) : { data: null, error: { code: 'PGRST202', message: `Could not find the function public.${fn} in the schema cache` } }),
   };
 }
 const dayStr = (daysAgo) => { const d = new Date(); d.setDate(d.getDate() - daysAgo); return d.toLocaleDateString('sv'); };
@@ -233,6 +233,39 @@ test('loadLeaderboards: série ostatních se bere ze serveru (leaderboard_streak
   const withoutServer = await quiet(() => loadLeaderboards(pagingClient({ books: [], activity, profiles }), USER));
   assert.equal(withoutServer.streak.find((r) => r.email === 'alex').streak, 0, 'bez SQL se pojistky neznají (původní chování)');
   assert.equal(withoutServer.streak.find((r) => r.email === 'pavla').streak, 1);
+});
+
+// ---- soukromí: žebříček čte souhrny ze serveru (db/security-hardening.sql), ne cizí řádky tabulek ----
+const dayIso = (daysAgo) => new Date(Date.now() - daysAgo * 864e5).toISOString();
+test('loadLeaderboards: počty knih a dny čtení přicházejí z funkcí serveru a cizí tabulky se vůbec nečtou', async () => {
+  const profiles = [{ id: 'alex', username: 'alex' }, { id: 'pavla', username: 'pavla' }, { id: 'u1', username: 'jana' }];
+  const calls = [];
+  const client = pagingClient({ books: [], activity: [], profiles, rpc: {
+    leaderboard_reads: async (args) => { calls.push(['reads', args]); return { data: [{ user_id: 'alex', total_read: 7, monthly_read: 3 }, { user_id: 'pavla', total_read: 2, monthly_read: 0 }], error: null }; },
+    leaderboard_activity: async (args) => { calls.push(['activity', args]); return { data: [{ user_id: 'pavla', activity_date: dayStr(0) }, { user_id: 'pavla', activity_date: dayStr(1) }], error: null }; },
+  } });
+  const board = await quiet(() => loadLeaderboards(client, USER));
+  assert.equal(board.totalRead.find((r) => r.email === 'alex').totalRead, 7);
+  assert.equal(board.monthlyRead.find((r) => r.email === 'alex').monthlyRead, 3);
+  assert.equal(board.totalRead.find((r) => r.email === 'jana').totalRead, 0, 'kdo ve výsledku není, má nulu');
+  assert.equal(board.streak.find((r) => r.email === 'pavla').streak, 2, 'série ze dnů čtení od serveru');
+  assert.equal(client.seen.books, 0, 'tabulka user_books se nečte');
+  assert.equal(client.seen.activity, 0, 'tabulka user_daily_activity se nečte');
+  const from = new Date(calls.find((c) => c[0] === 'reads')[1].p_from); const to = new Date(calls.find((c) => c[0] === 'reads')[1].p_to);
+  const now = new Date();
+  assert.deepEqual([from.getFullYear(), from.getMonth(), from.getDate(), from.getHours()], [now.getFullYear(), now.getMonth(), 1, 0], 'měsíc začíná prvního v 0:00 místního času');
+  assert.equal(to.getMonth(), (now.getMonth() + 1) % 12, 'a končí začátkem příštího měsíce');
+  assert.equal(calls.find((c) => c[0] === 'activity')[1].p_days, 60);
+});
+
+test('loadLeaderboards: když funkce souhrnů v databázi ještě nejsou, čtou se tabulky po staru; jiná chyba žebříček neukáže (radši nic než špatná čísla)', async () => {
+  const profiles = [{ id: 'alex', username: 'alex' }, { id: 'u1', username: 'jana' }];
+  const books = [{ user_id: 'alex', first_completed_at: dayIso(0), updated_at: dayIso(0) }, { user_id: 'alex', first_completed_at: '2020-01-01T10:00:00Z', updated_at: '2020-01-01T10:00:00Z' }];
+  const old = await quiet(() => loadLeaderboards(pagingClient({ books, activity: [], profiles }), USER));
+  assert.equal(old.totalRead.find((r) => r.email === 'alex').totalRead, 2, 'bez SQL: stará cesta přes tabulky');
+  assert.equal(old.monthlyRead.find((r) => r.email === 'alex').monthlyRead, 1, 'a měsíc se počítá stejně');
+  const broken = await quiet(() => loadLeaderboards(pagingClient({ books, activity: [], profiles, rpc: { leaderboard_reads: async () => ({ data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } }) } }), USER));
+  assert.equal(broken, null, 'jiná chyba než "funkce chybí": žádný žebříček, ne zavádějící čísla');
 });
 
 // ---- zmrzlá série v žebříčku: řádek je modrý, ne nula ----

@@ -365,6 +365,15 @@ describe('Edge Function send-push', { skip: !EDGE && 'Node bez podpory TypeScrip
     assert.equal((await EDGE.handle(req({}, { secret: null }), d)).status, 401);
     assert.equal((await EDGE.handle(req({ audience: 'user', user_id: UID }), { ...d, secret: '' })).status, 401); // nenastavené heslo funkce nikoho nepustí
   });
+  test('heslo funkce se porovnává v konstantním čase (secretMatches), ne obyčejným ===', async () => {
+    assert.equal(await EDGE.secretMatches('s3', 's3'), true);
+    for (const bad of ['', 's', 's33', 'S3', 's3 ', null]) assert.equal(await EDGE.secretMatches(bad, 's3'), false, `špatné heslo ${JSON.stringify(bad)}`);
+    assert.equal(await EDGE.secretMatches('s3', ''), false, 'nenastavené heslo funkce nikoho nepustí, ani prázdné');
+    assert.equal(await EDGE.secretMatches('', ''), false);
+    const src = read('db/push/send-push.ts');
+    assert.match(src, /secretMatches\(req\.headers\.get\('x-push-secret'\), deps\.secret\)/, 'handle() heslo porovnává přes secretMatches');
+    assert.doesNotMatch(src, /get\('x-push-secret'\) (!==|===) deps\.secret/, 'a ne přímo');
+  });
   test('nečitelné tělo a špatný příjemce', async () => {
     const { deps: d } = deps();
     assert.equal((await EDGE.handle(req(null, { raw: '{x' }), d)).status, 400);
