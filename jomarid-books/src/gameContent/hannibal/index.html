@@ -1812,6 +1812,7 @@
         requestAnimationFrame(() => this.fitCanvas());
         if (this.isPortraitPhone() && !this._portraitTip) {
           this._portraitTip = true;
+          this._tipUntil = Date.now() + 6000;
           Game.toast('Tip: pro větší bojiště otoč telefon na šířku (nebo použij ⛶). Cíl nejdřív ťukni pro náhled, druhé ťuknutí zaútočí.', 6000);
         }
       }
@@ -1823,6 +1824,8 @@
         if (!wrap) return;
         const cw = wrap.clientWidth, ch = wrap.clientHeight;
         if (!cw || !ch) return; // obrazovka není vidět
+        // Rada „otoč telefon“ nemá smysl ukazovat, když už je otočený
+        if (this._tipUntil && Date.now() < this._tipUntil && !this.isPortraitPhone()) { this._tipUntil = 0; Game.hideToast(); }
         const cs = window.getComputedStyle ? window.getComputedStyle(wrap) : null;
         const padX = cs ? (parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)) || 0 : 0;
         const padY = cs ? (parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)) || 0 : 0;
@@ -3742,6 +3745,12 @@
       startMinigame(node) {
         this.showScreen('minigame-screen');
         MinigameEngine.start(node);
+      },
+
+      hideToast() {
+        const t = document.getElementById('toast');
+        if (t) t.classList.remove('show');
+        clearTimeout(this._toastTimer);
       },
 
       toast(msg, ms = 3000) {

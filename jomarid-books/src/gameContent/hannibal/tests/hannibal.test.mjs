@@ -464,3 +464,31 @@ test('omezený pohyb: otřes plátna se při nastavení systému vypne, nápis t
   assert.doesNotMatch(calm, /transform|scale/, 'klidný nápis se nepřibližuje');
   assert.match(calm, /100% \{ opacity: 0; \}/);
 });
+
+test('rada „otoč telefon“: po otočení na šířku se skryje (jen dokud by běžela), jinde se nic nemění', () => {
+  assert.match(html, /this\._tipUntil = Date\.now\(\) \+ 6000;\s*Game\.toast\('Tip: pro větší bojiště otoč telefon/);
+  const fit = methodSrc('fitCanvas');
+  assert.match(fit, /if \(this\._tipUntil && Date\.now\(\) < this\._tipUntil && !this\.isPortraitPhone\(\)\) \{ this\._tipUntil = 0; Game\.hideToast\(\); \}/);
+  // hideToast: schová hlášku a zruší její časovač
+  const calls = [];
+  const game = vm.runInNewContext(`({ ${methodSrc('hideToast')} })`, { document: { getElementById: () => ({ classList: { remove: (c) => calls.push('remove:' + c) } }) }, clearTimeout: (t) => calls.push('clear:' + t) });
+  game._toastTimer = 7;
+  game.hideToast();
+  assert.deepEqual(calls, ['remove:show', 'clear:7']);
+  // fitCanvas: tip se skryje jen při přechodu z výšky na šířku v době jeho zobrazení
+  const run = (portrait, until) => {
+    const hidden = [];
+    const eng = vm.runInNewContext(`({ ${fit} })`, {
+      Date, Game: { hideToast: () => hidden.push(1) }, Math, parseFloat, window: { getComputedStyle: () => ({ paddingLeft: '0', paddingRight: '0', paddingTop: '0', paddingBottom: '0' }) },
+    });
+    Object.assign(eng, { canvas: { width: 900, height: 600, style: {}, parentElement: { clientWidth: 800, clientHeight: 500 } }, isPortraitPhone: () => portrait, _tipUntil: until });
+    eng.fitCanvas();
+    return [hidden.length, eng._tipUntil];
+  };
+  const soon = Date.now() + 5000;
+  assert.deepEqual(run(true, soon), [0, soon], 'dál na výšku: rada zůstává');
+  assert.deepEqual(run(false, soon), [1, 0], 'otočeno na šířku: rada zmizí');
+  const expired = Date.now() - 1000;
+  assert.deepEqual(run(false, expired), [0, expired], 'už vypršela: nic se neskrývá (nezasahuje do jiných hlášek)');
+  assert.deepEqual(run(false, 0), [0, 0], 'rada se nikdy neukázala');
+});
