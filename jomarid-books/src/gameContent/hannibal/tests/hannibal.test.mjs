@@ -38,9 +38,9 @@ test('postup se ukládá jen pod klíči, které appka přenáší na server', (
   const used = new Set([...html.matchAll(/localStorage\.(?:getItem|setItem|removeItem)\(\s*(?:'([^']+)'|(this\.SAVE_KEY|BATTLE_KEY))/g)].map((m) => m[1] || named[m[2]]));
   assert.ok(html.includes("SAVE_KEY: 'hannibal_save_v1'"));
   assert.ok(html.includes("const BATTLE_KEY = 'hannibal_battle_v1';"));
-  assert.deepEqual([...used].sort(), ['hannibal_battle_v1', 'hannibal_endless_best', 'hannibal_save_v1'], 'hra sahá přesně na tyto tři klíče');
+  assert.deepEqual([...used].sort(), ['hannibal_battle_v1', 'hannibal_endless_best', 'hannibal_muted', 'hannibal_save_v1'], 'hra sahá přesně na tyto čtyři klíče');
   for (const key of used) assert.ok(LEGACY_KEYS.hannibal.includes(key), `${key} chybí v gameSave/catalog.js`);
-  assert.deepEqual([...LEGACY_KEYS.hannibal].sort(), ['hannibal_battle_v1', 'hannibal_endless_best', 'hannibal_save_v1']);
+  assert.deepEqual([...LEGACY_KEYS.hannibal].sort(), ['hannibal_battle_v1', 'hannibal_endless_best', 'hannibal_muted', 'hannibal_save_v1']);
 });
 
 test('Jomarid Coins: hra jen žádá (vítězství v kampani 10, v minihře 5, poražená vlna nekonečného tažení 2), o částce rozhoduje server', () => {
@@ -352,4 +352,115 @@ test('rozehraná bitva: velitelství nabízí pokračování nebo zahození a ob
   assert.match(html, /if \(\(GameCampaign\.started \|\| save\) && GameCampaign\.peekBattleSave\(\)\) info\.innerText \+= '\\n⚔️ Čeká na tebe rozehraná bitva\.';/);
   assert.match(resume, /eng\.scenarioConf\.terrainMap = s\.terrain;/, 'terén nekonečného tažení se vrací');
   assert.doesNotMatch(resume, /meta\.playerRoster\s*=/, 'obnova armádu v rosteru nemění');
+});
+
+/* ============================ Zvuk a omezený pohyb ============================ */
+const storeStub = (init = {}, broken = false) => {
+  const m = new Map(Object.entries(init));
+  const boom = () => { throw new Error('úložiště je zakázané'); };
+  return broken ? { getItem: boom, setItem: boom, removeItem: boom, map: m } : { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k), map: m };
+};
+const loadSound = (store) => {
+  const made = { osc: 0, ctx: 0 };
+  class FakeAudioContext {
+    constructor() { made.ctx++; this.currentTime = 0; this.destination = {}; }
+    createOscillator() { made.osc++; return { type: '', frequency: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {}, start() {}, stop() {} }; }
+    createGain() { return { gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {} }; }
+  }
+  const src = html.slice(html.indexOf('class SoundEngine {'), html.indexOf('const audioFX = new SoundEngine();'));
+  assert.ok(src.length > 200, 'zdroj SoundEngine se našel');
+  const ctx = vm.createContext({ window: { AudioContext: FakeAudioContext }, localStorage: store });
+  vm.runInContext(`${src}\nthis.SoundEngine = SoundEngine;`, ctx);
+  return { SoundEngine: ctx.SoundEngine, made };
+};
+
+test('zvuk: vypnutí se pamatuje, ztlumený zvuk nevytváří žádné oscilátory a chybné úložiště hru nerozbije', () => {
+  const store = storeStub();
+  const { SoundEngine, made } = loadSound(store);
+  const a = new SoundEngine();
+  assert.equal(a.muted, false, 'bez uloženého nastavení je zvuk zapnutý');
+  a.playSword();
+  assert.equal(made.osc, 0, 'před init() (bez kliknutí hráče) se nehraje nic, jako dřív');
+  a.init();
+  a.playSword(); a.playMarch(); a.playVictory();
+  assert.equal(made.osc, 1 + 1 + 4, 'zapnutý zvuk hraje meč, pochod i čtyři tóny vítězství');
+  a.setMuted(true);
+  assert.equal(store.map.get('hannibal_muted'), '1');
+  const before = made.osc;
+  a.playSword(); a.playMarch(); a.playVictory();
+  assert.equal(made.osc, before, 'ztlumeno: nic se nevytváří');
+  // nová návštěva: ztlumení zůstane
+  const b = new SoundEngine();
+  assert.equal(b.muted, true, 'nastavení se načte z úložiště');
+  b.init(); b.playVictory();
+  assert.equal(made.osc, before);
+  b.setMuted(false);
+  assert.ok(!store.map.has('hannibal_muted'), 'zapnutí klíč smaže (nezůstává "0")');
+  b.playSword();
+  assert.equal(made.osc, before + 1);
+  assert.equal(new SoundEngine().muted, false);
+  // úložiště, které hází výjimky (soukromé okno, zakázané cookies)
+  const { SoundEngine: S2, made: m2 } = loadSound(storeStub({}, true));
+  const c = new S2();
+  assert.equal(c.muted, false);
+  assert.doesNotThrow(() => c.setMuted(true));
+  assert.equal(c.muted, true, 'v paměti se ztlumení drží i bez úložiště');
+  c.init(); c.playSword();
+  assert.equal(m2.osc, 0);
+});
+
+test('zvuk: tlačítka v menu, velitelství i bitvě sdílejí jeden stav, klávesa M přepíná a popisky se mění', () => {
+  for (const id of ['btn-sound-menu', 'btn-sound-hub', 'btn-sound']) assert.match(html, new RegExp(`class="btn[^"]*sound-toggle" id="${id}"[^>]*onclick="Game\\.toggleSound\\(\\)"`), id);
+  assert.match(html, /id="btn-sound-menu" data-full="1"/, 'v menu je popisek celý, jinde jen ikona');
+  assert.match(html, /<kbd>M<\/kbd> zvuk/);
+  assert.match(html, /\.btn-small\.sound-toggle \{ min-width: 34px; \}/, 'ikona v bitvě má použitelnou šířku pro prst');
+  assert.match(html, /\.battle-hud > div:last-child \.btn\.sound-toggle \{ flex: 0 0 auto; min-width: 34px; \}/, 'i na telefonu, kde se tlačítka v řádku mačkají (min-width: 0)');
+  assert.match(html, /else if \(e\.key === 'm' \|\| e\.key === 'M'\) \{ Game\.toggleSound\(\); \}/);
+  assert.match(html, /window\.gameEngine = new TacticalEngine\('gameCanvas'\);\s*Game\.refreshSoundButtons\(\);/, 'popisky se při startu srovnají s uloženým nastavením');
+  const mkBtn = (full) => { const attrs = {}; return { dataset: full ? { full: '1' } : {}, textContent: '', title: '', attrs, setAttribute(k, v) { attrs[k] = v; } }; };
+  const sandbox = {
+    buttons: [mkBtn(true), mkBtn(false), mkBtn(false)],
+    audioFX: { muted: false, inits: 0, marches: 0, setMuted(m) { this.muted = m; }, init() { this.inits++; }, playMarch() { this.marches++; } },
+    String,
+  };
+  sandbox.document = { querySelectorAll: (q) => (q === '.sound-toggle' ? sandbox.buttons : []) };
+  const game = vm.runInNewContext(`({ ${methodSrc('toggleSound')}, ${methodSrc('refreshSoundButtons')} })`, sandbox);
+  game.refreshSoundButtons();
+  assert.deepEqual(sandbox.buttons.map((b) => b.textContent), ['🔊 Zvuk: zapnutý', '🔊', '🔊']);
+  game.toggleSound();
+  assert.equal(sandbox.audioFX.muted, true);
+  assert.deepEqual(sandbox.buttons.map((b) => b.textContent), ['🔇 Zvuk: vypnutý', '🔇', '🔇']);
+  assert.deepEqual(sandbox.buttons.map((b) => b.attrs['aria-pressed']), ['false', 'false', 'false']);
+  assert.equal(sandbox.buttons[1].title, 'Zapnout zvuk');
+  assert.equal(sandbox.buttons[1].attrs['aria-label'], 'Zapnout zvuk');
+  assert.equal(sandbox.audioFX.marches, 0, 'vypnutí nic nezahraje');
+  game.toggleSound();
+  assert.equal(sandbox.audioFX.muted, false);
+  assert.deepEqual(sandbox.buttons.map((b) => b.textContent), ['🔊 Zvuk: zapnutý', '🔊', '🔊']);
+  assert.deepEqual(sandbox.buttons.map((b) => b.attrs['aria-pressed']), ['true', 'true', 'true']);
+  assert.equal(sandbox.buttons[2].title, 'Vypnout zvuk');
+  assert.deepEqual([sandbox.audioFX.inits, sandbox.audioFX.marches], [1, 1], 'zapnutí zvuk probudí (kliknutí hráče) a krátce ho předvede');
+});
+
+test('omezený pohyb: otřes plátna se při nastavení systému vypne, nápis tahu jen zprůhlední a pulzování zmizí', () => {
+  const shake = (matches) => {
+    const eng = vm.runInNewContext(`({ ${methodSrc('triggerShake')} })`, { window: { matchMedia: (q) => ({ matches: matches && /prefers-reduced-motion: reduce/.test(q) }) }, Date });
+    eng.shakeUntil = 0; eng.shakeMag = 0;
+    eng.triggerShake(9);
+    return [eng.shakeUntil > 0, eng.shakeMag];
+  };
+  assert.deepEqual(shake(false), [true, 9], 'běžně se plátno otřese');
+  assert.deepEqual(shake(true), [false, 0], 'při „omezit pohyb“ ne');
+  // prohlížeč bez matchMedia nic nerozbije
+  const bare = vm.runInNewContext(`({ ${methodSrc('triggerShake')} })`, { window: {}, Date });
+  bare.triggerShake(4);
+  assert.ok(bare.shakeUntil > 0);
+  const css = html.slice(html.indexOf('@media (prefers-reduced-motion: reduce) {'));
+  const block = css.slice(0, css.indexOf('\n    }') + 6);
+  assert.match(block, /\.btn-warn, \.next-badge \{ animation: none !important; \}/, 'pozdější pravidlo .next-badge by jinak pulzování vrátilo');
+  assert.match(block, /\.turn-banner\.show \{ animation: bannerFadeCalm 1\.4s linear forwards; \}/);
+  assert.match(block, /\* \{ transition-duration: 0\.01ms !important; \}/);
+  const calm = html.match(/@keyframes bannerFadeCalm [^\n]*/)[0];
+  assert.doesNotMatch(calm, /transform|scale/, 'klidný nápis se nepřibližuje');
+  assert.match(calm, /100% \{ opacity: 0; \}/);
 });

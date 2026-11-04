@@ -749,3 +749,9 @@ test('seznam režimů ukazuje u denní výzvy dnešní nejlepší výsledek, u o
   e.store['koulovi-kamosi-v1'] = JSON.stringify({ dc: 'x', tut: 'ano' });
   assert.ok(true);
 });
+
+test('omezený pohyb: kývání koulí se při nastavení systému vypne a v CSS nezůstane jiná nekonečná animace bez výjimky', () => {
+  assert.match(css, /@media \(prefers-reduced-motion:reduce\)\{\.b\{animation:none\}\}/);
+  const infinite = [...css.matchAll(/([^{}]+)\{[^{}]*animation:[^;}]*infinite/g)].map((m) => m[1].trim());
+  assert.deepEqual(infinite, ['.b'], 'jediná nekonečná animace je kývání koulí, a ta je v bloku vypnutá');
+});

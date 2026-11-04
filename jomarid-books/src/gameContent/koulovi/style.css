@@ -27,3 +27,4 @@ button.sec{font-size:1.5em;background:linear-gradient(#8ccbff,#4aa8ff 48%,#2f84d
 .b span{position:absolute;top:30%;width:26%;height:30%;background:#fff;border:.06em solid #111;border-radius:50%}
 .b span:before{content:"";position:absolute;left:35%;top:35%;width:40%;height:50%;background:#111;border-radius:50%}
 @keyframes bob{50%{transform:translateY(-.5em)}}
+@media (prefers-reduced-motion:reduce){.b{animation:none}}
