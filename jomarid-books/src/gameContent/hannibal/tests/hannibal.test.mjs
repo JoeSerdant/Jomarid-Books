@@ -492,3 +492,51 @@ test('rada „otoč telefon“: po otočení na šířku se skryje (jen dokud by
   assert.deepEqual(run(false, expired), [0, expired], 'už vypršela: nic se neskrývá (nezasahuje do jiných hlášek)');
   assert.deepEqual(run(false, 0), [0, 0], 'rada se nikdy neukázala');
 });
+
+test('uložený postup kampaně: při čtení se vadné hodnoty opraví a nic platného se nezmění', () => {
+  const start = html.indexOf('function cleanCampaignSave(');
+  const end = html.lastIndexOf('/*', html.indexOf('2. META STRATEGY MANAGER'));
+  const clean = vm.runInNewContext(`(${html.slice(start, end).trim().replace(/;\s*$/, '')})`, { Math, Number, Array, Object, Set, isFinite, Number });
+  const TYPES = ['hannibal', 'carthage_spearmen', 'numidian_cavalry', 'elephants', 'balearic_sling'];
+  const label = (t) => ({ elephants: 'Bojoví sloni', hannibal: 'Hannibalova Garda' }[t]);
+  const start0 = { v: 1, savedAt: 5, gold: 500, manpower: 10000, senateFavor: 50, tutorialDone: true, saguntumBonusGiven: false, doctrines: { SACRED_BAND: true }, nodes: { saguntum: { unlocked: true, completed: true } }, stats: { kills: 3 },
+    roster: [
+      { id: 'u_hannibal', type: 'hannibal', name: 'Hannibalova Garda', xp: 120, level: 3, hpPercent: 1.0 },
+      { id: 'u_spear_1', type: 'carthage_spearmen', name: '1. Africká Falanx', xp: 40, level: 1, hpPercent: 0.35 },
+      { id: 'u_balearic_sling_1793814310573', type: 'balearic_sling', name: 'Baleárští prakovníci 2', xp: 0, level: 1, hpPercent: 0.05 },
+    ] };
+  const same = plain(clean(start0, TYPES, label));
+  assert.deepEqual(same, start0, 'platný postup (včetně výchozího xp 120 u Hannibala a nejnižšího zdraví 5 %) se nezmění ani na vlas');
+  assert.notEqual(clean(start0, TYPES, label), start0, 'vrací kopii, ne původní objekt');
+  // není to postup
+  for (const bad of [null, undefined, 5, 'x', [], {}, { v: 2, roster: [], gold: 1 }, { v: 1, roster: 'x', gold: 1 }, { v: 1, roster: [], gold: '5' }, { v: 1, roster: [], gold: null }]) assert.equal(clean(bad, TYPES, label), null, JSON.stringify(bad));
+  // oprava hodnot
+  const mixed = plain(clean({ v: 1, gold: -50, manpower: 1e12, senateFavor: 'x', roster: [
+    null, 7, [], { id: 'a', type: 'dragon' }, { type: 'elephants', id: '' }, { type: 'elephants', id: 'x'.repeat(61) },
+    { id: 'ok1', type: 'elephants', name: 5, level: 'x', xp: 'NaN', hpPercent: 'x' },
+    { id: 'ok1', type: 'elephants', name: 'duplicita' },
+    { id: 'ok2', type: 'hannibal', name: '', level: 2.5, xp: -4, hpPercent: 7 },
+    { id: 'ok3', type: 'numidian_cavalry', name: 'x'.repeat(81), level: 1e9, xp: 1e9, hpPercent: -1 },
+    { id: 'ok4', type: 'carthage_spearmen', name: { a: 1 }, level: null, xp: null, hpPercent: null },
+  ] }, TYPES, label));
+  assert.equal(mixed.gold, 0); assert.equal(mixed.manpower, 1e9); assert.equal(mixed.senateFavor, 50);
+  assert.deepEqual(mixed.roster.map((u) => u.id), ['ok1', 'ok2', 'ok3', 'ok4'], 'nepoužitelné a opakované jednotky se zahodí');
+  assert.deepEqual(mixed.roster[0], { id: 'ok1', type: 'elephants', name: 'Bojoví sloni', level: 1, xp: 0, hpPercent: 1 }, 'chybné jméno se doplní podle typu');
+  assert.deepEqual(mixed.roster[1], { id: 'ok2', type: 'hannibal', name: 'Hannibalova Garda', level: 1, xp: 0, hpPercent: 1 });
+  assert.deepEqual(mixed.roster[2], { id: 'ok3', type: 'numidian_cavalry', name: 'numidian_cavalry', level: 99, xp: 1000, hpPercent: 0.05 }, 'bez štítku se jméno zalomí na typ');
+  assert.deepEqual(mixed.roster[3], { id: 'ok4', type: 'carthage_spearmen', name: 'carthage_spearmen', level: 1, xp: 0, hpPercent: 1 });
+  // kapitoly: jen objekty se dvěma pravdivostními příznaky (menu postup sčítá hodnoty bez kontroly na null)
+  const nodes = plain(clean({ v: 1, gold: 1, roster: [], nodes: { a: null, b: 5, c: 'x', d: [], e: { unlocked: 1, completed: 0 }, f: { completed: 'ano' } } }, TYPES, label)).nodes;
+  assert.deepEqual(nodes, { d: { unlocked: false, completed: false }, e: { unlocked: true, completed: false }, f: { unlocked: false, completed: true } });
+  for (const bad of [undefined, null, 5, 'abc', [1, 2]]) assert.deepEqual(plain(clean({ v: 1, gold: 1, roster: [], nodes: bad }, TYPES, label)).nodes, {}, String(bad));
+  // prázdná armáda je platný stav (po zničení armády se verbuje znovu) a příliš dlouhý seznam se zkrátí
+  assert.deepEqual(plain(clean({ v: 1, gold: 1, roster: [] }, TYPES, label)).roster, []);
+  const big = Array.from({ length: 200 }, (_, i) => ({ id: 'u' + i, type: 'elephants', name: 'S' + i, xp: 0, level: 1, hpPercent: 1 }));
+  assert.equal(clean({ v: 1, gold: 1, roster: big }, TYPES, label).roster.length, 60);
+  assert.match(html, /return cleanCampaignSave\(JSON\.parse\(raw\), Object\.keys\(UNIT_INFO\), t => UNIT_INFO\[t\]\.label\);/, 'readSave používá čištění pro všechny, kdo postup čtou, a v armádě jsou jen jednotky hráče');
+  // armáda hráče má jen typy z UNIT_INFO, a ty umí verbování i počáteční armáda
+  const info = html.slice(html.indexOf('const UNIT_INFO = {'), html.indexOf('const ABILITY_INFO'));
+  const playerTypes = [...info.matchAll(/^\s+(\w+):\s+\{ label:/gm)].map((m) => m[1]);
+  assert.deepEqual(playerTypes.sort(), ['balearic_sling', 'carthage_spearmen', 'celtiberian_swordsman', 'elephants', 'hannibal', 'libyan_heavy', 'numidian_cavalry']);
+  for (const m of html.matchAll(/\{ id: 'u_\w+', type: '(\w+)'/g)) assert.ok(playerTypes.includes(m[1]), `počáteční armáda: ${m[1]}`);
+});

@@ -1174,6 +1174,30 @@
       return { kind: d.kind, nodeId, wave, terrain, turnNumber: d.turnNumber, units, stats };
     }
 
+    // Uložený postup kampaně se při čtení očistí: vadné nebo ručně upravené hodnoty se nahradí rozumnými, ať hra nespadne ani neukáže NaN.
+    // Vrací kopii (uložený text se nemění, do úložiště se čistá podoba zapíše při příštím uložení) nebo null, když to postup vůbec není.
+    function cleanCampaignSave(d, types, labelOf) {
+      if (!d || typeof d !== 'object' || Array.isArray(d) || d.v !== 1 || !Array.isArray(d.roster) || typeof d.gold !== 'number') return null;
+      const fin = (v, lo, hi, dflt) => (typeof v === 'number' && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : dflt);
+      const roster = [], ids = new Set();
+      for (const u of d.roster.slice(0, 60)) {
+        if (!u || typeof u !== 'object' || Array.isArray(u)) continue;
+        if (!(types || []).includes(u.type) || typeof u.id !== 'string' || !u.id || u.id.length > 60 || ids.has(u.id)) continue;
+        ids.add(u.id);
+        const level = Number.isInteger(u.level) && u.level >= 1 ? Math.min(99, u.level) : 1;
+        roster.push({
+          id: u.id, type: u.type,
+          name: typeof u.name === 'string' && u.name.trim() && u.name.length <= 80 ? u.name : ((labelOf && labelOf(u.type)) || u.type),
+          level, xp: fin(u.xp, 0, 1000, 0), hpPercent: fin(u.hpPercent, 0.05, 1, 1)
+        });
+      }
+      const nodes = {};
+      if (d.nodes && typeof d.nodes === 'object' && !Array.isArray(d.nodes)) {
+        for (const id of Object.keys(d.nodes)) { const n = d.nodes[id]; if (n && typeof n === 'object') nodes[id] = { unlocked: !!n.unlocked, completed: !!n.completed }; }
+      }
+      return Object.assign({}, d, { gold: fin(d.gold, 0, 1e9, 500), manpower: fin(d.manpower, 0, 1e9, 10000), senateFavor: fin(d.senateFavor, 0, 100, 50), roster, nodes });
+    }
+
     /* ==========================================================================
        2. META STRATEGY MANAGER
        ========================================================================== */
@@ -1325,9 +1349,7 @@
         try {
           const raw = localStorage.getItem(this.SAVE_KEY);
           if (!raw) return null;
-          const d = JSON.parse(raw);
-          if (!d || d.v !== 1 || !Array.isArray(d.roster) || typeof d.gold !== 'number') return null;
-          return d;
+          return cleanCampaignSave(JSON.parse(raw), Object.keys(UNIT_INFO), t => UNIT_INFO[t].label);
         } catch (e) { return null; }
       },
 
