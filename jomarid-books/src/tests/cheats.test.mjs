@@ -10,16 +10,14 @@ import { GAME_BADGES } from '../gameRecords/catalog.js';
 
 const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (...p) => fs.readFileSync(path.join(SRC, 'gameContent', ...p), 'utf8');
-// Hry City Clicker a Warroom jsou v repu jako jeden JS řetězec s HTML
-const htmlOf = (file) => JSON.parse(read(file).match(/export const \w+ = (".*");\s*$/s)[1]);
 
 const GAMES = {
   chess: { code: read('chess', 'ui.js'), page: read('chess', 'ui.js') },
   rocket: { code: read('rocket', 'index.html'), page: read('rocket', 'index.html') },
   polygonarena: { code: read('polygonArena', 'cheat.js'), page: read('polygonArena', 'index.html') },
   koulovikamosi: { code: read('koulovi', 'game.js'), page: read('koulovi', 'index.html') + read('koulovi', 'style.css') },
-  cityclicker: { code: htmlOf('cityClicker.js'), page: htmlOf('cityClicker.js') },
-  warroom: { code: htmlOf('warroom.js'), page: htmlOf('warroom.js') },
+  cityclicker: { code: read('cityClicker', 'index.html'), page: read('cityClicker', 'index.html') },
+  warroom: { code: read('warroom', 'index.html'), page: read('warroom', 'index.html') },
 };
 
 test('kód je u všech šesti her 67MILUJU', () => {

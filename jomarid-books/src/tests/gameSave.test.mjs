@@ -19,17 +19,12 @@ const DB = path.join(SRC, '..', 'db');
 const read = (...p) => fs.readFileSync(path.join(SRC, ...p), 'utf8').replace(/\r\n/g, '\n');
 const sql = fs.readFileSync(path.join(DB, 'game-saves.sql'), 'utf8');
 
-// Texty her tak, jak je appka vkládá do iframu (u City Clickeru a Warroomu jde o řetězec zapsaný v JS souboru).
-const gameHtml = (file) => {
-  const raw = read('gameContent', file);
-  if (!['cityClicker.js', 'warroom.js'].includes(file)) return raw;
-  const m = /export const \w+ = /.exec(raw);
-  return JSON.parse(raw.slice(m.index + m[0].length).trim().replace(/;$/, ''));
-};
+// Texty her tak, jak je appka vkládá do iframu.
+const gameHtml = (file) => read('gameContent', file);
 const GAME_SOURCES = {
   rocket: ['rocket/index.html'],
-  warroom: ['warroom.js'],
-  cityclicker: ['cityClicker.js'],
+  warroom: ['warroom/index.html'],
+  cityclicker: ['cityClicker/index.html'],
   polygonarena: ['polygonArena/index.html', 'polygonArena/core.js'],
   chess: ['chess/index.html', 'chess/league.js', 'chess/ui.js'],
   koulovikamosi: ['koulovi/index.html', 'koulovi/game.js'],
@@ -77,7 +72,7 @@ test('hry se do localStorage pořád zapisují obyčejně (shim je jediná vrstv
     assert.match(text, /localStorage/, `${game}: používá localStorage`);
     assert.ok(!/IndexedDB|indexedDB|document\.cookie/.test(text), `${game}: žádné jiné trvalé úložiště`);
   }
-  for (const file of ['rocket/index.html', 'warroom.js', 'cityClicker.js', 'polygonArena/index.html', 'chess/index.html', 'koulovi/index.html']) {
+  for (const file of ['rocket/index.html', 'warroom/index.html', 'cityClicker/index.html', 'polygonArena/index.html', 'chess/index.html', 'koulovi/index.html']) {
     assert.match(gameHtml(file), /<head(\s[^>]*)?>/i, `${file}: <head>`);
   }
 });
@@ -189,7 +184,7 @@ test('withStorageShim vloží skript hned za <head> (před skripty hry), jinak z
 });
 
 test('shim v reálných hrách: dokument se po vložení pořád dá rozebrat a skript je před prvním skriptem hry', () => {
-  for (const file of ['rocket/index.html', 'warroom.js', 'cityClicker.js', 'polygonArena/index.html', 'chess/index.html', 'koulovi/index.html']) {
+  for (const file of ['rocket/index.html', 'warroom/index.html', 'cityClicker/index.html', 'polygonArena/index.html', 'chess/index.html', 'koulovi/index.html']) {
     const html = gameHtml(file);
     const out = withStorageShim(html, 'g', { k: 'v' });
     assert.equal(out.length, html.length + buildStorageShim('g', { k: 'v' }).length + '<script></script>'.length, file);

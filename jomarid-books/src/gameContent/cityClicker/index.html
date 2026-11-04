@@ -1,0 +1,3211 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>City Clicker</title>
+<style>
+  :root{
+    --font-body: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    --font-mono: 'Consolas', 'SFMono-Regular', Menlo, 'Courier New', monospace;
+    --radius: 6px;
+  }
+
+  [data-theme="classic"]{
+    --bg:#020617; --panel-bg:#0f172a; --panel-bg-alt:#1e293b;
+    --border: rgba(124,58,237,.25); --text:#f1f5f9; --text-dim:#94a3b8;
+    --accent:#7c3aed; --accent-2:#4fd1c5; --danger:#e0526f;
+    --accent-glow: rgba(124,58,237,.35);
+    --font-display: 'Trebuchet MS', 'Segoe UI', sans-serif;
+    --radius: 12px;
+  }
+  [data-theme="steampunk"]{
+    --bg:#20130a; --panel-bg:#2b1c10; --panel-bg-alt:#341f12;
+    --border: rgba(217,164,65,.28); --text:#f0e0c4; --text-dim:#b89a72;
+    --accent:#d9a441; --accent-2:#8fae6b; --danger:#c0503a;
+    --accent-glow: rgba(217,164,65,.35);
+    --font-display: Georgia, 'Times New Roman', serif;
+    --radius: 3px;
+  }
+  [data-theme="cyberpunk"]{
+    --bg:#08040f; --panel-bg:#130b20; --panel-bg-alt:#190f29;
+    --border: rgba(255,46,196,.28); --text:#f0e9ff; --text-dim:#9d8ab8;
+    --accent:#ff2ec4; --accent-2:#22e8ff; --danger:#ff4d4d;
+    --accent-glow: rgba(255,46,196,.35);
+    --font-display: 'Consolas', 'Courier New', monospace;
+    --radius: 2px;
+  }
+  [data-theme="mars"]{
+    --bg:#1a0f09; --panel-bg:#241610; --panel-bg-alt:#2c1a12;
+    --border: rgba(217,112,46,.28); --text:#f3e3d3; --text-dim:#c9a082;
+    --accent:#d9702e; --accent-2:#8bc178; --danger:#d94f4f;
+    --accent-glow: rgba(217,112,46,.35);
+    --font-display: 'Segoe UI', Verdana, sans-serif;
+    --radius: 10px;
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; }
+  html{ scroll-padding-top:env(safe-area-inset-top,0px); }
+  body{
+    background-color:var(--bg); color:var(--text); font-family:var(--font-body);
+    background-image: radial-gradient(circle, var(--border) 1px, transparent 1px);
+    background-size: 26px 26px;
+    min-height:100vh; transition: background-color .4s ease, color .4s ease;
+    overscroll-behavior-y: contain;
+  }
+  button{ font-family:inherit; touch-action:manipulation; }
+  ::selection{ background:var(--accent); color:var(--bg); }
+
+  .app{
+    max-width:1400px; margin:0 auto;
+    padding:calc(20px + env(safe-area-inset-top,0px)) calc(20px + env(safe-area-inset-right,0px)) calc(60px + env(safe-area-inset-bottom,0px)) calc(20px + env(safe-area-inset-left,0px));
+  }
+
+  /* ---------- Skyline banner (graphic identity strip) ---------- */
+  .skyline-banner{
+    position:relative; width:100%; height:90px; overflow:hidden; margin-bottom:14px;
+    border-radius:var(--radius); border:1px solid var(--border);
+    background:linear-gradient(180deg, var(--panel-bg), var(--bg));
+  }
+  .skyline-banner svg{ position:absolute; bottom:0; left:0; width:100%; height:140px; display:block; }
+  .skyline-banner .sk-building{ fill:var(--panel-bg-alt); stroke:var(--border); stroke-width:1; transition:fill .4s ease; }
+  .skyline-banner .sk-window{ fill:var(--accent); opacity:.85; animation-name:sk-twinkle; animation-iteration-count:infinite; animation-timing-function:ease-in-out; }
+  @keyframes sk-twinkle{ 0%,100%{ opacity:.85; } 50%{ opacity:.15; } }
+  body.endcraze .skyline-banner .sk-window{ fill:var(--danger); animation-duration:1.1s !important; }
+  body.endcraze .skyline-banner{ border-color:var(--danger); }
+
+  /* ---------- Topbar ---------- */
+  .topbar{
+    display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between;
+    gap:16px; padding-bottom:16px; margin-bottom:18px; border-bottom:1px solid var(--border);
+  }
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .brand-emoji{ font-size:1.9rem; }
+  .brand h1{
+    font-family:var(--font-display); font-size:1.35rem; margin:0; font-weight:700; letter-spacing:.2px;
+  }
+  .top-stats{ display:flex; gap:22px; flex-wrap:wrap; font-family:var(--font-mono); font-size:0.88rem; color:var(--text-dim); }
+  .top-stats .stat-item{ display:flex; flex-direction:column; gap:2px; }
+  .top-stats .stat-val{ color:var(--text); font-weight:700; font-size:0.98rem; }
+  .top-actions{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  select#themeSelect{
+    background:var(--panel-bg-alt); color:var(--text); border:1px solid var(--border);
+    border-radius:var(--radius); padding:8px 10px; font-family:var(--font-body); font-size:0.85rem; cursor:pointer;
+  }
+  .btn-util{
+    background:transparent; border:1px solid var(--border); color:var(--text-dim);
+    padding:8px 12px; border-radius:var(--radius); font-size:0.82rem; cursor:pointer; transition:.15s;
+  }
+  .btn-util:hover{ border-color:var(--accent); color:var(--accent); }
+
+  /* ---------- Tabs (mobile) ---------- */
+  .tabs{ display:none; gap:8px; margin-bottom:16px; }
+  .tab-btn{
+    flex:1; padding:11px; border-radius:var(--radius); border:1px solid var(--border);
+    background:var(--panel-bg); color:var(--text-dim); cursor:pointer; font-size:0.85rem;
+  }
+  .tab-btn.active{ border-color:var(--accent); color:var(--accent); }
+
+  /* ---------- Layout ---------- */
+  .layout{ display:grid; grid-template-columns: 300px 1fr 350px; gap:20px; align-items:start; }
+  .column{ background:var(--panel-bg); border:1px solid var(--border); border-radius:var(--radius); padding:22px; }
+  .column h2{ font-family:var(--font-display); font-size:1.05rem; margin:0 0 14px; font-weight:700; }
+  .column h3{ font-family:var(--font-display); font-size:0.95rem; margin:26px 0 12px; font-weight:700; color:var(--text-dim); }
+  .column h3:first-of-type{ margin-top:0; }
+
+  @media (max-width:900px){
+    .layout{ grid-template-columns:1fr; }
+    .tabs{ display:flex; }
+    .tab-btn{ min-height:44px; }
+    .column{ display:none; }
+    .column.active-tab{ display:block; }
+    .top-stats{ font-size:0.8rem; gap:14px; }
+    .skyline-banner{ height:56px; }
+    .skyline-banner svg{ height:90px; }
+    .btn-util, .btn-policy, .btn-mega{ min-height:44px; }
+    .btn-build{ min-height:48px; }
+    .app{ padding-left:calc(14px + env(safe-area-inset-left,0px)); padding-right:calc(14px + env(safe-area-inset-right,0px)); }
+  }
+
+  @media (max-width:420px){
+    .btn-townhall{ width:150px; height:150px; }
+    .btn-townhall-icon{ font-size:2.2rem; }
+    .townhall-ring{ width:168px; height:168px; }
+    .brand h1{ font-size:1.1rem; }
+    .top-stats{ gap:10px; }
+    .cheat-grid{ grid-template-columns:1fr; }
+  }
+
+  /* ---------- Left column: Town Hall ---------- */
+  .theme-flavor{ font-size:0.8rem; color:var(--text-dim); margin-bottom:18px; line-height:1.5; }
+  .theme-flavor .flavor-emoji{ font-size:1.1rem; margin-right:4px; }
+
+  .townhall-wrap{ position:relative; display:flex; justify-content:center; margin:10px 0 24px; }
+  .townhall-ring{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-90deg); pointer-events:none; }
+  .ring-track{ fill:none; stroke:var(--border); stroke-width:5; }
+  .ring-progress{
+    fill:none; stroke:var(--accent); stroke-width:5; stroke-linecap:round;
+    stroke-dasharray:578; stroke-dashoffset:578;
+    transition:stroke-dashoffset .15s linear, stroke .3s ease;
+    filter:drop-shadow(0 0 6px var(--accent-glow));
+  }
+  .btn-townhall{
+    width:180px; height:180px; border-radius:50%; border:4px solid var(--accent);
+    background:radial-gradient(circle at 35% 30%, var(--panel-bg-alt), var(--panel-bg) 72%);
+    color:var(--text); display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:6px; cursor:pointer; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
+    touch-action:manipulation; box-shadow:0 0 0 0 var(--accent-glow); transition:box-shadow .2s, transform .1s;
+  }
+  .btn-townhall:hover{ box-shadow:0 0 26px 6px var(--accent-glow); }
+  .btn-townhall:active{ transform:scale(.97); }
+  .btn-townhall-icon{ font-size:2.7rem; }
+  .btn-townhall-value{ font-family:var(--font-mono); font-weight:700; color:var(--accent); font-size:1rem; }
+  .btn-townhall-cta{ font-size:0.7rem; color:var(--text-dim); }
+
+  @keyframes pulseBtn{ 0%{transform:scale(1);} 30%{transform:scale(.93);} 65%{transform:scale(1.05);} 100%{transform:scale(1);} }
+  .btn-townhall.pulse{ animation:pulseBtn .32s ease; }
+  body.frenzy .btn-townhall{ box-shadow:0 0 0 8px var(--accent-glow), 0 0 46px 12px var(--accent-glow); }
+
+  .float-text{
+    position:absolute; pointer-events:none; font-family:var(--font-mono); font-weight:700;
+    color:var(--accent-2); left:50%; top:50%; transform:translate(-50%,-10px);
+    animation:floatUp .9s ease-out forwards; white-space:nowrap; text-shadow:0 2px 6px rgba(0,0,0,.5);
+  }
+  @keyframes floatUp{ from{opacity:1; transform:translate(-50%,-10px);} to{opacity:0; transform:translate(-50%,-80px);} }
+
+  .float-text.gold{
+    color:#ffd700; font-size:1.35em; font-weight:800;
+    animation:floatUpGold 1.3s ease-out forwards;
+  }
+  @keyframes floatUpGold{
+    0%{opacity:1; transform:translate(-50%,-10px) scale(1);}
+    15%{transform:translate(-50%,-20px) scale(1.25);}
+    100%{opacity:0; transform:translate(-50%,-110px) scale(1);}
+  }
+
+  .click-particle{
+    position:absolute; width:6px; height:6px; border-radius:50%; background:var(--accent);
+    pointer-events:none; left:0; top:0; transform:translate(-50%,-50%);
+    animation:particle-fly .55s ease-out forwards;
+  }
+  @keyframes particle-fly{
+    0%{ transform:translate(-50%,-50%) translate(0,0) scale(1); opacity:1; }
+    100%{ transform:translate(-50%,-50%) translate(var(--dx), var(--dy)) scale(.3); opacity:0; }
+  }
+
+  .confetti-container{ position:fixed; inset:0; pointer-events:none; z-index:2000; overflow:hidden; }
+  .confetti-piece{
+    position:absolute; top:-24px; width:8px; height:14px; opacity:.9;
+    animation-name:confetti-fall; animation-timing-function:ease-in; animation-fill-mode:forwards;
+  }
+  @keyframes confetti-fall{
+    0%{ transform:translateY(0) rotate(0deg); opacity:1; }
+    100%{ transform:translateY(110vh) rotate(480deg); opacity:0; }
+  }
+
+  @keyframes screen-shake{
+    0%,100%{ transform:translate(0,0); }
+    20%{ transform:translate(-6px,4px); }
+    40%{ transform:translate(6px,-4px); }
+    60%{ transform:translate(-4px,-6px); }
+    80%{ transform:translate(4px,6px); }
+  }
+  .app.shake{ animation:screen-shake .4s ease; }
+
+  .combo-wrap{ margin-top:6px; }
+  .combo-track{
+    height:16px; border-radius:8px; background:var(--panel-bg-alt); border:1px solid var(--border);
+    overflow:hidden; position:relative;
+  }
+  .combo-fill{ height:100%; width:0%; background:linear-gradient(90deg, var(--accent-2), var(--accent)); transition:width .15s linear; }
+  .combo-label-row{ display:flex; justify-content:space-between; font-size:0.74rem; color:var(--text-dim); margin-top:7px; font-family:var(--font-mono); }
+  .frenzy-badge{
+    display:inline-block; margin-top:10px; padding:5px 12px; border-radius:12px; background:var(--danger);
+    color:#fff; font-size:0.76rem; font-family:var(--font-mono); font-weight:700;
+  }
+  .frenzy-badge.hidden{ display:none; }
+
+  .permits-box{
+    margin-top:22px; padding:14px; border:1px dashed var(--border); border-radius:var(--radius);
+    font-size:0.8rem; color:var(--text-dim); text-align:center;
+  }
+  .permits-box .permits-num{ font-family:var(--font-mono); font-size:1.3rem; color:var(--accent); font-weight:700; display:block; margin-bottom:4px; }
+
+  /* ---------- Middle column: Stats + Crisis + Policies ---------- */
+  .stat-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(130px,1fr)); gap:12px; margin-bottom:22px; }
+  .stat-gauge{ background:var(--panel-bg-alt); border:1px solid var(--border); border-radius:var(--radius); padding:16px 10px; text-align:center; }
+  .stat-gauge-value{ font-family:var(--font-mono); font-size:1.4rem; font-weight:700; color:var(--accent); word-break:break-word; }
+  .stat-gauge-label{ font-size:0.74rem; color:var(--text-dim); margin-top:6px; }
+
+  .crisis-banner{
+    position:relative; border:2px solid var(--danger); border-radius:var(--radius); padding:16px 16px 14px;
+    margin-bottom:22px; cursor:pointer; background:var(--panel-bg-alt); overflow:hidden; animation:slideIn .3s ease;
+  }
+  .crisis-banner::before{
+    content:''; position:absolute; top:0; left:0; right:0; height:6px;
+    background:repeating-linear-gradient(45deg, var(--danger), var(--danger) 8px, rgba(255,255,255,.18) 8px, rgba(255,255,255,.18) 16px);
+  }
+  .crisis-banner.hidden{ display:none; }
+  @keyframes slideIn{ from{ transform:translateY(-12px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
+  .crisis-top{ display:flex; align-items:center; gap:12px; margin-top:6px; }
+  .crisis-icon{ font-size:1.9rem; }
+  .crisis-name{ font-family:var(--font-display); font-weight:700; font-size:1rem; flex:1; }
+  .crisis-timer{ font-family:var(--font-mono); font-weight:700; color:var(--danger); font-size:1.1rem; }
+  .crisis-sub{ margin-top:10px; display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:0.8rem; }
+  .crisis-reward{ color:var(--accent-2); }
+  .crisis-penalty{ color:var(--danger); }
+  .crisis-hint{ margin-top:8px; font-size:0.74rem; color:var(--text-dim); text-align:center; }
+
+  .policy-row{ display:flex; justify-content:space-between; align-items:center; gap:14px; padding:13px 2px; border-bottom:1px dashed var(--border); }
+  .policy-row:last-child{ border-bottom:none; }
+  .policy-row.enacted{ opacity:.65; }
+  .policy-name{ font-family:var(--font-display); font-size:0.94rem; }
+  .policy-desc{ font-size:0.75rem; color:var(--text-dim); margin-top:4px; max-width:360px; line-height:1.4; }
+  .btn-policy{
+    padding:9px 15px; border-radius:var(--radius); border:1px solid var(--accent-2); background:transparent;
+    color:var(--accent-2); font-family:var(--font-mono); font-size:0.8rem; cursor:pointer; white-space:nowrap; transition:.15s;
+  }
+  .btn-policy:disabled{ opacity:.4; cursor:not-allowed; border-color:var(--text-dim); color:var(--text-dim); }
+  .btn-policy:hover:not(:disabled){ background:var(--accent-2); color:var(--bg); }
+
+  /* ---------- Right column: Shop + Megaprojects ---------- */
+  .ledger-row{ display:flex; align-items:center; gap:12px; padding:13px 2px; border-bottom:1px solid var(--border); }
+  .ledger-row:last-child{ border-bottom:none; }
+  .ledger-icon{ font-size:1.7rem; width:38px; text-align:center; flex-shrink:0; }
+  .ledger-info{ flex:1; min-width:0; }
+  .ledger-name{ font-family:var(--font-display); font-size:0.95rem; }
+  .ledger-meta{ font-size:0.74rem; color:var(--text-dim); margin-top:3px; line-height:1.4; }
+  .btn-build{
+    display:flex; flex-direction:column; align-items:center; gap:3px; padding:9px 14px; border-radius:var(--radius);
+    border:1px solid var(--accent); background:transparent; color:var(--accent); cursor:pointer;
+    font-family:var(--font-mono); font-size:0.78rem; min-width:100px; transition:.15s;
+  }
+  .btn-build:hover:not(:disabled){ background:var(--accent); color:var(--bg); }
+  .btn-build:disabled{ opacity:.35; cursor:not-allowed; border-color:var(--text-dim); color:var(--text-dim); }
+  .btn-build-cost{ font-weight:700; }
+
+  .mega-panel{
+    border:1px solid var(--border); padding:16px; border-radius:var(--radius); margin-bottom:14px;
+    background:linear-gradient(180deg, var(--panel-bg-alt), var(--panel-bg));
+  }
+  .mega-header{ display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+  .mega-icon{ font-size:1.6rem; }
+  .mega-title{ font-family:var(--font-display); font-size:1.02rem; font-weight:700; }
+  .phase-track{ display:flex; gap:6px; margin-bottom:12px; }
+  .phase-seg{ flex:1; height:8px; border-radius:3px; background:var(--border); }
+  .phase-seg.done{ background:var(--accent-2); }
+  .phase-seg.current{ background:var(--accent); animation:pulseSeg 1.4s ease-in-out infinite; }
+  @keyframes pulseSeg{ 0%,100%{opacity:1;} 50%{opacity:.4;} }
+  .mega-status{ font-size:0.82rem; color:var(--text-dim); margin-bottom:10px; }
+  .mega-status.done{ color:var(--accent-2); font-weight:700; }
+  .btn-mega{
+    padding:10px 16px; border-radius:var(--radius); border:none; background:var(--accent); color:var(--bg);
+    font-family:var(--font-mono); font-weight:700; cursor:pointer; font-size:0.82rem; width:100%;
+  }
+  .btn-mega:disabled{ opacity:.35; cursor:not-allowed; background:var(--text-dim); }
+
+  /* ---------- Prestige panel ---------- */
+  .prestige-panel{
+    margin-top:22px; border:1px solid var(--border); border-radius:var(--radius); padding:22px;
+    background:linear-gradient(180deg, var(--panel-bg-alt), var(--panel-bg));
+  }
+  .prestige-panel h2{ font-family:var(--font-display); margin:0 0 6px; font-size:1.1rem; }
+  .prestige-sub{ font-size:0.82rem; color:var(--text-dim); margin-bottom:16px; line-height:1.5; }
+  .prestige-progress-track{ height:14px; border-radius:7px; background:var(--panel-bg); border:1px solid var(--border); overflow:hidden; margin-bottom:8px; }
+  .prestige-progress-fill{ height:100%; width:0%; background:linear-gradient(90deg, var(--accent-2), var(--accent)); transition:width .3s ease; }
+  .prestige-progress-label{ font-family:var(--font-mono); font-size:0.78rem; color:var(--text-dim); margin-bottom:16px; }
+  .btn-prestige{
+    padding:13px 22px; border-radius:var(--radius); border:none; background:var(--accent); color:var(--bg);
+    font-family:var(--font-display); font-weight:700; font-size:0.95rem; cursor:pointer;
+  }
+  .btn-prestige:disabled{ opacity:.35; cursor:not-allowed; background:var(--text-dim); }
+
+  /* ---------- Helicopter ---------- */
+  .helicopter{
+    position:fixed; font-size:2.5rem; z-index:500; cursor:pointer; user-select:none;
+    filter:drop-shadow(0 4px 10px rgba(0,0,0,.55)); left:-15%; top:10%;
+  }
+  .helicopter.hidden{ display:none; }
+  .helicopter.flying{ animation:flyAcross 7s linear forwards; }
+  @keyframes flyAcross{
+    0%{ left:-12%; top:9%; transform:scaleX(1); }
+    49%{ transform:scaleX(1); }
+    50%{ left:56%; top:16%; transform:scaleX(1); }
+    50.01%{ transform:scaleX(-1); }
+    100%{ left:114%; top:11%; transform:scaleX(-1); }
+  }
+
+  /* ---------- Toasts ---------- */
+  .toast-container{ position:fixed; bottom:20px; right:20px; display:flex; flex-direction:column; gap:9px; z-index:900; max-width:320px; }
+  .toast{
+    padding:13px 16px; border-radius:var(--radius); background:var(--panel-bg-alt); border:1px solid var(--border);
+    color:var(--text); font-size:0.84rem; box-shadow:0 8px 24px rgba(0,0,0,.45);
+    opacity:0; transform:translateY(10px); transition:opacity .3s, transform .3s;
+  }
+  .toast.show{ opacity:1; transform:translateY(0); }
+  .toast-success{ border-color:var(--accent-2); }
+  .toast-error{ border-color:var(--danger); }
+  .toast-frenzy{ border-color:var(--accent); background:var(--accent-glow); }
+
+  /* ---------- Modal ---------- */
+  .modal{ position:fixed; inset:0; background:rgba(0,0,0,.72); display:flex; align-items:center; justify-content:center; z-index:1000; padding:20px; }
+  .modal.hidden{ display:none; }
+  .modal-box{ background:var(--panel-bg); border:1px solid var(--border); border-radius:var(--radius); padding:28px; max-width:480px; width:100%; max-height:88vh; overflow-y:auto; }
+  .modal-box h2{ font-family:var(--font-display); margin:0 0 8px; }
+  .modal-box p{ font-size:0.85rem; color:var(--text-dim); line-height:1.5; margin:0 0 6px; }
+  .theme-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:18px; }
+  .theme-option{
+    padding:18px 12px; border:1px solid var(--border); border-radius:var(--radius); background:var(--panel-bg-alt);
+    cursor:pointer; text-align:center; color:var(--text); font-family:var(--font-body); font-size:0.85rem;
+  }
+  .theme-option:hover{ border-color:var(--accent); }
+  .theme-option .to-emoji{ font-size:1.6rem; display:block; margin-bottom:8px; }
+  .modal-close{
+    margin-top:18px; width:100%; padding:10px; background:transparent; border:1px solid var(--border);
+    color:var(--text-dim); border-radius:var(--radius); cursor:pointer; font-size:0.82rem;
+  }
+
+  #statsModalBody{ max-height:50vh; overflow-y:auto; padding-right:4px; }
+  #statsModalBody h3{ font-family:var(--font-display); font-size:0.9rem; color:var(--text-dim); margin:14px 0 8px; }
+  #statsModalBody .endcraze-checklist li{ font-size:0.8rem; }
+
+  .help-box{ max-width:620px; }
+  .help-body{ max-height:56vh; overflow-y:auto; padding-right:6px; }
+  .help-body h3{ font-family:var(--font-display); font-size:0.95rem; margin:16px 0 6px; color:var(--accent); }
+  .help-body h3:first-child{ margin-top:0; }
+  .help-body p{ font-size:0.85rem; color:var(--text-dim); line-height:1.6; margin:0 0 4px; }
+
+  #soundToggleBtn{ min-width:44px; }
+
+  /* Pole pro tajný kód vypadá jako číslo verze úplně dole pod obsahem. Písmo 16 px (iOS při klepnutí nepřibližuje stránku), vizuálně se zmenší. */
+  .vfoot{ display:flex; justify-content:center; padding-top:26px; }
+  .vfield{
+    box-sizing:border-box; width:120px; height:34px; margin:0; padding:0 4px;
+    background:transparent; border:none; border-radius:8px; outline:none; opacity:.5;
+    color:var(--text-dim); font-family:inherit; font-size:16px; font-weight:600; line-height:34px; text-align:center; letter-spacing:1px;
+    caret-color:transparent; transform:scale(.75); -webkit-appearance:none; appearance:none;
+  }
+  .vfield::placeholder{ color:var(--text-dim); opacity:1; }
+  .vfield:focus{ opacity:1; background:rgba(0,0,0,.35); box-shadow:0 0 0 1px var(--text-dim); caret-color:currentColor; color:inherit; }
+
+  .cheat-box{ border-color:var(--accent); box-shadow:0 0 40px 8px var(--accent-glow); }
+  .cheat-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:16px 0 4px; }
+  .cheat-grid .btn-mega{ width:auto; }
+
+  @keyframes slideUpModal{
+    from{ transform:translateY(60px); opacity:0; }
+    to{ transform:translateY(0); opacity:1; }
+  }
+  #cheatModal .modal-box{ animation:slideUpModal .35s ease; }
+  #cheatModal{ align-items:flex-end; }
+  #cheatModal .modal-box{ margin-bottom:20px; }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:0.01ms !important; animation-iteration-count:1 !important; transition-duration:0.01ms !important; }
+  }
+
+  button:focus-visible, select:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  .hidden{ display:none !important; }
+
+  /* ---------- EndCraze (apocalyptic endgame) ---------- */
+  .endcraze-panel{ border-color:var(--danger); }
+  .endcraze-panel h2{ color:var(--danger); }
+  body.endcraze .prestige-panel:not(.endcraze-panel){ opacity:0.45; }
+  body.endcraze{
+    background-color:var(--bg);
+    background-image:
+      radial-gradient(circle at 50% 0%, rgba(224,82,111,.12), transparent 60%),
+      radial-gradient(circle, var(--danger) 1px, transparent 1px);
+    background-size: auto, 26px 26px;
+  }
+  .endcraze-checklist{ list-style:none; padding:0; margin:0 0 16px; font-size:0.83rem; color:var(--text-dim); }
+  .endcraze-checklist li{ padding:7px 2px; border-bottom:1px dashed var(--border); }
+  .endcraze-checklist li:last-child{ border-bottom:none; }
+  .endcraze-lock{
+    padding:24px 16px; text-align:center; color:var(--text-dim); font-size:0.85rem;
+    border:1px dashed var(--border); border-radius:var(--radius); line-height:1.6;
+  }
+  .doomsday-row{ display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:0.8rem; color:var(--text-dim); margin-bottom:8px; }
+  .danger-fill{ background:linear-gradient(90deg, var(--accent), var(--danger)) !important; }
+
+  /* ======================================================================
+     Grafika: plastické panely, tlačítka, skyline a charakter motivů.
+     Je to vrstva přes základní styl výš, měnit hru to nemusí.
+     ====================================================================== */
+  body:not(.endcraze){
+    background-image:radial-gradient(ellipse 90% 42% at 50% -6%, var(--accent-glow), transparent 72%), radial-gradient(circle, var(--border) 1px, transparent 1px);
+    background-size:auto, 26px 26px; background-attachment:fixed, scroll;
+  }
+
+  /* skyline: noční obloha, hvězdy, měsíc, dvě vrstvy budov a blikající majáky */
+  .skyline-banner{
+    background:radial-gradient(ellipse 60% 120% at 82% 0%, var(--accent-glow), transparent 70%), linear-gradient(180deg, var(--panel-bg-alt), var(--bg) 92%);
+    box-shadow:inset 0 -18px 30px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.35);
+  }
+  .skyline-banner::before{
+    content:""; position:absolute; inset:0; z-index:0; opacity:.6; pointer-events:none;
+    background-image:radial-gradient(1px 1px at 6% 22%, #fff, transparent), radial-gradient(1px 1px at 14% 48%, #fff, transparent), radial-gradient(1.4px 1.4px at 23% 16%, #fff, transparent), radial-gradient(1px 1px at 31% 38%, #fff, transparent), radial-gradient(1px 1px at 44% 14%, #fff, transparent), radial-gradient(1.4px 1.4px at 52% 42%, #fff, transparent), radial-gradient(1px 1px at 63% 20%, #fff, transparent), radial-gradient(1px 1px at 71% 46%, #fff, transparent), radial-gradient(1.4px 1.4px at 88% 12%, #fff, transparent), radial-gradient(1px 1px at 95% 36%, #fff, transparent);
+  }
+  .skyline-banner::after{
+    content:""; position:absolute; right:11%; top:14%; width:24px; height:24px; border-radius:50%; z-index:0; pointer-events:none;
+    background:radial-gradient(circle at 36% 34%, #fff, var(--text-dim) 78%); box-shadow:0 0 22px 7px var(--accent-glow); opacity:.92;
+  }
+  .skyline-banner svg{ z-index:1; }
+  .skyline-banner .sk-building{ fill:url(#skG); stroke:var(--border); }
+  .skyline-banner .sk-far{ fill:url(#skF); }
+  .skyline-banner .sk-window:nth-child(3n){ fill:var(--accent-2); }
+  .skyline-banner .sk-ant{ fill:var(--text-dim); opacity:.7; }
+  .skyline-banner .sk-beacon{ fill:var(--danger); animation:sk-blink 1.8s ease-in-out infinite; filter:drop-shadow(0 0 3px var(--danger)); }
+  @keyframes sk-blink{ 0%,100%{ opacity:1; } 50%{ opacity:.15; } }
+  @media (max-width:420px){ .skyline-banner::after{ width:16px; height:16px; } }
+
+  /* hlavička */
+  .brand h1{ text-shadow:0 0 18px var(--accent-glow); }
+  .top-stats .stat-val{ text-shadow:0 0 10px var(--accent-glow); }
+  .btn-util, select#themeSelect{
+    background:linear-gradient(180deg, rgba(255,255,255,.07), transparent 60%), var(--panel-bg-alt);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.1), 0 3px 0 rgba(0,0,0,.3); transition:.15s;
+  }
+  .btn-util:hover{ transform:translateY(-1px); box-shadow:inset 0 1px 0 rgba(255,255,255,.14), 0 5px 0 rgba(0,0,0,.3), 0 0 14px var(--accent-glow); }
+  .btn-util:active{ transform:translateY(2px); box-shadow:inset 0 1px 0 rgba(255,255,255,.1), 0 1px 0 rgba(0,0,0,.3); }
+  .tab-btn{ background:linear-gradient(180deg, rgba(255,255,255,.06), transparent 60%), var(--panel-bg); box-shadow:0 3px 0 rgba(0,0,0,.28); }
+  .tab-btn.active{ box-shadow:0 3px 0 rgba(0,0,0,.28), 0 0 16px var(--accent-glow); }
+
+  /* panely */
+  .column{
+    position:relative;
+    background:linear-gradient(165deg, var(--panel-bg-alt) 0%, var(--panel-bg) 36%, var(--bg) 150%);
+    box-shadow:0 16px 36px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.07), inset 0 0 0 1px var(--border);
+  }
+  .column h2{ position:relative; padding-left:14px; }
+  .column h2::before{ content:""; position:absolute; left:0; top:.18em; bottom:.18em; width:4px; border-radius:3px; background:linear-gradient(var(--accent), var(--accent-2)); box-shadow:0 0 10px var(--accent-glow); }
+  .stat-gauge{
+    position:relative; overflow:hidden;
+    background:radial-gradient(circle at 50% -30%, var(--accent-glow), transparent 65%), linear-gradient(180deg, var(--panel-bg-alt), var(--panel-bg));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.08), 0 6px 14px rgba(0,0,0,.3);
+  }
+  .stat-gauge::before{ content:""; position:absolute; left:0; right:0; top:0; height:3px; background:linear-gradient(90deg, transparent, var(--accent), var(--accent-2), transparent); opacity:.85; }
+  .stat-gauge-value{ text-shadow:0 0 14px var(--accent-glow); }
+  .permits-box{ background:radial-gradient(circle at 50% 0%, var(--accent-glow), transparent 75%); }
+
+  /* radnice: kovové tlačítko, otáčející se záře a lesk */
+  .townhall-wrap::before{
+    content:""; position:absolute; top:50%; left:50%; width:236px; height:236px; margin:-118px 0 0 -118px; border-radius:50%; pointer-events:none; opacity:.75; filter:blur(7px);
+    background:conic-gradient(from 0deg, transparent 0 8%, var(--accent-glow) 22%, transparent 38% 58%, var(--accent-glow) 74%, transparent 90%);
+    animation:thSpin 16s linear infinite;
+  }
+  @keyframes thSpin{ to{ transform:rotate(360deg); } }
+  .btn-townhall{
+    position:relative; border:none; overflow:hidden;
+    background:radial-gradient(circle at 34% 24%, rgba(255,255,255,.26), transparent 36%), radial-gradient(circle at 50% 128%, var(--accent-glow), transparent 58%), radial-gradient(circle at 36% 30%, var(--panel-bg-alt), var(--panel-bg) 74%);
+    box-shadow:inset 0 0 0 4px var(--accent), inset 0 10px 20px rgba(255,255,255,.1), inset 0 -16px 28px rgba(0,0,0,.5), 0 14px 26px rgba(0,0,0,.5);
+  }
+  .btn-townhall::after{ content:""; position:absolute; left:18%; top:8%; width:64%; height:34%; border-radius:50%; background:linear-gradient(180deg, rgba(255,255,255,.1), transparent); pointer-events:none; }
+  .btn-townhall:hover{ box-shadow:inset 0 0 0 4px var(--accent), inset 0 10px 20px rgba(255,255,255,.12), inset 0 -16px 28px rgba(0,0,0,.5), 0 14px 26px rgba(0,0,0,.5), 0 0 30px 8px var(--accent-glow); }
+  body.frenzy .btn-townhall{ box-shadow:inset 0 0 0 4px var(--accent), inset 0 -16px 28px rgba(0,0,0,.5), 0 0 0 8px var(--accent-glow), 0 0 50px 14px var(--accent-glow); }
+  .btn-townhall-icon{ filter:drop-shadow(0 4px 6px rgba(0,0,0,.55)); position:relative; z-index:1; }
+  .btn-townhall-value, .btn-townhall-cta{ position:relative; z-index:1; }
+  .btn-townhall-value{ text-shadow:0 0 10px var(--accent-glow); }
+  .ring-progress{ stroke-width:6; }
+  .combo-track{ box-shadow:inset 0 2px 5px rgba(0,0,0,.45); }
+  .combo-fill{
+    background:repeating-linear-gradient(115deg, rgba(255,255,255,.24) 0 8px, transparent 8px 16px), linear-gradient(90deg, var(--accent-2), var(--accent));
+    background-size:32px 100%, 100% 100%; animation:comboShine 1.1s linear infinite; box-shadow:0 0 12px var(--accent-glow);
+  }
+  @keyframes comboShine{ to{ background-position:32px 0, 0 0; } }
+  .click-particle{ box-shadow:0 0 8px 2px var(--accent-glow); }
+
+  /* obchod a vyhlášky */
+  .ledger-row, .policy-row{ border-radius:10px; transition:background .15s; }
+  .ledger-row:hover, .policy-row:hover{ background:rgba(255,255,255,.035); }
+  .ledger-icon{
+    width:46px; height:46px; display:flex; align-items:center; justify-content:center; font-size:1.55rem; border-radius:12px;
+    background:radial-gradient(circle at 30% 24%, rgba(255,255,255,.16), transparent 58%), linear-gradient(180deg, var(--panel-bg-alt), var(--panel-bg));
+    box-shadow:inset 0 0 0 1px var(--border), 0 5px 10px rgba(0,0,0,.35);
+  }
+  .btn-build, .btn-policy{
+    background:linear-gradient(180deg, rgba(255,255,255,.1), transparent 62%), var(--panel-bg-alt);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.14), 0 4px 0 rgba(0,0,0,.35); transition:.15s;
+  }
+  .btn-build:hover:not(:disabled){ background:linear-gradient(180deg, rgba(255,255,255,.28), transparent 60%), var(--accent); transform:translateY(-1px); box-shadow:inset 0 1px 0 rgba(255,255,255,.2), 0 6px 0 rgba(0,0,0,.35), 0 0 16px var(--accent-glow); }
+  .btn-policy:hover:not(:disabled){ background:linear-gradient(180deg, rgba(255,255,255,.28), transparent 60%), var(--accent-2); transform:translateY(-1px); }
+  .btn-build:active:not(:disabled), .btn-policy:active:not(:disabled){ transform:translateY(3px); box-shadow:inset 0 1px 0 rgba(255,255,255,.1), 0 1px 0 rgba(0,0,0,.35); }
+  .btn-mega, .btn-prestige{
+    background:linear-gradient(180deg, rgba(255,255,255,.3), transparent 55%), var(--accent);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.3), 0 4px 0 rgba(0,0,0,.38), 0 0 16px var(--accent-glow); transition:.15s;
+  }
+  .btn-mega:hover:not(:disabled), .btn-prestige:hover:not(:disabled){ transform:translateY(-1px); filter:brightness(1.1); }
+  .btn-mega:active:not(:disabled), .btn-prestige:active:not(:disabled){ transform:translateY(3px); box-shadow:inset 0 1px 0 rgba(255,255,255,.2), 0 1px 0 rgba(0,0,0,.38); }
+  .btn-mega:disabled, .btn-prestige:disabled{ box-shadow:none; background:var(--text-dim); }
+  .mega-panel, .prestige-panel{ box-shadow:inset 0 1px 0 rgba(255,255,255,.07), 0 10px 24px rgba(0,0,0,.3); }
+  .mega-icon{ filter:drop-shadow(0 3px 5px rgba(0,0,0,.5)); }
+  .phase-seg.done{ box-shadow:0 0 8px var(--accent-2); }
+  .phase-seg.current{ box-shadow:0 0 8px var(--accent); }
+  .prestige-progress-fill{ box-shadow:0 0 12px var(--accent-glow); }
+
+  /* krize, toasty, okna */
+  .crisis-banner{ box-shadow:0 0 22px rgba(224,82,111,.25), inset 0 0 0 1px rgba(224,82,111,.25); }
+  .toast{ background:linear-gradient(180deg, rgba(255,255,255,.06), transparent 60%), var(--panel-bg-alt); border-left:4px solid var(--accent); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
+  .toast-success{ border-left-color:var(--accent-2); } .toast-error{ border-left-color:var(--danger); }
+  .modal{ -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px); }
+  .modal-box{ background:linear-gradient(165deg, var(--panel-bg-alt), var(--panel-bg) 45%); box-shadow:0 24px 60px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.08); }
+  .theme-option{ background:linear-gradient(180deg, rgba(255,255,255,.06), transparent 70%), var(--panel-bg-alt); box-shadow:0 4px 0 rgba(0,0,0,.3); transition:.15s; }
+  .theme-option:hover{ transform:translateY(-2px); box-shadow:0 6px 0 rgba(0,0,0,.3), 0 0 16px var(--accent-glow); }
+
+  /* motiv Steampunk: mosazný rám s nýty a teplé světlo */
+  body[data-theme="steampunk"]:not(.endcraze){ background-image:radial-gradient(ellipse 90% 45% at 50% -8%, rgba(217,164,65,.2), transparent 72%), radial-gradient(circle, rgba(217,164,65,.22) 1px, transparent 1.4px); }
+  [data-theme="steampunk"] .column{ box-shadow:0 16px 36px rgba(0,0,0,.45), inset 0 0 0 2px rgba(217,164,65,.42), inset 0 0 0 5px rgba(0,0,0,.28), inset 0 0 0 6px rgba(217,164,65,.2); }
+  [data-theme="steampunk"] .column::after{
+    content:""; position:absolute; inset:0; pointer-events:none; background-repeat:no-repeat;
+    background-image:radial-gradient(circle at 12px 12px, #f0cd7e 0 2px, #8a5f1c 3px, transparent 3.6px), radial-gradient(circle at calc(100% - 12px) 12px, #f0cd7e 0 2px, #8a5f1c 3px, transparent 3.6px), radial-gradient(circle at 12px calc(100% - 12px), #f0cd7e 0 2px, #8a5f1c 3px, transparent 3.6px), radial-gradient(circle at calc(100% - 12px) calc(100% - 12px), #f0cd7e 0 2px, #8a5f1c 3px, transparent 3.6px);
+  }
+  [data-theme="steampunk"] .btn-townhall{ box-shadow:inset 0 0 0 4px #d9a441, inset 0 0 0 8px rgba(0,0,0,.35), inset 0 -16px 28px rgba(0,0,0,.5), 0 14px 26px rgba(0,0,0,.5); }
+  [data-theme="steampunk"] .brand h1, [data-theme="steampunk"] .column h2{ letter-spacing:.4px; }
+
+  /* motiv Cyberpunk: neonové obrysy a jemné scanlines */
+  [data-theme="cyberpunk"] .column{ box-shadow:0 0 0 1px rgba(255,46,196,.5), 0 0 24px rgba(255,46,196,.2), inset 0 0 34px rgba(34,232,255,.06); }
+  [data-theme="cyberpunk"] .stat-gauge{ box-shadow:inset 0 0 0 1px rgba(34,232,255,.25), 0 0 14px rgba(34,232,255,.12); }
+  [data-theme="cyberpunk"] .btn-build, [data-theme="cyberpunk"] .btn-policy{ box-shadow:inset 0 1px 0 rgba(255,255,255,.14), 0 0 10px var(--accent-glow); }
+  [data-theme="cyberpunk"] .column h2, [data-theme="cyberpunk"] .brand h1{ text-shadow:0 0 12px rgba(255,46,196,.6); }
+  body[data-theme="cyberpunk"]::after{ content:""; position:fixed; inset:0; z-index:1; pointer-events:none; background:repeating-linear-gradient(0deg, rgba(255,255,255,.028) 0 1px, transparent 1px 3px); }
+
+  /* motiv Mars: prašné teplé světlo a zrnění */
+  body[data-theme="mars"]:not(.endcraze){
+    background-image:radial-gradient(ellipse 90% 45% at 50% -8%, rgba(217,112,46,.28), transparent 72%), url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .85  0 0 0 0 .5  0 0 0 0 .3  0 0 0 .09 0'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
+    background-size:auto, 160px 160px; background-attachment:fixed, scroll;
+  }
+  [data-theme="mars"] .column{ box-shadow:0 16px 36px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,220,180,.1), inset 0 0 0 1px var(--border), inset 0 -30px 50px rgba(217,112,46,.08); }
+</style>
+<script>/* JOMARID-BRIDGE */
+(function () {
+  var GAME_ID = 'cityclicker';
+  var inFrame = false;
+  try { inFrame = !!window.parent && window.parent !== window; } catch (e) { inFrame = false; }
+  var pending = 0, reasons = {}, timer = null;
+
+  function flush() {
+    timer = null;
+    if (!pending || !inFrame) { pending = 0; reasons = {}; return; }
+    var top = 'event', topAmt = 0;
+    for (var k in reasons) { if (reasons[k] > topAmt) { top = k; topAmt = reasons[k]; } }
+    var amount = pending; pending = 0; reasons = {};
+    try { window.parent.postMessage({ source: 'jomarid-game', type: 'coin', game: GAME_ID, amount: amount, reason: top }, '*'); } catch (e) {}
+  }
+
+  // Hra jen POSILA ZADOST o odmenu - o tom, kolik Jomarid Coins se skutecne udeli,
+  // rozhoduje server (denni stropy). Vice udalosti v rychlem sledu se sloucí do jedne zpravy.
+  // Potvrzení odměny (kolik se skutečně připsalo) ukazuje lišta appky nad hrou, hra samotná nic nezobrazuje.
+  window.jomaridReward = function (reason, amount, immediate) {
+    if (!inFrame) return;
+    amount = Math.floor(Number(amount));
+    if (!isFinite(amount) || amount < 1) return;
+    var r = reason || 'event';
+    pending += amount;
+    reasons[r] = (reasons[r] || 0) + amount;
+    if (immediate) { if (timer) clearTimeout(timer); flush(); }
+    else if (!timer) { timer = setTimeout(flush, 1200); }
+  };
+
+  // Rekordy hry (nejlepší skóre, nejvyšší úroveň...): hra jen hlásí aktuální hodnotu, o zápisu a odznacích rozhoduje server.
+  // Hlásí se jen zvýšení oproti naposledy odeslanému (stejná nebo nižší hodnota se neposílá znovu) a víc hlášení v rychlém sledu se sloučí.
+  var recSent = {}, recPending = {}, recTimer = null;
+  function recFlush() {
+    recTimer = null;
+    var pend = recPending; recPending = {};
+    if (!inFrame) return;
+    for (var k in pend) {
+      if (pend[k] <= (recSent[k] || 0)) continue;
+      recSent[k] = pend[k];
+      try { window.parent.postMessage({ source: 'jomarid-game', type: 'record', game: GAME_ID, stat: k, value: pend[k] }, '*'); } catch (e) {}
+    }
+  }
+  window.jomaridRecord = function (stat, value, immediate) {
+    if (!inFrame || typeof stat !== 'string') return;
+    value = Math.floor(Number(value));
+    if (!isFinite(value) || value < 1) return;
+    if (value <= (recSent[stat] || 0) || value <= (recPending[stat] || 0)) return;
+    recPending[stat] = value;
+    if (immediate) { if (recTimer) clearTimeout(recTimer); recFlush(); }
+    else if (!recTimer) { recTimer = setTimeout(recFlush, 1500); }
+  };
+
+  window.addEventListener('pagehide', function () { if (timer) clearTimeout(timer); flush(); if (recTimer) clearTimeout(recTimer); recFlush(); });
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target.closest('#btn-back-to-jomarid') : null;
+    if (t) { if (timer) clearTimeout(timer); flush(); if (recTimer) clearTimeout(recTimer); recFlush(); }
+  }, true);
+})();
+</script>
+
+</head>
+<body data-theme="classic">
+<a href="/games" id="btn-back-to-jomarid" onclick="try { if (typeof saveGame === 'function') saveGame(false); } catch (e) {} if (window.parent !== window) { window.parent.postMessage({ source: 'jomarid-game', type: 'close' }, '*'); return false; }" style="position:fixed; top:calc(10px + env(safe-area-inset-top,0px)); left:10px; z-index:9999; color:#94a3b8; font-size:11px; letter-spacing:0.5px; text-decoration:none; background:rgba(2,6,23,0.75); padding:6px 10px; border-radius:8px; border:1px solid #1e293b; backdrop-filter: blur(4px); font-family: 'Segoe UI', Tahoma, sans-serif;">← Jomarid Books</a>
+
+<div class="app">
+
+  <div class="skyline-banner" aria-hidden="true">
+    <svg viewBox="0 0 1200 140" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="skG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--panel-bg-alt)"></stop><stop offset="1" style="stop-color:var(--bg)"></stop></linearGradient><linearGradient id="skF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--panel-bg-alt);stop-opacity:.55"></stop><stop offset="1" style="stop-color:var(--bg);stop-opacity:.2"></stop></linearGradient></defs><rect x="-10" y="103" width="26" height="37" class="sk-far"></rect><rect x="21" y="113" width="62" height="27" class="sk-far"></rect><rect x="87" y="85" width="62" height="55" class="sk-far"></rect><rect x="152" y="86" width="66" height="54" class="sk-far"></rect><rect x="222" y="82" width="31" height="58" class="sk-far"></rect><rect x="258" y="93" width="26" height="47" class="sk-far"></rect><rect x="284" y="109" width="49" height="31" class="sk-far"></rect><rect x="333" y="116" width="57" height="24" class="sk-far"></rect><rect x="394" y="61" width="43" height="79" class="sk-far"></rect><rect x="440" y="112" width="31" height="28" class="sk-far"></rect><rect x="476" y="61" width="47" height="79" class="sk-far"></rect><rect x="525" y="87" width="63" height="53" class="sk-far"></rect><rect x="591" y="67" width="60" height="73" class="sk-far"></rect><rect x="656" y="105" width="35" height="35" class="sk-far"></rect><rect x="695" y="70" width="39" height="70" class="sk-far"></rect><rect x="734" y="74" width="36" height="66" class="sk-far"></rect><rect x="770" y="92" width="55" height="48" class="sk-far"></rect><rect x="825" y="114" width="31" height="26" class="sk-far"></rect><rect x="860" y="68" width="30" height="72" class="sk-far"></rect><rect x="891" y="90" width="37" height="50" class="sk-far"></rect><rect x="928" y="83" width="43" height="57" class="sk-far"></rect><rect x="975" y="72" width="45" height="68" class="sk-far"></rect><rect x="1022" y="85" width="50" height="55" class="sk-far"></rect><rect x="1072" y="87" width="37" height="53" class="sk-far"></rect><rect x="1112" y="85" width="58" height="55" class="sk-far"></rect><rect x="1170" y="59" width="67" height="81" class="sk-far"></rect><rect x="0" y="86" width="60" height="54" class="sk-building"></rect><rect x="5" y="92" width="5" height="6" class="sk-window" style="animation-delay:2.72s;animation-duration:3.78s"></rect><rect x="18" y="92" width="5" height="6" class="sk-window" style="animation-delay:2.34s;animation-duration:3.86s"></rect><rect x="31" y="92" width="5" height="6" class="sk-window" style="animation-delay:3.18s;animation-duration:4.6s"></rect><rect x="44" y="92" width="5" height="6" class="sk-window" style="animation-delay:2.3s;animation-duration:4.08s"></rect><rect x="31" y="107" width="5" height="6" class="sk-window" style="animation-delay:3.92s;animation-duration:2.85s"></rect><rect x="44" y="107" width="5" height="6" class="sk-window" style="animation-delay:3.03s;animation-duration:2.96s"></rect><rect x="5" y="122" width="5" height="6" class="sk-window" style="animation-delay:0.16s;animation-duration:4.5s"></rect><rect x="31" y="122" width="5" height="6" class="sk-window" style="animation-delay:3.5s;animation-duration:3.44s"></rect><rect x="65" y="99" width="81" height="41" class="sk-building"></rect><rect x="70" y="105" width="5" height="6" class="sk-window" style="animation-delay:2.32s;animation-duration:3.87s"></rect><rect x="109" y="105" width="5" height="6" class="sk-window" style="animation-delay:2.66s;animation-duration:2.68s"></rect><rect x="109" y="120" width="5" height="6" class="sk-window" style="animation-delay:1.54s;animation-duration:4.51s"></rect><rect x="122" y="120" width="5" height="6" class="sk-window" style="animation-delay:1.85s;animation-duration:3.0s"></rect><rect x="148" y="93" width="74" height="47" class="sk-building"></rect><rect x="153" y="99" width="5" height="6" class="sk-window" style="animation-delay:0.24s;animation-duration:4.8s"></rect><rect x="166" y="99" width="5" height="6" class="sk-window" style="animation-delay:0.99s;animation-duration:3.67s"></rect><rect x="192" y="99" width="5" height="6" class="sk-window" style="animation-delay:1.8s;animation-duration:4.15s"></rect><rect x="179" y="114" width="5" height="6" class="sk-window" style="animation-delay:1.66s;animation-duration:3.58s"></rect><rect x="226" y="98" width="77" height="42" class="sk-building"></rect><rect x="231" y="104" width="5" height="6" class="sk-window" style="animation-delay:0.7s;animation-duration:3.2s"></rect><rect x="244" y="104" width="5" height="6" class="sk-window" style="animation-delay:1.94s;animation-duration:4.27s"></rect><rect x="257" y="104" width="5" height="6" class="sk-window" style="animation-delay:0.02s;animation-duration:3.76s"></rect><rect x="270" y="104" width="5" height="6" class="sk-window" style="animation-delay:2.27s;animation-duration:5.36s"></rect><rect x="231" y="119" width="5" height="6" class="sk-window" style="animation-delay:2.47s;animation-duration:4.53s"></rect><rect x="244" y="119" width="5" height="6" class="sk-window" style="animation-delay:3.6s;animation-duration:4.84s"></rect><rect x="283" y="119" width="5" height="6" class="sk-window" style="animation-delay:1.6s;animation-duration:2.81s"></rect><rect x="309" y="101" width="53" height="39" class="sk-building"></rect><rect x="327" y="107" width="5" height="6" class="sk-window" style="animation-delay:0.27s;animation-duration:3.13s"></rect><rect x="340" y="107" width="5" height="6" class="sk-window" style="animation-delay:1.36s;animation-duration:2.66s"></rect><rect x="314" y="122" width="5" height="6" class="sk-window" style="animation-delay:0.61s;animation-duration:2.8s"></rect><rect x="327" y="122" width="5" height="6" class="sk-window" style="animation-delay:0.1s;animation-duration:5.12s"></rect><rect x="340" y="122" width="5" height="6" class="sk-window" style="animation-delay:0.59s;animation-duration:3.26s"></rect><rect x="364" y="52" width="67" height="88" class="sk-building"></rect><rect x="369" y="58" width="5" height="6" class="sk-window" style="animation-delay:1.46s;animation-duration:2.87s"></rect><rect x="408" y="58" width="5" height="6" class="sk-window" style="animation-delay:1.94s;animation-duration:2.76s"></rect><rect x="369" y="73" width="5" height="6" class="sk-window" style="animation-delay:1.37s;animation-duration:3.29s"></rect><rect x="395" y="73" width="5" height="6" class="sk-window" style="animation-delay:0.09s;animation-duration:5.35s"></rect><rect x="408" y="73" width="5" height="6" class="sk-window" style="animation-delay:0.59s;animation-duration:4.13s"></rect><rect x="369" y="88" width="5" height="6" class="sk-window" style="animation-delay:2.11s;animation-duration:5.44s"></rect><rect x="408" y="88" width="5" height="6" class="sk-window" style="animation-delay:1.47s;animation-duration:3.0s"></rect><rect x="382" y="103" width="5" height="6" class="sk-window" style="animation-delay:3.12s;animation-duration:3.49s"></rect><rect x="395" y="103" width="5" height="6" class="sk-window" style="animation-delay:3.25s;animation-duration:5.45s"></rect><rect x="408" y="118" width="5" height="6" class="sk-window" style="animation-delay:2.07s;animation-duration:3.57s"></rect><rect x="433" y="94" width="55" height="46" class="sk-building"></rect><rect x="438" y="100" width="5" height="6" class="sk-window" style="animation-delay:0.11s;animation-duration:3.34s"></rect><rect x="451" y="100" width="5" height="6" class="sk-window" style="animation-delay:2.77s;animation-duration:5.37s"></rect><rect x="464" y="100" width="5" height="6" class="sk-window" style="animation-delay:3.75s;animation-duration:5.46s"></rect><rect x="451" y="115" width="5" height="6" class="sk-window" style="animation-delay:0.88s;animation-duration:3.18s"></rect><rect x="464" y="115" width="5" height="6" class="sk-window" style="animation-delay:0.82s;animation-duration:4.37s"></rect><rect x="494" y="98" width="67" height="42" class="sk-building"></rect><rect x="525" y="104" width="5" height="6" class="sk-window" style="animation-delay:2.61s;animation-duration:4.9s"></rect><rect x="538" y="104" width="5" height="6" class="sk-window" style="animation-delay:2.64s;animation-duration:5.23s"></rect><rect x="525" y="119" width="5" height="6" class="sk-window" style="animation-delay:0.71s;animation-duration:4.87s"></rect><rect x="538" y="119" width="5" height="6" class="sk-window" style="animation-delay:3.2s;animation-duration:5.41s"></rect><rect x="567" y="77" width="47" height="63" class="sk-building"></rect><rect x="572" y="83" width="5" height="6" class="sk-window" style="animation-delay:1.61s;animation-duration:5.34s"></rect><rect x="598" y="83" width="5" height="6" class="sk-window" style="animation-delay:0.51s;animation-duration:2.95s"></rect><rect x="598" y="98" width="5" height="6" class="sk-window" style="animation-delay:3.31s;animation-duration:5.44s"></rect><rect x="585" y="113" width="5" height="6" class="sk-window" style="animation-delay:2.19s;animation-duration:2.89s"></rect><rect x="598" y="113" width="5" height="6" class="sk-window" style="animation-delay:3.88s;animation-duration:4.45s"></rect><rect x="620" y="32" width="43" height="108" class="sk-building"></rect><rect x="625" y="38" width="5" height="6" class="sk-window" style="animation-delay:3.73s;animation-duration:3.8s"></rect><rect x="625" y="53" width="5" height="6" class="sk-window" style="animation-delay:1.01s;animation-duration:3.38s"></rect><rect x="638" y="53" width="5" height="6" class="sk-window" style="animation-delay:2.35s;animation-duration:3.28s"></rect><rect x="651" y="53" width="5" height="6" class="sk-window" style="animation-delay:0.52s;animation-duration:5.23s"></rect><rect x="625" y="68" width="5" height="6" class="sk-window" style="animation-delay:1.83s;animation-duration:4.25s"></rect><rect x="651" y="68" width="5" height="6" class="sk-window" style="animation-delay:3.67s;animation-duration:4.0s"></rect><rect x="625" y="83" width="5" height="6" class="sk-window" style="animation-delay:2.09s;animation-duration:2.56s"></rect><rect x="638" y="83" width="5" height="6" class="sk-window" style="animation-delay:0.73s;animation-duration:2.51s"></rect><rect x="625" y="98" width="5" height="6" class="sk-window" style="animation-delay:1.89s;animation-duration:4.68s"></rect><rect x="638" y="98" width="5" height="6" class="sk-window" style="animation-delay:1.3s;animation-duration:4.06s"></rect><rect x="651" y="98" width="5" height="6" class="sk-window" style="animation-delay:3.14s;animation-duration:2.82s"></rect><rect x="625" y="113" width="5" height="6" class="sk-window" style="animation-delay:0.99s;animation-duration:3.33s"></rect><rect x="651" y="113" width="5" height="6" class="sk-window" style="animation-delay:2.25s;animation-duration:4.78s"></rect><rect x="669" y="99" width="65" height="41" class="sk-building"></rect><rect x="687" y="105" width="5" height="6" class="sk-window" style="animation-delay:2.45s;animation-duration:4.02s"></rect><rect x="700" y="105" width="5" height="6" class="sk-window" style="animation-delay:2.77s;animation-duration:3.86s"></rect><rect x="713" y="105" width="5" height="6" class="sk-window" style="animation-delay:1.91s;animation-duration:5.32s"></rect><rect x="713" y="120" width="5" height="6" class="sk-window" style="animation-delay:2.24s;animation-duration:5.33s"></rect><rect x="737" y="34" width="42" height="106" class="sk-building"></rect><rect x="755" y="40" width="5" height="6" class="sk-window" style="animation-delay:0.49s;animation-duration:3.83s"></rect><rect x="768" y="40" width="5" height="6" class="sk-window" style="animation-delay:0.96s;animation-duration:2.72s"></rect><rect x="742" y="70" width="5" height="6" class="sk-window" style="animation-delay:2.86s;animation-duration:4.48s"></rect><rect x="755" y="70" width="5" height="6" class="sk-window" style="animation-delay:3.53s;animation-duration:5.4s"></rect><rect x="768" y="70" width="5" height="6" class="sk-window" style="animation-delay:3.81s;animation-duration:3.69s"></rect><rect x="742" y="85" width="5" height="6" class="sk-window" style="animation-delay:3.96s;animation-duration:5.0s"></rect><rect x="755" y="85" width="5" height="6" class="sk-window" style="animation-delay:1.73s;animation-duration:4.05s"></rect><rect x="768" y="85" width="5" height="6" class="sk-window" style="animation-delay:0.78s;animation-duration:3.46s"></rect><rect x="755" y="100" width="5" height="6" class="sk-window" style="animation-delay:2.22s;animation-duration:3.82s"></rect><rect x="768" y="100" width="5" height="6" class="sk-window" style="animation-delay:1.33s;animation-duration:4.37s"></rect><rect x="742" y="115" width="5" height="6" class="sk-window" style="animation-delay:0.26s;animation-duration:5.46s"></rect><rect x="782" y="52" width="58" height="88" class="sk-building"></rect><rect x="787" y="58" width="5" height="6" class="sk-window" style="animation-delay:1.06s;animation-duration:2.62s"></rect><rect x="813" y="58" width="5" height="6" class="sk-window" style="animation-delay:0.52s;animation-duration:3.77s"></rect><rect x="800" y="73" width="5" height="6" class="sk-window" style="animation-delay:0.6s;animation-duration:5.26s"></rect><rect x="813" y="73" width="5" height="6" class="sk-window" style="animation-delay:2.8s;animation-duration:2.77s"></rect><rect x="826" y="73" width="5" height="6" class="sk-window" style="animation-delay:2.75s;animation-duration:3.78s"></rect><rect x="787" y="88" width="5" height="6" class="sk-window" style="animation-delay:3.75s;animation-duration:4.4s"></rect><rect x="813" y="88" width="5" height="6" class="sk-window" style="animation-delay:3.42s;animation-duration:2.7s"></rect><rect x="787" y="103" width="5" height="6" class="sk-window" style="animation-delay:1.36s;animation-duration:4.16s"></rect><rect x="813" y="103" width="5" height="6" class="sk-window" style="animation-delay:0.52s;animation-duration:4.08s"></rect><rect x="826" y="103" width="5" height="6" class="sk-window" style="animation-delay:0.44s;animation-duration:2.98s"></rect><rect x="787" y="118" width="5" height="6" class="sk-window" style="animation-delay:0.81s;animation-duration:3.44s"></rect><rect x="800" y="118" width="5" height="6" class="sk-window" style="animation-delay:3.04s;animation-duration:3.37s"></rect><rect x="813" y="118" width="5" height="6" class="sk-window" style="animation-delay:0.71s;animation-duration:3.54s"></rect><rect x="826" y="118" width="5" height="6" class="sk-window" style="animation-delay:1.0s;animation-duration:2.55s"></rect><rect x="843" y="90" width="74" height="50" class="sk-building"></rect><rect x="861" y="96" width="5" height="6" class="sk-window" style="animation-delay:0.76s;animation-duration:3.92s"></rect><rect x="887" y="96" width="5" height="6" class="sk-window" style="animation-delay:3.28s;animation-duration:3.8s"></rect><rect x="900" y="96" width="5" height="6" class="sk-window" style="animation-delay:3.34s;animation-duration:3.68s"></rect><rect x="848" y="111" width="5" height="6" class="sk-window" style="animation-delay:2.75s;animation-duration:5.45s"></rect><rect x="861" y="111" width="5" height="6" class="sk-window" style="animation-delay:3.33s;animation-duration:4.62s"></rect><rect x="887" y="111" width="5" height="6" class="sk-window" style="animation-delay:1.39s;animation-duration:2.66s"></rect><rect x="900" y="111" width="5" height="6" class="sk-window" style="animation-delay:0.28s;animation-duration:4.72s"></rect><rect x="848" y="126" width="5" height="6" class="sk-window" style="animation-delay:0.65s;animation-duration:2.75s"></rect><rect x="900" y="126" width="5" height="6" class="sk-window" style="animation-delay:0.97s;animation-duration:3.38s"></rect><rect x="923" y="34" width="59" height="106" class="sk-building"></rect><rect x="928" y="40" width="5" height="6" class="sk-window" style="animation-delay:0.63s;animation-duration:3.84s"></rect><rect x="941" y="40" width="5" height="6" class="sk-window" style="animation-delay:3.85s;animation-duration:5.42s"></rect><rect x="954" y="40" width="5" height="6" class="sk-window" style="animation-delay:0.98s;animation-duration:5.4s"></rect><rect x="967" y="40" width="5" height="6" class="sk-window" style="animation-delay:1.43s;animation-duration:2.5s"></rect><rect x="928" y="55" width="5" height="6" class="sk-window" style="animation-delay:1.9s;animation-duration:4.01s"></rect><rect x="941" y="55" width="5" height="6" class="sk-window" style="animation-delay:2.02s;animation-duration:2.51s"></rect><rect x="954" y="55" width="5" height="6" class="sk-window" style="animation-delay:0.36s;animation-duration:3.7s"></rect><rect x="967" y="55" width="5" height="6" class="sk-window" style="animation-delay:0.09s;animation-duration:3.41s"></rect><rect x="928" y="70" width="5" height="6" class="sk-window" style="animation-delay:2.34s;animation-duration:4.09s"></rect><rect x="941" y="85" width="5" height="6" class="sk-window" style="animation-delay:1.3s;animation-duration:5.45s"></rect><rect x="954" y="85" width="5" height="6" class="sk-window" style="animation-delay:2.9s;animation-duration:4.43s"></rect><rect x="967" y="85" width="5" height="6" class="sk-window" style="animation-delay:3.34s;animation-duration:5.18s"></rect><rect x="967" y="100" width="5" height="6" class="sk-window" style="animation-delay:2.1s;animation-duration:4.01s"></rect><rect x="967" y="115" width="5" height="6" class="sk-window" style="animation-delay:3.57s;animation-duration:4.55s"></rect><rect x="985" y="31" width="46" height="109" class="sk-building"></rect><rect x="1003" y="37" width="5" height="6" class="sk-window" style="animation-delay:0.12s;animation-duration:2.9s"></rect><rect x="1016" y="37" width="5" height="6" class="sk-window" style="animation-delay:0.42s;animation-duration:5.01s"></rect><rect x="990" y="52" width="5" height="6" class="sk-window" style="animation-delay:2.51s;animation-duration:4.38s"></rect><rect x="1016" y="52" width="5" height="6" class="sk-window" style="animation-delay:0.01s;animation-duration:4.89s"></rect><rect x="1003" y="67" width="5" height="6" class="sk-window" style="animation-delay:2.14s;animation-duration:4.48s"></rect><rect x="1016" y="67" width="5" height="6" class="sk-window" style="animation-delay:2.95s;animation-duration:3.26s"></rect><rect x="990" y="82" width="5" height="6" class="sk-window" style="animation-delay:1.06s;animation-duration:4.69s"></rect><rect x="1003" y="82" width="5" height="6" class="sk-window" style="animation-delay:2.96s;animation-duration:5.43s"></rect><rect x="1016" y="82" width="5" height="6" class="sk-window" style="animation-delay:1.53s;animation-duration:3.94s"></rect><rect x="1016" y="97" width="5" height="6" class="sk-window" style="animation-delay:2.57s;animation-duration:2.73s"></rect><rect x="990" y="112" width="5" height="6" class="sk-window" style="animation-delay:1.02s;animation-duration:4.73s"></rect><rect x="1003" y="112" width="5" height="6" class="sk-window" style="animation-delay:2.27s;animation-duration:2.54s"></rect><rect x="1016" y="112" width="5" height="6" class="sk-window" style="animation-delay:1.08s;animation-duration:4.52s"></rect><rect x="1037" y="81" width="80" height="59" class="sk-building"></rect><rect x="1068" y="87" width="5" height="6" class="sk-window" style="animation-delay:2.07s;animation-duration:3.89s"></rect><rect x="1081" y="87" width="5" height="6" class="sk-window" style="animation-delay:0.47s;animation-duration:5.18s"></rect><rect x="1094" y="87" width="5" height="6" class="sk-window" style="animation-delay:3.91s;animation-duration:5.31s"></rect><rect x="1042" y="102" width="5" height="6" class="sk-window" style="animation-delay:1.84s;animation-duration:4.96s"></rect><rect x="1068" y="102" width="5" height="6" class="sk-window" style="animation-delay:1.07s;animation-duration:3.13s"></rect><rect x="1094" y="102" width="5" height="6" class="sk-window" style="animation-delay:2.33s;animation-duration:2.93s"></rect><rect x="1042" y="117" width="5" height="6" class="sk-window" style="animation-delay:3.81s;animation-duration:2.9s"></rect><rect x="1068" y="117" width="5" height="6" class="sk-window" style="animation-delay:3.55s;animation-duration:4.61s"></rect><rect x="1081" y="117" width="5" height="6" class="sk-window" style="animation-delay:3.59s;animation-duration:3.96s"></rect><rect x="1094" y="117" width="5" height="6" class="sk-window" style="animation-delay:0.01s;animation-duration:3.98s"></rect><rect x="1121" y="35" width="46" height="105" class="sk-building"></rect><rect x="1126" y="41" width="5" height="6" class="sk-window" style="animation-delay:1.21s;animation-duration:2.92s"></rect><rect x="1139" y="41" width="5" height="6" class="sk-window" style="animation-delay:1.26s;animation-duration:5.02s"></rect><rect x="1152" y="41" width="5" height="6" class="sk-window" style="animation-delay:3.0s;animation-duration:5.02s"></rect><rect x="1126" y="56" width="5" height="6" class="sk-window" style="animation-delay:3.71s;animation-duration:4.64s"></rect><rect x="1152" y="56" width="5" height="6" class="sk-window" style="animation-delay:1.49s;animation-duration:3.68s"></rect><rect x="1139" y="71" width="5" height="6" class="sk-window" style="animation-delay:1.44s;animation-duration:3.78s"></rect><rect x="1152" y="71" width="5" height="6" class="sk-window" style="animation-delay:0.19s;animation-duration:2.81s"></rect><rect x="1139" y="86" width="5" height="6" class="sk-window" style="animation-delay:3.74s;animation-duration:3.25s"></rect><rect x="1152" y="86" width="5" height="6" class="sk-window" style="animation-delay:2.04s;animation-duration:3.07s"></rect><rect x="1126" y="101" width="5" height="6" class="sk-window" style="animation-delay:3.82s;animation-duration:5.15s"></rect><rect x="1152" y="116" width="5" height="6" class="sk-window" style="animation-delay:2.88s;animation-duration:2.65s"></rect><rect x="1169" y="98" width="76" height="42" class="sk-building"></rect><rect x="1187" y="104" width="5" height="6" class="sk-window" style="animation-delay:3.01s;animation-duration:4.43s"></rect><rect x="1200" y="104" width="5" height="6" class="sk-window" style="animation-delay:0.2s;animation-duration:5.28s"></rect><rect x="1213" y="104" width="5" height="6" class="sk-window" style="animation-delay:1.89s;animation-duration:3.53s"></rect><rect x="1226" y="104" width="5" height="6" class="sk-window" style="animation-delay:2.96s;animation-duration:5.43s"></rect><rect x="1174" y="119" width="5" height="6" class="sk-window" style="animation-delay:2.62s;animation-duration:3.4s"></rect><rect x="1187" y="119" width="5" height="6" class="sk-window" style="animation-delay:1.58s;animation-duration:3.0s"></rect><rect x="1200" y="119" width="5" height="6" class="sk-window" style="animation-delay:0.83s;animation-duration:5.22s"></rect><rect x="1213" y="119" width="5" height="6" class="sk-window" style="animation-delay:0.88s;animation-duration:5.22s"></rect><rect x="640" y="20" width="2" height="12" class="sk-ant"></rect><circle cx="641" cy="19" r="2.6" class="sk-beacon" style="animation-delay:1.89s"></circle><rect x="757" y="22" width="2" height="12" class="sk-ant"></rect><circle cx="758" cy="21" r="2.6" class="sk-beacon" style="animation-delay:0.19s"></circle><rect x="951" y="22" width="2" height="12" class="sk-ant"></rect><circle cx="952" cy="21" r="2.6" class="sk-beacon" style="animation-delay:0.15s"></circle><rect x="1007" y="19" width="2" height="12" class="sk-ant"></rect><circle cx="1008" cy="18" r="2.6" class="sk-beacon" style="animation-delay:0.26s"></circle><rect x="1143" y="23" width="2" height="12" class="sk-ant"></rect><circle cx="1144" cy="22" r="2.6" class="sk-beacon" style="animation-delay:0.54s"></circle></svg>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-emoji" id="themeEmoji">🏙️</span>
+      <h1 id="gameTitle">City Clicker: Metropolis</h1>
+    </div>
+    <div class="top-stats">
+      <div class="stat-item"><span>Rozpočet</span><span class="stat-val" id="tbBudget">$0</span></div>
+      <div class="stat-item"><span>Populace</span><span class="stat-val" id="tbPopulation">0</span></div>
+      <div class="stat-item"><span>Spokojenost</span><span class="stat-val" id="tbSatisfaction">100%</span></div>
+      <div class="stat-item"><span>Příjem</span><span class="stat-val" id="tbIncome">$0/s</span></div>
+    </div>
+    <div class="top-actions">
+      <select id="themeSelect" title="Vizuální téma" aria-label="Vizuální téma">
+        <option value="classic">Klasické Metropolis</option>
+        <option value="steampunk">Steampunk</option>
+        <option value="cyberpunk">Cyberpunk 2099</option>
+        <option value="mars">Marsovská kolonie</option>
+      </select>
+      <button type="button" class="btn-util" id="helpBtn" title="Nápověda" aria-label="Nápověda">❓ Nápověda</button>
+      <button type="button" class="btn-util" id="soundToggleBtn" title="Zvuk" aria-label="Přepnout zvuk">🔊</button>
+      <button type="button" class="btn-util" id="statsBtn">📊 Statistiky</button>
+      <button type="button" class="btn-util" id="saveBtn">💾 Uložit</button>
+      <button type="button" class="btn-util" id="loadBtn">📂 Načíst</button>
+      <button type="button" class="btn-util" id="resetBtn">🗑️ Hard Reset</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button type="button" class="tab-btn active" data-tab="left">🏛️ Radnice</button>
+    <button type="button" class="tab-btn" data-tab="middle">📊 Přehled</button>
+    <button type="button" class="tab-btn" data-tab="right">🏗️ Obchod</button>
+  </nav>
+
+  <main class="layout">
+
+    <!-- LEFT COLUMN -->
+    <section class="column active-tab" data-col="left">
+      <h2 id="townhallLabel">Radnice</h2>
+      <div class="theme-flavor"><span class="flavor-emoji" id="themeFlavorEmoji">🏙️</span><span id="themeFlavor">Klasická metropole ve stínu mrakodrapů a nočních světel.</span></div>
+
+      <div class="townhall-wrap" id="townhallWrap">
+        <svg class="townhall-ring" viewBox="0 0 200 200" width="200" height="200" aria-hidden="true">
+          <circle class="ring-track" cx="100" cy="100" r="92"></circle>
+          <circle class="ring-progress" id="comboRing" cx="100" cy="100" r="92"></circle>
+        </svg>
+        <button type="button" class="btn-townhall" id="townhallBtn" aria-label="Klikni na radnici pro zisk">
+          <span class="btn-townhall-icon">🏛️</span>
+          <span class="btn-townhall-value" id="clickValueDisplay">+$4</span>
+          <span class="btn-townhall-cta">Klikni!</span>
+        </button>
+      </div>
+
+      <div class="combo-wrap">
+        <div class="combo-track"><div class="combo-fill" id="comboFill"></div></div>
+        <div class="combo-label-row">
+          <span>Combo Meter</span>
+          <span id="comboLabel">0%</span>
+        </div>
+        <span class="frenzy-badge hidden" id="frenzyBadge">🔥 15s</span>
+      </div>
+
+      <div class="permits-box">
+        <span class="permits-num" id="permitsDisplay">0</span>
+        Zlatých stavebních povolení
+      </div>
+
+      <div class="permits-box hidden" id="stardustMiniBox" style="margin-top:10px;">
+        <span class="permits-num" id="stardustMiniDisplay">0</span>
+        🌠 Hvězdný prach
+      </div>
+    </section>
+
+    <!-- MIDDLE COLUMN -->
+    <section class="column" data-col="middle">
+      <h2>Přehled města</h2>
+
+      <div class="stat-grid">
+        <div class="stat-gauge">
+          <div class="stat-gauge-value" id="statBudget">$0</div>
+          <div class="stat-gauge-label">Rozpočet</div>
+        </div>
+        <div class="stat-gauge">
+          <div class="stat-gauge-value" id="statPopulation">0</div>
+          <div class="stat-gauge-label">Populace</div>
+        </div>
+        <div class="stat-gauge">
+          <div class="stat-gauge-value" id="statSatisfaction">100%</div>
+          <div class="stat-gauge-label">Spokojenost</div>
+        </div>
+        <div class="stat-gauge">
+          <div class="stat-gauge-value" id="statIncome">$0/s</div>
+          <div class="stat-gauge-label">Pasivní příjem</div>
+        </div>
+      </div>
+
+      <div class="crisis-banner hidden" id="crisisBanner">
+        <div class="crisis-top">
+          <span class="crisis-icon" id="crisisIcon">🔥</span>
+          <span class="crisis-name" id="crisisName">Krize</span>
+          <span class="crisis-timer" id="crisisTimer">10s</span>
+        </div>
+        <div class="crisis-sub">
+          <span class="crisis-reward" id="crisisReward">+$0</span>
+          <span class="crisis-penalty" id="crisisPenalty">-$0</span>
+        </div>
+        <div class="crisis-hint">Klikni kamkoli sem pro rychlý zásah!</div>
+      </div>
+
+      <h3>Politická matice — Vyhlášky</h3>
+      <div id="policyList"></div>
+    </section>
+
+    <!-- RIGHT COLUMN -->
+    <section class="column" data-col="right">
+      <h2>Obchod se zónami</h2>
+      <div id="shopList"></div>
+
+      <h3>Megaprojekty</h3>
+      <div id="megaList"></div>
+    </section>
+
+  </main>
+
+  <section class="prestige-panel">
+    <h2>🏗️ Generální přestavba (Urban Renewal)</h2>
+    <div class="prestige-sub">Po dosažení celkových výdělků $100,000,000 můžeš provést generální přestavbu. Město se vynuluje, ale získáš trvalá Zlatá stavební povolení (+2 % pasivního příjmu za každé) a můžeš si zvolit nové vizuální téma.</div>
+    <div class="prestige-progress-track"><div class="prestige-progress-fill" id="prestigeProgressFill"></div></div>
+    <div class="prestige-progress-label" id="prestigeProgressLabel">$0 / $100,000,000</div>
+    <button type="button" class="btn-prestige" id="prestigeBtn" disabled>Zahájit generální přestavbu</button>
+  </section>
+
+  <section class="prestige-panel endcraze-panel" id="endcrazePanel">
+    <h2>☠️ EndCraze: Apokalyptický Survival</h2>
+
+    <div id="endcrazeLockedView">
+      <div class="prestige-sub">Odemkni tuto fázi dokončením celé základní výzkumné větve (všechny vyhlášky + oba megaprojekty) a dosažením statusu Megacity. Dokončení Částicového urychlovače nevratně uzamkne běžný nákup zón a spustí apokalyptická endgame fáze.</div>
+      <ul class="endcraze-checklist" id="endcrazeChecklist"></ul>
+      <div id="acceleratorPanel"></div>
+    </div>
+
+    <div id="endcrazeActiveView" class="hidden">
+      <div class="doomsday-row">
+        <span>Hodiny apokalypsy</span>
+        <span id="doomsdayLabel">0%</span>
+      </div>
+      <div class="prestige-progress-track"><div class="prestige-progress-fill danger-fill" id="doomsdayFill"></div></div>
+
+      <div class="stat-grid" style="margin-top:16px;">
+        <div class="stat-gauge">
+          <div class="stat-gauge-value" id="darkMatterDisplay">0 TH</div>
+          <div class="stat-gauge-label">Temná hmota</div>
+        </div>
+        <div class="stat-gauge">
+          <div class="stat-gauge-value" id="factionDisplay">Nezvoleno</div>
+          <div class="stat-gauge-label">Frakce</div>
+        </div>
+      </div>
+
+      <div id="factionActionArea"></div>
+
+      <h3>Dimenzionální Archa</h3>
+      <div id="archaPanel"></div>
+
+      <div id="relicsArea"></div>
+
+      <button type="button" class="btn-prestige hidden" id="jumpBtn" style="margin-top:16px;">🌌 Spustit dimenzionální skok</button>
+    </div>
+  </section>
+
+  <section class="prestige-panel hidden" id="stardustPanel">
+    <h2>🌠 Hvězdný trh — nekonečný postup</h2>
+    <div class="prestige-sub">Jakmile posbíráš všech 7 Kosmických relikvií, každý další dimenzionální skok ti místo relikvie přinese Hvězdný prach — věčnou měnu bez horní hranice. Utrácej ji tady za vylepšení, která se dají kupovat pořád dokola. Žádný strop, žádný konec — jen další a další skok.</div>
+    <div class="stat-grid" style="margin-bottom:14px;">
+      <div class="stat-gauge">
+        <div class="stat-gauge-value" id="stardustDisplay">0</div>
+        <div class="stat-gauge-label">🌠 Hvězdný prach k utracení</div>
+      </div>
+    </div>
+    <div id="stardustShopList"></div>
+  </section>
+
+  <footer class="vfoot"><input type="text" id="versionField" class="vfield" placeholder="v3.1" maxlength="20" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" aria-label="Tajný kód"></footer>
+
+</div>
+
+<div class="helicopter hidden" id="helicopter">🚁</div>
+<div class="toast-container" id="toastContainer" role="status" aria-live="polite"></div>
+
+<div class="modal hidden" id="prestigeModal" role="dialog" aria-modal="true">
+  <div class="modal-box">
+    <h2>Zvol nové téma města</h2>
+    <p>Generální přestavba je dokončena. Vyber si vizuální styl, ve kterém bude tvé město pokračovat.</p>
+    <div class="theme-grid" id="themeGrid"></div>
+    <button type="button" class="modal-close" id="themeModalClose">Ponechat současné téma</button>
+  </div>
+</div>
+
+<div class="modal hidden" id="factionModal" role="dialog" aria-modal="true">
+  <div class="modal-box">
+    <h2>Volba finální frakce</h2>
+    <p>Hodiny apokalypsy dosáhly 50 %. Zvol definitivní osud města — tato volba je nevratná.</p>
+    <div class="theme-grid">
+      <div class="theme-option" id="chooseCultist">
+        <span class="to-emoji">🩸</span>
+        <strong>Kultisté Konce</strong>
+        <div class="policy-desc" style="margin-top:8px;">Aktivní styl. Obětuj populaci za trvalé násobitele TH z kliknutí. Každých 100 kliknutí spustí Rituál rychlosti (10 s automatické produkce TH).</div>
+      </div>
+      <div class="theme-option" id="chooseTechnocrat">
+        <span class="to-emoji">🤖</span>
+        <strong>Technokraté</strong>
+        <div class="policy-desc" style="margin-top:8px;">Pasivní styl. Automatické AI štíty eliminují riziko zničení čtvrtí trhlinami a generují TH bez nutnosti klikat.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal hidden" id="mutatorModal" role="dialog" aria-modal="true">
+  <div class="modal-box">
+    <h2>Mutátor Nového světa</h2>
+    <p>Dimenzionální skok tě přenesl do nové reality. Zvol pravidla, kterými se bude tento svět řídit.</p>
+    <div class="theme-grid" id="mutatorGrid"></div>
+  </div>
+</div>
+
+<div class="modal hidden" id="statsModal" role="dialog" aria-modal="true">
+  <div class="modal-box">
+    <h2>📊 Statistiky a achievementy</h2>
+    <div id="statsModalBody"></div>
+    <button type="button" class="modal-close" id="statsModalClose">Zavřít</button>
+  </div>
+</div>
+
+<div class="modal hidden" id="helpModal" role="dialog" aria-modal="true">
+  <div class="modal-box help-box">
+    <h2>❓ Jak hrát City Clicker</h2>
+    <div class="help-body">
+      <h3>🏛️ Základy</h3>
+      <p>Klikej na radnici vlevo — každé kliknutí přidá peníze do rozpočtu. V Obchodě vpravo stavíš zóny (Obytná, Komerční, Průmyslová, Tech/Eco, Park), které generují pasivní příjem podle populace a spokojenosti. Průmysl vydělává nejvíc, ale snižuje spokojenost — vyvažuj ho Parky a Tech/Eco zónami.</p>
+
+      <h3>🔥 Combo Meter a Horečka výplat</h3>
+      <p>Rychlé opakované klikání plní Combo Meter kolem tlačítka radnice. Při 100 % se spustí Horečka výplat — 15 vteřin s 50× vyšším ziskem z kliknutí. Meter mezitím pomalu klesá, takže je potřeba klikat v rytmu.</p>
+
+      <h3>📜 Vyhlášky a 🏗️ Megaprojekty</h3>
+      <p>Vyhlášky jsou trvalé jednorázové úpravy s klady i zápory (např. vyšší příjem za nižší spokojenost). Megaprojekty (Fúzní reaktor, Vesmírný výtah) jsou drahé vícefázové stavby, které po dokončení natrvalo zdvojnásobí pasivní příjem.</p>
+
+      <h3>🔥🐦 Krize a 🚁 VIP vrtulník</h3>
+      <p>Čas od času se objeví krize s 10vteřinovým odpočtem — klikni na ni včas pro odměnu, jinak přijdeš o část rozpočtu. Náhodně proletí i VIP vrtulník — klikni na něj pro okamžitý grant.</p>
+
+      <h3>🏗️ Generální přestavba (Prestige)</h3>
+      <p>Po dosažení 100 000 000 $ celkových výdělků můžeš provést Generální přestavbu — město se vynuluje, ale získáš trvalá Zlatá stavební povolení (+2 % příjmu každé) a můžeš změnit vizuální téma.</p>
+
+      <h3>☠️ EndCraze — konec hry (a začátek nekonečné hry)</h3>
+      <p>Dokonči všechny vyhlášky, oba megaprojekty a dosáhni statusu Megacity (1 bilion $ a 10 milionů obyvatel), abys odemkl apokalyptickou endgame fázi. Postav Částicový urychlovač, těž Temnou hmotu z Časových trhlin, zvol si frakci (Kultisté / Technokraté) a nakonec postav Dimenzionální archu, která ti umožní Dimenzionální skok.</p>
+
+      <h3>🪐🌠 Dimenzionální skok — nikdy neskončí</h3>
+      <p>Každý dimenzionální skok resetuje město, ale VŽDY přinese trvalou odměnu. Prvních 7 skoků ti postupně odemkne 7 unikátních Kosmických relikvií (mocné permanentní bonusy platné navždy, i po dalších přestavbách). Jakmile máš všech 7, každý další skok místo relikvie sype Hvězdný prach — měnu bez horní hranice, kterou utrácíš na Hvězdném trhu za nekonečně opakovatelná vylepšení. Čím dál doženeš ekonomiku před skokem, tím víc prachu dostaneš — takže vždy je co zlepšovat a vždy je kam skočit dál.</p>
+      <p>Po každém skoku si navíc vybereš jeden ze 4 mutátorů světa (bezpečný a drahý, nebezpečný a výnosný, hektický, nebo klidný) — takže se každá nová časová linie hraje trochu jinak.</p>
+
+      <h3>💾 Ukládání</h3>
+      <p>Hra se ukládá automaticky každých 10 vteřin a i při zavření stránky. Po návratu dostaneš i pasivní odměnu za čas strávený offline (max. 12 hodin, s relikvií Věčná baterie až 24 hodin).</p>
+
+      <h3>📱 Ovládání na mobilu i PC</h3>
+      <p>Krátký klik/ťuk na radnici funguje jako vždy. Když tlačítko podržíš (myší i prstem), hra po chvíli začne klikat sama v pravidelném rytmu — šetří to prsty při dlouhém hraní na telefonu i ruku na PC.</p>
+    </div>
+    <button type="button" class="modal-close" id="helpModalClose">Rozumím, zpět do hry</button>
+  </div>
+</div>
+
+<div class="modal hidden" id="offlineModal" role="dialog" aria-modal="true">
+  <div class="modal-box">
+    <h2>👋 Vítej zpět!</h2>
+    <div id="offlineModalBody"></div>
+    <button type="button" class="modal-close" id="offlineModalClose">Pokračovat</button>
+  </div>
+</div>
+
+<div class="modal hidden" id="cheatModal" role="dialog" aria-modal="true">
+  <div class="modal-box cheat-box">
+    <h2>🕹️ Tajné cheat menu</h2>
+    <p>Na testování a rychlé prozkoumání pozdní hry. Změny jsou skutečné: počítají se do postupu, rekordů i odznaků.</p>
+    <div class="cheat-grid">
+      <button type="button" class="btn-mega" id="cheatAddMoney">💰 +1 mld. $</button>
+      <button type="button" class="btn-mega" id="cheatAddDarkMatter">🌀 +1 mld. TH</button>
+      <button type="button" class="btn-mega" id="cheatCompleteResearch">📜 Dokončit výzkum</button>
+      <button type="button" class="btn-mega" id="cheatMegacity">🌆 Status Megacity</button>
+      <button type="button" class="btn-mega" id="cheatAddPermits">🪙 +50 povolení</button>
+      <button type="button" class="btn-mega" id="cheatCompleteArcha">🚀 Dokončit Archu</button>
+      <button type="button" class="btn-mega" id="cheatActivateEndgame">⚛️ Aktivovat EndCraze</button>
+      <button type="button" class="btn-mega" id="cheatUnlockAllAchievements">🏆 Vše odemknout</button>
+      <button type="button" class="btn-mega" id="cheatUnlockAllRelics">🪐 Vše relikvie</button>
+      <button type="button" class="btn-mega" id="cheatAddStardust">🌠 +1000 prachu</button>
+      <button type="button" class="btn-mega" id="cheatAddClicks">🖱️ +100 000 kliků</button>
+      <button type="button" class="btn-mega" id="cheatAllBadges">🎖️ Všechny odznaky</button>
+      <button type="button" class="btn-mega" id="cheatPrestige">🏗️ Generální přestavba</button>
+    </div>
+    <button type="button" class="modal-close" id="cheatModalClose">Zavřít</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* =========================================================
+     KONSTANTY A DEFINICE
+     ========================================================= */
+
+  var SAVE_KEY = 'cityClickerSaveV1';
+  var PRESTIGE_THRESHOLD = 100000000;
+
+  var MEGACITY_BUDGET = 1000000000000;      // 1 Trilion $
+  var MEGACITY_POPULATION = 10000000;       // 10 mil. obyvatel
+  var ACCELERATOR_PHASES = [
+    { name:'Stabilizace magnetického pole',      cost:150000000000 },
+    { name:'Instalace urychlovacího prstence',   cost:250000000000 },
+    { name:'Kalibrace singularity',               cost:350000000000 }
+  ];
+  var ARCHA_PHASES = 5;
+  var ARCHA_PHASE_COST = 400000000;           // 400 mil. TH za fázi (5× = 2 mld. TH); těžba se škáluje s městem, viz getDarkMatterPower()
+
+  var RELIC_ORDER = ['gravitationalAnchor','temporalCapacitor','echoAmplifier','neuralOverclock','voidCompressor','eternalBattery','luckyComet'];
+
+  var RELIC_DEFS = {
+    gravitationalAnchor: { icon:'🪨', name:'Gravitační kotva',    desc:'Budovy již nikdy neztrácejí hodnotu při přestavbě ani skoku.' },
+    temporalCapacitor:   { icon:'⏳', name:'Časový kondenzátor',  desc:'Combo Meter i Ukazatel šílenství se plní o 50 % rychleji. Horečka výplat i Hysterický boost trvají o 10 s déle.' },
+    echoAmplifier:       { icon:'📡', name:'Ozvěnový zesilovač',  desc:'Trvale +20 % veškerý pasivní příjem (peníze i Temná hmota).' },
+    neuralOverclock:     { icon:'🧠', name:'Neurální přetaktování', desc:'Trvale +20 % síla kliknutí, v běžné hře i během EndCraze.' },
+    voidCompressor:      { icon:'🕳️', name:'Kompresor prázdnoty', desc:'Ceny nových budov rostou pomaleji (×1.13 místo ×1.15 za jednotku).' },
+    eternalBattery:      { icon:'🔋', name:'Věčná baterie',       desc:'Offline postup se nyní počítá až za 24 hodin nepřítomnosti místo 12.' },
+    luckyComet:          { icon:'☄️', name:'Šťastná kometa',       desc:'Odměny z krizí a VIP vrtulníku jsou o 50 % vyšší.' }
+  };
+
+  var MUTATOR_DEFS = {
+    carefree: { icon:'🛡️', name:'Bezstarostný svět',  desc:'Žádné katastrofy ani destruktivní trhliny neškodí, ale stavby jsou 2× dražší.' },
+    volatile: { icon:'⚡', name:'Neklidný svět',       desc:'Krize a trhliny jsou dvakrát častější a agresivnější, ale TH i $ odměny jsou o 50 % vyšší.' },
+    boomtown: { icon:'🏙️', name:'Horečka zlata',       desc:'+15 % veškerý pasivní příjem i produkce Temné hmoty, ale krize a trhliny se spouštějí o 40 % častěji.' },
+    serene:   { icon:'🕊️', name:'Klidná dimenze',       desc:'Krize a trhliny se v tomto světě vůbec neobjeví, ale veškerý příjem je o 20 % nižší.' }
+  };
+
+  var STARDUST_UPGRADE_ORDER = ['income','click','darkmatter'];
+  var STARDUST_UPGRADE_DEFS = {
+    income:     { icon:'💹', name:'Hvězdný katalyzátor', desc:'+1 % trvalého pasivního příjmu za úroveň (bez horní hranice).', baseCost:5, costMult:1.35, perLevel:0.01 },
+    click:      { icon:'👆', name:'Kvantový impuls',      desc:'+1 % trvalé síly kliknutí za úroveň (bez horní hranice).',      baseCost:5, costMult:1.35, perLevel:0.01 },
+    darkmatter: { icon:'🌀', name:'Entropický filtr',      desc:'+2 % trvalé produkce Temné hmoty za úroveň (bez horní hranice).', baseCost:5, costMult:1.35, perLevel:0.02 }
+  };
+
+  var MAX_OFFLINE_MS = 12 * 3600 * 1000;       // offline výdělky se počítají max. za 12 hodin
+  var MIN_OFFLINE_MS_TO_NOTIFY = 60 * 1000;    // od 1 minuty nepřítomnosti se zobrazí souhrn
+
+  var CHEAT_CODE = '67MILUJU';
+
+  var ACHIEVEMENT_DEFS = [
+    { key:'firstClick',    icon:'👆', name:'První klik',            desc:'Klikni poprvé na radnici.' },
+    { key:'firstBuilding', icon:'🏗️', name:'Základní kámen',        desc:'Postav svou první zónu.' },
+    { key:'firstPolicy',   icon:'📜', name:'Zákonodárce',           desc:'Schval první vyhlášku.' },
+    { key:'firstFrenzy',   icon:'🔥', name:'Horká výplata',         desc:'Aktivuj Horečku výplat.' },
+    { key:'firstMega',     icon:'🏛️', name:'Velké dílo',            desc:'Dokonči první megaprojekt.' },
+    { key:'firstPrestige', icon:'🏗️', name:'Nový začátek',          desc:'Proveď generální přestavbu.' },
+    { key:'megacity',      icon:'🌆', name:'Megacity',              desc:'Dosáhni statusu Megacity (1 bil. $ a 10 mil. obyvatel).' },
+    { key:'endcrazeStart', icon:'☠️', name:'Konec, jak ho známe',   desc:'Aktivuj EndCraze.' },
+    { key:'factionChosen', icon:'⚖️', name:'Osud zvolen',           desc:'Zvol finální frakci.' },
+    { key:'archaDone',     icon:'🚀', name:'Archa hotova',           desc:'Dokonči Dimenzionální archu.' },
+    { key:'firstJump',     icon:'🌌', name:'Skokan mezi dimenzemi', desc:'Proveď dimenzionální skok.' },
+    { key:'hundredClicks', icon:'💯', name:'Vytrvalec',              desc:'Naklikej dohromady 100 kliknutí.' },
+    { key:'allRelics',     icon:'🪐', name:'Sběratel relikvií',      desc:'Získej všech 7 Kosmických relikvií.' },
+    { key:'stardustCollector', icon:'🌠', name:'Věčný poutník',      desc:'Utrať poprvé Hvězdný prach na Hvězdném trhu.' }
+  ];
+
+  var buildingOrder = ['residential','commercial','industrial','techeco','park'];
+
+  var buildingDefs = {
+    residential: { baseCost:50,   icon:'🏠', desc:'+20 populace za jednotku, znásobeno celkovým rozvojem města' },
+    commercial:  { baseCost:180,  icon:'🏬', desc:'+1.4 $/s základního příjmu za jednotku' },
+    industrial:  { baseCost:480,  icon:'🏭', desc:'+4 $/s příjmu, ale -0.6 spokojenosti za jednotku' },
+    techeco:     { baseCost:1500, icon:'🔬', desc:'+2.2 $/s příjmu a +0.6 spokojenosti za jednotku' },
+    park:        { baseCost:350,  icon:'🌳', desc:'+0.9 spokojenosti za jednotku' }
+  };
+
+  var policyDefs = [
+    { key:'homeOffice',      name:'Kult práce z domova',   cost:5000,   desc:'+25 % populace z obytných zón. -15 % příjem z komerčních zón.' },
+    { key:'touristDistrict', name:'Turistický rajón',      cost:9000,   desc:'+20 % příjem z komerčních zón. -8 spokojenosti.' },
+    { key:'unions',          name:'Odborové hnutí',        cost:14000,  desc:'+15 spokojenosti. -10 % příjem z průmyslu i komerce.' },
+    { key:'greenEnergy',     name:'Zelená energie',        cost:22000,  desc:'+40 % efekt Tech/Eco zón a Parků. -25 % příjem z průmyslu.' },
+    { key:'smartCity',       name:'Iniciativa Smart City', cost:60000,  desc:'+30 % příjem z Tech/Eco zón. +10 % populace.' },
+    { key:'taxCuts',         name:'Daňové úlevy',          cost:120000, desc:'+20 % veškerý pasivní příjem. +50 % ceny nových budov.' }
+  ];
+
+  var megaprojectOrder = ['fusion','spaceElevator'];
+
+  var megaprojectDefs = {
+    fusion: {
+      icon:'⚛️',
+      phases: [
+        { name:'Základy reaktoru',  cost:5000000 },
+        { name:'Instalace jádra',   cost:20000000 },
+        { name:'Spuštění reaktoru', cost:60000000 }
+      ]
+    },
+    spaceElevator: {
+      icon:'🛰️',
+      phases: [
+        { name:'Kotevní stanice',    cost:8000000 },
+        { name:'Nosné vlákno',       cost:35000000 },
+        { name:'Orbitální terminál', cost:90000000 }
+      ]
+    }
+  };
+
+  var crisisTypes = [
+    { icon:'🔥', name:'Požár ve skladu' },
+    { icon:'🐦', name:'Invaze holubů na náměstí' },
+    { icon:'🚧', name:'Havárie na hlavní silnici' },
+    { icon:'💧', name:'Prasklé vodovodní potrubí' },
+    { icon:'🦠', name:'Virus v městské síti' },
+    { icon:'⚡', name:'Rozsáhlý výpadek proudu' },
+    { icon:'🌪️', name:'Náhlá větrná smršť' }
+  ];
+
+  var themeOrder = ['classic','steampunk','cyberpunk','mars'];
+
+  var themeNames = {
+    classic: {
+      title:'City Clicker: Metropolis', townhall:'Radnice',
+      residential:'Obytná zóna', commercial:'Komerční zóna', industrial:'Průmyslová zóna',
+      techeco:'Tech/Eco zóna', park:'Park',
+      fusion:'Fúzní reaktor', spaceElevator:'Vesmírný výtah',
+      currency:'$', flavor:'Klasická metropole ve stínu mrakodrapů a nočních světel.', emoji:'🏙️'
+    },
+    steampunk: {
+      title:'City Clicker: Steampunk', townhall:'Purkmistrovský úřad',
+      residential:'Dělnické domky', commercial:'Parní tržiště', industrial:'Ozubená továrna',
+      techeco:'Vynálezecká dílna', park:'Botanická zahrada',
+      fusion:'Parní megastroj', spaceElevator:'Aetherický výtah',
+      currency:'£', flavor:'Město poháněné párou, mosazí a vynalézavostí.', emoji:'⚙️'
+    },
+    cyberpunk: {
+      title:'City Clicker: Cyberpunk 2099', townhall:'Věž korporace',
+      residential:'Bytové bloky', commercial:'Neonový trh', industrial:'Mega-korp. závod',
+      techeco:'Kybernetická laboratoř', park:'Vertikální zahrada',
+      fusion:'Fúzní jádro', spaceElevator:'Orbitální výtah',
+      currency:'¥', flavor:'Neonová megapole roku 2099 ovládaná korporacemi.', emoji:'🌆'
+    },
+    mars: {
+      title:'City Clicker: Marsovská kolonie', townhall:'Velitelské centrum',
+      residential:'Habitat kopule', commercial:'Obchodní modul', industrial:'Těžební komplex',
+      techeco:'Bio-laboratoř', park:'Skleníkový park',
+      fusion:'Fúzní reaktor kolonie', spaceElevator:'Vesmírný výtah',
+      currency:'₡', flavor:'První lidská kolonie pod kopulemi rudé planety.', emoji:'🔴'
+    }
+  };
+
+  /* =========================================================
+     STAV HRY
+     ========================================================= */
+
+  function defaultState(){
+    return {
+      budget: 500,
+      lifetimeEarnings: 0,
+      comboMeter: 0,
+      frenzyActive: false,
+      frenzyEnd: 0,
+      totalClicks: 0,
+      theme: 'classic',
+      goldenPermits: 0,
+      prestigeCount: 0,
+      jumpCount: 0,
+      activeCrisis: null,
+      relics: [],
+      stardust: 0,
+      stardustUpgrades: {},
+      dimension: null,
+      createdAt: Date.now(),
+      lastSaveTimestamp: Date.now(),
+      totalPlaytimeSeconds: 0,
+      achievements: [],
+      stats: {},
+      soundEnabled: true,
+      buildings: {
+        residential: { count:0 },
+        commercial:  { count:0 },
+        industrial:  { count:0 },
+        techeco:     { count:0 },
+        park:        { count:0 }
+      },
+      policies: {
+        homeOffice: false,
+        touristDistrict: false,
+        greenEnergy: false,
+        unions: false,
+        taxCuts: false,
+        smartCity: false
+      },
+      megaprojects: {
+        fusion:        { phase:0, completed:false },
+        spaceElevator: { phase:0, completed:false }
+      },
+      endgame: {
+        acceleratorPhase: 0,
+        acceleratorBuilt: false,
+        active: false,
+        darkMatter: 0,
+        peakIncome: 0,
+        madness: 0,
+        hystericalActive: false,
+        hystericalEnd: 0,
+        faction: null,
+        factionPromptShown: false,
+        sacrificeMultiplier: 0,
+        clickStreak: 0,
+        ritualActive: false,
+        ritualEnd: 0,
+        activeRift: null,
+        archaPhase: 0,
+        archaCompleted: false,
+        archaSpent: 0
+      }
+    };
+  }
+
+  var state = defaultState();
+
+  var crisisInterval = null;
+  var crisisTimeout = null;
+  var helicopterTimeout = null;
+  var riftInterval = null;
+  var riftTimeout = null;
+
+  // Čítače pro odznaky (state.stats) přežijí přestavbu i skok. Názvy jsou stejné jako statistiky v src/gameRecords/defs/cityClicker.js
+  // a hlásí se appce v reportRecords(); odznaky vyhodnocuje server.
+  function trk(key, n){ state.stats[key] = (state.stats[key] || 0) + (n === undefined ? 1 : n); }
+  function trkMax(key, v){ if(v > (state.stats[key] || 0)) state.stats[key] = v; }
+  function trkSeen(group, key){ var g = state.stats[group] || (state.stats[group] = {}); g[key] = 1; }
+  var BUILD_STAT = { residential:'houses_built', commercial:'shops_built', industrial:'factories_built', techeco:'labs_built', park:'parks_built' };
+
+  function deepMerge(target, source){
+    for(var key in source){
+      if(!source.hasOwnProperty(key)) continue;
+      var val = source[key];
+      if(val && typeof val === 'object' && !Array.isArray(val)){
+        if(!target[key] || typeof target[key] !== 'object'){ target[key] = {}; }
+        deepMerge(target[key], val);
+      } else {
+        target[key] = val;
+      }
+    }
+    return target;
+  }
+
+  /* =========================================================
+     POMOCNÉ FUNKCE (FORMÁTOVÁNÍ)
+     ========================================================= */
+
+  var NUMBER_UNITS = ['','K','M','B','T','Qa','Qi','Sx','Sp','Oc','No','De','Ud','DD','TD','QaD','QiD','SxD','SpD','OcD','NoD','Vg'];
+
+  function formatNumber(num){
+    if(num === null || num === undefined || isNaN(num)) return '0';
+    var sign = num < 0 ? '-' : '';
+    num = Math.abs(num);
+    if(num < 1000) return sign + Math.floor(num).toString();
+
+    // Hra je navržena jako nekonečná — jakmile dojdou pojmenované jednotky (10^66+),
+    // plynule přejde na vědecký zápis, takže čísla nikdy nepřestanou růst ani se nerozbijí.
+    var unitIndex = Math.floor(Math.log10(num) / 3);
+    if(unitIndex >= NUMBER_UNITS.length){
+      return sign + num.toExponential(2).replace('+', '');
+    }
+    var scaled = num / Math.pow(1000, unitIndex);
+    if(scaled >= 1000){ scaled /= 1000; unitIndex++; }
+    if(unitIndex >= NUMBER_UNITS.length){
+      return sign + num.toExponential(2).replace('+', '');
+    }
+    return sign + scaled.toFixed(2) + NUMBER_UNITS[unitIndex];
+  }
+
+  function formatCurrency(num){
+    return themeNames[state.theme].currency + formatNumber(num);
+  }
+
+  function formatTH(num){
+    return formatNumber(num) + ' TH';
+  }
+
+  function districtDisplayName(key){
+    return themeNames[state.theme][key];
+  }
+
+  /* =========================================================
+     RELIKVIE A HVĚZDNÝ PRACH (NEKONEČNÝ POSTUP PO DIMENZIONÁLNÍM SKOKU)
+     ========================================================= */
+
+  function hasRelic(key){
+    return state.relics.indexOf(key) !== -1;
+  }
+
+  function allRelicsCollected(){
+    return RELIC_ORDER.every(function(k){ return hasRelic(k); });
+  }
+
+  function getMaxOfflineMs(){
+    return hasRelic('eternalBattery') ? (24 * 3600 * 1000) : MAX_OFFLINE_MS;
+  }
+
+  function getStardustBonusMultiplier(key){
+    var def = STARDUST_UPGRADE_DEFS[key];
+    var level = (state.stardustUpgrades && state.stardustUpgrades[key]) || 0;
+    return 1 + level * def.perLevel;
+  }
+
+  function getStardustUpgradeCost(key){
+    var def = STARDUST_UPGRADE_DEFS[key];
+    var level = (state.stardustUpgrades && state.stardustUpgrades[key]) || 0;
+    return Math.ceil(def.baseCost * Math.pow(def.costMult, level));
+  }
+
+  function computeStardustReward(){
+    // Roste s tím, jak daleko hráč tento běh dotáhl — čím výnosnější město před skokem, tím víc prachu.
+    // Díky tomu nemá dimenzionální skok žádný strop: vždy je co zlepšovat, vždy je co skákat.
+    var base = Math.sqrt(Math.max(0, state.lifetimeEarnings) / 1000000000);
+    return Math.max(3, Math.floor(base) + state.jumpCount);
+  }
+
+  /* =========================================================
+     VÝPOČTY EKONOMIKY
+     ========================================================= */
+
+  function getBuildingCost(key){
+    var def = buildingDefs[key];
+    var count = state.buildings[key].count;
+    var growth = hasRelic('voidCompressor') ? 1.13 : 1.15;
+    var cost = def.baseCost * Math.pow(growth, count);
+    if(state.policies.taxCuts) cost *= 1.5;
+    if(state.dimension === 'carefree') cost *= 2;
+    return Math.ceil(cost);
+  }
+
+  function computePopulation(){
+    var base = 80 + state.buildings.residential.count * 20;
+    var devMult = 1 + Math.sqrt(Math.max(0, state.lifetimeEarnings)) / 120;
+    var pop = base * devMult;
+    if(state.policies.homeOffice) pop *= 1.25;
+    if(state.policies.smartCity) pop *= 1.10;
+    return Math.floor(pop);
+  }
+
+  function computeSatisfaction(){
+    var sat = 100;
+    sat -= state.buildings.industrial.count * 0.6;
+    var ecoBonus = state.buildings.techeco.count * 0.6 + state.buildings.park.count * 0.9;
+    if(state.policies.greenEnergy) ecoBonus *= 1.4;
+    sat += ecoBonus;
+    if(state.policies.touristDistrict) sat -= 8;
+    if(state.policies.unions) sat += 15;
+    if(sat < 0) sat = 0;
+    if(sat > 100) sat = 100;
+    return sat;
+  }
+
+  function computePassiveIncome(){
+    var comm = state.buildings.commercial.count * 1.4;
+    var ind = state.buildings.industrial.count * 4;
+    var tech = state.buildings.techeco.count * 2.2;
+
+    if(state.policies.touristDistrict) comm *= 1.2;
+    if(state.policies.unions){ comm *= 0.9; ind *= 0.9; }
+    if(state.policies.greenEnergy) ind *= 0.75;
+    if(state.policies.smartCity) tech *= 1.3;
+
+    var base = comm + ind + tech;
+    var popMult = computePopulation() / 100;
+    var satMult = computeSatisfaction() / 100;
+    var total = base * popMult * satMult;
+
+    if(state.policies.taxCuts) total *= 1.2;
+    if(state.megaprojects.fusion.completed) total *= 2;
+    if(state.megaprojects.spaceElevator.completed) total *= 2;
+    total *= (1 + state.goldenPermits * 0.02);
+
+    if(state.dimension === 'boomtown') total *= 1.15;
+    if(state.dimension === 'serene') total *= 0.8;
+    if(hasRelic('echoAmplifier')) total *= 1.2;
+    total *= getStardustBonusMultiplier('income');
+
+    return total;
+  }
+
+  function getClickValue(){
+    var base = 4 + computePassiveIncome() * 0.1;
+    if(state.frenzyActive) base *= 50;
+    if(hasRelic('neuralOverclock')) base *= 1.2;
+    base *= getStardustBonusMultiplier('click');
+    return base;
+  }
+
+  /* =========================================================
+     AKCE HRÁČE
+     ========================================================= */
+
+  function buyBuilding(key){
+    if(state.endgame.active){ showToast('Nákup zón je během EndCraze uzamčen.', 'error'); return; }
+    var cost = getBuildingCost(key);
+    if(state.budget < cost){ showToast('Nedostatek rozpočtu na tuto stavbu.', 'error'); return; }
+    state.budget -= cost;
+    state.buildings[key].count++;
+    trk('zones_built'); trk(BUILD_STAT[key]);
+    playBuySound();
+    renderAll();
+  }
+
+  function buyPolicy(key){
+    var def = null;
+    for(var i=0;i<policyDefs.length;i++){ if(policyDefs[i].key === key){ def = policyDefs[i]; break; } }
+    if(!def) return;
+    if(state.policies[key]) return;
+    if(state.budget < def.cost){ showToast('Nedostatek rozpočtu na tuto vyhlášku.', 'error'); return; }
+    state.budget -= def.cost;
+    state.policies[key] = true;
+    trkMax('policies_max', policyDefs.filter(function(p){ return state.policies[p.key]; }).length);
+    playBuySound();
+    showToast('Vyhláška "' + def.name + '" byla schválena.', 'success');
+    renderAll();
+  }
+
+  function investMegaproject(key){
+    var def = megaprojectDefs[key];
+    var mstate = state.megaprojects[key];
+    if(mstate.completed) return;
+    var phase = def.phases[mstate.phase];
+    if(!phase) return;
+    if(state.budget < phase.cost){ showToast('Nedostatek rozpočtu na tuto fázi.', 'error'); return; }
+    state.budget -= phase.cost;
+    mstate.phase++;
+    playBuySound();
+    if(mstate.phase >= def.phases.length){
+      mstate.completed = true;
+      trkMax('megaprojects_done', megaprojectOrder.filter(function(k){ return state.megaprojects[k].completed; }).length);
+      showToast('Megaprojekt "' + themeNames[state.theme][key] + '" byl dokončen! Pasivní příjem trvale ×2.', 'success');
+    } else {
+      showToast('Fáze dokončena: ' + phase.name, 'success');
+    }
+    renderAll();
+  }
+
+  function onTownHallClick(evt){
+    if(state.endgame.active){
+      onEndgameClick(evt);
+      return;
+    }
+    var val = getClickValue();
+    state.budget += val;
+    state.lifetimeEarnings += val;
+    state.totalClicks++;
+    if(state.frenzyActive) trk('frenzy_clicks');
+
+    state.comboMeter = Math.min(100, state.comboMeter + (hasRelic('temporalCapacitor') ? 13.5 : 9));
+    if(state.comboMeter >= 100 && !state.frenzyActive){
+      activateFrenzy();
+    }
+
+    spawnFloatingText(evt, '+' + formatCurrency(val));
+
+    // Vzácné "zlaté kliknutí" - nezávislé na frenzy/comba, malá šance na
+    // jakékoliv kliknutí. Odměna škáluje s aktuální hodnotou kliknutí, ať
+    // zůstane vzrušující jak na začátku, tak v pozdní hře.
+    if(Math.random() < 0.018){
+      trk('golden_clicks');
+      var goldBonus = Math.round(val * (15 + Math.random() * 15));
+      state.budget += goldBonus;
+      state.lifetimeEarnings += goldBonus;
+      spawnFloatingText(evt, '✨ +' + formatCurrency(goldBonus), true);
+      showToast('✨ Zlaté kliknutí! Bonus +' + formatCurrency(goldBonus), 'frenzy');
+      if (typeof jomaridReward === 'function') jomaridReward('golden_click', 3);
+      hapticTick([10, 30, 10]);
+    }
+
+    spawnClickParticles(evt);
+    playClickSound();
+    hapticTick(6);
+    pulseTownHall();
+    renderFast();
+  }
+
+  function activateFrenzy(){
+    trk('frenzies');
+    state.frenzyActive = true;
+    var durationMs = hasRelic('temporalCapacitor') ? 25000 : 15000;
+    state.frenzyEnd = Date.now() + durationMs;
+    state.comboMeter = 0;
+    document.body.classList.add('frenzy');
+    hapticTick([15, 40, 15]);
+    showToast('🔥 Horečka výplat! 50× zisk z kliknutí na ' + Math.round(durationMs / 1000) + ' sekund!', 'frenzy');
+  }
+
+  function deactivateFrenzy(){
+    state.frenzyActive = false;
+    document.body.classList.remove('frenzy');
+    showToast('Horečka výplat skončila.', 'info');
+  }
+
+  /* =========================================================
+     HERNÍ SMYČKA
+     ========================================================= */
+
+  function mainTick(){
+    var income = computePassiveIncome();
+    var delta = income / 10;
+    state.budget += delta;
+    state.lifetimeEarnings += delta;
+    state.totalPlaytimeSeconds += 0.1;
+
+    if(!state.frenzyActive){
+      state.comboMeter = Math.max(0, state.comboMeter - 1.3);
+    } else if(Date.now() >= state.frenzyEnd){
+      deactivateFrenzy();
+    }
+
+    if(state.endgame.active){ endgameTick(); }
+
+    renderFast();
+  }
+
+  /* =========================================================
+     KRIZOVÉ UDÁLOSTI
+     ========================================================= */
+
+  function scheduleCrisis(){
+    clearTimeout(crisisTimeout);
+    if(state.dimension === 'serene') return;
+    var delay = 30000 + Math.random() * 30000;
+    if(state.dimension === 'volatile') delay *= 0.5;
+    if(state.dimension === 'boomtown') delay *= 0.6;
+    crisisTimeout = setTimeout(triggerCrisis, delay);
+  }
+
+  function triggerCrisis(){
+    if(state.endgame.active){ return; }
+    if(state.activeCrisis){ scheduleCrisis(); return; }
+    var type = crisisTypes[Math.floor(Math.random() * crisisTypes.length)];
+    var reward = Math.round(Math.max(300, state.budget * 0.05 + computePassiveIncome() * 20));
+    var penalty = Math.round(state.budget * 0.12);
+    if(state.dimension === 'volatile'){ reward = Math.round(reward * 1.5); penalty = Math.round(penalty * 1.5); }
+    if(hasRelic('luckyComet')) reward = Math.round(reward * 1.5);
+    state.activeCrisis = { icon:type.icon, name:type.name, timeLeft:10, reward:reward, penalty:penalty };
+    playAlertSound();
+    renderCrisis();
+    clearInterval(crisisInterval);
+    crisisInterval = setInterval(function(){
+      if(!state.activeCrisis){ clearInterval(crisisInterval); return; }
+      state.activeCrisis.timeLeft--;
+      if(state.activeCrisis.timeLeft <= 0){
+        resolveCrisis(false);
+      } else {
+        renderCrisis();
+      }
+    }, 1000);
+  }
+
+  function resolveCrisis(success){
+    if(!state.activeCrisis) return;
+    clearInterval(crisisInterval);
+    var c = state.activeCrisis;
+    if(success){
+      trk('crises_solved');
+      if(c.timeLeft >= 9) trk('quick_crises');
+      state.budget += c.reward;
+      state.lifetimeEarnings += c.reward;
+      showToast('✅ Krize zvládnuta! +' + formatCurrency(c.reward), 'success');
+    } else if(state.dimension === 'carefree'){
+      trk('crises_failed');
+      showToast('🛡️ V tomto světě katastrofy neškodí.', 'info');
+    } else {
+      trk('crises_failed');
+      state.budget = Math.max(0, state.budget - c.penalty);
+      showToast('❌ Krize nezvládnuta. -' + formatCurrency(c.penalty), 'error');
+    }
+    state.activeCrisis = null;
+    renderCrisis();
+    renderFast();
+    scheduleCrisis();
+  }
+
+  function onCrisisClick(){
+    if(state.endgame.active){
+      if(state.endgame.activeRift){ resolveRift(true); }
+      return;
+    }
+    resolveCrisis(true);
+  }
+
+  /* =========================================================
+     ČASOVÉ TRHLINY (ENDGAME)
+     ========================================================= */
+
+  function scheduleRift(){
+    clearTimeout(riftTimeout);
+    if(state.dimension === 'serene') return;
+    var delay = 20000 + Math.random() * 20000;
+    if(state.dimension === 'volatile') delay *= 0.5;
+    if(state.dimension === 'boomtown') delay *= 0.6;
+    riftTimeout = setTimeout(triggerRift, delay);
+  }
+
+  function triggerRift(){
+    if(!state.endgame.active){ return; }
+    if(state.endgame.activeRift){ scheduleRift(); return; }
+    var availableDistricts = buildingOrder.filter(function(k){ return state.buildings[k].count > 0; });
+    var pool = availableDistricts.length ? availableDistricts : buildingOrder;
+    var districtKey = pool[Math.floor(Math.random() * pool.length)];
+    var power = getDarkMatterPower();
+    var reward = Math.round(Math.max(power * 2, state.endgame.darkMatter * 0.01 + power * 2));
+    if(state.dimension === 'volatile') reward = Math.round(reward * 1.5);
+    state.endgame.activeRift = { districtKey: districtKey, timeLeft:5, reward: reward };
+    playAlertSound();
+    renderCrisis();
+    clearInterval(riftInterval);
+    riftInterval = setInterval(function(){
+      if(!state.endgame.activeRift){ clearInterval(riftInterval); return; }
+      state.endgame.activeRift.timeLeft--;
+      if(state.endgame.activeRift.timeLeft <= 0){
+        resolveRift(false);
+      } else {
+        renderCrisis();
+      }
+    }, 1000);
+  }
+
+  function resolveRift(success){
+    if(!state.endgame.activeRift) return;
+    clearInterval(riftInterval);
+    var r = state.endgame.activeRift;
+    if(success){
+      trk('rifts_closed');
+      state.endgame.darkMatter += r.reward;
+      showToast('✅ Trhlina uzavřena! +' + formatTH(r.reward), 'success');
+    } else {
+      trk('rifts_missed');
+      var shielded = state.endgame.faction === 'technocrat' || state.dimension === 'carefree';
+      if(shielded){
+        showToast('🛡️ AI štíty odvrátily zničení čtvrti ' + districtDisplayName(r.districtKey) + '.', 'info');
+      } else {
+        state.buildings[r.districtKey].count = 0;
+        showToast('💀 Čtvrť ' + districtDisplayName(r.districtKey) + ' byla vymazána z mapy!', 'error');
+      }
+    }
+    state.endgame.activeRift = null;
+    renderCrisis();
+    renderFast();
+    scheduleRift();
+  }
+
+  /* =========================================================
+     VIP VRTULNÍK
+     ========================================================= */
+
+  function scheduleHelicopter(){
+    clearTimeout(helicopterTimeout);
+    var delay = 45000 + Math.random() * 45000;
+    helicopterTimeout = setTimeout(triggerHelicopter, delay);
+  }
+
+  function triggerHelicopter(){
+    var heli = document.getElementById('helicopter');
+    heli.classList.remove('hidden');
+    void heli.offsetWidth;
+    heli.classList.add('flying');
+    var clicked = false;
+
+    var clickHandler = function(){
+      if(clicked) return;
+      clicked = true;
+      trk('helis_caught');
+      var grant = Math.round(Math.max(1000, state.budget * 0.08 + computePassiveIncome() * 30));
+      if(hasRelic('luckyComet')) grant = Math.round(grant * 1.5);
+      state.budget += grant;
+      state.lifetimeEarnings += grant;
+      showToast('🚁 VIP grant přistál! +' + formatCurrency(grant), 'success');
+      renderFast();
+      endHelicopter();
+    };
+    heli.onclick = clickHandler;
+
+    clearTimeout(heli._despawnTimeout);
+    heli._despawnTimeout = setTimeout(function(){
+      if(!clicked) endHelicopter();
+    }, 7000);
+  }
+
+  function endHelicopter(){
+    var heli = document.getElementById('helicopter');
+    heli.classList.add('hidden');
+    heli.classList.remove('flying');
+    heli.onclick = null;
+    clearTimeout(heli._despawnTimeout);
+    scheduleHelicopter();
+  }
+
+  /* =========================================================
+     ENDCRAZE — ODEMČENÍ, EKONOMIKA, MECHANIKY
+     ========================================================= */
+
+  function checkEndgameUnlockable(){
+    var policiesDone = policyDefs.every(function(p){ return state.policies[p.key]; });
+    var megaDone = state.megaprojects.fusion.completed && state.megaprojects.spaceElevator.completed;
+    var budgetDone = state.budget >= MEGACITY_BUDGET;
+    var popDone = computePopulation() >= MEGACITY_POPULATION;
+    return {
+      policiesDone: policiesDone,
+      megaDone: megaDone,
+      budgetDone: budgetDone,
+      popDone: popDone,
+      all: policiesDone && megaDone && budgetDone && popDone
+    };
+  }
+
+  function getDoomsdayClock(){
+    var total = ARCHA_PHASE_COST * ARCHA_PHASES;
+    return Math.min(100, (state.endgame.archaSpent / total) * 100);
+  }
+
+  // Síla těžby Temné hmoty: odmocnina z nejvyššího pasivního příjmu, který město během EndCraze mělo. Roste s městem, hvězdným prachem i relikviemi,
+  // ale nepadá, když boost zničí infrastrukturu (jinak by se těžba při každém boostu zhroutila). Minimum drží i města z cheatů.
+  function getDarkMatterPower(){
+    var e = state.endgame, cur = computePassiveIncome();
+    if(cur > (e.peakIncome || 0)) e.peakIncome = cur;
+    return Math.sqrt(Math.max(e.peakIncome || 0, 1000000));
+  }
+
+  function getEndgameClickValue(){
+    var base = getDarkMatterPower() * 0.1;
+    var mult = 1;
+    if(state.endgame.hystericalActive) mult *= 100;
+    if(state.endgame.faction === 'cultist') mult *= (1 + state.endgame.sacrificeMultiplier);
+    if(state.dimension === 'boomtown') mult *= 1.15;
+    if(state.dimension === 'serene') mult *= 0.8;
+    if(hasRelic('neuralOverclock')) mult *= 1.2;
+    mult *= getStardustBonusMultiplier('click');
+    return base * mult;
+  }
+
+  function getTechnocratPassiveRate(){
+    var total = 0;
+    buildingOrder.forEach(function(k){ total += state.buildings[k].count; });
+    var rate = getDarkMatterPower() * 4 * (1 + total / 200) * (1 + state.goldenPermits * 0.02);
+    if(state.dimension === 'boomtown') rate *= 1.15;
+    if(state.dimension === 'serene') rate *= 0.8;
+    if(hasRelic('echoAmplifier')) rate *= 1.2;
+    rate *= getStardustBonusMultiplier('darkmatter');
+    return rate;
+  }
+
+  function investAccelerator(){
+    var status = checkEndgameUnlockable();
+    if(!status.all){ showToast('Nesplňuješ podmínky pro aktivaci EndCraze.', 'error'); return; }
+    var e = state.endgame;
+    if(e.acceleratorBuilt) return;
+    var phase = ACCELERATOR_PHASES[e.acceleratorPhase];
+    if(!phase) return;
+    if(state.budget < phase.cost){ showToast('Nedostatek rozpočtu na tuto fázi urychlovače.', 'error'); return; }
+
+    if(e.acceleratorPhase === ACCELERATOR_PHASES.length - 1){
+      var ok = confirm('Dokončit poslední fázi Částicového urychlovače?\n\nTímto krokem se NEVRATNĚ uzamkne běžný nákup zón a spustí apokalyptická fáze EndCraze.');
+      if(!ok) return;
+    }
+
+    state.budget -= phase.cost;
+    e.acceleratorPhase++;
+    if(e.acceleratorPhase >= ACCELERATOR_PHASES.length){
+      e.acceleratorBuilt = true;
+      activateEndgame();
+    } else {
+      showToast('Urychlovač: fáze ' + e.acceleratorPhase + '/' + ACCELERATOR_PHASES.length + ' dokončena.', 'success');
+      renderAll();
+    }
+  }
+
+  function activateEndgame(){
+    trk('endcraze_starts');
+    state.endgame.active = true;
+    state.activeCrisis = null;
+    document.body.classList.add('endcraze');
+    showToast('⚛️ Částicový urychlovač aktivován! Realita se začíná trhat...', 'frenzy');
+    screenShake();
+    restartSchedulers();
+    renderAll();
+  }
+
+  function onEndgameClick(evt){
+    var e = state.endgame;
+    var val = getEndgameClickValue();
+    e.darkMatter += val;
+    e.madness = Math.min(100, e.madness + (hasRelic('temporalCapacitor') ? 13.5 : 9));
+    if(e.madness >= 100 && !e.hystericalActive){
+      activateHystericalBoost();
+    }
+
+    if(e.faction === 'cultist'){
+      e.clickStreak++;
+      if(e.clickStreak >= 100){
+        e.clickStreak = 0;
+        activateRitual();
+      }
+    }
+
+    spawnFloatingText(evt, '+' + formatTH(val));
+    spawnClickParticles(evt);
+    playClickSound();
+    hapticTick(6);
+    pulseTownHall();
+    renderFast();
+  }
+
+  function activateHystericalBoost(){
+    trk('hysterical_boosts');
+    state.endgame.hystericalActive = true;
+    var durationMs = hasRelic('temporalCapacitor') ? 20000 : 10000;
+    state.endgame.hystericalEnd = Date.now() + durationMs;
+    state.endgame.madness = 0;
+    document.body.classList.add('frenzy');
+    hapticTick([15, 40, 15]);
+    showToast('🌀 Hysterický boost! +10 000 % produkce TH na ' + Math.round(durationMs / 1000) + ' sekund!', 'frenzy');
+  }
+
+  function deactivateHystericalBoost(){
+    state.endgame.hystericalActive = false;
+    document.body.classList.remove('frenzy');
+    buildingOrder.forEach(function(k){
+      state.buildings[k].count = Math.floor(state.buildings[k].count * 0.8);
+    });
+    screenShake();
+    showToast('💥 Hysterický boost skončil! 20 % infrastruktury zničeno.', 'error');
+  }
+
+  function activateRitual(){
+    trk('rituals');
+    state.endgame.ritualActive = true;
+    state.endgame.ritualEnd = Date.now() + 10000;
+    showToast('🩸 Rituál rychlosti aktivován! Automatická produkce TH na 10 sekund.', 'frenzy');
+  }
+
+  function sacrificePopulation(){
+    if(state.endgame.faction !== 'cultist') return;
+    var pop = computePopulation();
+    if(pop <= 1000){ showToast('Nedostatek populace k obětování.', 'error'); return; }
+    trk('sacrifices');
+    var amount = Math.max(1000, Math.floor(pop * 0.1));
+    var reduceRatio = amount / pop;
+    state.buildings.residential.count = Math.max(0, Math.floor(state.buildings.residential.count * (1 - reduceRatio)));
+    state.endgame.sacrificeMultiplier += amount / 100000;
+    showToast('🩸 Obětováno ' + formatNumber(amount) + ' obyvatel. Klikací násobitel TH zvýšen.', 'frenzy');
+    renderAll();
+  }
+
+  function investArcha(){
+    var e = state.endgame;
+    if(e.archaCompleted) return;
+    if(e.darkMatter < ARCHA_PHASE_COST){ showToast('Nedostatek Temné hmoty na další fázi Archy.', 'error'); return; }
+    e.darkMatter -= ARCHA_PHASE_COST;
+    e.archaSpent += ARCHA_PHASE_COST;
+    e.archaPhase++;
+    trkMax('archa_phases', e.archaPhase);
+    if(e.archaPhase >= ARCHA_PHASES){
+      e.archaCompleted = true;
+      showToast('🚀 Dimenzionální archa je dokončena! Skok je připraven.', 'success');
+    } else {
+      showToast('Archa: fáze ' + e.archaPhase + '/' + ARCHA_PHASES + ' dokončena.', 'success');
+    }
+    renderAll();
+  }
+
+  function endgameTick(){
+    var e = state.endgame;
+
+    if(e.hystericalActive && Date.now() >= e.hystericalEnd){
+      deactivateHystericalBoost();
+    }
+    if(!e.hystericalActive){
+      e.madness = Math.max(0, e.madness - 1.3);
+    }
+
+    if(e.ritualActive){
+      if(Date.now() >= e.ritualEnd){
+        e.ritualActive = false;
+        showToast('Rituál rychlosti skončil.', 'info');
+      } else {
+        e.darkMatter += getEndgameClickValue() * 0.5;
+      }
+    }
+
+    if(e.faction === 'technocrat'){
+      e.darkMatter += getTechnocratPassiveRate() / 10;
+    }
+
+    var clock = getDoomsdayClock();
+    if(clock >= 50 && !e.factionPromptShown){
+      e.factionPromptShown = true;
+      openFactionModal();
+    }
+  }
+
+  function chooseFaction(key){
+    state.endgame.faction = key;
+    trkMax(key === 'cultist' ? 'chose_cultist' : 'chose_technocrat', 1);
+    closeFactionModal();
+    showToast(key === 'cultist' ? '🩸 Zvolena cesta Kultistů Konce.' : '🤖 Zvolena cesta Technokratů.', 'frenzy');
+    renderAll();
+  }
+
+  function openFactionModal(){ document.getElementById('factionModal').classList.remove('hidden'); }
+  function closeFactionModal(){ document.getElementById('factionModal').classList.add('hidden'); }
+
+  function chooseMutator(key){
+    state.dimension = key;
+    trkSeen('dims', key);
+    showToast('Mutátor „' + MUTATOR_DEFS[key].name + '“ je aktivní pro tento svět.', 'info');
+    renderAll();
+  }
+
+  function buildMutatorGrid(){
+    var grid = document.getElementById('mutatorGrid');
+    grid.innerHTML = '';
+    Object.keys(MUTATOR_DEFS).forEach(function(key){
+      var m = MUTATOR_DEFS[key];
+      var opt = document.createElement('div');
+      opt.className = 'theme-option';
+      opt.innerHTML = '<strong>' + m.icon + ' ' + m.name + '</strong><div class="policy-desc" style="margin-top:8px;">' + m.desc + '</div>';
+      opt.addEventListener('click', function(){
+        chooseMutator(key);
+        closeMutatorModal();
+      });
+      grid.appendChild(opt);
+    });
+  }
+
+  function openMutatorModal(){ document.getElementById('mutatorModal').classList.remove('hidden'); }
+  function closeMutatorModal(){ document.getElementById('mutatorModal').classList.add('hidden'); }
+
+  function doDimensionalJump(){
+    if(!state.endgame.archaCompleted){ showToast('Archa ještě není dokončena.', 'error'); return; }
+    var ok = confirm('Spustit dimenzionální skok?\n\nZtratíš rozpočet, populaci i všechny stavby (pokud nevlastníš Gravitační kotvu). Toto je definitivní konec současné časové linie — ale odměna tě čeká pokaždé, natrvalo a bez konce.');
+    if(!ok) return;
+
+    updatePeaks();
+    var keepStats = JSON.parse(JSON.stringify(state.stats));
+    var keepTheme = state.theme;
+    var keepPermits = state.goldenPermits;
+    var keepPrestigeCount = state.prestigeCount;
+    var keepJumpCount = state.jumpCount + 1;
+    var keepRelics = state.relics.slice();
+    var keepAchievements = state.achievements.slice();
+    var keepTotalClicks = state.totalClicks;
+    var keepPlaytime = state.totalPlaytimeSeconds;
+    var keepCreatedAt = state.createdAt;
+    var keepStardust = state.stardust;
+    var keepStardustUpgrades = JSON.parse(JSON.stringify(state.stardustUpgrades || {}));
+    var hasAnchor = keepRelics.indexOf('gravitationalAnchor') !== -1;
+    var keepBuildings = hasAnchor ? JSON.parse(JSON.stringify(state.buildings)) : null;
+
+    // Nekonečný postup: dokud nemáš všech 7 relikvií, každý skok jednu přidá.
+    // Jakmile máš vše, skoky dál sypou stále víc Hvězdného prachu, natrvalo, bez konce.
+    var newlyAwarded = null;
+    var stardustGained = 0;
+    for(var i=0;i<RELIC_ORDER.length;i++){
+      if(keepRelics.indexOf(RELIC_ORDER[i]) === -1){ newlyAwarded = RELIC_ORDER[i]; break; }
+    }
+    if(newlyAwarded){
+      keepRelics.push(newlyAwarded);
+    } else {
+      stardustGained = computeStardustReward();
+      keepStardust += stardustGained;
+    }
+
+    document.body.classList.remove('frenzy');
+    document.body.classList.remove('endcraze');
+
+    state = defaultState();
+    state.stats = keepStats;
+    state.theme = keepTheme;
+    state.goldenPermits = keepPermits;
+    state.prestigeCount = keepPrestigeCount;
+    state.jumpCount = keepJumpCount;
+    state.relics = keepRelics;
+    state.stardust = keepStardust;
+    state.stardustUpgrades = keepStardustUpgrades;
+    state.achievements = keepAchievements;
+    state.totalClicks = keepTotalClicks;
+    state.totalPlaytimeSeconds = keepPlaytime;
+    state.createdAt = keepCreatedAt;
+    if(keepBuildings){ state.buildings = keepBuildings; }
+
+    document.body.setAttribute('data-theme', state.theme);
+    document.getElementById('themeSelect').value = state.theme;
+
+    if(newlyAwarded){
+      showToast('🪐 Získána Kosmická relikvie: ' + RELIC_DEFS[newlyAwarded].name + '!', 'success');
+      checkAchievements();
+    } else if(stardustGained > 0){
+      showToast('🌠 Všechny relikvie máš — místo toho +' + formatNumber(stardustGained) + ' Hvězdného prachu (celkem ' + formatNumber(state.stardust) + ')!', 'success');
+    }
+    showToast('🌌 Dimenzionální skok proveden! Vstupuješ do nového světa.', 'frenzy');
+    spawnConfetti();
+
+    saveGame(false);
+    renderAll();
+    restartSchedulers();
+    openMutatorModal();
+  }
+
+  function restartSchedulers(){
+    clearTimeout(crisisTimeout); clearInterval(crisisInterval);
+    clearTimeout(riftTimeout); clearInterval(riftInterval);
+    clearTimeout(helicopterTimeout);
+    if(state.endgame.active){
+      scheduleRift();
+    } else {
+      scheduleCrisis();
+    }
+    scheduleHelicopter();
+  }
+
+  /* =========================================================
+     ACHIEVEMENTY A STATISTIKY
+     ========================================================= */
+
+  function unlockAchievement(key){
+    if(state.achievements.indexOf(key) !== -1) return;
+    state.achievements.push(key);
+    var def = null;
+    for(var i=0;i<ACHIEVEMENT_DEFS.length;i++){ if(ACHIEVEMENT_DEFS[i].key === key){ def = ACHIEVEMENT_DEFS[i]; break; } }
+    if(def){
+      playAchievementSound();
+      hapticTick([10, 30, 10, 30, 10]);
+      showToast('🏆 Achievement odemčen: ' + def.icon + ' ' + def.name, 'success');
+    }
+  }
+
+  function checkAchievements(){
+    if(state.totalClicks >= 1) unlockAchievement('firstClick');
+    if(state.totalClicks >= 100) unlockAchievement('hundredClicks');
+    var totalBuildings = 0;
+    buildingOrder.forEach(function(k){ totalBuildings += state.buildings[k].count; });
+    if(totalBuildings >= 1) unlockAchievement('firstBuilding');
+    if(policyDefs.some(function(p){ return state.policies[p.key]; })) unlockAchievement('firstPolicy');
+    if(state.frenzyActive || state.prestigeCount > 0) unlockAchievement('firstFrenzy');
+    if(state.megaprojects.fusion.completed || state.megaprojects.spaceElevator.completed) unlockAchievement('firstMega');
+    if(state.prestigeCount >= 1) unlockAchievement('firstPrestige');
+    if(state.budget >= MEGACITY_BUDGET && computePopulation() >= MEGACITY_POPULATION) unlockAchievement('megacity');
+    if(state.endgame.active) unlockAchievement('endcrazeStart');
+    if(state.endgame.faction) unlockAchievement('factionChosen');
+    if(state.endgame.archaCompleted) unlockAchievement('archaDone');
+    if(state.jumpCount >= 1) unlockAchievement('firstJump');
+    if(allRelicsCollected()) unlockAchievement('allRelics');
+    if(state.stardust > 0 || Object.keys(state.stardustUpgrades || {}).some(function(k){ return state.stardustUpgrades[k] > 0; })) unlockAchievement('stardustCollector');
+  }
+
+  function formatDuration(ms){
+    var totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    var h = Math.floor(totalSeconds / 3600);
+    var m = Math.floor((totalSeconds % 3600) / 60);
+    var s = totalSeconds % 60;
+    var parts = [];
+    if(h > 0) parts.push(h + ' h');
+    if(h > 0 || m > 0) parts.push(m + ' min');
+    parts.push(s + ' s');
+    return parts.join(' ');
+  }
+
+  function renderStatsModal(){
+    var body = document.getElementById('statsModalBody');
+    var ageMs = Date.now() - state.createdAt;
+    var html = '<ul class="endcraze-checklist">' +
+      '<li>🖱️ Celkem kliknutí: ' + formatNumber(state.totalClicks) + '</li>' +
+      '<li>⏱️ Aktivní herní čas: ' + formatDuration(state.totalPlaytimeSeconds * 1000) + '</li>' +
+      '<li>📅 Město založeno před: ' + formatDuration(ageMs) + '</li>' +
+      '<li>🏗️ Generálních přestaveb: ' + state.prestigeCount + '</li>' +
+      '<li>🌌 Dimenzionálních skoků: ' + state.jumpCount + '</li>' +
+      '<li>🪙 Zlatých povolení: ' + state.goldenPermits + '</li>' +
+      '<li>🪐 Kosmických relikvií: ' + state.relics.length + '/' + RELIC_ORDER.length + '</li>' +
+      '<li>🌠 Hvězdný prach: ' + formatNumber(state.stardust) + '</li>' +
+      '</ul>' +
+      '<h3 style="margin-top:8px;">Achievementy (' + state.achievements.length + '/' + ACHIEVEMENT_DEFS.length + ')</h3>' +
+      '<ul class="endcraze-checklist">';
+    ACHIEVEMENT_DEFS.forEach(function(a){
+      var unlocked = state.achievements.indexOf(a.key) !== -1;
+      html += '<li>' + (unlocked ? '✅' : '🔒') + ' ' + a.icon + ' <strong>' + a.name + '</strong> — ' + a.desc + '</li>';
+    });
+    html += '</ul>';
+    body.innerHTML = html;
+  }
+
+  function openStatsModal(){
+    renderStatsModal();
+    document.getElementById('statsModal').classList.remove('hidden');
+  }
+  function closeStatsModal(){ document.getElementById('statsModal').classList.add('hidden'); }
+
+  function openHelpModal(){ document.getElementById('helpModal').classList.remove('hidden'); }
+  function closeHelpModal(){ document.getElementById('helpModal').classList.add('hidden'); }
+
+  /* =========================================================
+     OFFLINE POSTUP
+     ========================================================= */
+
+  function applyOfflineProgress(){
+    var now = Date.now();
+    var last = state.lastSaveTimestamp || now;
+    var elapsedMs = now - last;
+    state.lastSaveTimestamp = now;
+    if(elapsedMs < MIN_OFFLINE_MS_TO_NOTIFY) return;
+
+    trk('offline_returns');
+    trkMax('longest_absence_h', Math.floor(elapsedMs / 3600000));
+    var maxOfflineMs = getMaxOfflineMs();
+    var cappedMs = Math.min(elapsedMs, maxOfflineMs);
+    var seconds = cappedMs / 1000;
+
+    var earnedMoney = computePassiveIncome() * seconds;
+    state.budget += earnedMoney;
+    state.lifetimeEarnings += earnedMoney;
+
+    var earnedTH = 0;
+    if(state.endgame.active && state.endgame.faction === 'technocrat'){
+      earnedTH = getTechnocratPassiveRate() * seconds;
+      state.endgame.darkMatter += earnedTH;
+    }
+
+    showOfflineModal(elapsedMs, cappedMs, earnedMoney, earnedTH, maxOfflineMs);
+  }
+
+  function showOfflineModal(elapsedMs, cappedMs, earnedMoney, earnedTH, maxOfflineMs){
+    var body = document.getElementById('offlineModalBody');
+    var html = '<p>Byl jsi pryč ' + formatDuration(elapsedMs) + '.</p>';
+    if(elapsedMs > cappedMs){
+      html += '<p style="font-size:0.78rem;">(Offline výdělky se počítají maximálně za ' + formatDuration(maxOfflineMs) + '.)</p>';
+    }
+    if(earnedMoney > 0){
+      html += '<p>💰 Pasivně vyděláno: <strong>+' + formatCurrency(earnedMoney) + '</strong></p>';
+    }
+    if(earnedTH > 0){
+      html += '<p>🌀 Technokratská produkce: <strong>+' + formatTH(earnedTH) + '</strong></p>';
+    }
+    body.innerHTML = html;
+    document.getElementById('offlineModal').classList.remove('hidden');
+  }
+
+  function closeOfflineModal(){ document.getElementById('offlineModal').classList.add('hidden'); }
+
+  /* =========================================================
+     TAJNÝ CHEAT MENU (kód: 67MILUJU)
+     ========================================================= */
+
+  var cheatBuffer = '';
+
+  // Znak z klávesy nezávisle na rozložení: na české klávesnici dává řada čísel bez Shiftu písmena s háčky, proto se číslice berou podle ev.code.
+  function cheatKeyChar(ev){
+    var m = /^(?:Digit|Numpad)(\d)$/.exec(ev.code || '');
+    if(m) return m[1];
+    return (typeof ev.key === 'string' && /^[a-z]$/i.test(ev.key)) ? ev.key.toUpperCase() : null;
+  }
+
+  // Kód se píše kdekoli na klávesnici, nebo do pole, které vypadá jako číslo verze úplně dole pod hrou (telefon bez klávesnice).
+  function initCheatListener(){
+    document.addEventListener('keydown', function(ev){
+      if(ev.repeat || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+      var ch = cheatKeyChar(ev);
+      if(!ch) return;
+      cheatBuffer = (cheatBuffer + ch).slice(-20);
+      if(cheatBuffer.indexOf(CHEAT_CODE) !== -1){
+        cheatBuffer = '';
+        openCheatModal();
+      }
+    });
+
+    var field = document.getElementById('versionField');
+    if(field){
+      field.addEventListener('input', function(){
+        if(String(field.value).replace(/\s+/g, '').toUpperCase() === CHEAT_CODE){
+          field.value = '';
+          field.blur();
+          openCheatModal();
+        }
+      });
+      field.addEventListener('blur', function(){ field.value = ''; });
+    }
+  }
+
+  var DISMISSIBLE_MODAL_IDS = ['prestigeModal', 'statsModal', 'helpModal', 'offlineModal', 'cheatModal'];
+
+  function initEscapeHandler(){
+    document.addEventListener('keydown', function(ev){
+      if(ev.key !== 'Escape') return;
+      for(var i = 0; i < DISMISSIBLE_MODAL_IDS.length; i++){
+        var el = document.getElementById(DISMISSIBLE_MODAL_IDS[i]);
+        if(el && !el.classList.contains('hidden')){
+          el.classList.add('hidden');
+          return;
+        }
+      }
+    });
+  }
+
+  function openCheatModal(){
+    var field = document.getElementById('versionField');
+    if(field){ field.value = ''; field.blur(); }
+    document.getElementById('cheatModal').classList.remove('hidden');
+    showToast('🕹️ Cheat menu odemčeno!', 'frenzy');
+  }
+  function closeCheatModal(){ document.getElementById('cheatModal').classList.add('hidden'); }
+
+  function cheatAddMoney(){
+    state.budget += 1000000000;
+    state.lifetimeEarnings += 1000000000;
+    showToast('💰 Cheat: +$1,000,000,000', 'frenzy');
+    renderAll();
+  }
+
+  function cheatAddDarkMatter(){
+    state.endgame.darkMatter += 1000000000;
+    showToast('🌀 Cheat: +1 mld. TH', 'frenzy');
+    renderAll();
+  }
+
+  function cheatCompleteResearch(){
+    policyDefs.forEach(function(p){ state.policies[p.key] = true; });
+    state.megaprojects.fusion = { phase:3, completed:true };
+    state.megaprojects.spaceElevator = { phase:3, completed:true };
+    showToast('📜 Cheat: základní výzkumná větev dokončena', 'frenzy');
+    renderAll();
+  }
+
+  function cheatMegacity(){
+    state.budget = Math.max(state.budget, MEGACITY_BUDGET * 1.1);
+    state.lifetimeEarnings = Math.max(state.lifetimeEarnings, MEGACITY_BUDGET * 1.5);
+    state.buildings.residential.count = Math.max(state.buildings.residential.count, 150);
+    showToast('🌆 Cheat: status Megacity nastaven', 'frenzy');
+    renderAll();
+  }
+
+  function cheatAddPermits(){
+    state.goldenPermits += 50;
+    showToast('🪙 Cheat: +50 Zlatých povolení', 'frenzy');
+    renderAll();
+  }
+
+  function cheatCompleteArcha(){
+    if(!state.endgame.active){ showToast('Archa je dostupná až během EndCraze.', 'error'); return; }
+    state.endgame.archaPhase = ARCHA_PHASES;
+    state.endgame.archaSpent = ARCHA_PHASE_COST * ARCHA_PHASES;
+    state.endgame.archaCompleted = true;
+    showToast('🚀 Cheat: Dimenzionální archa dokončena', 'frenzy');
+    renderAll();
+  }
+
+  function cheatActivateEndgame(){
+    if(state.endgame.active){ showToast('EndCraze už je aktivní.', 'error'); return; }
+    cheatCompleteResearch();
+    cheatMegacity();
+    state.endgame.acceleratorPhase = ACCELERATOR_PHASES.length;
+    state.endgame.acceleratorBuilt = true;
+    activateEndgame();
+    showToast('⚛️ Cheat: EndCraze aktivováno', 'frenzy');
+  }
+
+  function cheatUnlockAllAchievements(){
+    ACHIEVEMENT_DEFS.forEach(function(a){
+      if(state.achievements.indexOf(a.key) === -1) state.achievements.push(a.key);
+    });
+    showToast('🏆 Cheat: všechny achievementy odemčeny', 'frenzy');
+    renderAll();
+  }
+
+  function cheatUnlockAllRelics(){
+    RELIC_ORDER.forEach(function(k){
+      if(state.relics.indexOf(k) === -1) state.relics.push(k);
+    });
+    showToast('🪐 Cheat: všech 7 relikvií odemčeno — Hvězdný trh je teď otevřený', 'frenzy');
+    checkAchievements();
+    renderAll();
+  }
+
+  function cheatAddStardust(){
+    state.stardust += 1000;
+    showToast('🌠 Cheat: +1000 Hvězdného prachu', 'frenzy');
+    checkAchievements();
+    renderAll();
+  }
+
+  // Kliky se počítají do skutečných statistik, takže jdou do rekordu a do odznaků za kliky (až 100 000).
+  // Všechny statistiky na hodnoty pro odznaky (tlačítko Všechny odznaky): jen na zkoušení, ukládá se jako skutečný postup.
+  var CHEAT_STATS = {prestige_count:25,total_clicks:500000,golden_clicks:100,frenzies:25,frenzy_clicks:1000,zones_built:3000,houses_built:100,factories_built:50,parks_built:50,policies_max:6,megaprojects_done:2,crises_solved:150,crises_failed:10,quick_crises:25,helis_caught:25,wealth_exp:24,income_exp:9,population_exp:7,dark_matter_exp:12,endcraze_starts:1,rifts_closed:100,rifts_missed:5,hysterical_boosts:5,rituals:3,sacrifices:5,chose_cultist:1,chose_technocrat:1,archa_phases:5,jump_count:5,relics_owned:7,stardust_upgrades:10,themes_used:4,mutators_used:4,permits_total:200,achievements_unlocked:14,offline_returns:1,longest_absence_h:12,play_min:1000};
+  function cheatAllBadges(){
+    Object.keys(CHEAT_STATS).forEach(function(k){
+      var v = CHEAT_STATS[k];
+      if(k === 'prestige_count') state.prestigeCount = Math.max(state.prestigeCount, v);
+      else if(k === 'total_clicks') state.totalClicks = Math.max(state.totalClicks, v);
+      else if(k === 'jump_count') state.jumpCount = Math.max(state.jumpCount, v);
+      else if(k === 'permits_total') state.goldenPermits = Math.max(state.goldenPermits, v);
+      else if(k === 'play_min') state.totalPlaytimeSeconds = Math.max(state.totalPlaytimeSeconds, v * 60);
+      else if(k === 'relics_owned'){ RELIC_ORDER.forEach(function(r){ if(state.relics.indexOf(r) === -1) state.relics.push(r); }); }
+      else if(k === 'achievements_unlocked'){ ACHIEVEMENT_DEFS.forEach(function(a){ if(state.achievements.indexOf(a.key) === -1) state.achievements.push(a.key); }); }
+      else if(k === 'themes_used'){ themeOrder.forEach(function(t){ trkSeen('themes', t); }); }
+      else if(k === 'mutators_used'){ Object.keys(MUTATOR_DEFS).forEach(function(m){ trkSeen('dims', m); }); }
+      else trkMax(k, v);
+    });
+    showToast('🎖️ Cheat: všechny statistiky jsou na hodnotách pro odznaky', 'frenzy');
+    saveGame(false);
+    renderAll();
+  }
+
+  function cheatAddClicks(){
+    state.totalClicks += 100000;
+    showToast('🖱️ Cheat: +100 000 kliků', 'frenzy');
+    checkAchievements();
+    saveGame(false);
+    renderAll();
+  }
+
+  // Skutečná generální přestavba (se stejným potvrzením i odměnou); cheat jen doplní celkové výdělky, aby byla dostupná.
+  function cheatPrestige(){
+    if(state.endgame.active){ showToast('Během EndCraze není běžná přestavba dostupná.', 'error'); return; }
+    state.lifetimeEarnings = Math.max(state.lifetimeEarnings, PRESTIGE_THRESHOLD);
+    closeCheatModal();
+    doPrestige();
+  }
+
+  /* =========================================================
+     VIZUÁLNÍ EFEKTY
+     ========================================================= */
+
+  function spawnFloatingText(evt, text, isGolden){
+    var wrap = document.getElementById('townhallWrap');
+    var span = document.createElement('span');
+    span.className = isGolden ? 'float-text gold' : 'float-text';
+    span.textContent = text;
+    var rect = wrap.getBoundingClientRect();
+    var x = rect.width / 2;
+    var y = rect.height / 2;
+    if(evt && evt.clientX !== undefined){
+      var btnRect = evt.currentTarget.getBoundingClientRect();
+      x = evt.clientX - rect.left;
+      y = evt.clientY - rect.top;
+      if(x < 0 || x > rect.width) x = rect.width / 2;
+      if(y < 0 || y > rect.height) y = rect.height / 2;
+    }
+    span.style.left = x + 'px';
+    span.style.top = y + 'px';
+    wrap.appendChild(span);
+    setTimeout(function(){ if(span.parentNode) span.parentNode.removeChild(span); }, isGolden ? 1300 : 900);
+  }
+
+  // Podržení tlačítka radnice = plynulé opakované klikání (ušetří prsty na mobilu, funguje i myší na PC).
+  // Krátký ťuk zůstává beze změny (obsluhuje ho standardní 'click').
+  var holdInterval = null;
+  var holdTimeout = null;
+  var lastHoldEvt = null;
+
+  function startHoldClicking(evt){
+    lastHoldEvt = { clientX: evt.clientX, clientY: evt.clientY, currentTarget: evt.currentTarget };
+    clearTimeout(holdTimeout);
+    clearInterval(holdInterval);
+    holdTimeout = setTimeout(function(){
+      holdInterval = setInterval(function(){ onTownHallClick(lastHoldEvt); }, 130);
+    }, 350);
+  }
+
+  function stopHoldClicking(){
+    clearTimeout(holdTimeout);
+    clearInterval(holdInterval);
+    holdTimeout = null;
+    holdInterval = null;
+  }
+
+  function pulseTownHall(){
+    var btn = document.getElementById('townhallBtn');
+    btn.classList.remove('pulse');
+    void btn.offsetWidth;
+    btn.classList.add('pulse');
+  }
+
+  var RING_RADIUS = 92;
+  var RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+  function updateComboRing(percent, isBoosted){
+    var ring = document.getElementById('comboRing');
+    if(!ring) return;
+    var p = Math.max(0, Math.min(100, percent));
+    var offset = RING_CIRCUMFERENCE * (1 - p / 100);
+    ring.style.strokeDasharray = RING_CIRCUMFERENCE;
+    ring.style.strokeDashoffset = offset;
+    ring.style.stroke = isBoosted ? 'var(--danger)' : 'var(--accent)';
+  }
+
+  function spawnClickParticles(evt){
+    var wrap = document.getElementById('townhallWrap');
+    if(!wrap) return;
+    var rect = wrap.getBoundingClientRect();
+    var cx = rect.width / 2;
+    var cy = rect.height / 2;
+    if(evt && evt.clientX !== undefined){
+      var relX = evt.clientX - rect.left;
+      var relY = evt.clientY - rect.top;
+      if(relX >= 0 && relX <= rect.width) cx = relX;
+      if(relY >= 0 && relY <= rect.height) cy = relY;
+    }
+    var count = 6;
+    for(var i = 0; i < count; i++){
+      var p = document.createElement('span');
+      p.className = 'click-particle';
+      var angle = Math.random() * Math.PI * 2;
+      var dist = 35 + Math.random() * 40;
+      p.style.left = cx + 'px';
+      p.style.top = cy + 'px';
+      p.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
+      p.style.setProperty('--dy', Math.sin(angle) * dist + 'px');
+      wrap.appendChild(p);
+      (function(el){ setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 600); })(p);
+    }
+  }
+
+  function spawnConfetti(){
+    var container = document.createElement('div');
+    container.className = 'confetti-container';
+    document.body.appendChild(container);
+    var colors = ['var(--accent)', 'var(--accent-2)', 'var(--danger)'];
+    var count = 60;
+    for(var i = 0; i < count; i++){
+      var piece = document.createElement('span');
+      piece.className = 'confetti-piece';
+      piece.style.left = (Math.random() * 100) + '%';
+      piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+      piece.style.animationDelay = (Math.random() * 0.4) + 's';
+      piece.style.animationDuration = (2 + Math.random() * 1.5) + 's';
+      piece.style.transform = 'rotate(' + Math.floor(Math.random() * 360) + 'deg)';
+      container.appendChild(piece);
+    }
+    setTimeout(function(){ if(container.parentNode) container.parentNode.removeChild(container); }, 4200);
+  }
+
+  function screenShake(){
+    var app = document.querySelector('.app');
+    if(!app) return;
+    app.classList.remove('shake');
+    void app.offsetWidth;
+    app.classList.add('shake');
+  }
+
+  /* =========================================================
+     ZVUKOVÝ SYSTÉM
+     ========================================================= */
+
+  var audioCtx = null;
+
+  function ensureAudioCtx(){
+    if(audioCtx) return audioCtx;
+    try{
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if(!Ctx) return null;
+      audioCtx = new Ctx();
+    }catch(e){
+      audioCtx = null;
+    }
+    return audioCtx;
+  }
+
+  function playTone(freq, duration, type){
+    if(!state.soundEnabled) return;
+    var ctx = ensureAudioCtx();
+    if(!ctx) return;
+    try{
+      if(ctx.state === 'suspended' && ctx.resume){ ctx.resume(); }
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = type || 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + duration);
+    }catch(e){}
+  }
+
+  function playClickSound(){ playTone(520, 0.07, 'sine'); }
+  function playBuySound(){ playTone(340, 0.12, 'triangle'); }
+  function playAchievementSound(){
+    playTone(660, 0.14, 'sine');
+    setTimeout(function(){ playTone(880, 0.18, 'sine'); }, 90);
+  }
+
+  // Jemná haptika pro mobilní zařízení - sdílí vypínač se zvukem, aby hráč měl jeden přepínač na "šťávu" hry.
+  function hapticTick(pattern){
+    if(!state.soundEnabled) return;
+    try{ if(navigator.vibrate) navigator.vibrate(pattern); }catch(e){}
+  }
+  function playAlertSound(){ playTone(220, 0.22, 'sawtooth'); }
+
+  function toggleSound(){
+    state.soundEnabled = !state.soundEnabled;
+    document.getElementById('soundToggleBtn').textContent = state.soundEnabled ? '🔊' : '🔇';
+    if(state.soundEnabled) playClickSound();
+    saveGame(false);
+  }
+
+  function showToast(msg, type){
+    var container = document.getElementById('toastContainer');
+    var div = document.createElement('div');
+    div.className = 'toast toast-' + (type || 'info');
+    div.textContent = msg;
+    container.appendChild(div);
+    requestAnimationFrame(function(){ div.classList.add('show'); });
+    setTimeout(function(){
+      div.classList.remove('show');
+      setTimeout(function(){ if(div.parentNode) div.parentNode.removeChild(div); }, 400);
+    }, 3600);
+  }
+
+  /* =========================================================
+     TÉMATA
+     ========================================================= */
+
+  function applyTheme(themeKey){
+    if(!themeNames[themeKey]) return;
+    state.theme = themeKey;
+    trkSeen('themes', themeKey);
+    document.body.setAttribute('data-theme', themeKey);
+    document.getElementById('themeSelect').value = themeKey;
+    renderAll();
+  }
+
+  function buildThemeGrid(){
+    var grid = document.getElementById('themeGrid');
+    grid.innerHTML = '';
+    themeOrder.forEach(function(key){
+      var t = themeNames[key];
+      var opt = document.createElement('div');
+      opt.className = 'theme-option';
+      opt.innerHTML = '<span class="to-emoji">' + t.emoji + '</span>' + t.title;
+      opt.addEventListener('click', function(){
+        applyTheme(key);
+        closeThemeModal();
+      });
+      grid.appendChild(opt);
+    });
+  }
+
+  function openThemeModal(){
+    document.getElementById('prestigeModal').classList.remove('hidden');
+  }
+  function closeThemeModal(){
+    document.getElementById('prestigeModal').classList.add('hidden');
+  }
+
+  /* =========================================================
+     PRESTIGE (URBAN RENEWAL)
+     ========================================================= */
+
+  function doPrestige(){
+    if(state.endgame.active){
+      showToast('Během EndCraze není běžná přestavba dostupná.', 'error');
+      return;
+    }
+    if(state.lifetimeEarnings < PRESTIGE_THRESHOLD){
+      showToast('Ještě nemáš dostatek celkových výdělků pro přestavbu.', 'error');
+      return;
+    }
+    var permitsEarned = Math.max(1, Math.floor(Math.sqrt(state.lifetimeEarnings / 1000000)));
+    var ok = confirm('Provést generální přestavbu?\n\nZískáš ' + permitsEarned + ' Zlatých stavebních povolení (trvale +' + (permitsEarned * 2) + ' % pasivního příjmu).\nRozpočet, budovy, vyhlášky a megaprojekty se vynulují. Tato akce je nevratná.');
+    if(!ok) return;
+
+    updatePeaks();
+    var keepStats = JSON.parse(JSON.stringify(state.stats));
+    var keepTheme = state.theme;
+    var keepPermits = state.goldenPermits + permitsEarned;
+    var keepPrestigeCount = state.prestigeCount + 1;
+    var keepJumpCount = state.jumpCount;
+    var keepRelics = state.relics.slice();
+    var keepDimension = state.dimension;
+    var keepAchievements = state.achievements.slice();
+    var keepTotalClicks = state.totalClicks;
+    var keepPlaytime = state.totalPlaytimeSeconds;
+    var keepCreatedAt = state.createdAt;
+    var keepStardust = state.stardust;
+    var keepStardustUpgrades = JSON.parse(JSON.stringify(state.stardustUpgrades || {}));
+    var hasAnchor = keepRelics.indexOf('gravitationalAnchor') !== -1;
+    var keepBuildings = hasAnchor ? JSON.parse(JSON.stringify(state.buildings)) : null;
+
+    document.body.classList.remove('frenzy');
+
+    state = defaultState();
+    state.stats = keepStats;
+    state.theme = keepTheme;
+    state.goldenPermits = keepPermits;
+    state.prestigeCount = keepPrestigeCount;
+    state.jumpCount = keepJumpCount;
+    state.relics = keepRelics;
+    state.stardust = keepStardust;
+    state.stardustUpgrades = keepStardustUpgrades;
+    state.dimension = keepDimension;
+    state.achievements = keepAchievements;
+    state.totalClicks = keepTotalClicks;
+    state.totalPlaytimeSeconds = keepPlaytime;
+    state.createdAt = keepCreatedAt;
+    if(keepBuildings){ state.buildings = keepBuildings; }
+
+    document.body.setAttribute('data-theme', state.theme);
+    document.getElementById('themeSelect').value = state.theme;
+
+    showToast('🏗️ Generální přestavba dokončena! +' + permitsEarned + ' Zlatých povolení.', 'success');
+    spawnConfetti();
+    saveGame(false);
+    renderAll();
+    restartSchedulers();
+    openThemeModal();
+  }
+
+  /* =========================================================
+     RENDEROVÁNÍ
+     ========================================================= */
+
+  function renderFast(){
+    var names = themeNames[state.theme];
+
+    document.getElementById('gameTitle').textContent = names.title;
+    document.title = names.title;
+    document.getElementById('themeEmoji').textContent = names.emoji;
+    document.getElementById('themeFlavorEmoji').textContent = names.emoji;
+    document.getElementById('themeFlavor').textContent = names.flavor;
+    document.getElementById('townhallLabel').textContent = names.townhall;
+
+    var budgetTxt = formatCurrency(state.budget);
+    var popTxt = formatNumber(computePopulation());
+    var satTxt = Math.round(computeSatisfaction()) + '%';
+    var incomeTxt = formatCurrency(computePassiveIncome()) + '/s';
+
+    document.getElementById('tbBudget').textContent = budgetTxt;
+    document.getElementById('tbPopulation').textContent = popTxt;
+    document.getElementById('tbSatisfaction').textContent = satTxt;
+    document.getElementById('tbIncome').textContent = incomeTxt;
+
+    document.getElementById('statBudget').textContent = budgetTxt;
+    document.getElementById('statPopulation').textContent = popTxt;
+    document.getElementById('statSatisfaction').textContent = satTxt;
+    document.getElementById('statIncome').textContent = incomeTxt;
+
+    document.getElementById('permitsDisplay').textContent = state.goldenPermits;
+
+    var stardustMiniBox = document.getElementById('stardustMiniBox');
+    if(stardustMiniBox){
+      var stardustVisible = allRelicsCollected() || state.stardust > 0;
+      stardustMiniBox.classList.toggle('hidden', !stardustVisible);
+      if(stardustVisible){ document.getElementById('stardustMiniDisplay').textContent = formatNumber(state.stardust); }
+    }
+
+    var comboRowLabel = document.querySelector('.combo-label-row span:first-child');
+    var iconEl = document.querySelector('.btn-townhall-icon');
+    var ctaEl = document.querySelector('.btn-townhall-cta');
+    var frenzyBadge = document.getElementById('frenzyBadge');
+
+    if(state.endgame.active){
+      document.getElementById('townhallLabel').textContent = 'Časoprostorový generátor';
+      document.getElementById('themeFlavor').textContent = 'Realita se hroutí. Ovládni Temnou hmotu, než bude pozdě.';
+      if(iconEl) iconEl.textContent = '🌀';
+      if(ctaEl) ctaEl.textContent = 'Destabilizuj!';
+      if(comboRowLabel) comboRowLabel.textContent = 'Ukazatel šílenství';
+
+      document.getElementById('clickValueDisplay').textContent = '+' + formatTH(getEndgameClickValue());
+      document.getElementById('comboFill').style.width = state.endgame.madness + '%';
+      document.getElementById('comboLabel').textContent = state.endgame.hystericalActive ? 'HYSTERICKÝ BOOST!' : Math.round(state.endgame.madness) + '%';
+      updateComboRing(state.endgame.madness, state.endgame.hystericalActive);
+
+      if(state.endgame.hystericalActive){
+        frenzyBadge.classList.remove('hidden');
+        var remainH = Math.max(0, Math.ceil((state.endgame.hystericalEnd - Date.now()) / 1000));
+        frenzyBadge.textContent = '🌀 ' + remainH + 's';
+      } else if(state.endgame.ritualActive){
+        frenzyBadge.classList.remove('hidden');
+        var remainR = Math.max(0, Math.ceil((state.endgame.ritualEnd - Date.now()) / 1000));
+        frenzyBadge.textContent = '🩸 Rituál ' + remainR + 's';
+      } else {
+        frenzyBadge.classList.add('hidden');
+      }
+
+      document.getElementById('darkMatterDisplay').textContent = formatTH(state.endgame.darkMatter);
+      var clock = getDoomsdayClock();
+      document.getElementById('doomsdayFill').style.width = clock + '%';
+      document.getElementById('doomsdayLabel').textContent = Math.round(clock) + '%';
+      document.getElementById('factionDisplay').textContent =
+        state.endgame.faction === 'cultist' ? '🩸 Kultisté Konce' :
+        (state.endgame.faction === 'technocrat' ? '🤖 Technokraté' : 'Nezvoleno (od 50 %)');
+    } else {
+      if(iconEl) iconEl.textContent = '🏛️';
+      if(ctaEl) ctaEl.textContent = 'Klikni!';
+      if(comboRowLabel) comboRowLabel.textContent = 'Combo Meter';
+
+      document.getElementById('clickValueDisplay').textContent = '+' + formatCurrency(getClickValue());
+      document.getElementById('comboFill').style.width = state.comboMeter + '%';
+      document.getElementById('comboLabel').textContent = state.frenzyActive ? 'HOREČKA VÝPLAT!' : Math.round(state.comboMeter) + '%';
+      updateComboRing(state.comboMeter, state.frenzyActive);
+
+      if(state.frenzyActive){
+        frenzyBadge.classList.remove('hidden');
+        var remaining = Math.max(0, Math.ceil((state.frenzyEnd - Date.now()) / 1000));
+        frenzyBadge.textContent = '🔥 ' + remaining + 's';
+      } else {
+        frenzyBadge.classList.add('hidden');
+      }
+    }
+
+    var progress = Math.min(100, (state.lifetimeEarnings / PRESTIGE_THRESHOLD) * 100);
+    document.getElementById('prestigeProgressFill').style.width = progress + '%';
+    var progLabel = formatCurrency(state.lifetimeEarnings) + ' / ' + formatCurrency(PRESTIGE_THRESHOLD);
+    if(state.endgame.active) progLabel += ' (uzamčeno během EndCraze)';
+    document.getElementById('prestigeProgressLabel').textContent = progLabel;
+    document.getElementById('prestigeBtn').disabled = state.lifetimeEarnings < PRESTIGE_THRESHOLD || state.endgame.active;
+  }
+
+  function renderCrisis(){
+    var banner = document.getElementById('crisisBanner');
+
+    if(state.endgame.active){
+      var rift = state.endgame.activeRift;
+      if(rift){
+        banner.classList.remove('hidden');
+        document.getElementById('crisisIcon').textContent = '🌀';
+        document.getElementById('crisisName').textContent = 'Časová trhlina: ' + districtDisplayName(rift.districtKey);
+        document.getElementById('crisisTimer').textContent = rift.timeLeft + 's';
+        document.getElementById('crisisReward').textContent = '+' + formatTH(rift.reward);
+        var shielded = state.endgame.faction === 'technocrat' || state.dimension === 'carefree';
+        document.getElementById('crisisPenalty').textContent = shielded ? '🛡️ Štít aktivní' : 'Zničení čtvrti';
+      } else {
+        banner.classList.add('hidden');
+      }
+      return;
+    }
+
+    if(state.activeCrisis){
+      banner.classList.remove('hidden');
+      document.getElementById('crisisIcon').textContent = state.activeCrisis.icon;
+      document.getElementById('crisisName').textContent = state.activeCrisis.name;
+      document.getElementById('crisisTimer').textContent = state.activeCrisis.timeLeft + 's';
+      document.getElementById('crisisReward').textContent = '+' + formatCurrency(state.activeCrisis.reward);
+      document.getElementById('crisisPenalty').textContent = '-' + formatCurrency(state.activeCrisis.penalty);
+    } else {
+      banner.classList.add('hidden');
+    }
+  }
+
+  function renderShop(){
+    var names = themeNames[state.theme];
+    var container = document.getElementById('shopList');
+    container.innerHTML = '';
+
+    if(state.endgame.active){
+      container.innerHTML = '<div class="endcraze-lock">🔒 Základní ekonomika je uzamčena.<br>Probíhá apokalyptická fáze EndCraze — nové zóny nelze stavět.</div>';
+      return;
+    }
+
+    buildingOrder.forEach(function(key){
+      var def = buildingDefs[key];
+      var count = state.buildings[key].count;
+      var cost = getBuildingCost(key);
+      var afford = state.budget >= cost;
+
+      var row = document.createElement('div');
+      row.className = 'ledger-row';
+      row.innerHTML =
+        '<div class="ledger-icon">' + def.icon + '</div>' +
+        '<div class="ledger-info">' +
+          '<div class="ledger-name">' + names[key] + ' <span style="color:var(--text-dim);font-family:var(--font-mono);font-size:0.8rem;">(' + count + ')</span></div>' +
+          '<div class="ledger-meta">' + def.desc + '</div>' +
+        '</div>' +
+        '<button type="button" class="btn-build" data-key="' + key + '"' + (afford ? '' : ' disabled') + '>' +
+          '<span class="btn-build-label">Postavit</span>' +
+          '<span class="btn-build-cost">' + formatCurrency(cost) + '</span>' +
+        '</button>';
+      container.appendChild(row);
+    });
+    var btns = container.querySelectorAll('.btn-build');
+    for(var i=0;i<btns.length;i++){
+      btns[i].addEventListener('click', function(){ buyBuilding(this.getAttribute('data-key')); });
+    }
+  }
+
+  function renderPolicies(){
+    var container = document.getElementById('policyList');
+    container.innerHTML = '';
+    policyDefs.forEach(function(def){
+      var purchased = state.policies[def.key];
+      var afford = state.budget >= def.cost;
+      var row = document.createElement('div');
+      row.className = 'policy-row' + (purchased ? ' enacted' : '');
+      row.innerHTML =
+        '<div class="policy-info">' +
+          '<div class="policy-name">' + def.name + '</div>' +
+          '<div class="policy-desc">' + def.desc + '</div>' +
+        '</div>' +
+        '<button type="button" class="btn-policy" data-key="' + def.key + '"' + ((purchased || !afford) ? ' disabled' : '') + '>' +
+          (purchased ? 'Schváleno' : formatCurrency(def.cost)) +
+        '</button>';
+      container.appendChild(row);
+    });
+    var btns = container.querySelectorAll('.btn-policy');
+    for(var i=0;i<btns.length;i++){
+      btns[i].addEventListener('click', function(){ buyPolicy(this.getAttribute('data-key')); });
+    }
+  }
+
+  function renderMegaprojects(){
+    var names = themeNames[state.theme];
+    var container = document.getElementById('megaList');
+    container.innerHTML = '';
+    megaprojectOrder.forEach(function(key){
+      var def = megaprojectDefs[key];
+      var mstate = state.megaprojects[key];
+
+      var phaseHtml = '';
+      def.phases.forEach(function(phase, idx){
+        var cls = 'phase-seg';
+        if(idx < mstate.phase) cls += ' done';
+        else if(idx === mstate.phase && !mstate.completed) cls += ' current';
+        phaseHtml += '<div class="' + cls + '" title="' + phase.name + '"></div>';
+      });
+
+      var actionHtml;
+      if(mstate.completed){
+        actionHtml = '<div class="mega-status done">Dokončeno ✅ — příjem trvale ×2</div>';
+      } else {
+        var phase = def.phases[mstate.phase];
+        var afford = state.budget >= phase.cost;
+        actionHtml =
+          '<div class="mega-status">Aktuální fáze: ' + phase.name + ' (' + (mstate.phase + 1) + '/' + def.phases.length + ')</div>' +
+          '<button type="button" class="btn-mega" data-key="' + key + '"' + (afford ? '' : ' disabled') + '>Investovat ' + formatCurrency(phase.cost) + '</button>';
+      }
+
+      var panel = document.createElement('div');
+      panel.className = 'mega-panel' + (mstate.completed ? ' completed' : '');
+      panel.innerHTML =
+        '<div class="mega-header"><span class="mega-icon">' + def.icon + '</span><span class="mega-title">' + names[key] + '</span></div>' +
+        '<div class="phase-track">' + phaseHtml + '</div>' +
+        actionHtml;
+      container.appendChild(panel);
+    });
+    var btns = container.querySelectorAll('.btn-mega');
+    for(var i=0;i<btns.length;i++){
+      btns[i].addEventListener('click', function(){ investMegaproject(this.getAttribute('data-key')); });
+    }
+  }
+
+  function renderEndcraze(){
+    var lockedView = document.getElementById('endcrazeLockedView');
+    var activeView = document.getElementById('endcrazeActiveView');
+
+    if(!state.endgame.active){
+      lockedView.classList.remove('hidden');
+      activeView.classList.add('hidden');
+
+      var status = checkEndgameUnlockable();
+      var checklist = document.getElementById('endcrazeChecklist');
+      checklist.innerHTML =
+        '<li>' + (status.policiesDone ? '✅' : '❌') + ' Všechny vyhlášky schváleny</li>' +
+        '<li>' + (status.megaDone ? '✅' : '❌') + ' Oba megaprojekty dokončeny</li>' +
+        '<li>' + (status.budgetDone ? '✅' : '❌') + ' Rozpočet ≥ ' + formatCurrency(MEGACITY_BUDGET) + ' (aktuálně ' + formatCurrency(state.budget) + ')</li>' +
+        '<li>' + (status.popDone ? '✅' : '❌') + ' Populace ≥ ' + formatNumber(MEGACITY_POPULATION) + ' (aktuálně ' + formatNumber(computePopulation()) + ')</li>';
+
+      var accContainer = document.getElementById('acceleratorPanel');
+      var e0 = state.endgame;
+      if(!status.all){
+        accContainer.innerHTML = '<div class="endcraze-lock">🔒 Nejprve splň všechny podmínky výše — Částicový urychlovač poté půjde postavit.</div>';
+      } else {
+        var accPhaseHtml = '';
+        for(var pi = 0; pi < ACCELERATOR_PHASES.length; pi++){
+          var accCls = 'phase-seg';
+          if(pi < e0.acceleratorPhase) accCls += ' done';
+          else if(pi === e0.acceleratorPhase) accCls += ' current';
+          accPhaseHtml += '<div class="' + accCls + '"></div>';
+        }
+        var accPhase = ACCELERATOR_PHASES[e0.acceleratorPhase];
+        var accAfford = accPhase && state.budget >= accPhase.cost;
+        var accAction = accPhase ?
+          ('<div class="mega-status">Fáze ' + (e0.acceleratorPhase + 1) + '/' + ACCELERATOR_PHASES.length + ': ' + accPhase.name + ' — cena ' + formatCurrency(accPhase.cost) + '</div>' +
+          '<button type="button" class="btn-mega" id="acceleratorInvestBtn"' + (accAfford ? '' : ' disabled') + '>Investovat</button>') : '';
+        accContainer.innerHTML =
+          '<div class="mega-panel"><div class="mega-header"><span class="mega-icon">⚛️</span><span class="mega-title">Částicový urychlovač</span></div>' +
+          '<div class="phase-track">' + accPhaseHtml + '</div>' + accAction + '</div>';
+        var accBtn = document.getElementById('acceleratorInvestBtn');
+        if(accBtn) accBtn.addEventListener('click', investAccelerator);
+      }
+      return;
+    }
+
+    lockedView.classList.add('hidden');
+    activeView.classList.remove('hidden');
+
+    var e = state.endgame;
+    var area = document.getElementById('factionActionArea');
+    if(e.faction === 'cultist'){
+      area.innerHTML =
+        '<div class="policy-row"><div class="policy-info"><div class="policy-name">🩸 Obětuj populaci</div>' +
+        '<div class="policy-desc">Sniž populaci a trvale zvyš TH násobitel z kliknutí. Aktuální násobitel: ×' + (1 + e.sacrificeMultiplier).toFixed(2) + '</div></div>' +
+        '<button type="button" class="btn-policy" id="sacrificeBtn">Obětovat</button></div>' +
+        '<div class="mega-status">Rituál rychlosti: ' + e.clickStreak + '/100 kliknutí do dalšího rituálu.</div>';
+      var sacBtn = document.getElementById('sacrificeBtn');
+      if(sacBtn) sacBtn.addEventListener('click', sacrificePopulation);
+    } else if(e.faction === 'technocrat'){
+      area.innerHTML =
+        '<div class="mega-status">🤖 AI štíty aktivní — trhliny nemohou zničit čtvrti.</div>' +
+        '<div class="mega-status">Pasivní produkce: +' + formatTH(getTechnocratPassiveRate()) + '/s</div>';
+    } else {
+      area.innerHTML = '<div class="mega-status">Frakce bude nutné zvolit po dosažení 50 % na Hodinách apokalypsy.</div>';
+    }
+
+    var archaContainer = document.getElementById('archaPanel');
+    var phaseHtml = '';
+    for(var i = 0; i < ARCHA_PHASES; i++){
+      var cls = 'phase-seg';
+      if(i < e.archaPhase) cls += ' done';
+      else if(i === e.archaPhase && !e.archaCompleted) cls += ' current';
+      phaseHtml += '<div class="' + cls + '"></div>';
+    }
+    var archaAction;
+    if(e.archaCompleted){
+      archaAction = '<div class="mega-status done">Archa dokončena! Dimenzionální skok je připraven.</div>';
+    } else {
+      var afford = e.darkMatter >= ARCHA_PHASE_COST;
+      archaAction =
+        '<div class="mega-status">Fáze ' + (e.archaPhase + 1) + '/' + ARCHA_PHASES + ' — cena ' + formatTH(ARCHA_PHASE_COST) + '</div>' +
+        '<button type="button" class="btn-mega" id="archaInvestBtn"' + (afford ? '' : ' disabled') + '>Investovat do Archy</button>';
+    }
+    archaContainer.innerHTML =
+      '<div class="mega-panel"><div class="mega-header"><span class="mega-icon">🚀</span><span class="mega-title">Dimenzionální Archa</span></div>' +
+      '<div class="phase-track">' + phaseHtml + '</div>' + archaAction + '</div>';
+    var archaBtn = document.getElementById('archaInvestBtn');
+    if(archaBtn) archaBtn.addEventListener('click', investArcha);
+
+    var relicsContainer = document.getElementById('relicsArea');
+    if(state.relics.length){
+      var relicsHtml = '<h3>Kosmické relikvie (' + state.relics.length + '/' + RELIC_ORDER.length + ')</h3><ul class="endcraze-checklist">';
+      state.relics.forEach(function(r){
+        relicsHtml += '<li>' + RELIC_DEFS[r].icon + ' ' + RELIC_DEFS[r].name + ' — ' + RELIC_DEFS[r].desc + '</li>';
+      });
+      relicsHtml += '</ul>';
+      if(allRelicsCollected()){
+        relicsHtml += '<p style="font-size:0.8rem;color:var(--text-dim);">🌠 Všechny relikvie posbírány! Další skoky teď natrvalo sypou Hvězdný prach — viz Hvězdný trh níže.</p>';
+      }
+      relicsContainer.innerHTML = relicsHtml;
+    } else {
+      relicsContainer.innerHTML = '';
+    }
+
+    document.getElementById('jumpBtn').classList.toggle('hidden', !e.archaCompleted);
+  }
+
+  function renderStardustMarket(){
+    var panel = document.getElementById('stardustPanel');
+    if(!panel) return;
+    var unlocked = allRelicsCollected() || state.stardust > 0;
+    panel.classList.toggle('hidden', !unlocked);
+    if(!unlocked) return;
+
+    document.getElementById('stardustDisplay').textContent = formatNumber(state.stardust);
+
+    var container = document.getElementById('stardustShopList');
+    container.innerHTML = '';
+    STARDUST_UPGRADE_ORDER.forEach(function(key){
+      var def = STARDUST_UPGRADE_DEFS[key];
+      var level = (state.stardustUpgrades && state.stardustUpgrades[key]) || 0;
+      var cost = getStardustUpgradeCost(key);
+      var afford = state.stardust >= cost;
+      var row = document.createElement('div');
+      row.className = 'ledger-row';
+      row.innerHTML =
+        '<div class="ledger-icon">' + def.icon + '</div>' +
+        '<div class="ledger-info">' +
+          '<div class="ledger-name">' + def.name + ' <span style="color:var(--text-dim);font-family:var(--font-mono);font-size:0.8rem;">(Lv. ' + level + ')</span></div>' +
+          '<div class="ledger-meta">' + def.desc + '</div>' +
+        '</div>' +
+        '<button type="button" class="btn-build" data-key="' + key + '"' + (afford ? '' : ' disabled') + '>' +
+          '<span class="btn-build-label">Vylepšit</span>' +
+          '<span class="btn-build-cost">🌠 ' + formatNumber(cost) + '</span>' +
+        '</button>';
+      container.appendChild(row);
+    });
+    var btns = container.querySelectorAll('.btn-build');
+    for(var i = 0; i < btns.length; i++){
+      btns[i].addEventListener('click', function(){ buyStardustUpgrade(this.getAttribute('data-key')); });
+    }
+  }
+
+  function buyStardustUpgrade(key){
+    var cost = getStardustUpgradeCost(key);
+    if(state.stardust < cost){ showToast('Nedostatek Hvězdného prachu.', 'error'); return; }
+    state.stardust -= cost;
+    state.stardustUpgrades[key] = (state.stardustUpgrades[key] || 0) + 1;
+    trk('stardust_upgrades');
+    playBuySound();
+    checkAchievements();
+    renderAll();
+  }
+
+  function renderSlow(){
+    renderShop();
+    renderPolicies();
+    renderMegaprojects();
+    renderEndcraze();
+    renderStardustMarket();
+    checkAchievements();
+  }
+
+  function renderAll(){
+    renderFast();
+    renderSlow();
+    renderCrisis();
+  }
+
+  /* =========================================================
+     UKLÁDÁNÍ HRY
+     ========================================================= */
+
+  // Rekordy se hlásí appce (jomaridRecord v mostu); posílá se jen zvýšení, takže volání při každém uložení nic nestojí.
+  // Čítače, které se hlásí přímo ze state.stats (ostatní statistiky se odvozují z postupu v reportRecords).
+  var TRACKED_STATS = ['golden_clicks', 'frenzies', 'frenzy_clicks', 'zones_built', 'houses_built', 'factories_built', 'parks_built', 'policies_max', 'megaprojects_done',
+    'crises_solved', 'crises_failed', 'quick_crises', 'helis_caught', 'wealth_exp', 'income_exp', 'population_exp', 'dark_matter_exp', 'endcraze_starts', 'rifts_closed',
+    'rifts_missed', 'hysterical_boosts', 'rituals', 'sacrifices', 'chose_cultist', 'chose_technocrat', 'archa_phases', 'stardust_upgrades', 'offline_returns', 'longest_absence_h'];
+
+  function magnitude(x){ return x >= 1 ? Math.floor(Math.log10(x)) : 0; }
+
+  // Vrcholy, které se po přestavbě ztratí (výdělky, příjem, populace, Temná hmota), se zapíšou do čítačů dřív, než se stav vynuluje.
+  function updatePeaks(){
+    trkMax('wealth_exp', magnitude(state.lifetimeEarnings));
+    trkMax('income_exp', magnitude(computePassiveIncome()));
+    trkMax('population_exp', magnitude(computePopulation()));
+    trkMax('dark_matter_exp', magnitude(state.endgame.darkMatter));
+  }
+
+  function reportRecords(){
+    if(typeof jomaridRecord !== 'function') return;
+    updatePeaks();
+    jomaridRecord('prestige_count', state.prestigeCount);
+    jomaridRecord('total_clicks', state.totalClicks);
+    jomaridRecord('jump_count', state.jumpCount);
+    jomaridRecord('relics_owned', state.relics.length);
+    jomaridRecord('permits_total', state.goldenPermits);
+    jomaridRecord('achievements_unlocked', state.achievements.length);
+    jomaridRecord('play_min', state.totalPlaytimeSeconds / 60);
+    trkSeen('themes', state.theme);
+    if(state.dimension) trkSeen('dims', state.dimension);
+    jomaridRecord('themes_used', Object.keys(state.stats.themes || {}).length);
+    jomaridRecord('mutators_used', Object.keys(state.stats.dims || {}).length);
+    TRACKED_STATS.forEach(function(k){ jomaridRecord(k, state.stats[k]); });
+  }
+
+  function saveGame(manual){
+    try{
+      state.lastSaveTimestamp = Date.now();
+      localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+      if(manual) showToast('💾 Hra byla uložena.', 'success');
+    }catch(e){
+      if(manual) showToast('Chyba při ukládání hry.', 'error');
+    }
+    reportRecords();
+  }
+
+  function loadGame(manual){
+    var raw;
+    try{
+      raw = localStorage.getItem(SAVE_KEY);
+    }catch(e){
+      if(manual) showToast('Chyba přístupu k uloženým datům.', 'error');
+      return;
+    }
+    if(!raw){
+      if(manual) showToast('Žádné uložení nebylo nalezeno.', 'error');
+      return;
+    }
+    try{
+      var loaded = JSON.parse(raw);
+      state = deepMerge(defaultState(), loaded);
+      state.activeCrisis = null;
+      state.frenzyActive = false;
+      state.endgame.activeRift = null;
+      state.endgame.hystericalActive = false;
+      state.endgame.ritualActive = false;
+
+      document.body.classList.remove('frenzy');
+      document.body.classList.toggle('endcraze', !!state.endgame.active);
+
+      document.body.setAttribute('data-theme', state.theme);
+      document.getElementById('themeSelect').value = state.theme;
+      document.getElementById('soundToggleBtn').textContent = state.soundEnabled ? '🔊' : '🔇';
+
+      if(manual){ applyOfflineProgress(); }
+
+      renderAll();
+      restartSchedulers();
+      if(manual) showToast('📂 Hra byla načtena.', 'success');
+    }catch(e){
+      if(manual) showToast('Chyba při načítání uloženého souboru.', 'error');
+    }
+  }
+
+  function hardReset(){
+    var ok = confirm('Opravdu chceš provést Hard Reset?\n\nVeškerý postup včetně Zlatých stavebních povolení a Kosmických relikvií bude nenávratně ztracen. Tato akce je nevratná.');
+    if(!ok) return;
+
+    try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
+
+    document.body.classList.remove('frenzy');
+    document.body.classList.remove('endcraze');
+
+    state = defaultState();
+    document.body.setAttribute('data-theme', state.theme);
+    document.getElementById('themeSelect').value = state.theme;
+    document.getElementById('soundToggleBtn').textContent = state.soundEnabled ? '🔊' : '🔇';
+
+    renderAll();
+    restartSchedulers();
+    showToast('🗑️ Hra byla kompletně resetována.', 'info');
+  }
+
+  /* =========================================================
+     UI OVLÁDÁNÍ (TABY, TLAČÍTKA)
+     ========================================================= */
+
+  function bindTabs(){
+    var tabBtns = document.querySelectorAll('.tab-btn');
+    for(var i=0;i<tabBtns.length;i++){
+      tabBtns[i].addEventListener('click', function(){
+        var tabBtnsAll = document.querySelectorAll('.tab-btn');
+        for(var j=0;j<tabBtnsAll.length;j++){ tabBtnsAll[j].classList.remove('active'); }
+        this.classList.add('active');
+        var target = this.getAttribute('data-tab');
+        var cols = document.querySelectorAll('.column');
+        for(var k=0;k<cols.length;k++){
+          if(cols[k].getAttribute('data-col') === target){ cols[k].classList.add('active-tab'); }
+          else { cols[k].classList.remove('active-tab'); }
+        }
+      });
+    }
+  }
+
+  function bindEvents(){
+    document.getElementById('townhallBtn').addEventListener('click', onTownHallClick);
+    if(window.PointerEvent){
+      var thBtn = document.getElementById('townhallBtn');
+      thBtn.addEventListener('pointerdown', startHoldClicking);
+      thBtn.addEventListener('pointerup', stopHoldClicking);
+      thBtn.addEventListener('pointerleave', stopHoldClicking);
+      thBtn.addEventListener('pointercancel', stopHoldClicking);
+    }
+
+    document.getElementById('saveBtn').addEventListener('click', function(){ saveGame(true); });
+    document.getElementById('loadBtn').addEventListener('click', function(){ loadGame(true); });
+    document.getElementById('resetBtn').addEventListener('click', hardReset);
+    document.getElementById('statsBtn').addEventListener('click', openStatsModal);
+    document.getElementById('statsModalClose').addEventListener('click', closeStatsModal);
+    document.getElementById('helpBtn').addEventListener('click', openHelpModal);
+    document.getElementById('helpModalClose').addEventListener('click', closeHelpModal);
+    document.getElementById('soundToggleBtn').addEventListener('click', toggleSound);
+
+    document.getElementById('themeSelect').addEventListener('change', function(){
+      applyTheme(this.value);
+      saveGame(false);
+    });
+
+    document.getElementById('crisisBanner').addEventListener('click', onCrisisClick);
+
+    document.getElementById('prestigeBtn').addEventListener('click', doPrestige);
+
+    document.getElementById('themeModalClose').addEventListener('click', closeThemeModal);
+
+    document.getElementById('jumpBtn').addEventListener('click', doDimensionalJump);
+    document.getElementById('chooseCultist').addEventListener('click', function(){ chooseFaction('cultist'); });
+    document.getElementById('chooseTechnocrat').addEventListener('click', function(){ chooseFaction('technocrat'); });
+
+    document.getElementById('offlineModalClose').addEventListener('click', closeOfflineModal);
+
+    document.getElementById('cheatModalClose').addEventListener('click', closeCheatModal);
+    document.getElementById('cheatAddMoney').addEventListener('click', cheatAddMoney);
+    document.getElementById('cheatAddDarkMatter').addEventListener('click', cheatAddDarkMatter);
+    document.getElementById('cheatCompleteResearch').addEventListener('click', cheatCompleteResearch);
+    document.getElementById('cheatMegacity').addEventListener('click', cheatMegacity);
+    document.getElementById('cheatAddPermits').addEventListener('click', cheatAddPermits);
+    document.getElementById('cheatCompleteArcha').addEventListener('click', cheatCompleteArcha);
+    document.getElementById('cheatActivateEndgame').addEventListener('click', cheatActivateEndgame);
+    document.getElementById('cheatUnlockAllAchievements').addEventListener('click', cheatUnlockAllAchievements);
+    document.getElementById('cheatUnlockAllRelics').addEventListener('click', cheatUnlockAllRelics);
+    document.getElementById('cheatAddStardust').addEventListener('click', cheatAddStardust);
+    document.getElementById('cheatAddClicks').addEventListener('click', cheatAddClicks);
+    document.getElementById('cheatAllBadges').addEventListener('click', cheatAllBadges);
+    document.getElementById('cheatPrestige').addEventListener('click', cheatPrestige);
+
+    bindTabs();
+    buildThemeGrid();
+    buildMutatorGrid();
+    initCheatListener();
+    initEscapeHandler();
+  }
+
+  /* =========================================================
+     INICIALIZACE
+     ========================================================= */
+
+  function init(){
+    var raw;
+    try{ raw = localStorage.getItem(SAVE_KEY); }catch(e){ raw = null; }
+    var isFreshGame = true;
+
+    if(raw){
+      try{
+        var loaded = JSON.parse(raw);
+        state = deepMerge(defaultState(), loaded);
+        state.activeCrisis = null;
+        state.frenzyActive = false;
+        state.endgame.activeRift = null;
+        state.endgame.hystericalActive = false;
+        state.endgame.ritualActive = false;
+        isFreshGame = false;
+        reportRecords();
+      }catch(e){
+        state = defaultState();
+      }
+    } else {
+      state = defaultState();
+    }
+
+    document.body.setAttribute('data-theme', state.theme);
+    document.getElementById('themeSelect').value = state.theme;
+    document.body.classList.toggle('endcraze', !!state.endgame.active);
+    document.getElementById('soundToggleBtn').textContent = state.soundEnabled ? '🔊' : '🔇';
+
+    bindEvents();
+
+    if(!isFreshGame){
+      applyOfflineProgress();
+    } else {
+      setTimeout(openHelpModal, 600);
+    }
+
+    renderAll();
+
+    restartSchedulers();
+
+    setInterval(mainTick, 100);
+    setInterval(renderSlow, 500);
+    setInterval(function(){ saveGame(false); }, 10000);
+
+    window.addEventListener('beforeunload', function(){ saveGame(false); });
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+})();
+</script>
+
+</body>
+</html>

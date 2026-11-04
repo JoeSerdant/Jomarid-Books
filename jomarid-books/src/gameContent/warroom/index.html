@@ -1,0 +1,2693 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>WARROOM: FRONTLINES</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+        :root { 
+            --bg: #020617; --panel: rgba(15, 23, 42, 0.85); --border: #1e293b;
+            --accent: #10b981; --warning: #f59e0b; --danger: #ef4444;
+            --tech: #3b82f6; --text-main: #94a3b8; --purple: #a855f7;
+            --gold: #fbbf24; --cyan: #06b6d4; --toxic: #84cc16;
+        }
+
+        * { box-sizing: border-box; }
+        
+        body { 
+            font-family: 'Share Tech Mono', monospace; background-color: var(--bg); color: var(--text-main); 
+            display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; user-select: none;
+            background-image: radial-gradient(circle at center, #1a1f35 0%, #020617 100%); overflow: hidden;
+            box-shadow: inset 0 0 150px rgba(0,0,0,1);
+        }
+
+        body::after {
+            content: ""; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.15) 1px, transparent 1px, transparent 2px);
+            pointer-events: none; z-index: 1000;
+        }
+
+        h1, h2, h3, h4, button, .stat-value, .badge { text-shadow: 0 0 4px currentColor; }
+
+        .glass-panel {
+            background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+            backdrop-filter: blur(10px); box-shadow: 0 10px 40px rgba(0,0,0,0.8), inset 0 0 40px rgba(0,0,0,0.6);
+        }
+
+        .wizard-screen { display: none; text-align: center; max-width: 1150px; width: 95%; padding: 30px; z-index: 10; position: relative; max-height: 95vh; overflow-y: auto;}
+        .wizard-screen.active { display: block; animation: fadeInUI 0.4s ease-out; }
+        
+        .scenarios-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 20px;}
+        @media (max-width: 1000px) { .scenarios-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 550px) { .scenarios-grid { grid-template-columns: 1fr; } }
+        
+        .card { background: rgba(0,0,0,0.5); border: 1px solid var(--border); padding: 15px; border-radius: 8px; cursor: pointer; transition: all 0.2s; text-align: left; position: relative; overflow: hidden;}
+        .card:not(.locked-card):hover { border-color: var(--tech); background: rgba(59, 130, 246, 0.1); transform: translateY(-3px); box-shadow: 0 5px 15px rgba(59, 130, 246, 0.2); }
+        .card h4 { margin: 15px 0 8px 0; color: #fff; font-size: 0.95rem; letter-spacing: 1px;}
+        .card .scenario-tag { position: absolute; top: 10px; right: 10px; font-size: 0.65rem; background: rgba(0,0,0,0.8); border: 1px solid var(--border); padding: 3px 8px; border-radius: 4px; color: #fff; font-weight: bold; z-index: 2;}
+        .scenario-year { font-size: 0.7rem; font-weight: normal; color: #6b7280; }
+        .card small { font-size: 0.75rem; display: block; padding-right: 5px; color: #8a99ad; }
+
+        .locked-card { opacity: 0.45; cursor: not-allowed; border-color: #1a222d !important; background: rgba(5,7,10,0.8) !important; }
+        .locked-card h4 { color: #556275 !important; text-shadow: none !important; }
+
+        #game-screen { display: none; width: 95%; max-width: 850px; padding: 25px; z-index: 10; position: relative; max-height: 95vh; overflow-y: auto;}
+        
+        .shake { animation: shakeAnim 0.3s ease-in-out; }
+        .crisis { animation: crisisPulse 2s infinite alternate; border-color: var(--danger) !important; }
+        @keyframes shakeAnim { 0%, 100% { transform: translate(0, 0); } 20%, 60% { transform: translate(-5px, 3px); } 40%, 80% { transform: translate(5px, -3px); } }
+        @keyframes crisisPulse { 0% { box-shadow: 0 0 15px rgba(239, 68, 68, 0.1); } 100% { box-shadow: 0 0 40px rgba(239, 68, 68, 0.4); } }
+        @keyframes fadeInUI { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px dashed var(--border); padding-bottom: 15px; }
+        .header h2 { margin: 0; color: #fff; letter-spacing: 3px; font-size: 1.4rem; text-shadow: 0 0 10px rgba(255,255,255,0.5); }
+        .badge { background: rgba(0,0,0,0.6); border: 1px solid var(--border); padding: 5px 10px; border-radius: 6px; font-weight: bold; font-size: 0.85rem; margin-left: 6px; box-shadow: inset 0 0 5px rgba(0,0,0,0.5);}
+
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; text-align: center; }
+        .stat-box { background: rgba(0,0,0,0.5); padding: 10px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.85rem; }
+        .stat-value { display: block; font-size: 1.4rem; font-weight: bold; margin-top: 6px; }
+
+        #scenario-module { border: 1px solid var(--border); background: rgba(0,0,0,0.4); padding: 12px; border-radius: 6px; margin-bottom: 20px; text-align: center; }
+        #scenario-status { font-weight: bold; font-size: 1.15rem; color: #fff; letter-spacing: 1px;}
+        #scenario-desc { font-size: 0.85rem; color: var(--text-main); margin-top: 5px; }
+
+        .gauge-wrap { height: 32px; background: #000; border: 2px solid var(--border); border-radius: 8px; position: relative; overflow: hidden; margin-bottom: 20px; box-shadow: inset 0 0 15px rgba(0,0,0,1); }
+        #gauge { height: 100%; background: var(--accent); width: 50%; transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .gauge-text { position: absolute; width: 100%; text-align: center; line-height: 32px; color: #fff; font-weight: bold; z-index: 5; text-shadow: 1px 1px 3px #000; font-size: 1rem; letter-spacing: 1px;}
+        .vietnam-hidden #gauge { background: #111 !important; }
+        .vietnam-hidden .gauge-text { color: #444; }
+
+        #radar-wrap { display: none; margin: 20px 0; }
+        #radar { height: 70px; background: #020305; position: relative; border: 2px solid var(--border); border-radius: 6px; cursor: crosshair; overflow: hidden; box-shadow: inset 0 0 20px rgba(16,185,129,0.05); }
+        .target-zone { position: absolute; top: 0; height: 100%; background: rgba(16, 185, 129, 0.2); border-left: 2px dashed var(--accent); border-right: 2px dashed var(--accent); }
+        #pointer { position: absolute; top: 0; left: 50%; width: 3px; height: 100%; background: #fff; box-shadow: 0 0 10px #fff; }
+
+        .section-title { font-size: 0.85rem; text-transform: uppercase; color: #fff; margin: 20px 0 10px 0; letter-spacing: 2px; border-bottom: 1px solid var(--border); padding-bottom: 5px; }
+        .grid-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+        .grid-3 { grid-template-columns: repeat(3, 1fr); }
+        
+        .grid-upgrades { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
+        @media (max-width: 768px) { .grid-upgrades { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 480px) { .grid-upgrades { grid-template-columns: 1fr; } }
+        
+        button { 
+            font-family: 'Share Tech Mono', monospace; padding: 12px; border: 1px solid var(--border); 
+            border-radius: 6px; cursor: pointer; transition: all 0.1s ease-in-out; text-transform: uppercase; 
+            font-weight: bold; font-size: 0.9rem; position: relative; overflow: hidden;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+        button:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 0px 0 rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05); }
+        button::before {
+            content: ""; position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent); transform: skewX(-20deg); transition: 0s;
+        }
+        button:hover:not(:disabled)::before { animation: buttonShine 0.6s forwards; }
+        @keyframes buttonShine { 100% { left: 200%; } }
+
+        button:disabled { 
+            opacity: 0.4 !important; cursor: not-allowed; filter: grayscale(100%); 
+            background: rgba(0,0,0,0.5) !important; border-color: #222 !important; 
+            color: #666 !important; transform: translateY(0) !important; 
+            box-shadow: 0 4px 0 #111 !important; text-shadow: none;
+        }
+
+        .btn-main { background: linear-gradient(180deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05)); color: var(--accent); border-color: var(--accent); box-shadow: 0 4px 0 rgba(16,185,129,0.3); }
+        .btn-warn { background: linear-gradient(180deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05)); color: var(--warning); border-color: var(--warning); box-shadow: 0 4px 0 rgba(245,158,11,0.3); }
+        .btn-tech { background: linear-gradient(180deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.05)); color: var(--tech); border-color: var(--tech); box-shadow: 0 4px 0 rgba(59,130,246,0.3); }
+        .btn-spec { background: linear-gradient(180deg, rgba(168, 85, 247, 0.15), rgba(168, 85, 247, 0.05)); color: var(--purple); border-color: var(--purple); box-shadow: 0 4px 0 rgba(168,85,247,0.3); }
+        .btn-gold { background: linear-gradient(180deg, rgba(251, 191, 36, 0.15), rgba(251, 191, 36, 0.05)); color: var(--gold); border-color: var(--gold); box-shadow: 0 4px 0 rgba(251,191,36,0.3); }
+
+        .terminal-log { background: #000; border: 1px solid var(--border); padding: 12px; height: 140px; overflow-y: auto; font-size: 0.85rem; display: flex; flex-direction: column; gap: 6px; margin-top: 20px; border-radius: 6px; box-shadow: inset 0 0 10px rgba(0,0,0,1);}
+        .log-entry { animation: fadeIn 0.2s forwards; border-left: 2px solid transparent; padding-left: 5px;}
+        .log-entry.t-green { border-color: var(--accent); } .log-entry.t-red { border-color: var(--danger); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateX(-5px); } to { opacity: 1; transform: translateX(0); } }
+
+        .t-green { color: var(--accent); } .t-red { color: var(--danger); } .t-orange { color: var(--warning); } 
+        .t-blue { color: var(--tech); } .t-white { color: #fff; } .t-purple { color: var(--purple); } 
+        .t-gold { color: var(--gold); } .t-cyan { color: var(--cyan); } .t-toxic { color: var(--toxic); } .t-gray { color: #556275; }
+
+        #overlay-sector {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); z-index: 50; flex-direction: column; justify-content: center; align-items: center;
+            border-radius: 12px; backdrop-filter: blur(5px); animation: fadeInUI 0.4s ease-out;
+        }
+        #overlay-sector h1 { color: var(--accent); font-size: 2.5rem; letter-spacing: 5px; margin-bottom: 10px; text-align: center;}
+        #overlay-sector p { color: #fff; margin-bottom: 30px; font-size: 1.1rem;}
+        
+        .upg-info { font-size: 0.7rem; color: #8a99ad; display: block; margin-top: 3px; font-weight: normal;}
+
+        /* Toasts popups style */
+        .toast-notification {
+            position: fixed; top: 20px; right: -350px; width: 300px; 
+            background: rgba(16, 24, 35, 0.95); border: 2px solid var(--accent);
+            color: #fff; padding: 15px; border-radius: 8px; font-weight: bold;
+            z-index: 2000; box-shadow: 0 5px 25px rgba(0,0,0,0.7);
+            font-family: 'Share Tech Mono', monospace;
+            transition: right 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .toast-notification.active { right: 20px; }
+        .toast-title { color: var(--accent); font-size: 0.8rem; letter-spacing: 1px; margin-bottom: 5px; text-transform: uppercase; }
+        .toast-body { font-size: 0.95rem; }
+
+        /* ===== MODERNIZACE: pozadí, HUD prvky, feedback efekty ===== */
+
+        body::before {
+            content: ""; position: fixed; top: 50%; left: 50%; width: 2600px; height: 2600px;
+            margin: -1300px 0 0 -1300px; pointer-events: none; z-index: 0;
+            background: conic-gradient(from 0deg, rgba(16,185,129,0.09), transparent 18%, transparent 100%);
+            animation: radarSweep 7s linear infinite;
+        }
+        @keyframes radarSweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        #sound-toggle {
+            position: fixed; top: 16px; left: 16px; z-index: 1500; width: 46px; height: 46px;
+            border-radius: 50%; border: 1px solid var(--border); background: rgba(15,23,42,0.85);
+            color: var(--text-main); font-size: 1.2rem; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; backdrop-filter: blur(6px); box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+            transition: all 0.2s;
+        }
+        #sound-toggle:hover { border-color: var(--accent); color: var(--accent); transform: scale(1.08); }
+        #sound-toggle.muted { color: #556275; }
+
+        .float-text {
+            position: fixed; font-weight: bold; font-size: 1.1rem; pointer-events: none; z-index: 900;
+            text-shadow: 0 0 6px currentColor, 1px 1px 3px #000; animation: floatUp 1.2s ease-out forwards;
+            white-space: nowrap;
+        }
+        @keyframes floatUp {
+            0%   { opacity: 0; transform: translateY(0) scale(0.85); }
+            15%  { opacity: 1; transform: translateY(-8px) scale(1.05); }
+            100% { opacity: 0; transform: translateY(-75px) scale(1); }
+        }
+
+        .particle {
+            position: fixed; width: 5px; height: 5px; border-radius: 50%; pointer-events: none; z-index: 899;
+            transition: transform 0.6s cubic-bezier(0.15, 0.7, 0.4, 1), opacity 0.6s ease-out;
+        }
+
+        .flash-good { animation: flashGood 0.5s ease-out; }
+        .flash-bad { animation: flashBad 0.5s ease-out; }
+        @keyframes flashGood { 0% { box-shadow: 0 0 0 3px rgba(16,185,129,0.9), inset 0 0 15px rgba(16,185,129,0.6); } 100% { box-shadow: none; } }
+        @keyframes flashBad  { 0% { box-shadow: 0 0 0 3px rgba(239,68,68,0.9), inset 0 0 15px rgba(239,68,68,0.6); } 100% { box-shadow: none; } }
+
+        #vignette-flash {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 800;
+            opacity: 0; background: radial-gradient(circle, transparent 40%, rgba(239,68,68,0.35) 100%);
+        }
+        #vignette-flash.hit { animation: vignetteHit 0.6s ease-out; }
+        @keyframes vignetteHit { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+        @media (max-width: 550px) {
+            #sound-toggle { width: 40px; height: 40px; font-size: 1rem; top: 10px; left: 10px; }
+        }
+
+        /* Skryté pole pro cheat kód - vypadá jako neškodné číslo verze */
+        #cheat-input {
+            position: fixed; bottom: 4px; left: 50%; transform: translateX(-50%);
+            width: 100px; height: 16px; font-size: 9px; text-align: center;
+            background: transparent; border: none; color: rgba(255,255,255,0.12);
+            z-index: 1400; outline: none; font-family: 'Share Tech Mono', monospace;
+            letter-spacing: 1px; caret-color: transparent;
+        }
+        #cheat-input:focus { caret-color: rgba(255,255,255,0.3); }
+
+        #cheat-menu {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.88); z-index: 3000; justify-content: center; align-items: center;
+            backdrop-filter: blur(6px); animation: fadeInUI 0.3s ease-out;
+        }
+        .cheat-panel {
+            background: rgba(20,20,25,0.98); border: 2px solid #fbbf24; border-radius: 12px;
+            padding: 30px; width: 90%; max-width: 420px; text-align: center;
+            box-shadow: 0 0 40px rgba(251,191,36,0.3);
+        }
+        .cheat-panel h2 { color: #fbbf24; letter-spacing: 2px; margin-bottom: 8px; }
+        .cheat-sub { color: #9ca3af; font-size: 0.85rem; margin-bottom: 20px; }
+        .cheat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+        .cheat-grid button {
+            padding: 14px 8px; background: rgba(251,191,36,0.1); border: 1px solid #fbbf24;
+            color: #fbbf24; border-radius: 8px; cursor: pointer; font-family: inherit; font-weight: bold;
+            font-size: 0.85rem; transition: all 0.15s;
+        }
+        .cheat-grid button:hover { background: rgba(251,191,36,0.25); transform: scale(1.03); }
+        .cheat-close {
+            width: 100%; padding: 12px; background: rgba(239,68,68,0.15); border: 1px solid var(--danger);
+            color: var(--danger); border-radius: 8px; cursor: pointer; font-family: inherit; font-weight: bold;
+        }
+        .cheat-close:hover { background: rgba(239,68,68,0.3); }
+
+        /* ===== TUTORIÁL ===== */
+        #tutorial-help-btn {
+            position: fixed; top: 16px; left: 70px; z-index: 1500; width: 46px; height: 46px;
+            border-radius: 50%; border: 1px solid var(--border); background: rgba(15,23,42,0.85);
+            color: var(--accent); font-size: 1.3rem; font-weight: bold; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; backdrop-filter: blur(6px); box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+        }
+        #tutorial-help-btn:hover { border-color: var(--accent); transform: scale(1.08); }
+        @media (max-width: 550px) { #tutorial-help-btn { width: 40px; height: 40px; font-size: 1.1rem; top: 10px; left: 58px; } }
+
+        #tutorial-intro {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.92); z-index: 2800; justify-content: center; align-items: center;
+            backdrop-filter: blur(6px); animation: fadeInUI 0.4s ease-out;
+        }
+        .tutorial-intro-panel {
+            background: rgba(15,20,28,0.98); border: 2px solid var(--accent); border-radius: 12px;
+            padding: 35px; width: 90%; max-width: 480px; text-align: center;
+            box-shadow: 0 0 40px rgba(16,185,129,0.25);
+        }
+        .tutorial-intro-panel h2 { color: var(--accent); letter-spacing: 1px; margin-bottom: 15px; font-size: 1.3rem; }
+        .tutorial-intro-panel p { color: #d1d5db; font-size: 0.9rem; line-height: 1.6; margin-bottom: 25px; }
+        .tutorial-intro-btns { display: flex; flex-direction: column; gap: 10px; }
+        .tutorial-intro-btns button { padding: 14px; font-size: 0.9rem; }
+
+        #tutorial-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 2600; pointer-events: none; }
+        #tutorial-spotlight {
+            position: fixed; border-radius: 10px; pointer-events: none; z-index: 2601;
+            box-shadow: 0 0 0 9999px rgba(0,0,0,0.78);
+            border: 2px solid var(--accent);
+            transition: top 0.35s ease, left 0.35s ease, width 0.35s ease, height 0.35s ease;
+        }
+        #tutorial-box {
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+            width: 90%; max-width: 480px; background: rgba(15,20,28,0.98); border: 2px solid var(--accent);
+            border-radius: 12px; padding: 20px; z-index: 2602; pointer-events: auto;
+            box-shadow: 0 0 30px rgba(16,185,129,0.25);
+        }
+        #tutorial-text { color: #fff; font-size: 0.9rem; line-height: 1.5; margin-bottom: 8px; }
+        #tutorial-hint { font-size: 0.8rem; margin-bottom: 12px; min-height: 1em; font-weight: bold; }
+        #tutorial-nav { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        #tutorial-skip-btn { background: none; border: none; color: #6b7280; font-family: inherit; font-size: 0.8rem; cursor: pointer; text-decoration: underline; }
+        #tutorial-skip-btn:hover { color: #9ca3af; }
+        #tutorial-next-btn { padding: 10px 20px; background: var(--accent); color: #04120c; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-family: inherit; }
+        #tutorial-next-btn:hover { filter: brightness(1.1); }
+        #tutorial-next-btn.hidden-nav { display: none; }
+
+        /* ======================================================================
+           Grafika: mapa v pozadí, HUD rámečky, karty s emblémy, přístroje.
+           Vrstva přes základní styl výš, herní logiku nemění.
+           ====================================================================== */
+        body {
+            background-image:
+                radial-gradient(ellipse at 50% 40%, rgba(59,130,246,0.10), transparent 60%),
+                url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='84' viewBox='0 0 96 84'><path d='M24 0l24 14v28L24 56 0 42V14zM72 42l24 14v28L72 98 48 84V56z' fill='none' stroke='%2338507a' stroke-opacity='.22' stroke-width='1'/></svg>"),
+                radial-gradient(circle at center, #1a1f35 0%, #020617 100%);
+            background-size: auto, 96px 84px, auto;
+        }
+        /* soustředné kruhy radaru uprostřed obrazovky */
+        body::before {
+            background:
+                repeating-radial-gradient(circle at 50% 50%, transparent 0 140px, rgba(16,185,129,0.07) 140px 141.5px),
+                conic-gradient(from 0deg, rgba(16,185,129,0.14), transparent 16%, transparent 100%);
+        }
+
+        /* panely: rohové značky a jemný přechod */
+        .glass-panel {
+            background:
+                linear-gradient(var(--accent), var(--accent)) top left / 22px 2px no-repeat,
+                linear-gradient(var(--accent), var(--accent)) top left / 2px 22px no-repeat,
+                linear-gradient(var(--accent), var(--accent)) top right / 22px 2px no-repeat,
+                linear-gradient(var(--accent), var(--accent)) top right / 2px 22px no-repeat,
+                linear-gradient(var(--accent), var(--accent)) bottom left / 22px 2px no-repeat,
+                linear-gradient(var(--accent), var(--accent)) bottom left / 2px 22px no-repeat,
+                linear-gradient(var(--accent), var(--accent)) bottom right / 22px 2px no-repeat,
+                linear-gradient(var(--accent), var(--accent)) bottom right / 2px 22px no-repeat,
+                linear-gradient(160deg, rgba(30,41,59,0.9), rgba(2,6,23,0.92) 60%);
+            border-color: rgba(56,80,122,0.55);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8), inset 0 0 40px rgba(0,0,0,0.6), 0 0 30px rgba(16,185,129,0.06);
+        }
+        #screen-scenario h1 { background: linear-gradient(180deg, #fff, #9fb7e6); -webkit-background-clip: text; background-clip: text; color: transparent !important; filter: drop-shadow(0 0 10px rgba(59,130,246,0.55)); text-shadow: none; }
+
+        /* karty: barevný proužek podle štítku, emblém, číslo operace */
+        .card {
+            --tag: #3b82f6;
+            background: linear-gradient(160deg, rgba(30,41,59,0.55), rgba(0,0,0,0.6) 70%);
+            box-shadow: inset 0 3px 0 var(--tag), inset 0 0 30px rgba(0,0,0,0.5);
+            padding-left: 62px;
+        }
+        .card:not(.locked-card):hover { border-color: var(--tag); background: linear-gradient(160deg, rgba(59,130,246,0.14), rgba(0,0,0,0.55) 70%); box-shadow: inset 0 3px 0 var(--tag), 0 8px 22px rgba(0,0,0,0.5), 0 0 18px color-mix(in srgb, var(--tag) 35%, transparent); }
+        .card-emblem {
+            position: absolute; left: 12px; top: 38px; width: 40px; height: 44px; display: flex; align-items: center; justify-content: center;
+            font-size: 1.35rem; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+            background: linear-gradient(160deg, color-mix(in srgb, var(--tag) 55%, #000), rgba(0,0,0,0.8)); box-shadow: inset 0 0 12px rgba(255,255,255,0.12);
+            filter: drop-shadow(0 0 6px color-mix(in srgb, var(--tag) 60%, transparent));
+        }
+        .card-idx { position: absolute; left: 12px; top: 12px; font-size: 0.62rem; letter-spacing: 2px; color: #64748b; }
+        .card h4 { overflow-wrap: anywhere; }
+        .locked-card { --tag: #334155 !important; }
+        .locked-card .card-emblem { filter: grayscale(1); opacity: 0.8; }
+        .scenario-tag { box-shadow: 0 0 8px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.25); letter-spacing: 1px; }
+        @media (max-width: 550px) { .card { padding-left: 58px; } }
+        /* doktríny jsou vždy ve třech sloupcích: emblém nad textem, ne vedle něj */
+        #doctrines-container .card { padding-left: 15px; padding-top: 74px; }
+        #doctrines-container .card-emblem { top: 32px; }
+
+        /* záhlaví hry */
+        .header h2 { background: linear-gradient(90deg, #fff, #7dd3fc); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; filter: drop-shadow(0 0 8px rgba(125,211,252,0.45)); }
+        .badge { background: linear-gradient(180deg, rgba(30,41,59,0.8), rgba(0,0,0,0.7)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 2px 8px rgba(0,0,0,0.5); }
+
+        /* ukazatele zásob, VB, tlaku a krit. šance */
+        .stat-box { --c: #64748b; position: relative; overflow: hidden; background: linear-gradient(180deg, rgba(30,41,59,0.55), rgba(0,0,0,0.6)); box-shadow: inset 0 -2px 0 var(--c), inset 0 0 20px rgba(0,0,0,0.5); text-transform: uppercase; letter-spacing: 1px; font-size: 0.72rem; }
+        .stat-box::before { content: "";  position: absolute; left: 0; top: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--c), transparent); opacity: 0.9; }
+        .stat-box:nth-child(1) { --c: #f59e0b; } .stat-box:nth-child(2) { --c: #3b82f6; } .stat-box:nth-child(3) { --c: #ef4444; } .stat-box:nth-child(4) { --c: #10b981; }
+        .stat-value { font-size: 1.6rem; letter-spacing: 0; text-shadow: 0 0 12px currentColor; }
+
+        #scenario-module { background: linear-gradient(180deg, rgba(30,41,59,0.45), rgba(0,0,0,0.5)); border-color: rgba(56,80,122,0.5); box-shadow: inset 0 0 24px rgba(0,0,0,0.5); position: relative; }
+        #scenario-module::before { content: "STATUS"; position: absolute; left: 10px; top: 4px; font-size: 0.55rem; letter-spacing: 3px; color: #475569; }
+
+        /* fronta: segmentovaný lesklý ukazatel s plynule běžícími pruhy */
+        .gauge-wrap { background: linear-gradient(180deg, #000, #0a0f1a); box-shadow: inset 0 0 15px rgba(0,0,0,1), 0 0 18px rgba(0,0,0,0.5); }
+        #gauge {
+            background-image:
+                linear-gradient(180deg, rgba(255,255,255,0.38), rgba(255,255,255,0) 55%, rgba(0,0,0,0.25)),
+                repeating-linear-gradient(90deg, rgba(0,0,0,0.28) 0 2px, transparent 2px 16px);
+            box-shadow: 0 0 18px currentColor; position: relative;
+        }
+        #gauge::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(115deg, rgba(255,255,255,0.1) 0 10px, transparent 10px 20px); background-size: 28px 100%; animation: gaugeFlow 1.4s linear infinite; }
+        @keyframes gaugeFlow { to { background-position: 28px 0; } }
+        .vietnam-hidden #gauge::after { display: none; }
+
+        /* radar: mřížka, středová čára, pulzující zóna a zářící ukazatel */
+        #radar {
+            background:
+                linear-gradient(rgba(16,185,129,0.25), rgba(16,185,129,0.25)) center / 100% 1px no-repeat,
+                repeating-linear-gradient(90deg, rgba(16,185,129,0.12) 0 1px, transparent 1px 10%),
+                repeating-linear-gradient(0deg, rgba(16,185,129,0.08) 0 1px, transparent 1px 25%),
+                radial-gradient(ellipse at 50% 50%, rgba(16,185,129,0.10), #020305 75%);
+        }
+        .target-zone { background: linear-gradient(180deg, rgba(16,185,129,0.34), rgba(16,185,129,0.12)); box-shadow: 0 0 22px rgba(16,185,129,0.35), inset 0 0 14px rgba(16,185,129,0.25); animation: zonePulse 1.6s ease-in-out infinite alternate; }
+        @keyframes zonePulse { from { opacity: 0.75; } to { opacity: 1; } }
+        #pointer { background: linear-gradient(180deg, transparent, #fff 12%, #fff 88%, transparent); box-shadow: 0 0 14px #fff, 0 0 30px rgba(125,211,252,0.7); }
+
+        /* tlačítka a sekce */
+        .section-title { display: flex; align-items: center; gap: 10px; border-bottom: none; color: #cbd5e1; }
+        .section-title::before { content: ""; width: 8px; height: 8px; background: var(--accent); transform: rotate(45deg); box-shadow: 0 0 8px var(--accent); flex-shrink: 0; }
+        .section-title::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(56,80,122,0.7), transparent); }
+        .btn-main:hover:not(:disabled) { box-shadow: 0 4px 0 rgba(16,185,129,0.3), 0 0 18px rgba(16,185,129,0.35); }
+        .btn-warn:hover:not(:disabled) { box-shadow: 0 4px 0 rgba(245,158,11,0.3), 0 0 18px rgba(245,158,11,0.35); }
+        .btn-tech:hover:not(:disabled) { box-shadow: 0 4px 0 rgba(59,130,246,0.3), 0 0 18px rgba(59,130,246,0.35); }
+        .btn-spec:hover:not(:disabled) { box-shadow: 0 4px 0 rgba(168,85,247,0.3), 0 0 18px rgba(168,85,247,0.35); }
+        .btn-gold:hover:not(:disabled) { box-shadow: 0 4px 0 rgba(251,191,36,0.3), 0 0 18px rgba(251,191,36,0.35); }
+
+        /* terminál: fosforová záře a jemný odlesk */
+        .terminal-log { background: linear-gradient(180deg, rgba(2,12,8,0.95), #000); border-color: rgba(16,185,129,0.25); box-shadow: inset 0 0 26px rgba(16,185,129,0.08), inset 0 2px 0 rgba(255,255,255,0.03); text-shadow: 0 0 5px currentColor; }
+
+        /* přechod mezi sektory */
+        #overlay-sector { background: radial-gradient(circle at 50% 42%, rgba(16,185,129,0.16), rgba(0,0,0,0.94) 70%); }
+        #overlay-sector h1 { text-shadow: 0 0 24px rgba(16,185,129,0.7); }
+
+        /* tlačítka zvuk a nápověda stojí vedle odkazu zpět do Jomarid Books, ne pod ním ani na hlavičce hry */
+        #sound-toggle { top: 8px; left: 148px; }
+        #tutorial-help-btn { top: 8px; left: 202px; }
+        @media (max-width: 550px) { #sound-toggle { top: 6px; left: 148px; } #tutorial-help-btn { top: 6px; left: 196px; } }
+
+    </style>
+<script>/* JOMARID-BRIDGE */
+(function () {
+  var GAME_ID = 'warroom';
+  var inFrame = false;
+  try { inFrame = !!window.parent && window.parent !== window; } catch (e) { inFrame = false; }
+  var pending = 0, reasons = {}, timer = null;
+
+  function flush() {
+    timer = null;
+    if (!pending || !inFrame) { pending = 0; reasons = {}; return; }
+    var top = 'event', topAmt = 0;
+    for (var k in reasons) { if (reasons[k] > topAmt) { top = k; topAmt = reasons[k]; } }
+    var amount = pending; pending = 0; reasons = {};
+    try { window.parent.postMessage({ source: 'jomarid-game', type: 'coin', game: GAME_ID, amount: amount, reason: top }, '*'); } catch (e) {}
+  }
+
+  // Hra jen POSILA ZADOST o odmenu - o tom, kolik Jomarid Coins se skutecne udeli,
+  // rozhoduje server (denni stropy). Vice udalosti v rychlem sledu se sloucí do jedne zpravy.
+  // Potvrzení odměny (kolik se skutečně připsalo) ukazuje lišta appky nad hrou, hra samotná nic nezobrazuje.
+  window.jomaridReward = function (reason, amount, immediate) {
+    if (!inFrame) return;
+    amount = Math.floor(Number(amount));
+    if (!isFinite(amount) || amount < 1) return;
+    var r = reason || 'event';
+    pending += amount;
+    reasons[r] = (reasons[r] || 0) + amount;
+    if (immediate) { if (timer) clearTimeout(timer); flush(); }
+    else if (!timer) { timer = setTimeout(flush, 1200); }
+  };
+
+  // Rekordy hry (nejlepší skóre, nejvyšší úroveň...): hra jen hlásí aktuální hodnotu, o zápisu a odznacích rozhoduje server.
+  // Hlásí se jen zvýšení oproti naposledy odeslanému (stejná nebo nižší hodnota se neposílá znovu) a víc hlášení v rychlém sledu se sloučí.
+  var recSent = {}, recPending = {}, recTimer = null;
+  function recFlush() {
+    recTimer = null;
+    var pend = recPending; recPending = {};
+    if (!inFrame) return;
+    for (var k in pend) {
+      if (pend[k] <= (recSent[k] || 0)) continue;
+      recSent[k] = pend[k];
+      try { window.parent.postMessage({ source: 'jomarid-game', type: 'record', game: GAME_ID, stat: k, value: pend[k] }, '*'); } catch (e) {}
+    }
+  }
+  window.jomaridRecord = function (stat, value, immediate) {
+    if (!inFrame || typeof stat !== 'string') return;
+    value = Math.floor(Number(value));
+    if (!isFinite(value) || value < 1) return;
+    if (value <= (recSent[stat] || 0) || value <= (recPending[stat] || 0)) return;
+    recPending[stat] = value;
+    if (immediate) { if (recTimer) clearTimeout(recTimer); recFlush(); }
+    else if (!recTimer) { recTimer = setTimeout(recFlush, 1500); }
+  };
+
+  window.addEventListener('pagehide', function () { if (timer) clearTimeout(timer); flush(); if (recTimer) clearTimeout(recTimer); recFlush(); });
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target.closest('#btn-back-to-jomarid') : null;
+    if (t) { if (timer) clearTimeout(timer); flush(); if (recTimer) clearTimeout(recTimer); recFlush(); }
+  }, true);
+})();
+</script>
+
+</head>
+<body>
+<a href="/games" id="btn-back-to-jomarid" onclick="try { if (typeof checkSectorUnlockProgression === 'function') checkSectorUnlockProgression(); } catch (e) {} if (window.parent !== window) { window.parent.postMessage({ source: 'jomarid-game', type: 'close' }, '*'); return false; }" style="position:fixed; top:calc(10px + env(safe-area-inset-top,0px)); left:10px; z-index:9999; color:#94a3b8; font-size:11px; letter-spacing:0.5px; text-decoration:none; background:rgba(2,6,23,0.75); padding:6px 10px; border-radius:8px; border:1px solid #1e293b; backdrop-filter: blur(4px); font-family: 'Share Tech Mono', monospace;">← Jomarid Books</a>
+
+<div id="vignette-flash"></div>
+<button id="sound-toggle" onclick="toggleSound()" title="Zapnout/vypnout zvuk">🔊</button>
+
+<input type="text" id="cheat-input" maxlength="20" autocomplete="off" spellcheck="false"
+    value="v4.2"
+    onfocus="if(this.value==='v4.2') this.value='';"
+    onblur="if(this.value==='') this.value='v4.2';"
+    oninput="checkCheatCode(this.value)">
+
+<button id="tutorial-help-btn" onclick="startTutorial()" title="Spustit tutoriál">?</button>
+
+<div id="tutorial-intro">
+    <div class="tutorial-intro-panel">
+        <h2>🎖️ VÍTEJ VE WARROOM: FRONTLINES</h2>
+        <p>Jsi velitel na vzdálené frontě. Musíš dotlačit linii z počáteční pozice až na maximum dřív, než tě zničí tlak nepřítele. Projdi si krátký interaktivní tutoriál a nauč se základy velení.</p>
+        <div class="tutorial-intro-btns">
+            <button class="btn-main" onclick="startTutorial()">SPUSTIT INTERAKTIVNÍ TUTORIÁL</button>
+            <button class="btn-warn" onclick="skipTutorial()">PŘESKOČIT, CHCI HRÁT ROVNOU</button>
+        </div>
+    </div>
+</div>
+
+<div id="tutorial-overlay">
+    <div id="tutorial-spotlight"></div>
+    <div id="tutorial-box">
+        <div id="tutorial-text"></div>
+        <div id="tutorial-hint" class="t-orange"></div>
+        <div id="tutorial-nav">
+            <button id="tutorial-skip-btn" onclick="skipTutorial()">Přeskočit tutoriál</button>
+            <button id="tutorial-next-btn" onclick="tutorialNext()">Další ›</button>
+        </div>
+    </div>
+</div>
+
+<div id="cheat-menu">
+    <div class="cheat-panel">
+        <h2>🛠️ VELITELSKÁ KONZOLE</h2>
+        <p class="cheat-sub">Neoficiální ladicí nástroje. Použití je na tvou vlastní zodpovědnost.</p>
+        <div class="cheat-grid">
+            <button onclick="cheatAction('cp')">+1000 VB</button>
+            <button onclick="cheatAction('supplies')">+500 Zásob</button>
+            <button onclick="cheatAction('front')">+200 Fronta</button>
+            <button onclick="cheatAction('maxfront')">Vyhrát sektor</button>
+            <button onclick="cheatAction('unlockall')">Odemknout vše</button>
+            <button onclick="cheatAction('badges')">Všechny odznaky</button>
+            <button onclick="cheatAction('god')" id="cheat-god-btn">Nesmrtelnost: VYPNUTO</button>
+        </div>
+        <button class="cheat-close" onclick="closeCheatMenu()">ZAVŘÍT KONZOLI</button>
+    </div>
+</div>
+
+<div id="screen-scenario" class="wizard-screen active glass-panel">
+    <h1 class="t-white" style="letter-spacing:5px; margin-top:0; font-size: 2.2rem; text-shadow: 0 0 8px var(--tech);">WARROOM: FRONTLINES</h1>
+    <p style="color: #8a99ad; margin-bottom: 25px;">Zvol dějiště konfliktu. Pro odemčení dalšího scénáře musíš v předchozím dosáhnout <b>Sektoru 10</b>.</p>
+    
+    <div class="scenarios-grid" id="scenarios-container">
+        <!-- Generováno dynamicky pomocí JS -->
+    </div>
+
+    <div style="margin-top: 35px; border-top: 1px dashed var(--border); padding-top: 20px;">
+        <button class="btn-warn" style="font-size: 0.8rem; padding: 8px 16px;" onclick="resetSave()">VYMAZAT VŠECHNY POZICE (RESET)</button>
+    </div>
+</div>
+
+<div id="screen-doctrine" class="wizard-screen glass-panel">
+    <h2 class="t-white" style="letter-spacing:3px; margin-top:0;">ZVOL DOKTRÍNU VELENÍ</h2>
+    <p style="color: #8a99ad; margin-bottom: 25px;">Některé specializace jsou zpočátku zamčené a vyžadují splnění bojových úkolů.</p>
+    
+    <div class="scenarios-grid" style="grid-template-columns: repeat(3, 1fr);" id="doctrines-container">
+        <!-- Generováno dynamicky pomocí JS -->
+    </div>
+</div>
+
+<div id="game-screen" class="glass-panel">
+    <div id="overlay-sector">
+        <h1 id="os-title">SEKTOR DOBYT</h1>
+        <p id="os-desc">Vynikající práce, veliteli. Přesouváme linie!</p>
+        <button class="btn-main" onclick="nextSector()" style="font-size:1.2rem; padding: 15px 30px;">POKRAČOVAT DO DALŠÍ OBLASTI</button>
+    </div>
+
+    <div class="header">
+        <h2>FRONTLINES <span style="font-size: 0.8rem; color: #555;">v4.0</span></h2>
+        <div>
+            <span class="badge t-purple" id="lbl-scenario">SCÉNÁŘ</span>
+            <span class="badge t-blue" id="lbl-doctrine">DOKTRÍNA</span>
+            <span class="badge t-white">DEN <span id="val-day">1</span></span>
+        </div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-box">Zásoby<span class="stat-value t-orange" id="val-sup">10</span></div>
+        <div class="stat-box">Velit. Body<span class="stat-value t-blue" id="val-cp">0</span></div>
+        <div class="stat-box">Denní Tlak<span class="stat-value t-red" id="val-push">-5</span></div>
+        <div class="stat-box">Krit. Šance<span class="stat-value t-green" id="val-crit">15%</span></div>
+    </div>
+
+    <div id="scenario-module">
+        <div id="scenario-status">STATUS</div>
+        <div id="scenario-desc">Popis</div>
+    </div>
+
+    <div class="gauge-wrap" id="gauge-container">
+        <div class="gauge-text" id="gauge-text">FRONTLINE: <span id="val-front">250</span> / 500</div>
+        <div id="gauge"></div>
+    </div>
+
+    <div id="radar-wrap">
+        <div id="radar">
+            <div class="target-zone" id="t-zone"></div>
+            <div id="pointer"></div>
+        </div>
+    </div>
+
+    <div id="controls-wrap">
+        <div class="grid-buttons">
+            <button class="btn-main" id="btn-atk" onclick="startAttack()">OFENZÍVA</button>
+            <button class="btn-warn" id="btn-sup" onclick="doLogistics()">LOGISTIKA</button>
+        </div>
+        
+        <div class="section-title">Velitelství & Speciální operace</div>
+        <div class="grid-buttons grid-3" id="command-grid">
+            <button class="btn-tech" id="btn-art" onclick="useArtillery()">Baráž</button>
+            <button class="btn-tech" id="btn-air" onclick="useAirdrop()">Shoz</button>
+            <button class="btn-spec" id="btn-scenario" onclick="useScenarioSkill()">SKILL</button>
+        </div>
+
+        <div class="section-title">Výzkum a Vývoj (R&D) Globální Projekty</div>
+        <div class="grid-upgrades" id="upgrades-grid">
+            <button class="btn-tech" id="upg-sup" onclick="buyUpgrade('supply')">Logistika <span id="cost-sup">15</span><span class="upg-info" id="info-sup">Výnos +30%</span></button>
+            <button class="btn-tech" id="upg-rad" onclick="buyUpgrade('radar')">Optika <span id="cost-rad">25</span><span class="upg-info" id="info-rad">Zóna +25%</span></button>
+            <button class="btn-tech" id="upg-dmg" onclick="buyUpgrade('dmg')">Zbraně <span id="cost-dmg">40</span><span class="upg-info" id="info-dmg">Síla +20%</span></button>
+            <button class="btn-tech" id="upg-cpg" onclick="buyUpgrade('cpGain')">Velení <span id="cost-cpg">20</span><span class="upg-info" id="info-cpg">Příjem +20%</span></button>
+            <button class="btn-tech" id="upg-arm" onclick="buyUpgrade('armor')">Pancíř <span id="cost-arm">30</span><span class="upg-info" id="info-arm">Tlak -5%</span></button>
+            <button class="btn-tech" id="upg-rec" onclick="buyUpgrade('recon')">Průzkum <span id="cost-rec">35</span><span class="upg-info" id="info-rec">Pasivní VB</span></button>
+            
+            <!-- 3 Nové globální výzkumy -->
+            <button class="btn-tech" id="upg-crt" onclick="buyUpgrade('critical')">Kritika <span id="cost-crt">30</span><span class="upg-info" id="info-crt">Crit Šance +5%</span></button>
+            <button class="btn-tech" id="upg-itg" onclick="buyUpgrade('intel_gain')">Rozvědka <span id="cost-itg">25</span><span class="upg-info" id="info-itg">Tolerance zásahu</span></button>
+            <button class="btn-tech" id="upg-eng" onclick="buyUpgrade('engineering')">Ženisté <span id="cost-eng">35</span><span class="upg-info" id="info-eng">Počáteční HP +5%</span></button>
+        </div>
+        
+        <div class="section-title">Exkluzivní Taktické Moduly (Unikátní pro Scénář)</div>
+        <div class="grid-buttons grid-3" id="exclusive-grid" style="margin-bottom:0;">
+            <button class="btn-gold" id="btn-excl-1" onclick="buyExclusiveTech(1)">TECH 1</button>
+            <button class="btn-gold" id="btn-excl-2" onclick="buyExclusiveTech(2)">TECH 2</button>
+            <button class="btn-gold" id="btn-excl-3" onclick="buyExclusiveTech(3)">TECH 3</button>
+        </div>
+    </div>
+
+    <div class="terminal-log" id="log"></div>
+</div>
+
+<script>
+    const el = id => document.getElementById(id);
+
+    // =====================================================================
+    // ZVUKOVÝ ENGINE — vše generováno procedurálně přes Web Audio API,
+    // takže hra nepotřebuje žádné externí zvukové soubory.
+    // =====================================================================
+    const Sound = (() => {
+        let ctx = null, master = null, ambientStarted = false;
+        let muted = false;
+        try { muted = localStorage.getItem('warroom_muted') === '1'; } catch (e) { muted = false; }
+
+        function ensureCtx() {
+            if (!ctx) {
+                const AC = window.AudioContext || window.webkitAudioContext;
+                if (!AC) return null;
+                ctx = new AC();
+                master = ctx.createGain();
+                master.gain.value = muted ? 0 : 0.55;
+                master.connect(ctx.destination);
+            }
+            if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+            return ctx;
+        }
+
+        function tone(freq, duration, type = 'sine', gain = 0.3, glideTo = null, delay = 0) {
+            const c = ensureCtx();
+            if (!c) return;
+            const t0 = c.currentTime + delay;
+            const osc = c.createOscillator();
+            const g = c.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, t0);
+            if (glideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(1, glideTo), t0 + duration);
+            g.gain.setValueAtTime(0.0001, t0);
+            g.gain.exponentialRampToValueAtTime(gain, t0 + 0.01);
+            g.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+            osc.connect(g); g.connect(master);
+            osc.start(t0); osc.stop(t0 + duration + 0.02);
+        }
+
+        function noise(duration, gain = 0.3, filterFreq = 1200, delay = 0) {
+            const c = ensureCtx();
+            if (!c) return;
+            const t0 = c.currentTime + delay;
+            const size = Math.max(1, Math.floor(c.sampleRate * duration));
+            const buffer = c.createBuffer(1, size, c.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < size; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / size);
+            const src = c.createBufferSource();
+            src.buffer = buffer;
+            const filter = c.createBiquadFilter();
+            filter.type = 'lowpass'; filter.frequency.value = filterFreq;
+            const g = c.createGain();
+            g.gain.setValueAtTime(gain, t0);
+            g.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+            src.connect(filter); filter.connect(g); g.connect(master);
+            src.start(t0);
+        }
+
+        function startAmbient() {
+            const c = ensureCtx();
+            if (!c || ambientStarted) return;
+            ambientStarted = true;
+
+            // Hluboký hukot velitelského stanoviště (dva rozladěné oscilátory)
+            const droneGain = c.createGain();
+            droneGain.gain.value = 0.05;
+            droneGain.connect(master);
+
+            [55, 55.6].forEach(f => {
+                const o = c.createOscillator();
+                o.type = 'sawtooth'; o.frequency.value = f;
+                const lp = c.createBiquadFilter();
+                lp.type = 'lowpass'; lp.frequency.value = 220;
+                o.connect(lp); lp.connect(droneGain);
+                o.start();
+            });
+
+            // Pomalé "dýchání" hlasitosti hukotu
+            const lfo = c.createOscillator();
+            lfo.type = 'sine'; lfo.frequency.value = 0.08;
+            const lfoGain = c.createGain(); lfoGain.gain.value = 0.03;
+            lfo.connect(lfoGain); lfoGain.connect(droneGain.gain);
+            lfo.start();
+
+            // Tichý periodický radarový "ping" na pozadí
+            let pingTick = 0;
+            setInterval(() => {
+                if (muted) return;
+                pingTick++;
+                tone(1800, 0.08, 'sine', 0.02);
+            }, 4200);
+        }
+
+        function setMuted(v) {
+            muted = v;
+            try { localStorage.setItem('warroom_muted', muted ? '1' : '0'); } catch (e) {}
+            if (master) master.gain.value = muted ? 0 : 0.55;
+        }
+
+        return {
+            unlock() { ensureCtx(); startAmbient(); },
+            isMuted: () => muted,
+            toggleMuted() { setMuted(!muted); return muted; },
+
+            click()    { tone(700, 0.05, 'square', 0.10); },
+            hit()      { tone(240, 0.14, 'sawtooth', 0.22, 100); noise(0.10, 0.14, 900); },
+            graze()    { tone(320, 0.10, 'triangle', 0.15, 220); },
+            crit()     { tone(160, 0.30, 'sawtooth', 0.30, 45); noise(0.28, 0.28, 500); tone(900, 0.12, 'square', 0.12, null, 0.05); },
+            perfect()  { [700, 1000, 1400].forEach((f, i) => tone(f, 0.18, 'triangle', 0.22, null, i * 0.06)); },
+            miss()     { tone(140, 0.22, 'sine', 0.18, 55); },
+            save()     { tone(500, 0.10, 'triangle', 0.15); tone(750, 0.10, 'triangle', 0.12, null, 0.08); },
+            boom()     { noise(0.35, 0.35, 260); tone(85, 0.45, 'sine', 0.28, 35); },
+            drop()     { tone(500, 0.35, 'sine', 0.18, 220); },
+            resupply() { tone(600, 0.08, 'triangle', 0.16); tone(850, 0.10, 'triangle', 0.14, null, 0.07); },
+            buy()      { tone(880, 0.07, 'triangle', 0.18); tone(1200, 0.09, 'triangle', 0.14, null, 0.06); },
+            unlock()   { [660, 880, 1100].forEach((f, i) => tone(f, 0.16, 'triangle', 0.22, null, i * 0.09)); },
+            deny()     { tone(180, 0.12, 'square', 0.16); },
+            shake()    { tone(70, 0.25, 'sine', 0.2); },
+            victory()  { [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.30, 'triangle', 0.22, null, i * 0.15)); },
+            defeat()   { [420, 360, 300, 200].forEach((f, i) => tone(f, 0.45, 'sawtooth', 0.22, f * 0.7, i * 0.22)); }
+        };
+    })();
+
+    function toggleSound() {
+        const isMuted = Sound.toggleMuted();
+        const btn = el('sound-toggle');
+        btn.textContent = isMuted ? '🔇' : '🔊';
+        btn.classList.toggle('muted', isMuted);
+        if (!isMuted) Sound.unlock();
+    }
+
+    // Nastavení počátečního stavu tlačítka zvuku a odemčení AudioContext při prvním doteku/kliku
+    (function initSoundUI() {
+        const btn = el('sound-toggle');
+        if (btn && Sound.isMuted()) { btn.textContent = '🔇'; btn.classList.add('muted'); }
+        const unlockOnce = () => { Sound.unlock(); document.removeEventListener('pointerdown', unlockOnce); };
+        document.addEventListener('pointerdown', unlockOnce);
+    })();
+
+    // =====================================================================
+    // SKRYTÁ VELITELSKÁ KONZOLE (cheat menu) — aktivuje se zadáním "67MILUJU"
+    // do nenápadného pole úplně dole na stránce.
+    // =====================================================================
+    function checkCheatCode(value) {
+        if (value === '67MILUJU') {
+            openCheatMenu();
+            el('cheat-input').value = '';
+            el('cheat-input').blur();
+        }
+    }
+
+    function openCheatMenu() {
+        Sound.unlock();
+        Sound.perfect();
+        el('cheat-menu').style.display = 'flex';
+        let godBtn = el('cheat-god-btn');
+        if (godBtn) godBtn.innerText = `Nesmrtelnost: ${state.godMode ? 'ZAPNUTO' : 'VYPNUTO'}`;
+    }
+
+    function closeCheatMenu() {
+        Sound.click();
+        el('cheat-menu').style.display = 'none';
+    }
+
+    // Všechny statistiky na prahy odznaků (tlačítko Všechny odznaky), jen na zkoušení.
+    const CHEAT_STATS = {best_sector:40,scenarios_unlocked:24,scenarios_cleared:16,scenarios_deep:10,scenarios_started:24,doctrines_unlocked:12,doctrines_used:8,sectors_cleared:200,defeats:30,best_day:150,turns_total:5000,attacks:3000,bullseyes:500,crits:500,misses:100,saves:5,logistics_runs:250,artillery_used:100,airdrops_used:100,skills_used:100,upgrades_bought:100,max_upgrade_level:10,exclusive_techs:25,supply_peak:150,cp_peak:5000,last_stands:5,zombie_peak:8,ww2_streak:8,trench_peak:500};
+
+    function cheatAction(type) {
+        Sound.buy();
+        const gameActive = el('game-screen') && el('game-screen').style.display === 'block';
+
+        if (type === 'unlockall') {
+            try {
+                let allScen = SCENARIOS.map(s => s.id);
+                let allDoc = DOCTRINES.map(d => d.id);
+                saveProgress({ unlockedScenarios: allScen, unlockedDoctrines: allDoc, highScores: {}, stats: loadProgress().stats });
+            } catch (e) { /* ignore */ }
+            showUnlockNotification('Veškerý obsah odemčen. Hra se za chvíli restartuje...');
+            setTimeout(() => location.reload(), 1500);
+            return;
+        }
+
+        if (type === 'badges') {
+            try {
+                const prog = loadProgress();
+                const ids = SCENARIOS.map(s => s.id);
+                prog.unlockedScenarios = ids;
+                prog.unlockedDoctrines = DOCTRINES.map(d => d.id);
+                ids.forEach((id, i) => {
+                    const want = i < CHEAT_STATS.scenarios_deep ? CHEAT_STATS.best_sector : (i < CHEAT_STATS.scenarios_cleared ? 2 : 0);
+                    if (want > (prog.highScores[id] || 0)) prog.highScores[id] = want;
+                });
+                const st = prog.stats;
+                TRACKED_STATS.forEach(k => { st[k] = Math.max(st[k] || 0, CHEAT_STATS[k] || 0); });
+                st.scen = {}; ids.forEach(id => { st.scen[id] = 1; });
+                st.docts = {}; prog.unlockedDoctrines.forEach(id => { st.docts[id] = 1; });
+                saveProgress(prog);
+            } catch (e) { /* ignore */ }
+            showUnlockNotification('Všechny statistiky jsou na hodnotách pro odznaky. Hra se za chvíli restartuje...');
+            setTimeout(() => location.reload(), 1500);
+            return;
+        }
+
+        if (!gameActive) {
+            showUnlockNotification('Nejprve zahaj tažení - pak bude konzole plně funkční.');
+            return;
+        }
+
+        if (type === 'cp') { state.cp += 1000; }
+        else if (type === 'supplies') { state.supplies += 500; }
+        else if (type === 'front') { state.front = Math.min(state.maxFront, state.front + 200); }
+        else if (type === 'maxfront') { state.front = state.maxFront; }
+        else if (type === 'god') {
+            state.godMode = !state.godMode;
+            el('cheat-god-btn').innerText = `Nesmrtelnost: ${state.godMode ? 'ZAPNUTO' : 'VYPNUTO'}`;
+        }
+
+        updateUI();
+        checkWinLoss();
+    }
+
+    // =====================================================================
+    // INTERAKTIVNÍ TUTORIÁL
+    // =====================================================================
+    let tutorialActive = false;
+    let tutorialStep = -1;
+    let tutorialWaitFor = null;
+
+    const TUTORIAL_STEPS = [
+        { target: '#scenarios-container', text: 'Nejprve vyber VÁLEČNÝ SCÉNÁŘ. Každý má jinou mapu, tempo hry i vlastní speciální mechaniku. Pro první hru doporučujeme "ZÁKLADNÍ FRONTA".', hint: '👉 Klikni na libovolný scénář, abys pokračoval.', waitFor: 'scenario' },
+        { target: '#doctrines-container', text: 'Nyní zvol VELITELSKOU DOKTRÍNU - trvalý styl velení pro celé tažení. Ovlivňuje poškození, obranu i speciální schopnosti.', hint: '👉 Klikni na libovolnou doktrínu, abys pokračoval.', waitFor: 'doctrine' },
+        { target: '#gauge-container', text: 'Toto je FRONTA - zdraví tvé linie. Cílem každého sektoru je dotlačit ji až na maximum. Pokud klesne na 0, tažení končí.', hint: '', waitFor: null },
+        { target: '.stats-grid', text: 'ZÁSOBY pohánějí Ofenzívu, VELITELSKÉ BODY (VB) financují speciální akce a výzkum, DEN počítá, kolik tahů uplynulo.', hint: '', waitFor: null },
+        { target: '#btn-atk', text: 'OFENZÍVA stojí Zásoby a otevře radar pro přesné zaměření na nepřítele.', hint: '👉 Zkus na ni kliknout!', waitFor: 'attack' },
+        { target: '#radar', text: 'Klikni přesně doprostřed lišty pro nejlepší možný zásah - čím blíž středu, tím větší škoda a bonusy.', hint: '👉 Klikni kdekoliv na radar.', waitFor: 'radarClick' },
+        { target: '#btn-sup', text: 'LOGISTIKA vymění část Fronty za Zásoby. Užitečné, když ti dochází palivo do dalších útoků.', hint: '👉 Zkus na ni kliknout!', waitFor: 'logistics' },
+        { target: '#command-grid', text: 'BARÁŽ a SHOZ jsou okamžité akce za VB, které nespotřebují den navíc. SKILL je unikátní schopnost tvého scénáře.', hint: '', waitFor: null },
+        { target: '#upgrades-grid', text: 'VÝZKUM trvale vylepšuje tvé jednotky za VB. Vyplatí se investovat postupně do více směrů, ne jen do jednoho.', hint: '', waitFor: null },
+        { target: '#exclusive-grid', text: 'EXKLUZIVNÍ TECHNOLOGIE jsou silné, jednorázové nákupy platné jen pro aktuální sektor - po jeho dokončení je nutné je koupit znovu.', hint: '', waitFor: null, final: true }
+    ];
+
+    function shouldSkipStep(idx) {
+        if (idx < 0 || idx >= TUTORIAL_STEPS.length) return false;
+        let step = TUTORIAL_STEPS[idx];
+        // Scénář Mlýnek na maso útočí automaticky bez radaru - krok s mířením přeskoč
+        if (step.target === '#radar' && state.scenario === 'attrition') return true;
+        return false;
+    }
+
+    function startTutorial() {
+        Sound.unlock();
+        Sound.click();
+        el('tutorial-intro').style.display = 'none';
+        tutorialActive = true;
+        const gameActive = el('game-screen') && el('game-screen').style.display === 'block';
+        // Pokud je tažení již rozehrané, přeskočí se kroky výběru scénáře/doktríny 
+        // (aby opětovné spuštění tutoriálu přes tlačítko "?" nerestartovalo rozehranou hru).
+        tutorialStep = gameActive ? 1 : -1;
+        tutorialNext();
+    }
+
+    function skipTutorial() {
+        Sound.click();
+        tutorialActive = false;
+        tutorialWaitFor = null;
+        el('tutorial-intro').style.display = 'none';
+        el('tutorial-overlay').style.display = 'none';
+        try { localStorage.setItem('warroom_tutorial_done', '1'); } catch (e) {}
+    }
+
+    function tutorialAdvanceIf(key) {
+        if (tutorialActive && tutorialWaitFor === key) {
+            tutorialWaitFor = null;
+            setTimeout(tutorialNext, 450);
+        }
+    }
+
+    function tutorialNext() {
+        if (!tutorialActive) return;
+        tutorialStep++;
+        while (shouldSkipStep(tutorialStep)) tutorialStep++;
+
+        if (tutorialStep >= TUTORIAL_STEPS.length) {
+            skipTutorial();
+            showUnlockNotification('Tutoriál dokončen! Hodně štěstí, veliteli. 🎖️');
+            return;
+        }
+
+        let step = TUTORIAL_STEPS[tutorialStep];
+        el('tutorial-overlay').style.display = 'block';
+        el('tutorial-text').innerText = step.text;
+        el('tutorial-hint').innerText = step.hint || '';
+        tutorialWaitFor = step.waitFor || null;
+
+        let nextBtn = el('tutorial-next-btn');
+        if (step.waitFor) {
+            nextBtn.classList.add('hidden-nav');
+        } else {
+            nextBtn.classList.remove('hidden-nav');
+            nextBtn.innerText = step.final ? 'Dokončit tutoriál ✓' : 'Další ›';
+        }
+
+        positionSpotlight(step.target);
+    }
+
+    function positionSpotlight(selector) {
+        const target = document.querySelector(selector);
+        const spot = el('tutorial-spotlight');
+        if (!target || !spot) { if (spot) spot.style.opacity = '0'; return; }
+        const r = target.getBoundingClientRect();
+        spot.style.opacity = '1';
+        spot.style.top = (r.top - 6) + 'px';
+        spot.style.left = (r.left - 6) + 'px';
+        spot.style.width = (r.width + 12) + 'px';
+        spot.style.height = (r.height + 12) + 'px';
+    }
+
+    // Přepočítá polohu spotlightu při změně velikosti okna (mobilní rotace atp.)
+    window.addEventListener('resize', () => {
+        if (tutorialActive && tutorialStep >= 0 && tutorialStep < TUTORIAL_STEPS.length) {
+            positionSpotlight(TUTORIAL_STEPS[tutorialStep].target);
+        }
+    });
+
+    // Automatické spuštění úvodní obrazovky tutoriálu při první návštěvě
+    (function initTutorial() {
+        let seen = false;
+        try { seen = localStorage.getItem('warroom_tutorial_done') === '1'; } catch (e) {}
+        if (!seen) {
+            el('tutorial-intro').style.display = 'flex';
+        }
+    })();
+
+    // =====================================================================
+    // VIZUÁLNÍ FEEDBACK — létající čísla, jiskry a zásahové efekty
+    // =====================================================================
+    function floatText(text, colorClass, anchorId = 'gauge-container') {
+        const anchor = el(anchorId);
+        if (!anchor) return;
+        const rect = anchor.getBoundingClientRect();
+        const span = document.createElement('div');
+        span.className = `float-text ${colorClass}`;
+        span.textContent = text;
+        span.style.left = (rect.left + rect.width * (0.30 + Math.random() * 0.40)) + 'px';
+        span.style.top = (rect.top + rect.height * 0.5) + 'px';
+        document.body.appendChild(span);
+        setTimeout(() => span.remove(), 1250);
+    }
+
+    function spawnParticles(colorVar, count = 14, anchorId = 'gauge-container') {
+        const anchor = el(anchorId);
+        if (!anchor) return;
+        const rect = anchor.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+        for (let i = 0; i < count; i++) {
+            const p = document.createElement('div');
+            p.className = 'particle';
+            p.style.background = colorVar;
+            p.style.boxShadow = `0 0 6px ${colorVar}`;
+            p.style.left = cx + 'px';
+            p.style.top = cy + 'px';
+            p.style.opacity = '1';
+            document.body.appendChild(p);
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 40 + Math.random() * 90;
+            requestAnimationFrame(() => {
+                p.style.transform = `translate(${Math.cos(angle) * dist}px, ${Math.sin(angle) * dist}px)`;
+                p.style.opacity = '0';
+            });
+            setTimeout(() => p.remove(), 650);
+        }
+    }
+
+    function flashVignette() {
+        const v = el('vignette-flash');
+        v.classList.remove('hit'); 
+        void v.offsetWidth; // restart animace
+        v.classList.add('hit');
+    }
+
+    function flashPanel(good) {
+        const s = el('game-screen');
+        s.classList.remove('flash-good', 'flash-bad');
+        void s.offsetWidth;
+        s.classList.add(good ? 'flash-good' : 'flash-bad');
+    }
+
+    let anim;
+    
+    // UI upgrade mapování
+    const upgradeUIMap = { 
+        'supply': 'sup', 'radar': 'rad', 'dmg': 'dmg', 
+        'cpGain': 'cpg', 'armor': 'arm', 'recon': 'rec',
+        'critical': 'crt', 'intel_gain': 'itg', 'engineering': 'eng'
+    };
+
+    // Všechny definované scénáře
+    const RAW_SCENARIOS = [
+        { id: 'default', tag: 'BASE', name: 'ZÁKLADNÍ FRONTA', desc: 'Vyvážená bojová linie bez zvláštních anomálií.', baseMax: 500, year: 0 },
+
+        // --- NOVÝ SCÉNÁŘ: Napoleonské války ---
+        { id: 'napoleon_siege', tag: 'NAPOLEON', name: 'OBLÉHÁNÍ PEVNOSTI', desc: 'Nepřesné mušketové salvy - úzká zaměřovací zóna, ale zbraně jsou levné a časté.', baseMax: 550, year: 1812 },
+
+        { id: 'ww1_west', tag: 'WWI', name: 'ZÁPADNÍ FRONTA', desc: 'Útoky nabíjejí bojovou přípravu. Výhra pouze masivní ztečí.', baseMax: 600, year: 1914 },
+        { id: 'ww1_east', tag: 'WWI', name: 'VÝCHODNÍ FRONTA', desc: 'Zásobování kolabuje. Logistika nese minimum zásob.', baseMax: 450, year: 1914 },
+        { id: 'ww2_blitz', tag: 'WWII', name: 'BLESKOVÁ VÁLKA', desc: 'Hybnost je klíčem k vítězství. Minutí tě fatálně ochromí.', baseMax: 400, year: 1940 },
+        { id: 'ww2_pacific', tag: 'WWII', name: 'PACIFIK', desc: 'Ustoupit do moře nelze. Velmi rychlé a dynamické sektory.', baseMax: 200, year: 1941 },
+        { id: 'winter_war', tag: 'WWII', name: 'ZIMNÍ VÁLKA', desc: 'Extrémní tlak sovětských vojsk. Nutná rychlá sabotáž.', baseMax: 500, year: 1939 },
+
+        // --- NOVÝ SCÉNÁŘ: Korejská válka ---
+        { id: 'korea', tag: 'COLD WAR', name: 'KOREJSKÁ VÁLKA', desc: 'Drtivé lidské vlny ze severu. Letecké shozy OSN nesou o polovinu více zásob.', baseMax: 600, year: 1950 },
+
+        { id: 'guerilla', tag: 'COLD WAR', name: 'ODBOJ', desc: 'Zásoby jsou kradeny přímo z těl nepřátel při přesných zásazích.', baseMax: 350, year: 1960 },
+        { id: 'vietnam', tag: 'COLD WAR', name: 'VIETNAM', desc: 'Neviditelná fronta skrytá v džungli, dokud nepoužiješ Napalm.', baseMax: 450, year: 1965 },
+
+        // --- NOVÝ SCÉNÁŘ: Jomkipurská válka ---
+        { id: 'yom_kippur', tag: 'COLD WAR', name: 'JOM KIPUR', desc: 'Náhlý útok o Svátku smíření. První 3 dny je tlak nepřítele dvojnásobný, pak opadne.', baseMax: 500, year: 1973 },
+
+        // --- NOVÝ SCÉNÁŘ: Falklandská válka ---
+        { id: 'falklands', tag: 'NAVAL', name: 'FALKLANDY', desc: 'Zásobovací linie táhnou přes celý oceán (útok stojí 2 Zásoby), ale přesné zásahy krví o +10% vyšší šanci na kritický zásah.', baseMax: 400, year: 1982 },
+
+        { id: 'desert', tag: 'GULF WAR', name: 'POUŠTNÍ BOUŘE', desc: 'Vyprahlé území. Ofenzíva stojí dvojnásobek zásob.', baseMax: 600, year: 1991 },
+        { id: 'blockade', tag: 'NAVAL', name: 'NÁMOŘNÍ BLOKÁDA', desc: 'Extrémně drahý útok (3 Zásoby). Logistika hraje primární roli.', baseMax: 600, year: 2008 },
+        { id: 'modern_ew', tag: 'MODERN', name: 'KYBER VÁLKA', desc: 'Permanentní elektromagnetické rušení drasticky zrychluje radar.', baseMax: 500, year: 2015 },
+        { id: 'urban', tag: 'MODERN', name: 'MĚSTSKÝ BOJ', desc: 'Dlouhý sektor plný ruin. permanentní 50% postih k poškození.', baseMax: 1000, year: 2018 },
+        { id: 'zombie', tag: 'HORROR', name: 'ZOMBIE NÁKAZA', desc: 'Minutí zvedá hladinu mutace. Každý omyl trvale zesiluje tlak.', baseMax: 500, year: 2020 },
+        { id: 'drone', tag: 'MODERN', name: 'DRONOVÁ VÁLKA', desc: 'Vzdušné shozy a klasická artilerie jsou kompletně odpojeny.', baseMax: 400, year: 2022 },
+        { id: 'attrition', tag: 'ALT-HIST', name: 'MLÝNEK NA MASO', desc: 'Operuješ naslepo bez radaru. Čistá matematická simulace boje.', baseMax: 700, year: 2026 },
+        { id: 'cyber_rebel', tag: 'SCI-FI', name: 'KYBER POVSTÁNÍ', desc: 'Radar se chová nepředvídatelně a kmitá chaoticky. Zásahy dají +20 VB.', baseMax: 500, year: 2030 },
+        { id: 'nuke_winter', tag: 'ALT-HIST', name: 'NUKLEÁRNÍ ZIMA', desc: 'Extrémní mráz ti bere -1 Zásobu každý tah. Tlak nepřítele je poloviční.', baseMax: 550, year: 2035 },
+        { id: 'space', tag: 'SCI-FI', name: 'ORBITÁLNÍ VÁLKA', desc: 'Závratné kosmické tempo radaru. Kdo na sekundu zaváhá, zemře.', baseMax: 400, year: 2150 },
+        { id: 'alien_inv', tag: 'SCI-FI', name: 'MIMOZEMSKÁ INVAZE', desc: 'Mimozemšťané mají energetický štít, který pohlcuje poškození a dobíjí se.', baseMax: 650, year: 2200 },
+
+        // --- NOVÝ SCÉNÁŘ: Marsovská kolonie ---
+        { id: 'mars_colony', tag: 'SCI-FI', name: 'MARSOVSKÁ KOLONIE', desc: 'Nízká gravitace posiluje výbušniny (+10% Dmg), ale nedostatek zdrojů snižuje zisk Zásob (-20%).', baseMax: 700, year: 2250 }
+    ];
+
+    // Scénáře jsou vždy seřazeny chronologicky (od nejstaršího konfliktu po nejnovější / sci-fi budoucnost).
+    // "default" zůstává vždy první jako základní výcvikový scénář bez pevného data.
+    const SCENARIOS = RAW_SCENARIOS.slice().sort((a, b) => {
+        if (a.id === 'default') return -1;
+        if (b.id === 'default') return 1;
+        return a.year - b.year;
+    });
+
+    // Všechny definované doktríny
+    const DOCTRINES = [
+        { id: 'blitz', name: 'ÚTOČNÁ - Blitz', desc: '+30% Dmg. Tlak +15%. Unikátní: Kritický zásah nestojí Zásoby.', unlockInfo: 'Základní doktrína' },
+        { id: 'fortress', name: 'OBRANNÁ - Pevnost', desc: 'Tlak snížen o -20%. Unikátní: Max Fronta zvýšena o +20%.', unlockInfo: 'Základní doktrína' },
+        { id: 'intel', name: 'ZPRAVODAJSKÁ - Intel', desc: 'Crit šance +25%. Dmg -15%. Unikátní: Absolutní střed radaru = +20 VB.', unlockInfo: 'Dosáhni Sektoru 5 v Bleskové válce' },
+        { id: 'quartermaster', name: 'LOGISTICKÁ - Zásoby', desc: 'Startuješ s 20 Z. Unikátní: Máš-li pod 5 Z, logistika nestojí žádnou Frontu.', unlockInfo: 'Dosáhni Sektoru 5 ve Východní frontě / Blokádě' },
+        { id: 'tech', name: 'TECHNOLOGICKÁ - R&D', desc: 'Výzkumy o 25% levnější. Unikátní: Koupě výzkumu přidá +10 Fronty.', unlockInfo: 'Dosáhni Sektoru 5 v Kyber válce' },
+        { id: 'artillery', name: 'DĚLOSTŘELECKÁ - Shock', desc: 'Skilly o 25% levnější. Crit jen 5%. Unikátní: Baráž ochromí nepřítele na 2 dny.', unlockInfo: 'Dosáhni Sektoru 5 v Západní frontě' },
+        { id: 'partisan', name: 'ODBOJOVÁ - Partyzán', desc: '+30% zisk z logistiky. Dmg -20%. Unikátní: +50% Dmg do ochromeného cíle.', unlockInfo: 'Dosáhni Sektoru 5 v Odboji / Vietnamu' },
+        { id: 'propaganda', name: 'POLITICKÁ - Osvěta', desc: '+25% zisk všech VB. Tlak +15%. Unikátní: Každý 10. den se linie vyléčí o +50 bodů.', unlockInfo: 'Dosáhni Sektoru 10 v Základní frontě' },
+        { id: 'fanatic', name: 'FANATICKÁ - Víra', desc: 'Pod 35% HP udělíš +50% Dmg. Unikátní: Last Stand. Zabrání první smrti v sektoru.', unlockInfo: 'Dosáhni Sektoru 5 v Zombie nákaze / Mlýnku' },
+        
+        // Nové doktríny
+        { id: 'fleet', name: 'NÁMOŘNÍ - Fleet', desc: 'Výnos logistiky +40%. Přesný zásah v cílové zóně má 30% šanci vrátit použitou zásobu.', unlockInfo: 'Dosáhni Sektoru 5 v Pacifiku / Blokádě' },
+        { id: 'mercenary', name: 'ŽOLDÁCKÁ - Kontrakt', desc: 'Hospodářská doktrína. Každý den získáš extra +2 VB za každou zbývající jednotku Zásob.', unlockInfo: 'Dosáhni Sektoru 5 v Pouštní bouři' },
+        { id: 'chemical', name: 'CHEMICKÁ - Toxic', desc: 'Každý úspěšný útok do nepřítele má 15% šanci, že ho okamžitě ochromí na 1 kolo.', unlockInfo: 'Dosáhni Sektoru 5 v Kyber povstání / Nukleární zimě' }
+    ];
+
+    // ===== SYNERGIE SCÉNÁŘ + DOKTRÍNA =====
+    // Vždy jen POZITIVNÍ bonus za tematicky vhodnou kombinaci - nikdy postih za "špatnou" volbu.
+    const SYNERGIES = {
+        'guerilla|partisan':     { label: 'PARTYZÁNSKÁ TAKTIKA', type: 'supply',    value: 0.20 },
+        'vietnam|partisan':      { label: 'PARTYZÁNSKÁ TAKTIKA', type: 'crit',      value: 0.15 },
+        'ww1_west|artillery':    { label: 'DĚLOSTŘELECKÁ ŠKOLA', type: 'skillCost', value: -0.15 },
+        'urban|fortress':        { label: 'OPEVNĚNÉ ULICE',      type: 'maxFrontOnce', value: 0.15 },
+        'ww2_pacific|fleet':     { label: 'NÁMOŘNÍ PODPORA',     type: 'supply',    value: 0.20 },
+        'blockade|fleet':        { label: 'NÁMOŘNÍ PODPORA',     type: 'supply',    value: 0.20 },
+        'falklands|fleet':       { label: 'NÁMOŘNÍ PODPORA',     type: 'crit',      value: 0.15 },
+        'modern_ew|tech':        { label: 'VYSPĚLÁ TECHNIKA',    type: 'dmg',       value: 0.10 },
+        'cyber_rebel|tech':      { label: 'VYSPĚLÁ TECHNIKA',    type: 'dmg',       value: 0.10 },
+        'zombie|chemical':       { label: 'TOXICKÁ SYNERGIE',    type: 'dmg',       value: 0.10 },
+        'nuke_winter|chemical':  { label: 'TOXICKÁ SYNERGIE',    type: 'push',      value: -0.15 },
+        'desert|mercenary':      { label: 'VÁLEČNÝ OBCHODNÍK',   type: 'cp',        value: 0.10 },
+        'blockade|mercenary':    { label: 'VÁLEČNÝ OBCHODNÍK',   type: 'cp',        value: 0.10 },
+        'napoleon_siege|intel':  { label: 'POLNÍ DALEKOHLEDY',   type: 'radar',     value: 0.20 },
+        'korea|blitz':           { label: 'PRŮLOM FRONTY',       type: 'dmg',       value: 0.10 },
+        'yom_kippur|propaganda': { label: 'NÁRODNÍ MOBILIZACE',  type: 'cp',        value: 0.15 },
+        'attrition|fanatic':     { label: 'FANATICKÁ VÍRA',      type: 'skillCost', value: -0.15 }
+    };
+
+    function getSynergy() {
+        return SYNERGIES[state.scenario + '|' + state.doctrine] || null;
+    }
+    function getSynergyBonus(type) {
+        let syn = getSynergy();
+        return (syn && syn.type === type) ? syn.value : 0;
+    }
+
+    let state = {
+        scenario: '', doctrine: '',
+        front: 250, maxFront: 500, supplies: 10, cp: 0, day: 1, sector: 1,
+        baseEnemyPush: 6, isAiming: false, currentPointerPos: 50, enemyStunned: 0,
+        exclusiveBought1: false, exclusiveBought2: false, exclusiveBought3: false,
+        gamePaused: false, fanaticUsed: false, alienShield: 0, godMode: false,
+        
+        ww1_trenchPrep: 0, ww2_momentumPlayer: 0, ww2_momentumEnemy: 0,
+        viet_revealed: 0, modern_counterTimer: 0, zombie_mutation: 0,
+        
+        costArt: 30, costAir: 20, costSkill: 0,
+
+        upgrades: {
+            supply: { name: 'Logistika', level: 1, cost: 15 },
+            radar:  { name: 'Optika',    level: 1, cost: 25 },
+            dmg:    { name: 'Zbraně',    level: 1, cost: 40 },
+            cpGain: { name: 'Velení',    level: 1, cost: 20 },
+            armor:  { name: 'Pancíř',    level: 1, cost: 30 }, 
+            recon:  { name: 'Průzkum',   level: 1, cost: 35 },
+            
+            // 3 Nové globální výzkumy
+            critical: { name: 'Kritika', level: 1, cost: 30 },
+            intel_gain: { name: 'Rozvědka', level: 1, cost: 25 },
+            engineering: { name: 'Ženisté', level: 1, cost: 35 }
+        }
+    };
+
+    // --- PROGRESS SYSTÉM (LOCAL STORAGE) ---
+    function loadProgress() {
+        let saved = null;
+        try { saved = localStorage.getItem('warroom_frontlines_save_v1'); } catch (e) { saved = null; }
+        if (saved) {
+            try {
+                let parsed = JSON.parse(saved);
+                if (!parsed.unlockedScenarios) parsed.unlockedScenarios = ['default'];
+                if (!parsed.unlockedDoctrines) parsed.unlockedDoctrines = ['blitz', 'fortress'];
+                if (!parsed.highScores) parsed.highScores = {};
+                if (!parsed.stats || typeof parsed.stats !== 'object') parsed.stats = {};
+                return parsed;
+            } catch (e) {
+                console.error("Chyba při čtení uloženého progressu.");
+            }
+        }
+        return {
+            unlockedScenarios: ['default'],
+            unlockedDoctrines: ['blitz', 'fortress'],
+            highScores: {},
+            stats: {}
+        };
+    }
+
+    // Čítače pro odznaky (prog.stats) se ukládají s postupem kampaně. Názvy jsou stejné jako statistiky v src/gameRecords/defs/warroom.js.
+    const TRACKED_STATS = ['sectors_cleared', 'defeats', 'best_day', 'turns_total', 'attacks', 'bullseyes', 'crits', 'misses', 'saves', 'logistics_runs', 'artillery_used',
+        'airdrops_used', 'skills_used', 'upgrades_bought', 'max_upgrade_level', 'exclusive_techs', 'supply_peak', 'cp_peak', 'last_stands', 'zombie_peak', 'ww2_streak', 'trench_peak'];
+
+    // Rekordy se hlásí appce (jomaridRecord v mostu); posílá se jen zvýšení, takže volání při každém uložení nic nestojí.
+    function reportRecords(prog) {
+        if (typeof jomaridRecord !== 'function' || !prog) return;
+        const scores = Object.keys(prog.highScores || {}).map(k => Number(prog.highScores[k]) || 0);
+        const st = prog.stats || {};
+        jomaridRecord('best_sector', Math.max(0, ...scores));
+        jomaridRecord('scenarios_unlocked', (prog.unlockedScenarios || []).length);
+        jomaridRecord('scenarios_cleared', scores.length);
+        jomaridRecord('scenarios_deep', scores.filter(v => v >= 5).length);
+        jomaridRecord('scenarios_started', Object.keys(st.scen || {}).length);
+        jomaridRecord('doctrines_unlocked', (prog.unlockedDoctrines || []).length);
+        jomaridRecord('doctrines_used', Object.keys(st.docts || {}).length);
+        TRACKED_STATS.forEach(k => jomaridRecord(k, st[k]));
+    }
+
+    // Přičte čítače (inc), zvedne nejvyšší hodnoty (max) a zapíše vyzkoušený scénář nebo doktrínu (seen: { scen | docts: id }).
+    function warTrack(inc, max, seen) {
+        const prog = loadProgress();
+        const st = prog.stats;
+        for (const k in (inc || {})) st[k] = (st[k] || 0) + inc[k];
+        for (const k in (max || {})) { if (max[k] > (st[k] || 0)) st[k] = max[k]; }
+        for (const g in (seen || {})) { (st[g] = st[g] || {})[seen[g]] = 1; }
+        saveProgress(prog);
+    }
+
+    function saveProgress(prog) {
+        try {
+            localStorage.setItem('warroom_frontlines_save_v1', JSON.stringify(prog));
+        } catch (e) {
+            console.error("Nepodařilo se uložit postup.", e);
+        }
+        reportRecords(prog);
+    }
+
+    reportRecords(loadProgress());
+
+    function resetSave() {
+        if (confirm("Opravdu chceš kompletně vymazat veškerý dosavadní postup kampaně?")) {
+            try { localStorage.removeItem('warroom_frontlines_save_v1'); } catch (e) { /* ignore */ }
+            location.reload();
+        }
+    }
+
+    function showUnlockNotification(text) {
+        Sound.unlock();
+        let t = document.createElement('div');
+        t.className = 'toast-notification';
+        t.innerHTML = `<div class="toast-title">Bojové Hlášení HQ</div><div class="toast-body">${text}</div>`;
+        document.body.appendChild(t);
+        setTimeout(() => t.classList.add('active'), 100);
+        setTimeout(() => {
+            t.classList.remove('active');
+            setTimeout(() => t.remove(), 600);
+        }, 4500);
+    }
+
+    function getScenarioName(id) {
+        let sc = SCENARIOS.find(s => s.id === id);
+        return sc ? sc.name : id.toUpperCase();
+    }
+
+    function checkSectorUnlockProgression() {
+        let prog = loadProgress();
+        let changed = false;
+        
+        let currentMax = prog.highScores[state.scenario] || 1;
+        if (state.sector > currentMax) {
+            prog.highScores[state.scenario] = state.sector;
+            changed = true;
+        }
+
+        // 1. Postupné odemykání scénářů (Sektor 10 předchozího scénáře odemkne další v pořadí)
+        for (let i = 0; i < SCENARIOS.length - 1; i++) {
+            let cur = SCENARIOS[i].id;
+            let next = SCENARIOS[i+1].id;
+            
+            // Pokud hráč dosáhl Sektoru 10 v aktuálním a další ještě nemá odemčený
+            if (state.scenario === cur && state.sector >= 10 && !prog.unlockedScenarios.includes(next)) {
+                prog.unlockedScenarios.push(next);
+                showUnlockNotification(`🔓 NOVÁ FRONTA ODEMČENA:<br>${getScenarioName(next)}`);
+                changed = true;
+            }
+        }
+
+        // 2. Podmínkové odemykání doktrín na základě odehraných sektorů
+        if (state.scenario === 'ww2_blitz' && state.sector >= 5 && !prog.unlockedDoctrines.includes('intel')) {
+            prog.unlockedDoctrines.push('intel');
+            showUnlockNotification("🧠 ODEMČENA DOKTRÍNA:<br>Zpravodajská (Intel)");
+            changed = true;
+        }
+        if ((state.scenario === 'ww1_east' || state.scenario === 'blockade') && state.sector >= 5 && !prog.unlockedDoctrines.includes('quartermaster')) {
+            prog.unlockedDoctrines.push('quartermaster');
+            showUnlockNotification("📦 ODEMČENA DOKTRÍNA:<br>Logistická (Zásoby)");
+            changed = true;
+        }
+        if (state.scenario === 'modern_ew' && state.sector >= 5 && !prog.unlockedDoctrines.includes('tech')) {
+            prog.unlockedDoctrines.push('tech');
+            showUnlockNotification("⚙️ ODEMČENA DOKTRÍNA:<br>Technologická (R&D)");
+            changed = true;
+        }
+        if (state.scenario === 'ww1_west' && state.sector >= 5 && !prog.unlockedDoctrines.includes('artillery')) {
+            prog.unlockedDoctrines.push('artillery');
+            showUnlockNotification("💥 ODEMČENA DOKTRÍNA:<br>Dělostřelecká (Shock)");
+            changed = true;
+        }
+        if ((state.scenario === 'guerilla' || state.scenario === 'vietnam') && state.sector >= 5 && !prog.unlockedDoctrines.includes('partisan')) {
+            prog.unlockedDoctrines.push('partisan');
+            showUnlockNotification("🌲 ODEMČENA DOKTRÍNA:<br>Odbojová (Partyzán)");
+            changed = true;
+        }
+        if (state.scenario === 'default' && state.sector >= 10 && !prog.unlockedDoctrines.includes('propaganda')) {
+            prog.unlockedDoctrines.push('propaganda');
+            showUnlockNotification("📢 ODEMČENA DOKTRÍNA:<br>Politická (Osvěta)");
+            changed = true;
+        }
+        if ((state.scenario === 'zombie' || state.scenario === 'attrition') && state.sector >= 5 && !prog.unlockedDoctrines.includes('fanatic')) {
+            prog.unlockedDoctrines.push('fanatic');
+            showUnlockNotification("☣️ ODEMČENA DOKTRÍNA:<br>Fanatická (Víra)");
+            changed = true;
+        }
+        if ((state.scenario === 'ww2_pacific' || state.scenario === 'blockade') && state.sector >= 5 && !prog.unlockedDoctrines.includes('fleet')) {
+            prog.unlockedDoctrines.push('fleet');
+            showUnlockNotification("⚓ ODEMČENA DOKTRÍNA:<br>Námořní (Fleet)");
+            changed = true;
+        }
+        if (state.scenario === 'desert' && state.sector >= 5 && !prog.unlockedDoctrines.includes('mercenary')) {
+            prog.unlockedDoctrines.push('mercenary');
+            showUnlockNotification("💵 ODEMČENA DOKTRÍNA:<br>Žoldácká (Contract)");
+            changed = true;
+        }
+        if ((state.scenario === 'cyber_rebel' || state.scenario === 'nuke_winter') && state.sector >= 5 && !prog.unlockedDoctrines.includes('chemical')) {
+            prog.unlockedDoctrines.push('chemical');
+            showUnlockNotification("🧪 ODEMČENA DOKTRÍNA:<br>Chemická (Toxic)");
+            changed = true;
+        }
+
+        if (changed) saveProgress(prog);
+    }
+
+    // --- DYNAMICKÉ VYSTAVENÍ OBRAZOVEK WIZARDU ---
+    // Ikony karet (jen vzhled): podle štítku scénáře a podle doktríny
+    const TAG_ICONS = { 'BASE': '🎖️', 'NAPOLEON': '🐎', 'WWI': '🪖', 'WWII': '✈️', 'COLD WAR': '☢️', 'NAVAL': '⚓', 'GULF WAR': '🛢️', 'MODERN': '🛰️', 'HORROR': '☣️', 'ALT-HIST': '⏳', 'SCI-FI': '🚀' };
+    const DOCTRINE_ICONS = { blitz: '⚡', fortress: '🛡️', intel: '🛰️', quartermaster: '📦', tech: '🔬', artillery: '💥', partisan: '🌲', propaganda: '📢', fanatic: '🔥', fleet: '⚓', mercenary: '💰', chemical: '☣️' };
+
+    function initWizards() {
+        let prog = loadProgress();
+        
+        // Zobrazení scénářů
+        let sCont = el('scenarios-container');
+        sCont.innerHTML = '';
+        SCENARIOS.forEach((sc, scIdx) => {
+            let isUnlocked = prog.unlockedScenarios.includes(sc.id);
+            let card = document.createElement('div');
+            card.className = `card ${isUnlocked ? '' : 'locked-card'}`;
+            if (isUnlocked) {
+                card.onclick = () => setScenario(sc.id);
+            }
+            
+            let badgeBg = '#4b5563';
+            if (sc.tag === 'WWI') badgeBg = '#d97706';
+            if (sc.tag === 'WWII') badgeBg = '#dc2626';
+            if (sc.tag === 'COLD WAR') badgeBg = '#16a34a';
+            if (sc.tag === 'MODERN') badgeBg = '#7c3aed';
+            if (sc.tag === 'GULF WAR') badgeBg = '#ea580c';
+            if (sc.tag === 'HORROR') badgeBg = '#65a30d';
+            if (sc.tag === 'SCI-FI') badgeBg = '#0891b2';
+            if (sc.tag === 'NAVAL') badgeBg = '#2563eb';
+            if (sc.tag === 'ALT-HIST') badgeBg = '#831843';
+            if (sc.tag === 'NAPOLEON') badgeBg = '#92400e';
+            
+            card.style.setProperty('--tag', badgeBg);
+            card.innerHTML = `
+                <span class="card-idx">OP-${String(scIdx + 1).padStart(2, '0')}</span>
+                <span class="card-emblem" aria-hidden="true">${isUnlocked ? (TAG_ICONS[sc.tag] || '🎖️') : '🔒'}</span>
+                <span class="scenario-tag" style="background: ${badgeBg};">${sc.tag}</span>
+                <h4 class="${isUnlocked ? 't-white' : 't-gray'}">${sc.name} ${sc.year > 0 ? `<span class="scenario-year">${sc.year}</span>` : ''}</h4>
+                <small>${isUnlocked ? sc.desc : `<span class="t-red">🔒 UZAMČENO</span><br>Musíš dokončit Sektor 10 v předchozím scénáři.`}</small>
+            `;
+            sCont.appendChild(card);
+        });
+
+        // Zobrazení doktrín
+        let dCont = el('doctrines-container');
+        dCont.innerHTML = '';
+        DOCTRINES.forEach((doc, docIdx) => {
+            let isUnlocked = prog.unlockedDoctrines.includes(doc.id);
+            let card = document.createElement('div');
+            card.className = `card ${isUnlocked ? '' : 'locked-card'}`;
+            if (isUnlocked) {
+                card.onclick = () => setDoctrine(doc.id);
+            }
+            
+            card.style.setProperty('--tag', '#10b981');
+            card.innerHTML = `
+                <span class="card-idx">DOK-${String(docIdx + 1).padStart(2, '0')}</span>
+                <span class="card-emblem" aria-hidden="true">${isUnlocked ? (DOCTRINE_ICONS[doc.id] || '🎖️') : '🔒'}</span>
+                <h4 class="${isUnlocked ? 't-green' : 't-gray'}">${doc.name}</h4>
+                <small>${isUnlocked ? doc.desc : `<span class="t-red">🔒 ZAMČENO</span><br>Podmínka: ${doc.unlockInfo}`}</small>
+            `;
+            dCont.appendChild(card);
+        });
+    }
+
+    // --- CENTRÁLNÍ MULTIPLIKÁTORY ---
+    function getDmgMult() {
+        let m = 1.0 + ((state.upgrades.dmg.level - 1) * 0.20); 
+        if (state.doctrine === 'blitz') m += 0.30;
+        if (state.doctrine === 'intel') m -= 0.15;
+        if (state.doctrine === 'partisan') m -= 0.20;
+        if (state.scenario === 'urban' && !state.exclusiveBought1) m -= 0.50;
+        if (state.scenario === 'space' && state.exclusiveBought1) m += 0.50;
+        if (state.scenario === 'ww2_pacific' && state.exclusiveBought2) m += 0.40;
+        if (state.scenario === 'drone' && state.exclusiveBought1) m += 0.35;
+        if (state.scenario === 'ww2_blitz' && state.ww2_momentumPlayer > 0) m += (state.ww2_momentumPlayer * 0.20);
+        if (state.scenario === 'attrition' && state.exclusiveBought3) m += 0.60; 
+        if (state.scenario === 'ww2_blitz' && state.exclusiveBought3) m += 0.50;
+        if (state.scenario === 'mars_colony') m += 0.10;
+        if (state.scenario === 'mars_colony' && state.exclusiveBought2) m += 0.25;
+        if (state.scenario === 'yom_kippur' && state.exclusiveBought2 && state.day <= 3) m += 0.30;
+        m += getSynergyBonus('dmg');
+        return Math.max(0.1, m);
+    }
+
+    function getSupplyMult() {
+        let m = 1.0 + ((state.upgrades.supply.level - 1) * 0.30); 
+        if (state.doctrine === 'partisan') m += 0.30;
+        if (state.doctrine === 'fleet') m += 0.40;
+        if (state.scenario === 'ww1_east' && state.exclusiveBought2) m += 0.50;
+        if (state.scenario === 'urban' && state.exclusiveBought2) m += 0.50;
+        if (state.scenario === 'blockade') {
+            if (state.exclusiveBought1) m *= 3.0;
+            else m *= 1.5; 
+        }
+        if (state.scenario === 'mars_colony') {
+            m -= 0.20;
+            if (state.exclusiveBought1) m += 0.40;
+        }
+        if (state.scenario === 'yom_kippur' && state.exclusiveBought3) m += 0.50;
+        m += getSynergyBonus('supply');
+        return Math.max(0.1, m);
+    }
+
+    function getCpMult() {
+        let m = 1.0 + ((state.upgrades.cpGain.level - 1) * 0.20); 
+        if (state.doctrine === 'propaganda') m += 0.25;
+        if (state.scenario === 'attrition' && state.exclusiveBought2) m += 1.0; 
+        if (state.scenario === 'guerilla' && state.exclusiveBought3) m += 0.40;
+        if (state.scenario === 'korea' && state.exclusiveBought3) m += 0.25;
+        if (state.scenario === 'mars_colony' && state.exclusiveBought3) m += 0.35;
+        m += getSynergyBonus('cp');
+        return Math.max(0.1, m);
+    }
+
+    function getRadarWidth() {
+        let base = 10; 
+        let m = 1.0 + ((state.upgrades.radar.level - 1) * 0.25); 
+        if (state.doctrine === 'intel') m += 0.50;
+        if (state.scenario === 'winter_war' && state.exclusiveBought1) m += 0.50;
+        if (state.scenario === 'desert' && state.exclusiveBought2) m += 0.50;
+        if (state.scenario === 'cyber_rebel' && state.exclusiveBought3) m += 0.40;
+        if (state.scenario === 'napoleon_siege') {
+            m -= 0.30;
+            if (state.exclusiveBought2) m += 0.40;
+        }
+        m += getSynergyBonus('radar');
+        return Math.min(100, base * m);
+    }
+
+    // MASIVNÍ BUFF PRŮZKUMU (RECON)
+    function getPassiveCp() {
+        if (state.upgrades.recon.level === 1) return 0;
+        let base = 15; 
+        let m = 1.0 + ((state.upgrades.recon.level - 2) * 0.70); 
+        // Pasiv generuje fixní základ + škáluje se s aktuálním dnem konfliktu
+        let currentPassive = Math.floor(base * m) + Math.floor(state.day * 1.5);
+        
+        if (state.scenario === 'space' && state.exclusiveBought3) {
+            currentPassive += (state.upgrades.recon.level * 15);
+        }
+        return currentPassive;
+    }
+
+    function getScenarioBaseMaxFront(scen) {
+        let target = SCENARIOS.find(s => s.id === scen);
+        return target ? target.baseMax : 500;
+    }
+
+    // --- UNIKÁTNÍ TECHNOLOGIE (Nyní 3 pro každý scénář) ---
+    function getExclusive1() {
+        switch(state.scenario) {
+            case 'default': return { name: "POLNÍ NEMOCNICE", cost: 300, desc: "Trvale snižuje denní tlak nepřítele o -15%." };
+            case 'ww1_west': return { name: "ÚDERNÉ ODDÍLY", cost: 400, desc: "Zteč násobí nasbíranou přípravu 2.5x." };
+            case 'ww1_east': return { name: "DRANCOVÁNÍ", cost: 350, desc: "Rekvírování stojí jen -5 FR (místo -15)." };
+            case 'ww2_blitz': return { name: "MOTORIZACE", cost: 450, desc: "Minutí cíle ti nesmaže hybnost, jen ji sníží o 1." };
+            case 'ww2_pacific': return { name: "VÝSADKOVÁ PLAVIDLA", cost: 500, desc: "Zisk zásob za dobytý ostrov zdvojnásoben (+100%)." };
+            case 'winter_war': return { name: "BÍLÁ SMRT", cost: 350, desc: "Trvale rozšiřuje zónu radaru o +50%." };
+            case 'vietnam': return { name: "AGENT ORANGE", cost: 400, desc: "Napalm odhalí frontu na 6 dní." };
+            case 'modern_ew': return { name: "KVANTOVÝ RADAR", cost: 500, desc: "Zpomalí rychlost rušeného radaru o 30%." };
+            case 'desert': return { name: "MOBILNÍ ZÁSOBOVÁNÍ", cost: 600, desc: "Ofenzíva stojí už jen 1 Zásobu." };
+            case 'urban': return { name: "TĚŽKÁ TECHNIKA", cost: 450, desc: "Zruší penalizaci -50% poškození v ruinách." };
+            case 'guerilla': return { name: "PODZEMNÍ SÍŤ", cost: 350, desc: "Krádež zásob při zásahu je zdvojnásobena (x2)." };
+            case 'drone': return { name: "AUTONOMNÍ ROJE", cost: 500, desc: "Zvyšuje celkové poškození o +35%." };
+            case 'zombie': return { name: "VIROVÁ ANALÝZA", cost: 450, desc: "Každý PŘESNÝ zásah vyléčí -1 úroveň Mutace." };
+            case 'space': return { name: "ASISTENCE AI", cost: 550, desc: "Radar se zpomalí. +50% k poškození." };
+            case 'blockade': return { name: "JADERNÉ PONORKY", cost: 400, desc: "Zisk zásob z logistiky ztrojnásoben." };
+            case 'attrition': return { name: "CHEMICKÝ PLYN", cost: 450, desc: "Tlak nepřítele je trvale snížen o úctyhodných -40%." };
+            case 'cyber_rebel': return { name: "KYBER-ŠTÍT", cost: 400, desc: "Tlak nepřátelského povstání snížen o -20%." };
+            case 'nuke_winter': return { name: "PROTIMRAZOVÁ NAFTA", cost: 400, desc: "Zbraně fungují skvěle (+30% poškození)." };
+            case 'alien_inv': return { name: "IONTOVÝ KANÓN", cost: 500, desc: "Baráž okamžitě zničí mimozemský energetický štít." };
+            case 'napoleon_siege': return { name: "DĚLOSTŘELECKÁ PALBA", cost: 400, desc: "Zvyšuje veškeré poškození ofenzívy o +30%." };
+            case 'korea': return { name: "LETECTVO OSN", cost: 400, desc: "Letecký shoz nese o +50% více zásob." };
+            case 'yom_kippur': return { name: "OKAMŽITÁ MOBILIZACE", cost: 400, desc: "Zmírní šok z prvních 3 dní útoku o polovinu." };
+            case 'falklands': return { name: "SEA HARRIER PODPORA", cost: 450, desc: "Ofenzíva stojí už jen 1 Zásobu (místo 2)." };
+            case 'mars_colony': return { name: "TERRAFORMOVACÍ JEDNOTKA", cost: 450, desc: "Zisk zásob zvýšen o +40% (kompenzuje nedostatek zdrojů)." };
+        }
+    }
+
+    function getExclusive2() {
+        switch(state.scenario) {
+            case 'default': return { name: "ELITNÍ DŮSTOJNÍCI", cost: 350, desc: "Zvyšuje zisk Velitelských Bodů o +20%." };
+            case 'ww1_west': return { name: "TĚŽKÉ KULOMETY", cost: 400, desc: "Základní denní tlak nepřítele snížen o -15%." };
+            case 'ww1_east': return { name: "KOŇSKÁ SPŘEŽENÍ", cost: 350, desc: "Výnos logistiky zvýšen o +50%." };
+            case 'ww2_blitz': return { name: "LETKA STUKAS", cost: 400, desc: "Letecký shoz navíc uštědří 30 Dmg (FR)." };
+            case 'ww2_pacific': return { name: "PLAMENOMETY", cost: 400, desc: "Zvyšuje celkové poškození o +40%." };
+            case 'winter_war': return { name: "LYŽAŘSKÉ ODDÍLY", cost: 450, desc: "Akce Logistiky už nestojí žádné body Fronty." };
+            case 'vietnam': return { name: "TUNELOVÉ KRYSY", cost: 400, desc: "Když je džungle odhalena, šance na Crit je o +20% vyšší." };
+            case 'modern_ew': return { name: "SATELITNÍ UPLINK", cost: 450, desc: "Skill Anti-Rušička stojí trvale o -10 VB méně." };
+            case 'desert': return { name: "NOČNÍ VIDĚNÍ", cost: 400, desc: "Trvale rozšiřuje zónu radaru o dalších +50%." };
+            case 'urban': return { name: "ŽENISTÉ", cost: 350, desc: "Výnos logistiky zvýšen o +50%." };
+            case 'guerilla': return { name: "I.E.D. SÍŤ", cost: 450, desc: "Pokud na tebe nepřítel zatlačí, utrpí zranění (Vrátí +3 FR)." };
+            case 'drone': return { name: "RUŠIČKA SIGNÁLU", cost: 450, desc: "Základní denní tlak nepřítele je snížen o -25%." };
+            case 'zombie': return { name: "UV SVĚTLOMETY", cost: 500, desc: "Úroveň mutace zombíků už nikdy nemůže přesáhnout 3." };
+            case 'space': return { name: "KINETICKÉ ŠTÍTY", cost: 450, desc: "Základní tlak nepřítele z vesmíru trvale snížen o -30%." };
+            case 'blockade': return { name: "PAŠERÁCKÁ SÍŤ", cost: 400, desc: "Každý zásah do nepřítele ti daruje +2 Zásoby." };
+            case 'attrition': return { name: "VÁLEČNÁ EKONOMIKA", cost: 450, desc: "Zisk Velitelských Bodů (VB) je zdvojnásoben (+100%)." };
+            case 'cyber_rebel': return { name: "DEŠIFROVACÍ KLÍČ", cost: 450, desc: "Každý přesný zásah má 40% šanci znehybnit nepřítele." };
+            case 'nuke_winter': return { name: "GEOTERMÁLNÍ DŮM", cost: 500, desc: "Zásoby v zimě již neklesají samovolně o -1 každý tah." };
+            case 'alien_inv': return { name: "BIOLOGICKÝ VIRUS", cost: 450, desc: "Tlak mimozemšťanů klesá s každým novým dnem o -5% (max -50%)." };
+            case 'napoleon_siege': return { name: "LEHKÁ PĚCHOTA", cost: 400, desc: "Kompenzuje nepřesnost mušket - rozšíří zaměřovací zónu o +40%." };
+            case 'korea': return { name: "ARKTICKÁ VÝSTROJ", cost: 400, desc: "Trvale sníží denní tlak nepřítele o -20%." };
+            case 'yom_kippur': return { name: "OPERACE ABIREJ-LEV", cost: 450, desc: "Během prvních 3 dní zvyšuje poškození o +30%." };
+            case 'falklands': return { name: "EXOCET RAKETY", cost: 450, desc: "Kritické zásahy udělují o +30% více poškození." };
+            case 'mars_colony': return { name: "KOLONIÁLNÍ MILICE", cost: 450, desc: "Zvyšuje veškeré poškození o +25%." };
+        }
+    }
+
+    function getExclusive3() {
+        switch(state.scenario) {
+            case 'default': return { name: "TAKTIKA KRYTÍ", cost: 380, desc: "Sníží veškeré poškození denního tlaku o -20%." };
+            case 'ww1_west': return { name: "ZÁKOPNÍ MINY", cost: 450, desc: "Pokud se nepřítel přiblíží, baráž ho zraní o dalších +40 FR." };
+            case 'ww1_east': return { name: "CARSKÉ REZERVY", cost: 400, desc: "Získáš pasivně +5 VB každý den." };
+            case 'ww2_blitz': return { name: "PANCÉŘOVÝ KLÍN", cost: 500, desc: "Zavede těžké tanky a zvýší poškození ofenzívy o +50%." };
+            case 'ww2_pacific': return { name: "PÁSOVÁ VOZIDLA LVT", cost: 450, desc: "Při každém dalším sektoru začínáš s +15% HP fronty navíc." };
+            case 'winter_war': return { name: "SABOTÁŽNÍ MINY", cost: 400, desc: "Sabotáž navíc trvale ochromí nepřítele na 3 dny." };
+            case 'vietnam': return { name: "PRŮZKUM ZE VZDUCHU", cost: 420, desc: "Odhalení džungle ti okamžitě přinese +3 Zásoby." };
+            case 'modern_ew': return { name: "ŠIFROVÁNÍ DAT", cost: 480, desc: "Tlak nepřítele během aktivního rušení je snížen o -40%." };
+            case 'desert': return { name: "SATELITNÍ GPS", cost: 550, desc: "Radar se v bouři nikdy nerozkmitá nad kritickou rychlost." };
+            case 'urban': return { name: "BARIKÁDY", cost: 400, desc: "Zvýší maximální limit fronty v tomto sektoru o +30%." };
+            case 'guerilla': return { name: "VLASTENECKÉ RÁDIO", cost: 420, desc: "Zvyšuje zisk Velitelských Bodů (VB) o +40%." };
+            case 'drone': return { name: "DRON-MATKA", cost: 500, desc: "Získáváš o +30% vyšší účinek ze všech UAV úderů." };
+            case 'zombie': return { name: "SÉROLOGIE", cost: 480, desc: "Hladina mutace má poloviční negativní vliv na denní tlak." };
+            case 'space': return { name: "SOLÁRNÍ KOLEKTOR", cost: 500, desc: "Zvyšuje pasivní příjem VB o +15 za každou úroveň průzkumu." };
+            case 'blockade': return { name: "DOPROVODNÉ KORVETY", cost: 450, desc: "Útoky v tomto scénáři stojí už jen 2 Zásoby (místo 3)." };
+            case 'attrition': return { name: "KONCENTROVANÁ PALBA", cost: 500, desc: "Zvyšuje poškození o +60%." };
+            case 'cyber_rebel': return { name: "NEURO-PROPOJENÍ", cost: 450, desc: "Umožní ovládat radar s o 40% širší zónou." };
+            case 'nuke_winter': return { name: "RECYKLACE TEPLA", cost: 450, desc: "Logistika spotřebovává o -3 FR méně zdraví linie." };
+            case 'alien_inv': return { name: "DESTRUKTOR ŠTÍTŮ", cost: 550, desc: "Útoky kompletně ignorují mimozemský štít a udělí o 30% vyšší dmg." };
+            case 'napoleon_siege': return { name: "OPEVNĚNÍ", cost: 420, desc: "Jednorázově navýší strop fronty pro tento sektor o +25%." };
+            case 'korea': return { name: "MORÁLNÍ PODPORA", cost: 400, desc: "Zvyšuje zisk Velitelských Bodů o +25%." };
+            case 'yom_kippur': return { name: "LETECKÝ MOST", cost: 420, desc: "Zvyšuje zisk zásob o +50%." };
+            case 'falklands': return { name: "VÝSADEK SAN CARLOS", cost: 420, desc: "Jednorázově navýší strop fronty pro tento sektor o +20%." };
+            case 'mars_colony': return { name: "KVANTOVÝ POČÍTAČ", cost: 480, desc: "Zvyšuje zisk Velitelských Bodů o +35%." };
+            default: return { name: "ZÁLOŽNÍ HQ", cost: 300, desc: "Okamžitě obdržíš +10 Zásob." };
+        }
+    }
+
+    function setScenario(scen) { 
+        Sound.unlock();
+        Sound.click();
+        state.scenario = scen; 
+        warTrack(null, null, { scen: scen });
+        el('screen-scenario').classList.remove('active'); 
+        el('screen-doctrine').classList.add('active'); 
+        tutorialAdvanceIf('scenario');
+    }
+    
+    function setDoctrine(doc) {
+        Sound.click();
+        state.doctrine = doc; 
+        warTrack(null, null, { docts: doc });
+        el('screen-doctrine').classList.remove('active');
+        
+        let critBase = 15;
+        if (state.doctrine === 'fortress') { 
+            el('lbl-doctrine').innerText = "PEVNOST"; 
+        } 
+        else if (state.doctrine === 'blitz') { el('lbl-doctrine').innerText = "BLITZ"; } 
+        else if (state.doctrine === 'intel') { critBase = 40; el('lbl-doctrine').innerText = "INTEL"; }
+        else if (state.doctrine === 'quartermaster') { state.supplies = 20; el('lbl-doctrine').innerText = "ZÁSOBY"; }
+        else if (state.doctrine === 'tech') { 
+            Object.keys(state.upgrades).forEach(k => state.upgrades[k].cost = Math.floor(state.upgrades[k].cost * 0.75)); 
+            el('lbl-doctrine').innerText = "TECH"; 
+        }
+        else if (state.doctrine === 'artillery') { 
+            state.costArt = Math.floor(state.costArt * 0.75); 
+            state.costAir = Math.floor(state.costAir * 0.75); 
+            critBase = 5; 
+            el('lbl-doctrine').innerText = "SHOCK"; 
+        }
+        else if (state.doctrine === 'partisan') { el('lbl-doctrine').innerText = "ODBOJ"; }
+        else if (state.doctrine === 'propaganda') { el('lbl-doctrine').innerText = "OSVĚTA"; }
+        else if (state.doctrine === 'fanatic') { 
+            Object.keys(state.upgrades).forEach(k => state.upgrades[k].cost = Math.floor(state.upgrades[k].cost * 1.3)); 
+            el('lbl-doctrine').innerText = "VÍRA"; 
+        }
+        else if (state.doctrine === 'fleet') { el('lbl-doctrine').innerText = "FLEET"; }
+        else if (state.doctrine === 'mercenary') { el('lbl-doctrine').innerText = "ŽOLDÁCI"; }
+        else if (state.doctrine === 'chemical') { el('lbl-doctrine').innerText = "TOXIC"; }
+
+        // Výpočet počátečního maxFront na základě scénáře
+        let baseMax = getScenarioBaseMaxFront(state.scenario);
+        state.maxFront = baseMax;
+        
+        // Zohlednění Ženistů pro počáteční zdraví
+        let engBonus = 1 + ((state.upgrades.engineering.level - 1) * 0.05);
+        state.front = Math.floor(state.maxFront * 0.5 * engBonus);
+
+        const scMap = { 
+            'default': 'ZÁKLAD', 'napoleon_siege': 'OBLÉHÁNÍ', 'ww1_west': 'ZÁKOPY', 'ww1_east': 'VÝCHOD', 'ww2_blitz': 'BLITZ', 
+            'ww2_pacific': 'PACIFIK', 'winter_war': 'ZIMA', 'korea': 'KOREA', 'vietnam': 'VIETNAM', 'yom_kippur': 'JOM KIPUR', 
+            'falklands': 'FALKLANDY', 'modern_ew': 'KYBER', 
+            'desert': 'POUŠŤ', 'urban': 'MĚSTO', 'guerilla': 'ODBOJ', 'drone': 'DRONY', 
+            'zombie': 'NÁKAZA', 'space': 'VESMÍR', 'blockade': 'BLOKÁDA', 'attrition': 'MLÝNEK',
+            'cyber_rebel': 'POVSTÁNÍ', 'nuke_winter': 'NUKE_ZIMA', 'alien_inv': 'INVAZE', 'mars_colony': 'MARS'
+        };
+        el('lbl-scenario').innerText = scMap[state.scenario] || state.scenario.toUpperCase();
+
+        if (state.scenario === 'ww2_pacific') { 
+            state.maxFront = Math.floor(200 * engBonus); 
+            state.front = Math.floor(100 * engBonus); 
+            el('btn-sup').innerHTML = "RYBOLOV<br><small>Tlak</small>"; 
+        }
+        else if (state.scenario === 'winter_war') { state.baseEnemyPush += 4; }
+        else if (state.scenario === 'desert') { state.baseEnemyPush = 10; }
+        else if (state.scenario === 'urban') { 
+            state.maxFront = Math.floor(1000 * engBonus); 
+            state.front = Math.floor(500 * engBonus); 
+            state.baseEnemyPush = 4; 
+        }
+        else if (state.scenario === 'guerilla') { state.supplies = 5; el('btn-sup').innerHTML = "PAŠOVÁNÍ<br><small>Tlak</small>"; }
+        else if (state.scenario === 'zombie') { state.baseEnemyPush = 4; }
+        else if (state.scenario === 'space') { state.baseEnemyPush = 12; }
+        else if (state.scenario === 'blockade') { state.supplies = 15; }
+        else if (state.scenario === 'attrition') { state.baseEnemyPush = 8; el('btn-atk').innerHTML = "MASOVÝ ÚTOK<br><small>-1 Z</small>"; }
+        else if (state.scenario === 'nuke_winter') { state.baseEnemyPush = 8; }
+        else if (state.scenario === 'alien_inv') { state.alienShield = 150; }
+        else if (state.scenario === 'korea') { state.baseEnemyPush = 10; }
+        else if (state.scenario === 'falklands') { state.supplies = 12; }
+
+        // Bonus doktríny Pevnost (+20% Max Fronta) a případná synergie - aplikuje se na FINÁLNÍ hodnotu,
+        // až po všech scénářově specifických úpravách výše (aby se žádnou z nich nepřepsal).
+        let frontMultiplier = 1.0;
+        if (state.doctrine === 'fortress') frontMultiplier *= 1.20;
+        frontMultiplier *= (1 + getSynergyBonus('maxFrontOnce'));
+        if (frontMultiplier !== 1.0) {
+            state.maxFront = Math.floor(state.maxFront * frontMultiplier);
+            state.front = Math.floor(state.front * frontMultiplier);
+        }
+
+        el('val-crit').innerText = `${critBase}%`;
+        el('game-screen').style.display = 'block';
+        
+        logMessage("SYSTÉM FRONTLINES v4.0 AKTIVOVÁN. Přejeme úspěšný lov.", "t-white"); 
+
+        let syn = getSynergy();
+        if (syn && !tutorialActive) {
+            setTimeout(() => showUnlockNotification(`⭐ SYNERGIE AKTIVNÍ:<br>${syn.label}`), 800);
+        }
+
+        updateUI();
+        tutorialAdvanceIf('doctrine');
+    }
+
+    function logMessage(msg, col = "t-white") {
+        const lb = el('log');
+        if (!lb) return;
+        const entry = document.createElement('div'); 
+        entry.className = `log-entry ${col}`; 
+        entry.innerHTML = `> ${msg}`;
+        lb.appendChild(entry); 
+        lb.scrollTop = lb.scrollHeight;
+    }
+
+    function getEnemyPush() {
+        if (state.godMode) return 0;
+        if (state.enemyStunned > 0) return 0;
+        let base = state.baseEnemyPush + Math.floor(state.day / 4) + ((state.sector - 1) * 3);
+        
+        let pctMod = 1.0; 
+
+        // Výzkum pancíře
+        pctMod -= ((state.upgrades.armor.level - 1) * 0.05); 
+
+        // Vliv doktrín a exkluzivních modulů
+        if (state.doctrine === 'fortress') pctMod -= 0.20;
+        if (state.doctrine === 'blitz') pctMod += 0.15;
+        if (state.doctrine === 'propaganda') pctMod += 0.15;
+
+        if (state.scenario === 'default' && state.exclusiveBought1) pctMod -= 0.15;
+        if (state.scenario === 'ww1_west' && state.exclusiveBought2) pctMod -= 0.15;
+        if (state.scenario === 'drone' && state.exclusiveBought2) pctMod -= 0.25;
+        if (state.scenario === 'space' && state.exclusiveBought2) pctMod -= 0.30;
+        if (state.scenario === 'attrition' && state.exclusiveBought1) pctMod -= 0.40;
+        if (state.scenario === 'cyber_rebel' && state.exclusiveBought1) pctMod -= 0.20;
+        if (state.scenario === 'default' && state.exclusiveBought3) pctMod -= 0.20; 
+        if (state.scenario === 'modern_ew' && state.exclusiveBought3 && state.modern_counterTimer <= 0) pctMod -= 0.40;
+        if (state.scenario === 'alien_inv' && state.exclusiveBought2) pctMod -= Math.min(0.50, (state.day - 1) * 0.05);
+
+        if (state.scenario === 'ww2_blitz' && state.ww2_momentumEnemy > 0) pctMod += (state.ww2_momentumEnemy * 0.4);
+        if (state.scenario === 'nuke_winter') pctMod *= 0.5; // Zpomalení v zimě
+        if (state.scenario === 'yom_kippur' && state.day <= 3) {
+            pctMod *= state.exclusiveBought1 ? 1.5 : 2.0; // Šok z náhlého útoku, mobilizace ho zmírní
+        }
+        pctMod += getSynergyBonus('push');
+
+        pctMod = Math.max(0.1, pctMod); 
+        let finalPush = Math.floor(base * pctMod);
+
+        if (state.scenario === 'zombie') {
+            let mVal = state.zombie_mutation;
+            if (state.exclusiveBought2 && mVal > 3) mVal = 3;
+            if (state.exclusiveBought3) mVal = Math.floor(mVal * 0.5);
+            finalPush += mVal;
+        }
+        
+        return Math.max(0, finalPush);
+    }
+
+    function updateScenarioModule() {
+        let t = el('scenario-status'), d = el('scenario-desc'), m = el('scenario-module');
+        m.style.borderColor = "var(--border)";
+
+        if (state.scenario === 'default') { t.innerText = "ZÁKLADNÍ FRONTA"; t.className = "t-white"; d.innerText = "Standardní operace."; } 
+        else if (state.scenario === 'ww1_west') { t.innerText = `PŘÍPRAVA NA ZTEČ: ${state.ww1_trenchPrep} BODŮ`; t.className = "t-orange"; d.innerText = "Zteč spustíš tlačítkem SKILL."; m.style.borderColor = "var(--warning)"; } 
+        else if (state.scenario === 'ww1_east') { t.innerText = "HLADOMOR"; t.className = "t-red"; d.innerText = "Logistika má zmenšenou efektivitu."; } 
+        else if (state.scenario === 'ww2_blitz') {
+            if (state.ww2_momentumEnemy > 0) { t.innerText = `NEPŘÁTELSKÁ HYBNOST (+${state.ww2_momentumEnemy})`; t.className = "t-red"; d.innerText = "Tlak nepřítele roste!"; }
+            else { t.innerText = `TVOJE HYBNOST (+${state.ww2_momentumPlayer})`; t.className = "t-green"; d.innerText = "Bleskový postup vpřed!"; }
+        } 
+        else if (state.scenario === 'ww2_pacific') { t.innerText = `OSTROVNÍ KAMPAŇ (Sektor ${state.sector})`; t.className = "t-blue"; d.innerText = "Ustupování nemožné."; m.style.borderColor = "var(--tech)"; } 
+        else if (state.scenario === 'winter_war') { t.innerText = "ZAMRZLÉ PEKLO"; t.className = "t-white"; d.innerText = "Masivní tlak nepřátelské přesily."; } 
+        else if (state.scenario === 'vietnam') {
+            if (state.viet_revealed > 0) { t.innerText = `DŽUNGLE ODHALENA (${state.viet_revealed} dny)`; t.className = "t-orange"; d.innerText = "Nepřítel lokalizován."; }
+            else { t.innerText = "NEVIDITELNÁ FRONTA"; t.className = "t-red"; d.innerText = "Frontové linie jsou kompletně skryté v džungli."; }
+        } 
+        else if (state.scenario === 'modern_ew') {
+            if (state.modern_counterTimer > 0) { t.innerText = `ANTI-RUŠIČKA AKTIVNÍ (${state.modern_counterTimer} d.)`; t.className = "t-green"; }
+            else { t.innerText = "ELEKTRONICKÉ RUŠENÍ"; t.className = "t-purple"; d.innerText = "Radar se pohybuje extrémně nestabilně."; m.style.borderColor = "var(--purple)"; }
+        }
+        else if (state.scenario === 'desert') { t.innerText = "POUŠTNÍ BOUŘE"; t.className = "t-orange"; d.innerText = "Zásobování ztíženo. Ofenzíva vyžaduje 2 Zásoby."; }
+        else if (state.scenario === 'urban') { t.innerText = "MĚSTSKÝ BOJ"; t.className = "t-red"; d.innerText = "Boj v ruinách snižuje tvé základní poškození o 50%."; }
+        else if (state.scenario === 'guerilla') { t.innerText = "ASYMETRICKÝ BOJ"; t.className = "t-green"; d.innerText = "Zásoby kradeš přímo přesnými zásahy."; }
+        else if (state.scenario === 'drone') { t.innerText = "BEZPILOTNÍ VÁLKA"; t.className = "t-blue"; d.innerText = "Konvenční letectvo a dělostřelectvo mimo provoz."; }
+        else if (state.scenario === 'zombie') { t.innerText = `ÚROVEŇ MUTACE: ${state.zombie_mutation}`; t.className = "t-toxic"; d.innerText = "Minutí vyvolá mutaci. Každá úroveň zvyšuje trvalý tlak!"; m.style.borderColor = "var(--toxic)"; }
+        else if (state.scenario === 'space') { t.innerText = "ORBITÁLNÍ RYCHLOST"; t.className = "t-cyan"; d.innerText = "Frekvence radaru je smrtící."; m.style.borderColor = "var(--cyan)"; }
+        else if (state.scenario === 'blockade') { t.innerText = "NÁMOŘNÍ BLOKÁDA"; t.className = "t-blue"; d.innerText = "Průlom linie stojí enormní zdroje (3 Zásoby)."; }
+        else if (state.scenario === 'attrition') { t.innerText = "MLÝNEK NA MASO"; t.className = "t-red"; d.innerText = "Radar zničen. Spoléháš se na matematickou převahu."; }
+        
+        // Nové moduly
+        else if (state.scenario === 'cyber_rebel') { t.innerText = "KYBERNETICKÁ REBELIE"; t.className = "t-cyan"; d.innerText = "Radar je rušen, ale každý úspěšný zásah dává +20 VB."; m.style.borderColor = "var(--cyan)"; }
+        else if (state.scenario === 'nuke_winter') { t.innerText = "NUKLEÁRNÍ ZIMA"; t.className = "t-blue"; d.innerText = "Zásoby klesají o 1 za tah. Nepřítel je však pomalejší."; m.style.borderColor = "var(--tech)"; }
+        else if (state.scenario === 'alien_inv') { t.innerText = `MIMOZEMSKÝ ŠTÍT: ${state.alienShield} HP`; t.className = "t-cyan"; d.innerText = "Absorbuje veškeré poškození. Dobíjí se každých 5 dní."; m.style.borderColor = "var(--cyan)"; }
+        
+        // Moduly nových scénářů
+        else if (state.scenario === 'napoleon_siege') { t.innerText = "NEPŘESNÉ MUŠKETY"; t.className = "t-orange"; d.innerText = "Úzká zaměřovací zóna, ale útoky jsou levné a časté."; }
+        else if (state.scenario === 'korea') { t.innerText = "LIDSKÉ VLNY ZE SEVERU"; t.className = "t-red"; d.innerText = "Drtivý tlak přesily. Letecké shozy OSN jsou klíčové."; }
+        else if (state.scenario === 'yom_kippur') {
+            if (state.day <= 3) { t.innerText = `NÁHLÝ ÚTOK (den ${state.day}/3)`; t.className = "t-red"; d.innerText = "Šok z překvapivého útoku - tlak nepřítele je dočasně dvojnásobný."; m.style.borderColor = "var(--danger)"; }
+            else { t.innerText = "PROTIÚTOK V PLNÉM PROUDU"; t.className = "t-green"; d.innerText = "Počáteční šok pominul. Linie se stabilizovala."; }
+        }
+        else if (state.scenario === 'falklands') { t.innerText = "ZÁSOBOVÁNÍ PŘES OCEÁN"; t.className = "t-blue"; d.innerText = "Ofenzíva stojí 2 Zásoby, ale přesnost zbraní dává +10% šanci na kritický zásah."; }
+        else if (state.scenario === 'mars_colony') { t.innerText = "NÍZKÁ GRAVITACE"; t.className = "t-red"; d.innerText = "Výbušniny jsou silnější (+10% Dmg), ale zdrojů je nedostatek (-20% Zásob)."; m.style.borderColor = "var(--danger)"; }
+
+        let syn = getSynergy();
+        if (syn) {
+            d.innerText += ` ⭐ Synergie „${syn.label}" je aktivní.`;
+            m.style.borderColor = "var(--gold, #fbbf24)";
+        }
+    }
+
+    function updateUI() {
+        if (state.gamePaused) return;
+
+        let p = (state.front / state.maxFront) * 100;
+        let displayedFront = Math.max(0, Math.min(state.front, state.maxFront)); 
+        
+        let g = el('gauge'); 
+        g.style.width = `${Math.max(0, Math.min(100, p))}%`;
+        let cont = el('gauge-container');
+        
+        if (state.scenario === 'vietnam' && state.viet_revealed <= 0) { 
+            cont.classList.add('vietnam-hidden'); 
+            el('gauge-text').innerText = "FRONTLINE: ??? / ???"; 
+        } 
+        else {
+            cont.classList.remove('vietnam-hidden'); 
+            el('gauge-text').innerHTML = `FRONTLINE: <span id="val-front">${displayedFront}</span> / ${state.maxFront}`;
+            if (p < 25) { 
+                el('game-screen').classList.add('crisis'); 
+                g.style.backgroundColor = 'var(--danger)'; 
+            }
+            else { 
+                el('game-screen').classList.remove('crisis'); 
+                g.style.backgroundColor = p < 60 ? 'var(--warning)' : 'var(--accent)'; 
+            }
+        }
+
+        el('val-day').innerText = state.day; 
+        el('val-sup').innerText = state.supplies; 
+        el('val-cp').innerText = state.cp;
+        el('val-push').innerText = `-${getEnemyPush()}`;
+
+        // Výpočet ceny útoku
+        let atkCost = 1;
+        if (state.scenario === 'desert' && !state.exclusiveBought1) atkCost = 2;
+        if (state.scenario === 'blockade' && !state.exclusiveBought3) atkCost = 3;
+        if (state.scenario === 'blockade' && state.exclusiveBought3) atkCost = 2;
+        if (state.scenario === 'falklands' && !state.exclusiveBought1) atkCost = 2;
+        
+        if (state.scenario !== 'attrition') el('btn-atk').innerHTML = `OFENZÍVA<br><small>-${atkCost} Z</small>`;
+        el('btn-atk').disabled = state.supplies < atkCost;
+
+        el('btn-art').innerHTML = `Baráž<br><small>${state.costArt} VB</small>`;
+        el('btn-air').innerHTML = `Shoz<br><small>${state.costAir} VB</small>`;
+        
+        if (state.scenario === 'drone') { 
+            el('btn-art').disabled = true; 
+            el('btn-air').disabled = true; 
+        } else {
+            el('btn-art').disabled = state.cp < state.costArt;
+            el('btn-air').disabled = state.cp < state.costAir;
+        }
+
+        // Výpočet dovedností scénáře
+        let sBtn = el('btn-scenario');
+        let skCost = state.doctrine === 'artillery' ? 0.75 : 1;
+        skCost *= (1 + getSynergyBonus('skillCost'));
+        
+        if (state.scenario === 'default') { sBtn.innerHTML = "Uzamčeno<br><small>---</small>"; sBtn.disabled = true; }
+        else if (state.scenario === 'ww1_west') { sBtn.innerHTML = "Na Zteč!<br><small>Akce</small>"; sBtn.disabled = state.ww1_trenchPrep === 0; }
+        else if (state.scenario === 'ww1_east') { sBtn.innerHTML = `Rekvírovat<br><small>-${state.exclusiveBought1 ? 5 : 15} FR</small>`; sBtn.disabled = state.front <= (state.exclusiveBought1 ? 5 : 15); }
+        else if (state.scenario === 'ww2_blitz') { let c = Math.floor(40*skCost); sBtn.innerHTML = `Průlom<br><small>${c} VB</small>`; state.costSkill = c; sBtn.disabled = state.cp < c; }
+        else if (state.scenario === 'ww2_pacific') { let c = Math.floor(20*skCost); sBtn.innerHTML = `Konvoj<br><small>${c} VB</small>`; state.costSkill = c; sBtn.disabled = state.cp < c; }
+        else if (state.scenario === 'winter_war') { let c = Math.floor(20*skCost); sBtn.innerHTML = `Sabotáž<br><small>${c} VB</small>`; state.costSkill = c; sBtn.disabled = state.cp < c; }
+        else if (state.scenario === 'vietnam') { let c = Math.floor(30*skCost); sBtn.innerHTML = `Napalm<br><small>${c} VB</small>`; state.costSkill = c; sBtn.disabled = state.cp < c; }
+        else if (state.scenario === 'modern_ew') { 
+            let c = Math.floor(25*skCost); 
+            if (state.exclusiveBought2) c = Math.max(0, c - 10);
+            sBtn.innerHTML = `Anti-Rušič<br><small>${c} VB</small>`; state.costSkill = c; sBtn.disabled = state.cp < c || state.modern_counterTimer > 0; 
+        }
+        else if (state.scenario === 'desert') { let c = Math.floor(50*skCost); sBtn.innerHTML = `Nálet<br><small>${c} VB</small>`; state.costSkill = c; sBtn.disabled = state.cp < c; }
+        else if (state.scenario === 'urban') { let c = Math.floor(15*skCost); sBtn.innerHTML = `Sniper<br><small>${c} VB</small>`; state.costSkill = c; sBtn.disabled = state.cp < c; }
+        else if (state.scenario === 'guerilla') { let c = Math.floor(20*skCost); sBtn.innerHTML = `Přepad<br><small>${c} VB</small>`; state.costSkill = c; sBtn.disabled = state.cp < c; }
+        else if (state.scenario === 'drone') { let c = Math.floor(25*skCost); sBtn.innerHTML = `UAV Úder<br><small>${c} VB</small>`; state.costSkill = c; sBtn.disabled = state.cp < c; }
+        else if (state.scenario === 'zombie') { let c = Math.floor(30*skCost); sBtn.innerHTML = `Očista<br><small>${c} VB</small>`; state.costSkill = c; sBtn.disabled = state.cp < c || state.zombie_mutation === 0; }
+        else if (state.scenario === 'space') { let c = Math.floor(60*skCost); sBtn.innerHTML = `Orb. Laser<br><small>${c} VB</small>`; state.costSkill = c; sBtn.disabled = state.cp < c; }
+        else if (state.scenario === 'blockade') { let c = Math.floor(40*skCost); sBtn.innerHTML = `Prolomit<br><small>${c} VB</small>`; state.costSkill = c; sBtn.disabled = state.cp < c; }
+        else if (state.scenario === 'attrition') { let c = Math.floor(35*skCost); sBtn.innerHTML = `Vlna<br><small>${c} VB</small>`; state.costSkill = c; sBtn.disabled = state.cp < c; }
+        
+        // Nové dovednosti pro scénáře
+        else if (state.scenario === 'cyber_rebel') { let c = Math.floor(25*skCost); sBtn.innerHTML = `Overload<br><small>${c} VB</small>`; state.costSkill = c; sBtn.disabled = state.cp < c; }
+        else if (state.scenario === 'nuke_winter') { let c = Math.floor(30*skCost); sBtn.innerHTML = `Blizard<br><small>${c} VB</small>`; state.costSkill = c; sBtn.disabled = state.cp < c; }
+        else if (state.scenario === 'alien_inv') { let c = Math.floor(35*skCost); sBtn.innerHTML = `EMP Výboj<br><small>${c} VB</small>`; state.costSkill = c; sBtn.disabled = state.cp < c || state.alienShield <= 0; }
+        else if (state.scenario === 'napoleon_siege') { let c = Math.floor(30*skCost); sBtn.innerHTML = `Dělostřelba<br><small>${c} VB</small>`; state.costSkill = c; sBtn.disabled = state.cp < c; }
+        else if (state.scenario === 'korea') { let c = Math.floor(40*skCost); sBtn.innerHTML = `Bombardování<br><small>${c} VB</small>`; state.costSkill = c; sBtn.disabled = state.cp < c; }
+        else if (state.scenario === 'yom_kippur') { let c = Math.floor(35*skCost); sBtn.innerHTML = `Protiútok<br><small>${c} VB</small>`; state.costSkill = c; sBtn.disabled = state.cp < c; }
+        else if (state.scenario === 'falklands') { let c = Math.floor(35*skCost); sBtn.innerHTML = `Bombardování<br><small>${c} VB</small>`; state.costSkill = c; sBtn.disabled = state.cp < c; }
+        else if (state.scenario === 'mars_colony') { let c = Math.floor(55*skCost); sBtn.innerHTML = `Orb. Úder<br><small>${c} VB</small>`; state.costSkill = c; sBtn.disabled = state.cp < c; }
+
+        // Nastavení radaru
+        let z = el('t-zone'); 
+        let realRadVal = getRadarWidth();
+        z.style.width = `${realRadVal}%`; 
+        z.style.left = `${50 - (realRadVal / 2)}%`;
+        
+        // Aktualizace popisků a cen u všech 9 globálních upgradů
+        Object.keys(upgradeUIMap).forEach(k => { 
+            let s = upgradeUIMap[k]; 
+            el(`cost-${s}`).innerText = state.upgrades[k].cost; 
+            el(`upg-${s}`).disabled = state.cp < state.upgrades[k].cost; 
+            
+            let lvl = state.upgrades[k].level;
+            if (k === 'supply') el(`info-${s}`).innerText = `Výnos +${Math.round((lvl-1)*30)}% (Lv.${lvl})`;
+            if (k === 'radar') el(`info-${s}`).innerText = `Zóna +${Math.round((lvl-1)*25)}% (Lv.${lvl})`;
+            if (k === 'dmg') el(`info-${s}`).innerText = `Síla +${Math.round((lvl-1)*20)}% (Lv.${lvl})`;
+            if (k === 'cpGain') el(`info-${s}`).innerText = `Příjem +${Math.round((lvl-1)*20)}% (Lv.${lvl})`;
+            if (k === 'armor') el(`info-${s}`).innerText = `Tlak -${Math.round((lvl-1)*5)}% (Lv.${lvl})`;
+            if (k === 'recon') el(`info-${s}`).innerText = `Pasiv +${lvl > 1 ? Math.floor(15 * (1 + (lvl - 2) * 0.70)) : 0} VB (Lv.${lvl})`;
+            if (k === 'critical') el(`info-${s}`).innerText = `Šance +${Math.round((lvl-1)*5)}% (Lv.${lvl})`;
+            if (k === 'intel_gain') el(`info-${s}`).innerText = `Zóna +${Math.round((lvl-1)*3)}, Záchrana +${Math.round((lvl-1)*10)}% (Lv.${lvl})`;
+            if (k === 'engineering') el(`info-${s}`).innerText = `Start HP +${Math.round((lvl-1)*5)}% (Lv.${lvl})`;
+        });
+
+        // Tlačítka exkluzivních technologií
+        let ex1 = getExclusive1(), btnEx1 = el('btn-excl-1');
+        if (state.exclusiveBought1) { btnEx1.innerHTML = `★ ${ex1.name} ★<br><small>AKTIVNÍ</small>`; btnEx1.disabled = true; } 
+        else { btnEx1.innerHTML = `★ ${ex1.name} ★<br><small style="font-weight:normal;">${ex1.cost} VB - ${ex1.desc}</small>`; btnEx1.disabled = state.cp < ex1.cost; }
+
+        let ex2 = getExclusive2(), btnEx2 = el('btn-excl-2');
+        if (state.exclusiveBought2) { btnEx2.innerHTML = `★ ${ex2.name} ★<br><small>AKTIVNÍ</small>`; btnEx2.disabled = true; } 
+        else { btnEx2.innerHTML = `★ ${ex2.name} ★<br><small style="font-weight:normal;">${ex2.cost} VB - ${ex2.desc}</small>`; btnEx2.disabled = state.cp < ex2.cost; }
+
+        let ex3 = getExclusive3(), btnEx3 = el('btn-excl-3');
+        if (state.exclusiveBought3) { btnEx3.innerHTML = `★ ${ex3.name} ★<br><small>AKTIVNÍ</small>`; btnEx3.disabled = true; } 
+        else { btnEx3.innerHTML = `★ ${ex3.name} ★<br><small style="font-weight:normal;">${ex3.cost} VB - ${ex3.desc}</small>`; btnEx3.disabled = state.cp < ex3.cost; }
+
+        updateScenarioModule(); 
+        checkWinLoss(); 
+    }
+
+    function triggerShake() { 
+        let s = el('game-screen'); 
+        s.classList.add('shake'); 
+        setTimeout(() => s.classList.remove('shake'), 300); 
+    }
+    
+    function applyInstantAction(msg, color, snap, soundName) {
+        if (typeof msg === 'string' && msg.indexOf('SKILL:') === 0) warTrack({ skills_used: 1 });
+        if (snap) floatDiffs(snap);
+        if (soundName && Sound[soundName]) Sound[soundName]();
+        logMessage(msg, color); 
+        updateUI(); 
+    }
+
+    // Spočítá rozdíl oproti "snap" (stav před akcí) a vykreslí létající čísla
+    function floatDiffs(snap) {
+        let df = state.front - snap.f, ds = state.supplies - snap.s, dc = state.cp - snap.c;
+        if (df !== 0) floatText(`${df > 0 ? '+' : ''}${df} FR`, df > 0 ? 't-green' : 't-red');
+        if (ds !== 0) floatText(`${ds > 0 ? '+' : ''}${ds} Z`, 't-orange');
+        if (dc !== 0) floatText(`${dc > 0 ? '+' : ''}${dc} VB`, dc > 0 ? 't-blue' : 't-red');
+    }
+
+    function endTurn(msg, color) {
+        if (msg) logMessage(msg, color);
+        
+        let snap = { f: state.front, s: state.supplies, c: state.cp };
+
+        let passCp = getPassiveCp();
+        if (passCp > 0) { 
+            state.cp += passCp; 
+            logMessage(`Průzkumná síť vygenerovala +${passCp} VB.`, "t-blue"); 
+        }
+
+        if (state.doctrine === 'propaganda') {
+            if (state.day % 10 === 0) { 
+                state.front += 50; 
+                logMessage("OSVĚTA: Nové posily dorazily na frontu (+50 FR)!", "t-cyan"); 
+            }
+        }
+        if (state.doctrine === 'mercenary') {
+            let mercCp = state.supplies * 2;
+            state.cp += mercCp;
+            logMessage(`ŽOLDÁCI: Kontrakt vyplatil +${mercCp} VB za zbylé zásoby.`, "t-gold");
+        }
+        if (state.doctrine === 'partisan' && state.enemyStunned === 0 && Math.random() < 0.25) {
+            state.enemyStunned = 1; 
+            logMessage("Partyzánský odboj úspěšně napadl zásobování nepřítele! (Ochromen)", "t-toxic");
+        }
+        if (state.scenario === 'ww1_east' && state.exclusiveBought3) {
+            state.cp += 5;
+            logMessage("CARSKÉ REZERVY: Poslední zálohy carské pokladny vyplatily +5 VB.", "t-gold");
+        }
+
+        // Náhodný bonus nezávislý na zvolené doktríně - občas se po tahu
+        // najde opuštěný sklad zásob. 15% šance na tah dá při typické
+        // partii (kolem 20 tahů) v průměru 2-3 nálezy za hru - dost na to,
+        // aby to hráč reálně zažil, ne jen teoreticky mohl.
+        if (Math.random() < 0.15) {
+            const cache = 20 + Math.floor(Math.random() * 21);
+            state.cp += cache;
+            logMessage(`NÁLEZ: Průzkumná hlídka objevila opuštěný sklad zásob! (+${cache} VB)`, "t-gold");
+            floatText(`+${cache} VB 📦`, "t-gold");
+            if (typeof jomaridReward === 'function') jomaridReward('supply_cache', 5);
+        }
+
+        // Tlak nepřítele
+        let push = getEnemyPush();
+        let tookDamage = false;
+        if (state.enemyStunned > 0) { 
+            logMessage(`--- DEN ${state.day} (Nepřítel ochromen, zbývá ${state.enemyStunned} d.) ---`, "t-blue"); 
+            state.enemyStunned--; 
+        } else if (push > 0) { 
+            logMessage(`--- DEN ${state.day} (Tlak nepřítele: -${push}) ---`, "t-red"); 
+            state.front -= push; 
+            tookDamage = true;
+            if (state.scenario === 'guerilla' && state.exclusiveBought2) { 
+                state.front += 3; 
+                logMessage("I.E.D. SÍŤ zranila útočníky v zázemí (+3 FR)", "t-orange"); 
+            }
+            if (state.scenario === 'ww1_west' && state.exclusiveBought3) {
+                state.front += 40;
+                logMessage("ZÁKOPNÍ MINY explodovaly pod postupujícím nepřítelem (+40 FR)!", "t-orange");
+            }
+        }
+
+        // Nukleární zima: samovolný pokles zásob
+        if (state.scenario === 'nuke_winter' && !state.exclusiveBought2) {
+            state.supplies = Math.max(0, state.supplies - 1);
+            logMessage("NUKLEÁRNÍ ZIMA: Krutý mráz spotřeboval -1 Zásobu.", "t-red");
+        }
+
+        // Mimozemská regenerace štítu
+        if (state.scenario === 'alien_inv' && state.day % 5 === 0) {
+            state.alienShield += 100;
+            logMessage("MIMOZEMSKÁ INVAZE: Energetické štíty nepřítele se dobily (+100 HP)!", "t-cyan");
+        }
+
+        if (state.scenario === 'vietnam' && state.viet_revealed > 0) state.viet_revealed--;
+        if (state.scenario === 'modern_ew' && state.modern_counterTimer > 0) state.modern_counterTimer--;
+        
+        warTrack({ turns_total: 1 }, { best_day: state.day, supply_peak: state.supplies, cp_peak: state.cp, zombie_peak: state.zombie_mutation, ww2_streak: state.ww2_momentumPlayer, trench_peak: state.ww1_trenchPrep });
+        state.day++; 
+
+        if (tookDamage) { flashVignette(); Sound.shake(); }
+        floatDiffs(snap);
+        updateUI();
+    }
+
+    function startAttack() {
+        if (state.isAiming || state.gamePaused) return;
+
+        let cost = 1;
+        if (state.scenario === 'desert' && !state.exclusiveBought1) cost = 2;
+        if (state.scenario === 'blockade' && !state.exclusiveBought3) cost = 3;
+        if (state.scenario === 'blockade' && state.exclusiveBought3) cost = 2;
+        if (state.scenario === 'falklands' && !state.exclusiveBought1) cost = 2;
+
+        if (state.supplies < cost) { Sound.deny(); return; }
+        state.supplies -= cost; 
+
+        if (state.scenario === 'attrition') { 
+            resolveAttack(true, 0, cost); 
+            tutorialAdvanceIf('attack');
+            return; 
+        }
+
+        Sound.click();
+        state.isAiming = true;
+        el('radar-wrap').style.display = 'block'; 
+        el('controls-wrap').style.display = 'none';
+        
+        cancelAnimationFrame(anim); // Prevence proti dublování smyčky
+        anim = requestAnimationFrame(radarLoop);
+        tutorialAdvanceIf('attack');
+    }
+    
+    function radarLoop() {
+        let speed = 360 - Math.min(180, state.day * 2.5);
+        if (state.scenario === 'modern_ew' && state.modern_counterTimer <= 0) speed = 35; 
+        if (state.scenario === 'modern_ew' && state.exclusiveBought1) speed *= 1.3;
+        if (state.scenario === 'space') speed = state.exclusiveBought1 ? 120 : 60; 
+        if (state.scenario === 'cyber_rebel') {
+            // Rychlost radaru kolísá
+            speed = 40 + Math.sin(Date.now() / 800) * 25;
+        }
+        if (state.scenario === 'desert' && !state.exclusiveBought3) {
+            // Písečná bouře nepravidelně rozkmitává radar
+            speed *= (0.7 + Math.abs(Math.sin(Date.now() / 2200)) * 0.5);
+        }
+
+        state.currentPointerPos = 50 + Math.sin(Date.now() / speed) * 48;
+        el('pointer').style.left = `${state.currentPointerPos}%`;
+        anim = requestAnimationFrame(radarLoop);
+    }
+
+    el('radar').addEventListener('click', () => {
+        if (!state.isAiming) return;
+        cancelAnimationFrame(anim); 
+        state.isAiming = false;
+        
+        let cost = 1;
+        if (state.scenario === 'desert' && !state.exclusiveBought1) cost = 2;
+        if (state.scenario === 'blockade' && !state.exclusiveBought3) cost = 3;
+        if (state.scenario === 'blockade' && state.exclusiveBought3) cost = 2;
+        if (state.scenario === 'falklands' && !state.exclusiveBought1) cost = 2;
+
+        resolveAttack(false, Math.abs(state.currentPointerPos - 50), cost);
+        tutorialAdvanceIf('radarClick');
+    });
+
+    function resolveAttack(isAuto, dist, costSpent) {
+        let threshold = getRadarWidth() / 2;
+        let dmgMult = getDmgMult();
+        let cpMult = getCpMult();
+        let _snap = { f: state.front, s: state.supplies, c: state.cp };
+        
+        let dmg = 0, cp = 0, msg = "", col = "t-orange", isHit = false, sndType = 'hit';
+
+        // Výpočet šance na kritický zásah
+        let critChance = state.doctrine === 'intel' ? 0.40 : (state.doctrine === 'artillery' ? 0.05 : 0.15);
+        if (state.scenario === 'vietnam' && state.exclusiveBought2 && state.viet_revealed > 0) critChance += 0.20;
+        if (state.scenario === 'falklands') critChance += 0.10;
+        critChance += getSynergyBonus('crit');
+        
+        // Přičtení globálního výzkumu kritiky
+        critChance += (state.upgrades.critical.level - 1) * 0.05;
+
+        if (isAuto || dist <= threshold) {
+            let isCrit = Math.random() < critChance;
+            dmg = Math.floor(30 * dmgMult); 
+            cp = Math.floor(15 * cpMult); 
+            isHit = true; 
+            col = "t-green";
+            
+            if (!isAuto && dist < 2 && state.doctrine === 'intel') { 
+                cp += Math.floor(20 * cpMult); 
+                msg = `ABSOLUTNÍ STŘED (+${cp} VB)!`; 
+                triggerShake(); 
+                sndType = 'perfect';
+                spawnParticles('#fbbf24', 18);
+            }
+            else if (isCrit) { 
+                // Crit poškození roste o +10% za úroveň výzkumu
+                let critBonus = 1 + ((state.upgrades.critical.level - 1) * 0.10);
+                if (state.scenario === 'falklands' && state.exclusiveBought2) critBonus += 0.30;
+                dmg = Math.floor(55 * dmgMult * critBonus); 
+                cp += Math.floor(10 * cpMult); 
+                msg = `PERFEKTNÍ ÚDER!`; 
+                triggerShake(); 
+                sndType = 'crit';
+                spawnParticles('#10b981', 16);
+                if (state.doctrine === 'blitz') { 
+                    state.supplies += costSpent; 
+                    msg += " (Blitz: Zdarma!)"; 
+                }
+            } else { 
+                msg = `Přesný zásah!`; 
+                sndType = 'hit';
+            }
+            
+            if (state.scenario === 'zombie' && state.exclusiveBought1 && state.zombie_mutation > 0) { 
+                state.zombie_mutation--; 
+                msg += " (-1 Mutace)"; 
+            }
+        } else if (dist <= threshold + 15 + ((state.upgrades.intel_gain.level - 1) * 3)) { 
+            dmg = Math.floor(10 * dmgMult); 
+            cp = Math.floor(5 * cpMult); 
+            isHit = true; 
+            msg = `Standardní postup.`; 
+            sndType = 'graze';
+        } else { 
+            // Selhání ofenzívy: Rozvědka má šanci zachránit zásoby (10% za úroveň)
+            let saveChance = (state.upgrades.intel_gain.level - 1) * 0.10;
+            if (Math.random() < saveChance) {
+                state.supplies += costSpent;
+                msg = `Ofenzíva odvolána. Rozvědka zachránila zásoby!`;
+                col = "t-cyan";
+                sndType = 'save';
+            } else {
+                dmg = 2; 
+                cp = 1; 
+                msg = `Ofenzíva selhala.`; 
+                col = "t-red"; 
+                sndType = 'miss';
+                if (state.scenario === 'zombie') { 
+                    state.zombie_mutation++; 
+                    msg += " ZOMBIE MUTUJÍ (+1 Tlak)!"; 
+                    col = "t-toxic"; 
+                    triggerShake(); 
+                }
+            }
+        }
+        
+        let pct = (state.front / state.maxFront) * 100;
+        if (state.doctrine === 'fanatic' && pct < 35 && isHit) { 
+            dmg = Math.floor(dmg * 1.5); 
+            msg += " (Fanatická zuřivost +50% Dmg)"; 
+        }
+        if (state.doctrine === 'partisan' && state.enemyStunned > 0 && isHit) { 
+            dmg = Math.floor(dmg * 1.5); 
+            msg += " (Průraz partyzánů x1.5)"; 
+        }
+        if (state.doctrine === 'fleet' && dist <= threshold && isHit) {
+            if (Math.random() < 0.30) {
+                state.supplies += costSpent;
+                msg += " (Admirál: Logistika vrací zásoby!)";
+            }
+        }
+        if (state.doctrine === 'chemical' && isHit && Math.random() < 0.15) {
+            state.enemyStunned = Math.max(state.enemyStunned, 1);
+            msg += " (Toxic: Nepřítel ochromen!)";
+        }
+
+        if (state.scenario === 'default' && state.exclusiveBought2 && isHit) cp += Math.floor(2 * cpMult);
+
+        if (state.scenario === 'guerilla' && isHit) { 
+            let steal = state.exclusiveBought1 ? 4 : 2; 
+            state.supplies += steal; 
+            msg += ` (Ukradeno +${steal} Z)`; 
+        }
+        if (state.scenario === 'blockade' && isHit && state.exclusiveBought2) { 
+            state.supplies += 2; 
+            msg += ` (Pašování +2 Z)`; 
+        }
+        if (state.scenario === 'cyber_rebel' && isHit) {
+            cp += Math.floor(20 * cpMult);
+            msg += " (Rebelie bonus +20 VB)";
+            if (state.exclusiveBought2 && Math.random() < 0.40) {
+                state.enemyStunned = Math.max(state.enemyStunned, 1);
+                msg += " (Dešifrováno: Nepřítel ochromen!)";
+            }
+        }
+
+        if (state.scenario === 'ww1_west') { 
+            state.ww1_trenchPrep += dmg; 
+            msg += ` (Zákop +${dmg})`; 
+            dmg = 0; 
+        } 
+        else if (state.scenario === 'ww2_blitz') {
+            if (isHit) { 
+                if (state.ww2_momentumEnemy > 0) state.ww2_momentumEnemy = 0; 
+                else { state.ww2_momentumPlayer++; } 
+            } 
+            else { 
+                if (state.exclusiveBought1) state.ww2_momentumPlayer = Math.max(0, state.ww2_momentumPlayer - 1); 
+                else state.ww2_momentumPlayer = 0; 
+                state.ww2_momentumEnemy++; 
+            }
+        }
+
+        // Vyřešení poškození vůči mimozemskému štítu
+        if (state.scenario === 'alien_inv' && isHit) {
+            if (state.exclusiveBought3) {
+                state.front += Math.floor(dmg * 1.3); // Ignorování štítu + 30% bonus poškození
+            } else {
+                if (state.alienShield > 0) {
+                    let blocked = Math.min(state.alienShield, dmg);
+                    state.alienShield -= blocked;
+                    dmg -= blocked;
+                    msg += ` (Štít absorboval: -${blocked} HP, zbývá mu ${state.alienShield} HP)`;
+                }
+                state.front += dmg;
+            }
+        } else {
+            state.front += dmg;
+        }
+
+        state.cp += cp;
+        if (!isAuto) { 
+            el('radar-wrap').style.display = 'none'; 
+            el('controls-wrap').style.display = 'block'; 
+        }
+        warTrack({ attacks: 1, bullseyes: (isHit && !isAuto && dist <= 2) ? 1 : 0, crits: (sndType === 'crit' || sndType === 'perfect') ? 1 : 0, misses: sndType === 'miss' ? 1 : 0, saves: sndType === 'save' ? 1 : 0 });
+        Sound[sndType] ? Sound[sndType]() : Sound.hit();
+        floatDiffs(_snap);
+        endTurn(`OFENZÍVA: ${msg} ${dmg > 0 ? '(+'+dmg+' FR)' : ''} (+${cp} VB)`, col);
+    }
+
+    function doLogistics() {
+        let cost = state.doctrine === 'fortress' ? 5 : 12;
+        if (state.scenario === 'winter_war' && state.exclusiveBought2) cost = 0;
+        if (state.scenario === 'ww2_pacific') cost = 0;
+        if (state.scenario === 'nuke_winter' && state.exclusiveBought3) cost = Math.max(0, cost - 3);
+        if (state.doctrine === 'quartermaster' && state.supplies < 5) { 
+            cost = 0; 
+            logMessage("ZÁSOBY: Nouzová logistika uchráněna rezervami (Akce bez postihu Fronty).", "t-gold"); 
+        }
+
+        if (state.front <= cost) { 
+            logMessage("ZAMÍTNUTO: Linie je příliš křehká na oslabení!", "t-red"); 
+            Sound.deny();
+            return; 
+        }
+        
+        let supMult = getSupplyMult();
+        let baseGain = 5;
+        if (state.doctrine === 'quartermaster') baseGain += 3;
+        if (state.doctrine === 'fortress') baseGain = Math.max(1, baseGain - 1);
+        if (state.scenario === 'ww2_pacific') baseGain = 2; 
+        if (state.scenario === 'ww1_east') baseGain = Math.max(1, baseGain - 3); 
+        if (state.scenario === 'guerilla') { cost = 10; baseGain = 1; } 
+
+        let gain = Math.floor(baseGain * supMult);
+
+        if (state.scenario === 'ww2_blitz') { 
+            state.ww2_momentumPlayer = 0; 
+            state.ww2_momentumEnemy++; 
+        }
+
+        warTrack({ logistics_runs: 1 });
+        let _snapLog = { f: state.front, s: state.supplies, c: state.cp };
+        state.supplies += gain; 
+        state.front -= cost;
+        Sound.resupply();
+        floatDiffs(_snapLog);
+        endTurn(`Zabezpečení zázemí (-${cost} FR). Dodáno +${gain} Z.`, "t-orange");
+        tutorialAdvanceIf('logistics');
+    }
+
+    function useArtillery() {
+        if (state.cp < state.costArt) return; 
+        warTrack({ artillery_used: 1 });
+        let _snapArt = { f: state.front, s: state.supplies, c: state.cp };
+        state.cp -= state.costArt; 
+        state.enemyStunned = state.doctrine === 'artillery' ? 2 : 1; 
+        
+        let dmg = Math.floor(25 * getDmgMult());
+        if (state.scenario === 'alien_inv' && state.exclusiveBought1) {
+            state.alienShield = 0;
+            spawnParticles('#06b6d4', 20);
+            applyInstantAction(`HQ: Iontová baráž kompletně přetížila nepřátelský štít!`, "t-cyan", _snapArt, 'boom');
+            return;
+        }
+
+        if (state.scenario === 'ww1_west') { 
+            state.ww1_trenchPrep += dmg; 
+            applyInstantAction(`HQ: Dělostřelectvo posílilo zteč (+${dmg}). Nepřítel ochromen na ${state.enemyStunned} d.!`, "t-blue", _snapArt, 'boom'); 
+        }
+        else { 
+            state.front += dmg; 
+            triggerShake(); 
+            spawnParticles('#3b82f6', 16);
+            applyInstantAction(`HQ: Dělostřelecká baráž (+${dmg} FR). Nepřítel ochromen na ${state.enemyStunned} d.!`, "t-blue", _snapArt, 'boom'); 
+        }
+    }
+    
+    function useAirdrop() { 
+        if (state.cp < state.costAir) return; 
+        warTrack({ airdrops_used: 1 });
+        let _snapAir = { f: state.front, s: state.supplies, c: state.cp };
+        state.cp -= state.costAir; 
+        let airGain = Math.floor(6 * getSupplyMult());
+        if (state.scenario === 'korea' && state.exclusiveBought1) airGain = Math.floor(airGain * 1.5);
+        state.supplies += airGain; 
+        
+        if (state.scenario === 'ww2_blitz' && state.exclusiveBought2) { 
+            state.front += 30; 
+            triggerShake(); 
+            applyInstantAction(`HQ: Shoz dorazil (+${airGain} Z) a doprovodné bombardéry STUKAS vyčistily linii (+30 FR)!`, "t-blue", _snapAir, 'drop'); 
+        }
+        else { 
+            applyInstantAction(`HQ: Letecké zásoby shozeny (+${airGain} Z).`, "t-blue", _snapAir, 'drop'); 
+        }
+    }
+
+    function useScenarioSkill() {
+        let skCost = state.doctrine === 'artillery' ? 0.75 : 1;
+        let dmgMult = getDmgMult();
+        let _snapSk = { f: state.front, s: state.supplies, c: state.cp };
+        
+        if (state.scenario === 'ww1_west') {
+            if (state.ww1_trenchPrep <= 0) return; 
+            let burst = Math.floor(state.ww1_trenchPrep * (state.exclusiveBought1 ? 2.5 : 1.5) * dmgMult);
+            state.front += burst; 
+            state.ww1_trenchPrep = 0; 
+            triggerShake(); 
+            spawnParticles('#a855f7', 18);
+            applyInstantAction(`SKILL: NA ZTEČ! Proražení nepřátelských linií (+${burst} FR)!`, "t-purple", _snapSk, 'boom');
+        } else if (state.scenario === 'ww1_east') {
+            let cost = state.exclusiveBought1 ? 5 : 15; 
+            if (state.front <= cost) return;
+            state.front -= cost; 
+            let sup = Math.floor(5 * getSupplyMult()); 
+            state.supplies += sup; 
+            applyInstantAction(`SKILL: Rekvírování! (+${sup} Z), ústup z pozic (-${cost} FR).`, "t-purple", _snapSk, 'resupply');
+        } else if (state.scenario === 'ww2_blitz') {
+            if (state.cp < state.costSkill) return; 
+            state.cp -= state.costSkill; 
+            state.ww2_momentumPlayer += 2; 
+            state.ww2_momentumEnemy = 0; 
+            applyInstantAction("SKILL: Bleskový průlom nařízen! Získáváš okamžitou hybnost.", "t-purple", _snapSk, 'buy');
+        } else if (state.scenario === 'ww2_pacific') {
+            if (state.cp < state.costSkill) return; 
+            state.cp -= state.costSkill; 
+            state.supplies += Math.floor(15 * getSupplyMult()); 
+            applyInstantAction(`SKILL: Vykládka z konvoje úspěšně dokončena (+${Math.floor(15 * getSupplyMult())} Z).`, "t-purple", _snapSk, 'drop');
+        } else if (state.scenario === 'winter_war') {
+            if (state.cp < state.costSkill) return; 
+            state.cp -= state.costSkill; 
+            state.supplies += Math.floor(3 * getSupplyMult()); 
+            state.enemyStunned = state.exclusiveBought3 ? 3 : 1; 
+            applyInstantAction(`SKILL: Sissi přepad! (+${Math.floor(3 * getSupplyMult())} Z). Nepřítel ochromen.`, "t-purple", _snapSk, 'boom');
+        } else if (state.scenario === 'vietnam') {
+            if (state.cp < state.costSkill) return; 
+            state.cp -= state.costSkill; 
+            state.viet_revealed = state.exclusiveBought1 ? 6 : 3; 
+            let dmg = Math.floor(25 * dmgMult); 
+            state.front += dmg; 
+            if (state.exclusiveBought3) state.supplies += 3;
+            triggerShake(); 
+            spawnParticles('#f59e0b', 16);
+            applyInstantAction(`SKILL: Napalmový útok (+${dmg} FR). Džungle odhalena.`, "t-purple", _snapSk, 'boom');
+        } else if (state.scenario === 'modern_ew') {
+            if (state.cp < state.costSkill) return; 
+            state.cp -= state.costSkill; 
+            state.modern_counterTimer = 3; 
+            applyInstantAction("SKILL: Kybernetický protiúder! Filtry stabilizují radar.", "t-purple", _snapSk, 'buy');
+        } else if (state.scenario === 'desert') {
+            if (state.cp < state.costSkill) return; 
+            state.cp -= state.costSkill; 
+            let dmg = Math.floor(60 * dmgMult); 
+            state.front += dmg; 
+            state.enemyStunned = 1; 
+            triggerShake(); 
+            spawnParticles('#f59e0b', 16);
+            applyInstantAction(`SKILL: Kobercový nálet! (+${dmg} FR). Cíl ochromen.`, "t-purple", _snapSk, 'boom');
+        } else if (state.scenario === 'urban') {
+            if (state.cp < state.costSkill) return; 
+            state.cp -= state.costSkill; 
+            let dmg = Math.floor(30 * dmgMult); 
+            state.front += dmg; 
+            triggerShake(); 
+            applyInstantAction(`SKILL: Ostřelovači eliminovali velení v sektoru (+${dmg} FR).`, "t-purple", _snapSk, 'boom');
+        } else if (state.scenario === 'guerilla') {
+            if (state.cp < state.costSkill) return; 
+            state.cp -= state.costSkill; 
+            let dmg = Math.floor(30 * dmgMult); 
+            state.front += dmg; 
+            state.enemyStunned = 1; 
+            triggerShake(); 
+            applyInstantAction(`SKILL: Noční přepadení skladiště (+${dmg} FR, Ochromení).`, "t-purple", _snapSk, 'boom');
+        } else if (state.scenario === 'drone') {
+            if (state.cp < state.costSkill) return; 
+            state.cp -= state.costSkill; 
+            let mult = state.exclusiveBought3 ? 1.3 : 1.0;
+            let dmg = Math.floor(40 * dmgMult * mult); 
+            state.front += dmg; 
+            triggerShake(); 
+            applyInstantAction(`SKILL: Přesný úder rojů UAV (+${dmg} FR).`, "t-purple", _snapSk, 'boom');
+        } else if (state.scenario === 'zombie') {
+            if (state.cp < state.costSkill || state.zombie_mutation === 0) return; 
+            state.cp -= state.costSkill; 
+            state.zombie_mutation = 0; 
+            triggerShake(); 
+            spawnParticles('#84cc16', 16);
+            applyInstantAction("SKILL: Chemická očista! Úroveň nákazy zresetována na 0.", "t-toxic", _snapSk, 'unlock');
+        } else if (state.scenario === 'space') {
+            if (state.cp < state.costSkill) return; 
+            state.cp -= state.costSkill; 
+            let dmg = Math.floor(80 * dmgMult); 
+            state.front += dmg; 
+            triggerShake(); 
+            spawnParticles('#06b6d4', 22);
+            applyInstantAction(`SKILL: ORBITÁLNÍ LASER AKTIVOVÁN (+${dmg} FR).`, "t-cyan", _snapSk, 'boom');
+        } else if (state.scenario === 'blockade') {
+            if (state.cp < state.costSkill) return; 
+            state.cp -= state.costSkill; 
+            state.supplies += Math.floor(12 * getSupplyMult()); 
+            let dmg = Math.floor(20 * dmgMult); 
+            state.front += dmg; 
+            applyInstantAction(`SKILL: Prolomení koridoru silou (+${Math.floor(12 * getSupplyMult())} Z, +${dmg} FR).`, "t-purple", _snapSk, 'boom');
+        } else if (state.scenario === 'attrition') {
+            if (state.cp < state.costSkill) return; 
+            state.cp -= state.costSkill; 
+            let dmg = Math.floor(65 * dmgMult); 
+            state.front += dmg; 
+            triggerShake(); 
+            spawnParticles('#ef4444', 18);
+            applyInstantAction(`SKILL: Lidská vlna proražení (+${dmg} FR).`, "t-red", _snapSk, 'boom');
+        }
+        
+        // Nové dovednosti scénářů
+        else if (state.scenario === 'cyber_rebel') {
+            if (state.cp < state.costSkill) return; 
+            state.cp -= state.costSkill;
+            let bDmg = Math.floor(40 * dmgMult); 
+            state.front += bDmg;
+            let bSup = Math.floor(4 * getSupplyMult()); 
+            state.supplies += bSup;
+            applyInstantAction(`SKILL: Přetížení sítě rebelů! (+${bDmg} FR, +${bSup} Z)`, "t-cyan", _snapSk, 'boom');
+        } else if (state.scenario === 'nuke_winter') {
+            if (state.cp < state.costSkill) return; 
+            state.cp -= state.costSkill;
+            state.enemyStunned = 2;
+            applyInstantAction("SKILL: Umělá sněhová bouře! Nepřítel kompletně zamražen na 2 dny.", "t-blue", _snapSk, 'buy');
+        } else if (state.scenario === 'alien_inv') {
+            if (state.cp < state.costSkill) return; 
+            state.cp -= state.costSkill;
+            state.alienShield = 0;
+            spawnParticles('#06b6d4', 20);
+            applyInstantAction("SKILL: Masivní EMP výboj! Energetický štít mimozemšťanů zkratován.", "t-cyan", _snapSk, 'boom');
+        }
+        
+        // Dovednosti nových scénářů
+        else if (state.scenario === 'napoleon_siege') {
+            if (state.cp < state.costSkill) return; 
+            state.cp -= state.costSkill;
+            let dmg = Math.floor(45 * dmgMult); 
+            state.front += dmg; 
+            triggerShake(); 
+            spawnParticles('#92400e', 16);
+            applyInstantAction(`SKILL: Dělostřelecký sbor zahájil palbu (+${dmg} FR).`, "t-orange", _snapSk, 'boom');
+        } else if (state.scenario === 'korea') {
+            if (state.cp < state.costSkill) return; 
+            state.cp -= state.costSkill;
+            let dmg = Math.floor(55 * dmgMult); 
+            state.front += dmg; 
+            state.enemyStunned = 1;
+            triggerShake(); 
+            spawnParticles('#16a34a', 18);
+            applyInstantAction(`SKILL: Kobercové bombardování OSN (+${dmg} FR). Nepřítel ochromen.`, "t-purple", _snapSk, 'boom');
+        } else if (state.scenario === 'yom_kippur') {
+            if (state.cp < state.costSkill) return; 
+            state.cp -= state.costSkill;
+            let dmg = Math.floor(50 * dmgMult); 
+            state.front += dmg; 
+            triggerShake(); 
+            spawnParticles('#16a34a', 16);
+            applyInstantAction(`SKILL: Obrněný protiútok proráží linie (+${dmg} FR).`, "t-purple", _snapSk, 'boom');
+        } else if (state.scenario === 'falklands') {
+            if (state.cp < state.costSkill) return; 
+            state.cp -= state.costSkill;
+            let dmg = Math.floor(45 * dmgMult); 
+            state.front += dmg; 
+            let sup = Math.floor(4 * getSupplyMult());
+            state.supplies += sup;
+            triggerShake(); 
+            spawnParticles('#2563eb', 16);
+            applyInstantAction(`SKILL: Námořní bombardování (+${dmg} FR, +${sup} Z).`, "t-blue", _snapSk, 'boom');
+        } else if (state.scenario === 'mars_colony') {
+            if (state.cp < state.costSkill) return; 
+            state.cp -= state.costSkill;
+            let dmg = Math.floor(70 * dmgMult); 
+            state.front += dmg; 
+            triggerShake(); 
+            spawnParticles('#dc2626', 20);
+            applyInstantAction(`SKILL: Orbitální svržení kamene zasáhlo cíl (+${dmg} FR).`, "t-red", _snapSk, 'boom');
+        }
+    }
+
+    function buyUpgrade(key) {
+        let u = state.upgrades[key];
+        if (state.cp >= u.cost) {
+            let _snapU = { f: state.front, s: state.supplies, c: state.cp };
+            state.cp -= u.cost; 
+            u.level++; 
+            warTrack({ upgrades_bought: 1 }, { max_upgrade_level: u.level });
+            
+            let multiplier = state.doctrine === 'tech' ? 1.4 : 1.6;
+            u.cost = Math.round(u.cost * multiplier); 
+            
+            if (state.doctrine === 'tech') { 
+                state.front += 10; 
+                applyInstantAction(`VÝZKUM: ${u.name.toUpperCase()} Lv.${u.level} (Tech bonus +10 FR)`, "t-cyan", _snapU, 'buy'); 
+            }
+            else { 
+                applyInstantAction(`VÝZKUM: ${u.name.toUpperCase()} posunut na úroveň ${u.level}`, "t-blue", _snapU, 'buy'); 
+            }
+        } else {
+            Sound.deny();
+        }
+    }
+
+    function buyExclusiveTech(id) {
+        let ex = id === 1 ? getExclusive1() : (id === 2 ? getExclusive2() : getExclusive3());
+        if (state.cp >= ex.cost && state[`exclusiveBought${id}`] === false) { 
+            let _snapEx = { f: state.front, s: state.supplies, c: state.cp };
+            state.cp -= ex.cost; 
+            state[`exclusiveBought${id}`] = true; 
+            warTrack({ exclusive_techs: 1 });
+
+            // BARIKÁDY / OPEVNĚNÍ / VÝSADEK: jednorázově navýší strop fronty pro tento sektor
+            if (state.scenario === 'urban' && id === 3) {
+                state.maxFront = Math.floor(state.maxFront * 1.30);
+            }
+            if (state.scenario === 'napoleon_siege' && id === 3) {
+                state.maxFront = Math.floor(state.maxFront * 1.25);
+            }
+            if (state.scenario === 'falklands' && id === 3) {
+                state.maxFront = Math.floor(state.maxFront * 1.20);
+            }
+
+            spawnParticles('#fbbf24', 22);
+            applyInstantAction(`★★ TECHNOLOGIE ZÍSKÁNA: ${ex.name} ★★`, "t-gold", _snapEx, 'unlock'); 
+        } else if (state.cp < ex.cost) {
+            Sound.deny();
+        }
+    }
+
+    // NEPRŮSTŘELNÝ FALLBACK KOPÍROVÁNÍ PRO VŠECHNY PROHLÍŽEČE
+    function resetCopyLabelSoon() {
+        clearTimeout(window.__copyLabelTimeout);
+        window.__copyLabelTimeout = setTimeout(() => {
+            const btn = el('btn-copy');
+            if (btn) btn.innerText = "ZKOPÍROVAT VOJENSKÉ HLÁŠENÍ";
+        }, 2200);
+    }
+
+    // Obrazovka porazky smaze cele <body> (document.body.innerHTML = ...), takze popisky
+    // #lbl-scenario / #lbl-doctrine v tu chvili uz neexistuji - proto se jejich text
+    // ulozi predem do stavu a tady se cte z ulozene kopie, ne z DOM.
+    function reportLabel(id, saved) {
+        const node = document.getElementById(id);
+        if (node && node.innerText) return node.innerText;
+        return saved || '?';
+    }
+
+    function copyScore() {
+        let text = `🎖️ WARROOM: FRONTLINES\n📍 Scénář: ${reportLabel('lbl-scenario', state.reportScenario)}\n🧠 Doktrína: ${reportLabel('lbl-doctrine', state.reportDoctrine)}\n💀 Přežito dní: ${state.day}\n🚩 Dobyté sektory: ${state.sector - 1}\nDokážeš překonat mé skóre?`;
+        
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => {
+                el('btn-copy').innerText = "ZKOPÍROVÁNO DO SCHRÁNKY!";
+                resetCopyLabelSoon();
+            }).catch(() => fallbackCopy(text));
+        } else {
+            fallbackCopy(text);
+        }
+    }
+
+    function fallbackCopy(text) {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed"; 
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            el('btn-copy').innerText = "ZKOPÍROVÁNO!";
+            resetCopyLabelSoon();
+        } catch (err) {
+            alert("Automatické zkopírování selhalo. Zde je výsledek pro ruční kopii:\n\n" + text);
+        }
+        document.body.removeChild(textArea);
+    }
+
+
+    function checkWinLoss() {
+        if (state.front >= state.maxFront && !state.gamePaused) {
+            state.gamePaused = true;
+            el('os-title').innerText = state.scenario === 'ww2_pacific' ? `OSTROV ${state.sector} DOBYT` : `SEKTOR ${state.sector} ZABRÁN`;
+            
+            warTrack({ sectors_cleared: 1 }, { best_day: state.day });
+            // Vyhodnocení permanentních unlocků
+            checkSectorUnlockProgression();
+            
+            Sound.victory();
+            flashPanel(true);
+            el('overlay-sector').style.display = 'flex';
+            spawnParticles('#10b981', 26, 'overlay-sector');
+        } else if (state.front <= 0 && !state.gamePaused) {
+            if (state.doctrine === 'fanatic' && !state.fanaticUsed) { 
+                state.front = 1; 
+                state.fanaticUsed = true; 
+                warTrack({ last_stands: 1 });
+                logMessage("VÍRA: Vojáci odmítli ustoupit! Poslední linie drží na 1 HP!", "t-purple"); 
+                Sound.crit();
+                flashVignette();
+                return; 
+            }
+            state.gamePaused = true;
+            warTrack({ defeats: 1 }, { best_day: state.day });
+            Sound.defeat();
+            try { state.reportScenario = el('lbl-scenario').innerText; state.reportDoctrine = el('lbl-doctrine').innerText; } catch (e) {}
+            let msg = state.scenario === 'ww2_pacific' ? "ZATLAČENI DO MOŘE" : "ARMÁDA ZNIČENA";
+            if(state.scenario === 'zombie') msg = "SEŽRÁNI ZAŽIVA"; 
+            if(state.scenario === 'space') msg = "ORBITÁLNÍ KOLAPS";
+            if(state.scenario === 'alien_inv') msg = "KAPITULACE LIDSTVA";
+            
+            document.body.innerHTML = `<div id="vignette-flash"></div>
+            <button id="sound-toggle" class="${Sound.isMuted() ? 'muted' : ''}" onclick="toggleSound()" title="Zapnout/vypnout zvuk">${Sound.isMuted() ? '🔇' : '🔊'}</button>
+            <div class="wizard-screen active glass-panel" style="border-color:var(--danger)">
+                <h1 class="t-red">${msg}</h1>
+                <p>Udržel jsi linie po dobu <b>${state.day} dní</b> a vyčistil celkem ${state.sector - 1} sektorů.</p>
+                <div style="display:flex; flex-direction:column; gap:10px; align-items:center; margin-top:20px;">
+                    <button id="btn-copy" class="btn-spec" onclick="copyScore()" style="padding:15px; width: 300px; font-size:1rem;">ZKOPÍROVAT VOJENSKÉ HLÁŠENÍ</button>
+                    <button class="btn-main" onclick="location.reload()" style="padding:15px; width: 300px; font-size:1rem;">NOVÉ TAŽENÍ</button>
+                </div>
+            </div>`;
+        }
+    }
+
+    function nextSector() {
+        Sound.resupply();
+        el('overlay-sector').style.display = 'none'; 
+        state.sector++; 
+        state.supplies += 5; 
+        state.cp += 50;
+        
+        // Dynamické škálování maximálního cíle sektoru o +15%
+        let baseMax = getScenarioBaseMaxFront(state.scenario);
+        let currentMaxScaled = Math.floor(baseMax * (1 + (state.sector - 1) * 0.15));
+        state.maxFront = currentMaxScaled;
+        
+        let engBonus = 1 + ((state.upgrades.engineering.level - 1) * 0.05);
+        state.front = Math.floor(currentMaxScaled * 0.6 * engBonus);
+        
+        if (state.scenario === 'ww2_pacific') { 
+            state.supplies += state.exclusiveBought1 ? 15 : 8; 
+            state.maxFront = Math.floor(200 * (1 + (state.sector - 1) * 0.15));
+            state.front = Math.floor(state.maxFront * 0.6 * engBonus);
+            if (state.exclusiveBought3) state.front = Math.floor(state.front * 1.15);
+        } 
+        
+        // Reset proměnných kola
+        state.ww1_trenchPrep = 0; 
+        state.ww2_momentumEnemy = 0; 
+        state.ww2_momentumPlayer = 0; 
+        state.viet_revealed = 0;
+        state.gamePaused = false; 
+        state.fanaticUsed = false;
+        
+        state.exclusiveBought1 = false;
+        state.exclusiveBought2 = false;
+        state.exclusiveBought3 = false;
+
+        if (state.scenario === 'alien_inv') {
+            state.alienShield = 150 + (state.sector - 1) * 50;
+        }
+        
+        logMessage(`--- VSTUP DO SEKTORU ${state.sector} (Cíl fronty navýšen o obtížnost) ---`, "t-green");
+        updateUI();
+    }
+
+    window.onload = () => {
+        initWizards();
+    };
+</script>
+</body>
+</html>
