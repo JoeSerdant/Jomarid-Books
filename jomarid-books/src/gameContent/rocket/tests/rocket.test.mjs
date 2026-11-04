@@ -107,7 +107,7 @@ test('strom Vzestupu: nové uzly za hvězdný prach mají cenu, strop, uložení
   for (const id of ['armor', 'startShield', 'heal', 'loot', 'discount', 'combo']) {
     const n = byId[id];
     assert.ok(n, id);
-    assert.ok(n.max >= 4 && n.max <= 10, `${id}: max`);
+    assert.ok(n.max >= 8 && n.max <= 20, `${id}: max`);   // strop zdvojnásobený oproti původním 4 až 10 úrovním
     assert.ok(n.cost(0) > 0 && n.cost(n.max - 1) > n.cost(0), `${id}: cena roste`);
     assert.match(html, new RegExp(`${id}: 0[,\\s]`), `${id} v uložených výchozích hodnotách`);
   }
@@ -119,7 +119,7 @@ test('strom Vzestupu: nové uzly za hvězdný prach mají cenu, strop, uložení
   assert.match(html, /prestigeBonus\('discount', 0\.03\)/);
   assert.match(html, /prestigeBonus\('combo', 0\.1\)/);
   // stropy, ať se hra nerozbije: pancíř nejvýš -20 %, sleva nejvýš -15 %
-  assert.ok(byId.armor.max * 0.02 <= 0.2 && byId.discount.max * 0.03 <= 0.15);
+  assert.ok(byId.armor.max * 0.02 <= 0.4 && byId.discount.max * 0.03 <= 0.3);   // strop zdvojnásobený: pancíř nejvýš -40 %, sleva nejvýš -30 %
 });
 
 
