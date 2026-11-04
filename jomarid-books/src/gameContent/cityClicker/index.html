@@ -1254,18 +1254,60 @@
   function trkSeen(group, key){ var g = state.stats[group] || (state.stats[group] = {}); g[key] = 1; }
   var BUILD_STAT = { residential:'houses_built', commercial:'shops_built', industrial:'factories_built', techeco:'labs_built', park:'parks_built' };
 
-  function deepMerge(target, source){
+  // Sloučí uložený postup do výchozího stavu, ale přijme jen hodnoty stejného typu, jaký má výchozí (číslo za číslo, pole za pole, objekt za objekt).
+  // Poškozený nebo ručně upravený postup tak hru nerozbije (dřív stačilo, aby policies bylo false, a hra při startu spadla). Klíče, které
+  // výchozí stav nezná, zůstávají (mapy čítačů a vylepšení se plní za hry). buyAmount smí být číslo i text ('max').
+  function mergeSaved(target, source){
+    if(!source || typeof source !== 'object' || Array.isArray(source)) return target;
     for(var key in source){
-      if(!source.hasOwnProperty(key)) continue;
-      var val = source[key];
-      if(val && typeof val === 'object' && !Array.isArray(val)){
-        if(!target[key] || typeof target[key] !== 'object'){ target[key] = {}; }
-        deepMerge(target[key], val);
-      } else {
-        target[key] = val;
-      }
+      if(!Object.prototype.hasOwnProperty.call(source, key)) continue;
+      if(key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+      var val = source[key], def = target[key];
+      if(val === undefined) continue;
+      if(def === undefined){ target[key] = val; continue; }
+      if(key === 'buyAmount'){ if(typeof val === 'number' ? isFinite(val) : typeof val === 'string') target[key] = val; continue; }
+      if(def === null){ if(val === null || typeof val === 'string') target[key] = val; continue; }
+      if(Array.isArray(def)){ if(Array.isArray(val)) target[key] = val; continue; }
+      if(typeof def === 'object'){ if(val && typeof val === 'object' && !Array.isArray(val)) mergeSaved(def, val); continue; }
+      if(typeof def === 'number'){ if(typeof val === 'number' && isFinite(val)) target[key] = val; continue; }
+      if(typeof def === typeof val) target[key] = val;
     }
     return target;
+  }
+
+  // Po sloučení: to, co typ neověří (platné téma, počty budov jako celá nezáporná čísla, seznamy a mapy čítačů se správným obsahem).
+  function repairLoaded(st){
+    if(themeOrder.indexOf(st.theme) < 0) st.theme = 'classic';
+    for(var b in st.buildings){
+      if(!Object.prototype.hasOwnProperty.call(st.buildings, b)) continue;
+      var n = st.buildings[b].count;
+      st.buildings[b].count = n > 0 ? Math.floor(n) : 0;
+    }
+    var onlyText = function(list){ return list.filter(function(x){ return typeof x === 'string'; }); };
+    st.relics = onlyText(st.relics);
+    st.achievements = onlyText(st.achievements);
+    var numbersOnly = function(map, allowGroups){
+      var out = {};
+      if(!map || typeof map !== 'object' || Array.isArray(map)) return out;
+      for(var k in map){
+        if(!Object.prototype.hasOwnProperty.call(map, k)) continue;
+        var v = map[k];
+        if(typeof v === 'number' && isFinite(v) && v >= 0) out[k] = v;
+        else if(allowGroups && v && typeof v === 'object' && !Array.isArray(v)) out[k] = v;
+      }
+      return out;
+    };
+    st.stardustUpgrades = numbersOnly(st.stardustUpgrades, false);
+    st.stats = numbersOnly(st.stats, true);
+    // fáze projektů jsou indexy do seznamů (mimo rozsah by se při vykreslení četlo z ničeho)
+    megaprojectOrder.forEach(function(k){
+      var m = st.megaprojects[k], len = megaprojectDefs[k].phases.length;
+      m.phase = Math.min(len, Math.max(0, Math.floor(m.phase)));
+      if(m.phase >= len) m.completed = true;
+    });
+    st.endgame.acceleratorPhase = Math.min(ACCELERATOR_PHASES.length, Math.max(0, Math.floor(st.endgame.acceleratorPhase)));
+    st.endgame.archaPhase = Math.min(ARCHA_PHASES, Math.max(0, Math.floor(st.endgame.archaPhase)));
+    return st;
   }
 
   /* =========================================================
@@ -3357,7 +3399,8 @@
     }
     try{
       var loaded = JSON.parse(raw);
-      state = deepMerge(defaultState(), loaded);
+      if(!loaded || typeof loaded !== 'object' || Array.isArray(loaded)) throw new Error('uložení není objekt');
+      state = repairLoaded(mergeSaved(defaultState(), loaded));
       state.buyAmount = normalizeBuyAmount(state.buyAmount);
       state.activeCrisis = null;
       state.frenzyActive = false;
@@ -3540,7 +3583,8 @@
     if(raw){
       try{
         var loaded = JSON.parse(raw);
-        state = deepMerge(defaultState(), loaded);
+        if(!loaded || typeof loaded !== 'object' || Array.isArray(loaded)) throw new Error('uložení není objekt');
+        state = repairLoaded(mergeSaved(defaultState(), loaded));
         state.activeCrisis = null;
         state.frenzyActive = false;
         state.endgame.activeRift = null;
