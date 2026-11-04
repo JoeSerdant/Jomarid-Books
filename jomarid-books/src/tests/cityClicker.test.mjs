@@ -154,3 +154,199 @@ test('hra hlásí přesně statistiky z katalogu a cheat Všechny odznaky je dot
     assert.ok(reported.get(key) >= need, `${key}: cheat dá ${reported.get(key)}, odznak chce ${need}`);
   }
 });
+
+/* ---------------------------------------------------------------- nákup po více kusech, návratnost, čas podle hodin, stabilní tlačítka */
+const varLine = (name) => { const m = gameJs.match(new RegExp(`^  var ${name} = [^\\n]*;`, 'm')); assert.ok(m, name); return m[0]; };
+function makeShop({ budget = 1e6, counts = {}, policies = {}, dimension = null, relics = [] } = {}) {
+  const buildings = { residential: { count: 0 }, commercial: { count: 0 }, industrial: { count: 0 }, techeco: { count: 0 }, park: { count: 0 }, ...Object.fromEntries(Object.entries(counts).map(([k, v]) => [k, { count: v }])) };
+  const state = { budget, buildings, policies: { taxCuts: false, ...policies }, dimension, buyAmount: 1, stats: {}, endgame: { active: false } };
+  const buildingDefs = { residential: { baseCost: 50 }, commercial: { baseCost: 180 }, industrial: { baseCost: 480 }, techeco: { baseCost: 1500 }, park: { baseCost: 350 } };
+  const toasts = [];
+  const ctx = run(`${varLine('BUY_AMOUNTS')}\n${fnSrc('buildingCostAt')}\n${fnSrc('getBuildingCost')}\n${fnSrc('normalizeBuyAmount')}\n${fnSrc('planPurchase')}\n${fnSrc('zoneGain')}\n${fnSrc('buyBuilding')}`, {
+    state, buildingDefs, hasRelic: (k) => relics.includes(k), showToast: (m) => toasts.push(m), playBuySound() {}, renderAll() {}, trk(k, n) { state.stats[k] = (state.stats[k] || 0) + (n === undefined ? 1 : n); },
+    BUILD_STAT: { residential: 'houses_built', commercial: 'shops_built', industrial: 'factories_built', techeco: 'labs_built', park: 'parks_built' },
+    computePassiveIncome: () => buildings.commercial.count * 1.4 + buildings.residential.count * 0.5, computeSatisfaction: () => 100 - buildings.industrial.count, computePopulation: () => 80 + buildings.residential.count * 20,
+  });
+  return { ctx, state, toasts };
+}
+
+test('nákup po více kusech: cena ×N je součet cen jednotlivých kusů a stejná jako při koupi po jednom', () => {
+  const a = makeShop({ budget: 1e9, counts: { commercial: 7 } });
+  const plan = a.ctx.planPurchase('commercial', 10);
+  assert.equal(plan.n, 10);
+  let sum = 0;
+  for (let i = 0; i < 10; i++) { sum += a.ctx.getBuildingCost('commercial'); a.state.buildings.commercial.count++; }
+  assert.equal(plan.cost, sum);
+  // hra tohle skutečně strhne z rozpočtu a přičte kusy najednou
+  const b = makeShop({ budget: 1e9, counts: { commercial: 7 } });
+  b.state.buyAmount = 10;
+  b.ctx.buyBuilding('commercial');
+  assert.equal(b.state.buildings.commercial.count, 17);
+  assert.equal(1e9 - b.state.budget, plan.cost);
+  assert.equal(b.state.stats.zones_built, 10);
+  assert.equal(b.state.stats.shops_built, 10);
+});
+
+test('nákup po více kusech: Max koupí nejvíc, co rozpočet unese, a nikdy nejde do minusu; bez peněz ukáže cenu jednoho kusu', () => {
+  for (const budget of [0, 49, 50, 51, 1000, 123456, 9.9e7]) {
+    const s = makeShop({ budget });
+    s.state.buyAmount = 'max';
+    const plan = s.ctx.planPurchase('residential', 'max');
+    if (budget < 50) { assert.equal(plan.n, 1); assert.equal(plan.cost, 50); assert.ok(budget < plan.cost); s.ctx.buyBuilding('residential'); assert.equal(s.state.buildings.residential.count, 0, 'bez peněz se nekupuje'); continue; }
+    assert.ok(plan.cost <= budget, `Max v rozpočtu ${budget}`);
+    // o jeden kus víc už by se nevešel
+    const next = s.ctx.getBuildingCost('residential');
+    s.ctx.buyBuilding('residential');
+    assert.ok(s.state.budget >= 0);
+    assert.ok(s.state.budget < s.ctx.getBuildingCost('residential'), 'zbytek už na další kus nestačí');
+    assert.ok(next >= 50);
+  }
+  const cap = makeShop({ budget: 1e300 });
+  assert.ok(cap.ctx.planPurchase('residential', 'max').n <= 1000, 'strop 1000 kusů najednou');
+});
+
+test('nákup po více kusech: ceny respektují daňové úlevy, dimenzi a relikvii a špatné množství se opraví na 1', () => {
+  const base = makeShop().ctx.getBuildingCost('industrial');
+  assert.equal(base, 480);
+  assert.equal(makeShop({ policies: { taxCuts: true } }).ctx.getBuildingCost('industrial'), 720);
+  assert.equal(makeShop({ dimension: 'carefree' }).ctx.getBuildingCost('industrial'), 960);
+  assert.ok(makeShop({ counts: { industrial: 30 }, relics: ['voidCompressor'] }).ctx.getBuildingCost('industrial') < makeShop({ counts: { industrial: 30 } }).ctx.getBuildingCost('industrial'));
+  const c = makeShop().ctx;
+  for (const bad of [0, -5, 7, '10', null, undefined, NaN, 'MAX', {}]) assert.equal(c.normalizeBuyAmount(bad), 1, String(bad));
+  for (const ok of [1, 10, 100, 'max']) assert.equal(c.normalizeBuyAmount(ok), ok);
+});
+
+test('zoneGain jen počítá: stav zůstane beze změny a přínos odpovídá skutečné změně příjmu a populace', () => {
+  const s = makeShop({ counts: { commercial: 3, residential: 4 } });
+  const before = JSON.stringify(s.state.buildings);
+  const g = s.ctx.zoneGain('commercial', 5);
+  assert.equal(JSON.stringify(s.state.buildings), before);
+  assert.ok(Math.abs(g.income - 5 * 1.4) < 1e-9);
+  assert.equal(s.ctx.zoneGain('residential', 2).pop, 40);
+  assert.equal(s.ctx.zoneGain('industrial', 3).sat, -3);
+});
+
+test('čas podle hodin: tik po 100 ms dělá totéž co dřív, delší pauza (záložka na pozadí) připíše příjem za celou dobu, nejvýš za limit offline', () => {
+  const MAX = 12 * 3600 * 1000;
+  const mk = (income = 50) => {
+    const t = { now: 1_700_000_000_000 };
+    const state = { budget: 0, lifetimeEarnings: 0, totalPlaytimeSeconds: 0, comboMeter: 80, frenzyActive: false, frenzyEnd: 0, endgame: { active: false } };
+    const toasts = [];
+    const ctx = run(`${varLine('lastTickAt')}\n${varLine('AWAY_TOAST_MS')}\n${fnSrc('mainTick')}`, {
+      state, Date: { now: () => t.now }, computePassiveIncome: () => income, getMaxOfflineMs: () => MAX, showToast: (m) => toasts.push(m), formatDuration: (ms) => `${ms / 1000} s`, formatCurrency: (n) => '$' + Math.round(n),
+      deactivateFrenzy() { state.frenzyActive = false; }, endgameTick() {}, renderFast() {},
+    });
+    return { t, state, toasts, ctx };
+  };
+  const a = mk();
+  for (let i = 0; i < 10; i++) { a.ctx.mainTick(); a.t.now += 100; }
+  assert.ok(Math.abs(a.state.budget - 50) < 1e-9, 'deset tiků po 100 ms = sekunda příjmu');
+  assert.ok(Math.abs(a.state.comboMeter - (80 - 13)) < 1e-9, 'combo klesá 1,3 za tik');
+  assert.ok(Math.abs(a.state.totalPlaytimeSeconds - 1) < 1e-9);
+  assert.equal(a.toasts.length, 0);
+  // záložka na pozadí: další tik přijde až za 5 minut
+  a.t.now += 5 * 60 * 1000;
+  const before = a.state.budget;
+  a.ctx.mainTick();
+  assert.ok(Math.abs(a.state.budget - before - 50 * 300) < 10, 'příjem za pět minut');
+  assert.equal(a.toasts.length, 1, 'hráč se dozví, kolik město vyneslo');
+  assert.ok(a.state.totalPlaytimeSeconds <= 1 + 2.1, 'čas na pozadí se nepočítá jako aktivní hraní');
+  assert.equal(a.state.comboMeter, 0);
+  // absurdní pauza se ořízne limitem offline
+  const b = mk(10);
+  b.ctx.mainTick(); b.t.now += 99 * 3600 * 1000; b.ctx.mainTick();
+  assert.ok(Math.abs(b.state.budget - (1 + 10 * 12 * 3600)) < 1e3, 'nejvýš za 12 hodin');
+  // hodiny, které se vrátí zpátky, neubírají
+  const c = mk(10);
+  c.ctx.mainTick(); c.t.now -= 5000; const bc = c.state.budget; c.ctx.mainTick();
+  assert.ok(c.state.budget >= bc && c.state.budget - bc < 2, 'záporný rozdíl se bere jako obyčejný tik');
+});
+
+test('obchod se nepřekresluje zbytečně: řádky zón se vytvoří jednou, ostatní seznamy se přepíšou jen při změně a klikání se zachytává na obalu', () => {
+  assert.match(gameJs, /function setHtml\(el, html\)\{\s*if\(el\.__html === html\) return false;/);
+  const shop = fnSrc('renderShop');
+  assert.doesNotMatch(shop, /container\.innerHTML = ''/, 'renderShop obsah nemaže');
+  assert.match(gameJs, /function ensureShopRows\(container\)\{\s*if\(shopRows && container\.getAttribute\('data-mode'\) === 'rows'\) return;/);
+  for (const fn of ['renderPolicies', 'renderMegaprojects', 'renderStardustMarket', 'renderEndcraze']) {
+    const src = fnSrc(fn);
+    assert.doesNotMatch(src, /\.innerHTML\s*=(?!=)/, `${fn} nepřepisuje innerHTML napřímo`);
+    assert.doesNotMatch(src, /addEventListener\('click'/, `${fn} nepřidává posluchače na tlačítka, která se překreslují`);
+  }
+  for (const [host, sel] of [['shopList', '.btn-build'], ['policyList', '.btn-policy'], ['megaList', '.btn-mega'], ['stardustShopList', '.btn-build'], ['acceleratorPanel', '#acceleratorInvestBtn'], ['factionActionArea', '#sacrificeBtn'], ['archaPanel', '#archaInvestBtn']]) {
+    assert.ok(gameJs.includes(`delegate('${host}', '${sel}'`), `${host} má zachytávání kliků`);
+  }
+  // přepínač množství a klávesy
+  for (const a of ['1', '10', '100', 'max']) assert.match(html, new RegExp(`<button type="button" data-amt="${a}"`));
+  assert.match(gameJs, /delegate\('buyAmount', '\[data-amt\]'/);
+  assert.match(gameJs, /\^\(\?:Digit\|Numpad\)\(\[1-5\]\)\$/);
+  assert.match(gameJs, /ev\.code === 'KeyB'/);
+  assert.match(gameJs, /state\.buyAmount = normalizeBuyAmount\(state\.buyAmount\);[\s\S]*?isFreshGame = false;/, 'uložená hodnota se při načtení ověří');
+});
+
+test('tlačítko se při překreslení nevymění: DOM prvek tlačítka zůstane stejný po tisíci obnoveních (atrapa DOM)', () => {
+  // renderShop se spustí v atrapě dokumentu a počítá, kolikrát se vytvořily nové prvky
+  let created = 0;
+  const el = (tag) => ({ tag, children: [], classList: { _s: new Set(), contains(c) { return this._s.has(c); }, toggle(c, on) { if (on === undefined ? !this._s.has(c) : on) this._s.add(c); else this._s.delete(c); }, add(c) { this._s.add(c); }, remove(c) { this._s.delete(c); } },
+    attrs: {}, textContent: '', disabled: false, _html: '', style: {},
+    set innerHTML(v) { this._html = v; this.children = []; }, get innerHTML() { return this._html; },
+    setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k] === undefined ? null : this.attrs[k]; },
+    appendChild(c) { this.children.push(c); created++; return c; },
+    querySelector() { return el('span'); }, querySelectorAll() { return []; } });
+  const container = el('div'); const picker = el('div');
+  const s = makeShop({ budget: 5000, counts: { commercial: 3 } });
+  const names = { residential: 'Obytná', commercial: 'Komerční', industrial: 'Průmyslová', techeco: 'Tech', park: 'Park' };
+  const doc = { getElementById: (id) => (id === 'shopList' ? container : id === 'buyAmount' ? picker : null), createElement: (t) => el(t) };
+  const ctx = run(`var shopRows = null;\n${fnSrc('setHtml')}\n${fnSrc('setText')}\n${fnSrc('formatPayback')}\n${fnSrc('ensureShopRows')}\n${fnSrc('renderShop')}\nfunction formatRate(x){ return '$' + x; }`, {
+    document: doc, state: s.state, themeNames: { classic: { ...names } }, buildingOrder: ['residential', 'commercial', 'industrial', 'techeco', 'park'],
+    buildingDefs: { residential: { icon: 'R', desc: '' }, commercial: { icon: 'C', desc: '' }, industrial: { icon: 'I', desc: '' }, techeco: { icon: 'T', desc: '' }, park: { icon: 'P', desc: '' } },
+    formatCurrency: (n) => '$' + Math.round(n), formatNumber: (n) => String(Math.round(n)), normalizeBuyAmount: s.ctx.normalizeBuyAmount, planPurchase: s.ctx.planPurchase, zoneGain: s.ctx.zoneGain, getBuildingCost: s.ctx.getBuildingCost,
+  });
+  s.state.theme = 'classic';
+  ctx.renderShop();
+  const first = created, rows = container.children.slice();
+  assert.equal(first, 5, 'pět řádků');
+  for (let i = 0; i < 1000; i++) { s.state.budget += 7; ctx.renderShop(); }
+  assert.equal(created, first, 'nové řádky se nevytvářejí');
+  assert.deepEqual(container.children, rows);
+});
+
+test('formáty: čas dalšího nákupu, návratnost a malé částky jsou čitelné a nikdy nevypíšou NaN', () => {
+  const ctx = run(`${fnSrc('formatEta')}\n${fnSrc('formatPayback')}\n${fnSrc('formatRate')}\nfunction formatCurrency(n){ return '$' + Math.round(n); }`, { themeNames: { classic: { currency: '$' } }, state: { theme: 'classic' } });
+  assert.equal(ctx.formatEta(0.2), 'okamžik');
+  assert.equal(ctx.formatEta(45), '45 s');
+  assert.equal(ctx.formatEta(125), '2 min 5 s');
+  assert.equal(ctx.formatEta(3 * 3600 + 600), '3 h 10 min');
+  assert.equal(ctx.formatEta(3 * 86400), '3 d');
+  assert.equal(ctx.formatEta(1e10), 'víc než rok');
+  for (const bad of [NaN, Infinity, -1, undefined]) assert.equal(ctx.formatEta(bad), '');
+  assert.equal(ctx.formatPayback(0.3), '1 s');
+  assert.equal(ctx.formatPayback(90), '2 min');
+  assert.equal(ctx.formatPayback(5400), '1,5 h');
+  assert.equal(ctx.formatPayback(1e6), 'přes den');
+  for (const bad of [0, -3, NaN, Infinity]) assert.equal(ctx.formatPayback(bad), '');
+  assert.equal(ctx.formatRate(0.4), '$0.40');
+  assert.equal(ctx.formatRate(4.26), '$4.3');
+  assert.equal(ctx.formatRate(1234), '$1234');
+});
+
+test('panorama města: okna se rozsvěcují podle počtu zón a v EndCraze svítí všechna', () => {
+  const wins = Array.from({ length: 200 }, () => ({ style: { display: '' } }));
+  const mkSky = (total, endgame = false) => {
+    const state = { buildings: { a: { count: total } }, endgame: { active: endgame } };
+    const ctx = run(`var skyWindows = null;\nvar skyFrac = -1;\n${fnSrc('updateSkyline')}`, { state, document: { querySelectorAll: () => wins.map((w) => ({ ...w, style: w.style })) } });
+    return { state, ctx };
+  };
+  const lit = (nodesTotal, endgame) => {
+    const nodes = Array.from({ length: 200 }, () => ({ style: { display: '' } }));
+    const state = { buildings: { a: { count: nodesTotal } }, endgame: { active: endgame } };
+    const ctx = run(`var skyWindows = null;\nvar skyFrac = -1;\n${fnSrc('updateSkyline')}`, { state, document: { querySelectorAll: () => nodes } });
+    ctx.updateSkyline();
+    return nodes.filter((n) => n.style.display === '').length;
+  };
+  const a = lit(0, false), b = lit(20, false), c = lit(100, false), d = lit(2000, false), e = lit(0, true);
+  assert.ok(a > 0 && a < b && b < c && c <= d, `${a} < ${b} < ${c} <= ${d}`);
+  assert.ok(a < 200 * 0.3, 'nové město je skoro tmavé');
+  assert.equal(d, 200);
+  assert.equal(e, 200);
+  assert.ok(typeof mkSky === 'function');
+});
