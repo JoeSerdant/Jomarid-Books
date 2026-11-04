@@ -244,9 +244,11 @@ function boot() {
   elName.value = save.name || '';
   const coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
   if (coarse) { elApp.classList.add('touch'); setAuto(true); }
-  $('hintText').textContent = coarse
+  const HOW = coarse
     ? 'Levý palec pohybuje, pravý míří a střílí. Tlačítko Skok uhýbá, Auto míří za tebe. Body vylepšení rozdáváš klepnutím na panel vlevo.'
     : 'WASD pohyb, myš míří, klik nebo mezerník střílí. Shift = skok, 1–8 vylepšují stavbu, E zapíná Auto, P pauza.';
+  $('hintText').textContent = HOW;
+  $('pauseHint').textContent = HOW;   // ovládání je vidět i v pauze, kdyby ho hráč zapomněl
   refreshMenu();
   requestAnimationFrame(t => { lastT = t; requestAnimationFrame(frame); });
 }

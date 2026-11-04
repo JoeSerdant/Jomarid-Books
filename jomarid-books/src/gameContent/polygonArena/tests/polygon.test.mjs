@@ -633,3 +633,38 @@ test('Grafika: art.js se načítá před kreslením a snímky se v každé kvali
     assert.ok(g.run('typeof Art.ensure === "function" && typeof bevelPoly === "function"'));
   }
 });
+
+/* =====================================================================
+   Rozhraní: minimapa, odkaz zpět, ovládání v pauze
+   ===================================================================== */
+const polyCss = fs.readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+const polyHtml = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const polyUi = fs.readFileSync(new URL('../ui.js', import.meta.url), 'utf8');
+
+test('minimapa leží pod odkazem zpět do appky (odkaz jí dřív zakrýval horní třetinu) a panel vylepšení pod minimapou', () => {
+  assert.match(polyCss, /#mini\{position:absolute;top:calc\(46px \+ env\(safe-area-inset-top,0px\)\);/);
+  // odkaz zpět je inline: pevně nahoře vlevo, vysoký asi 28 px (top 10 + 28 = 38 < 46)
+  assert.match(polyHtml, /id="btn-back-to-jomarid"[^>]*style="position:fixed; top:calc\(10px \+ env\(safe-area-inset-top,0px\)\); left:10px;/);
+  // panel Stavba tanku na úzkém displeji začíná pod minimapou (46 + 84 = 130) a na nízkém (46 + 72 = 118)
+  assert.match(polyCss, /@media \(max-width:520px\)\{[\s\S]*?#stats\{top:146px;/);
+  assert.match(polyCss, /@media \(max-height:480px\)\{\s*#stats\{top:128px;/);
+});
+
+test('úzký displej: odkaz zpět je jen šipka a tlačítka nahoře začínají hned za ní, takže se nepřekrývají', () => {
+  const m = polyCss.match(/@media \(max-width:520px\)\{([\s\S]*?)\n\}/)[1];
+  assert.match(m, /#btn-back-to-jomarid\{font-size:0 !important;padding:0 !important;width:38px;/);
+  assert.match(m, /#btn-back-to-jomarid::before\{content:'←';/);
+  assert.match(m, /#topbtns\{left:58px;/, 'Auto a pauza vedle šipky (10 + 38 + mezera)');
+  assert.match(polyCss, /@media \(max-width:360px\)\{[\s\S]*?#topbtns\{left:56px;/);
+});
+
+test('ovládání je vidět i v pauze, ze stejného textu jako v menu (dotyk a klávesnice zvlášť)', () => {
+  assert.match(polyHtml, /<p class="hint" id="pauseHint"><\/p>/);
+  assert.match(polyUi, /\$\('hintText'\)\.textContent = HOW;\s*\n\s*\$\('pauseHint'\)\.textContent = HOW;/);
+  const how = polyUi.match(/const HOW = coarse\s*\n\s*\? '([^']+)'\s*\n\s*: '([^']+)';/);
+  assert.ok(how, 'text ovládání');
+  assert.match(how[1], /Levý palec pohybuje/);
+  assert.match(how[2], /WASD pohyb/);
+  assert.match(how[2], /Shift = skok/);
+  assert.match(how[2], /P pauza/);
+});
