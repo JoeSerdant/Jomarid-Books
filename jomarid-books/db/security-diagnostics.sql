@@ -580,7 +580,7 @@ begin
           loop
             v_expr := case
               when t.is_profiles and c.attname = 'role' and v_adminrole is not null then quote_literal(v_adminrole)
-              when c.attname = 'status' and c.typ ~* 'text|char' then '''active'''
+              when c.attname = 'status' and c.typ ~* 'text|char' then format('case when %I = ''active'' then ''requested'' else ''active'' end', c.attname)   -- musí hodnotu opravdu změnit (stejná hodnota není změna, ochranná spoušť ji nezastaví)
               when c.typ ~ '^(integer|bigint|smallint|numeric|real|double precision)' then format('coalesce(%I, 0) + 1', c.attname)
               when c.typ = 'boolean' then format('not coalesce(%I, false)', c.attname)
               when c.typ ~ '^(text|character|citext)' then format('coalesce(%I, '''') || ''x''', c.attname)
