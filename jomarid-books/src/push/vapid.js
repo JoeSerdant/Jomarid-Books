@@ -1,3 +1,4 @@
+import { t } from '../i18n/core.js';
 // Klíče VAPID (identita odesílatele Web Push): pár ECDSA P-256. Generuje se v prohlížeči správce, aby se soukromý klíč nikdy
 // nedostal do repozitáře ani jinam ven: ukáže se jednou a správce ho vloží do Supabase (db/push/README.md).
 
@@ -10,7 +11,7 @@ const b64url = (bytes) => {
 /** Vrací { publicKey (87 znaků, 65 bajtů), privateKey (43 znaků, 32 bajtů) } v base64url, jak je chce knihovna web-push. */
 export const generateVapidKeys = async (cryptoImpl = globalThis.crypto) => {
   const subtle = cryptoImpl?.subtle;
-  if (!subtle) throw new Error('Prohlížeč neumí WebCrypto.');
+  if (!subtle) throw new Error(t('Prohlížeč neumí WebCrypto.'));
   const pair = await subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
   const publicKey = b64url(new Uint8Array(await subtle.exportKey('raw', pair.publicKey)));
   const jwk = await subtle.exportKey('jwk', pair.privateKey);

@@ -8,6 +8,7 @@ import { reconcileAllGames } from './gameMerge.js';
 import { cryptoSupported, resetClock } from './crypto.js';
 import { REFRESH_EVERY_MS } from './model.js';
 import { registerLogoutCleanup } from './session.js';
+import { t } from '../i18n/core.js';
 
 export const offlineSupported = () => idbSupported() && cryptoSupported();
 
@@ -55,7 +56,7 @@ export async function confirmLogoutDiscard(user, ask = (text) => (typeof window 
   let n = await pendingChanges(user.id);
   if (n > 0) { await syncNow(user, { force: true }); n = await pendingChanges(user.id); }
   if (n === 0) return true;
-  return ask(`Máš ${n} neodeslaných změn z offline režimu (čtení a hry: pozice, záložky, postup ve hrách). Když se odhlásíš teď, o ně přijdeš. Opravdu se odhlásit?`);
+  return ask(t.p(n, 'Máš {n} neodeslanou změnu z offline režimu (čtení a hry: pozice, záložky, postup ve hrách). Když se odhlásíš teď, o ni přijdeš. Opravdu se odhlásit?', 'Máš {n} neodeslané změny z offline režimu (čtení a hry: pozice, záložky, postup ve hrách). Když se odhlásíš teď, o ně přijdeš. Opravdu se odhlásit?', 'Máš {n} neodeslaných změn z offline režimu (čtení a hry: pozice, záložky, postup ve hrách). Když se odhlásíš teď, o ně přijdeš. Opravdu se odhlásit?', { n }));
 }
 
 export { STORES };

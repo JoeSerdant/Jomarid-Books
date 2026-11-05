@@ -7,6 +7,7 @@
 // prohlídku nerozbije a texty se nikdy nevykreslují jako HTML (jen jako text).
 
 import { ROLE_READER, ROLE_PUBLISHER, ROLE_ADMIN, ROLE_LABELS } from '../constants/roles.js';
+import { tk } from '../i18n/mark.js';
 
 export const TOUR_SETTINGS_KEY = 'onboarding_tour';
 
@@ -20,21 +21,21 @@ export const setKeyForRole = (role) => (role === ROLE_PUBLISHER ? 'publisher' : 
 // at = jak začíná adresa, na které prvek už je (nepřecházet zbytečně). Bez route je prvek vidět na každé stránce.
 // Klíče musí odpovídat atributům data-tour v komponentách (Navbar, UserLibrary, SettingsModal, PublisherDashboard).
 export const ANCHORS = {
-  none: { label: 'Bez zvýraznění (karta uprostřed)' },
-  'nav-library': { label: 'Menu: Knihovna' },
-  'nav-shorts': { label: 'Menu: shortB' },
-  'nav-stats': { label: 'Menu: Statistiky' },
-  'nav-badges': { label: 'Menu: Odznaky' },
-  'nav-games': { label: 'Menu: Hry' },
-  'nav-studio': { label: 'Menu: Studio (jen nakladatel)' },
-  'nav-admin': { label: 'Menu: Admin (jen správce)' },
-  'nav-coins': { label: 'Zůstatek Jomarid Coinů' },
-  'nav-search': { label: 'Tlačítko hledání knih' },
-  'nav-settings': { label: 'Ozubené kolo (Nastavení)' },
-  'library-search': { label: 'Knihovna: hledání a filtry', route: '/app' },
-  'settings-tabs': { label: 'Nastavení: seznam záložek', route: '/settings/appearance', at: '/settings' },
-  'settings-checks': { label: 'Nastavení: záložka Kontrola účtu', route: '/settings/checks', at: '/settings' },
-  'publisher-tabs': { label: 'Studio: záložky panelu', route: '/publisher' },
+  none: { label: tk('Bez zvýraznění (karta uprostřed)') },
+  'nav-library': { label: tk('Menu: Knihovna') },
+  'nav-shorts': { label: tk('Menu: shortB') },
+  'nav-stats': { label: tk('Menu: Statistiky') },
+  'nav-badges': { label: tk('Menu: Odznaky') },
+  'nav-games': { label: tk('Menu: Hry') },
+  'nav-studio': { label: tk('Menu: Studio (jen nakladatel)') },
+  'nav-admin': { label: tk('Menu: Admin (jen správce)') },
+  'nav-coins': { label: tk('Zůstatek Jomarid Coinů') },
+  'nav-search': { label: tk('Tlačítko hledání knih') },
+  'nav-settings': { label: tk('Ozubené kolo (Nastavení)') },
+  'library-search': { label: tk('Knihovna: hledání a filtry'), route: '/app' },
+  'settings-tabs': { label: tk('Nastavení: seznam záložek'), route: '/settings/appearance', at: '/settings' },
+  'settings-checks': { label: tk('Nastavení: záložka Kontrola účtu'), route: '/settings/checks', at: '/settings' },
+  'publisher-tabs': { label: tk('Studio: záložky panelu'), route: '/publisher' },
 };
 export const ANCHOR_KEYS = Object.keys(ANCHORS);
 const isAnchor = (v) => typeof v === 'string' && Object.prototype.hasOwnProperty.call(ANCHORS, v);
@@ -42,39 +43,39 @@ const isAnchor = (v) => typeof v === 'string' && Object.prototype.hasOwnProperty
 const s = (id, anchor, title, text) => ({ id, enabled: true, anchor, title, text });
 
 const READER_STEPS = [
-  s('welcome', 'none', 'Vítej v Jomarid Books', 'Za minutku ti ukážeme, kde co najdeš. Prohlídku můžeš kdykoli přeskočit a znovu ji spustit v Nastavení v záložce Prohlídka appky.'),
-  s('library', 'nav-library', 'Knihovna', 'Tady najdeš celý katalog knih. Ty, které už máš, ukáže filtr Moje knihy. Otevři knihu a čti, appka si pamatuje, kde čtení skončilo.'),
-  s('library-search', 'library-search', 'Hledání v knihovně', 'Najdi knihu podle názvu nebo autora a výběr zúž podle žánru.'),
-  s('shorts', 'nav-shorts', 'shortB', 'Krátké knihy na jedno sezení. Listuj je do strany, po dočtení jedeš dolů na další. Feed se přizpůsobí tomu, co čteš.'),
-  s('stats', 'nav-stats', 'Statistiky', 'Série čtení, měsíční cíl, zkušenosti a žebříček. Čím víc čteš, tím výš se dostaneš.'),
-  s('badges', 'nav-badges', 'Odznaky', 'Odznaky za čtení i za hry. Za mince tady koupíš titul u svého jména a vzhled her.'),
-  s('games', 'nav-games', 'Mini-hry', 'Krátká odbočka od čtení. Za hraní dostaneš i pár Jomarid Coinů, jednou denně.'),
-  s('coins', 'nav-coins', 'Jomarid Coins', 'Mince získáváš odznaky, každodenním přihlášením a hrami. Za mince kupuješ další knihy.'),
-  s('search', 'nav-search', 'Rychlé hledání', 'Knihy můžeš hledat odkudkoli v appce.'),
-  s('settings', 'nav-settings', 'Nastavení', 'Tady si appku přizpůsobíš. Ukážeme ti, co všechno v ní je.'),
-  s('settings-tabs', 'settings-tabs', 'Přizpůsob si to po svém', 'Ve Vzhledu je světlý, tmavý i vlastní motiv s tvými barvami. Ve Čtečce si nastavíš písmo, řádkování nebo noční filtr. V Kontrole účtu uvidíš, co je ještě potřeba doladit.'),
-  s('done', 'none', 'To je vše', 'Prohlídku najdeš kdykoli v Nastavení v záložce Prohlídka appky. Příjemné čtení!'),
+  s('welcome', 'none', tk('Vítej v Jomarid Books'), tk('Za minutku ti ukážeme, kde co najdeš. Prohlídku můžeš kdykoli přeskočit a znovu ji spustit v Nastavení v záložce Prohlídka appky.')),
+  s('library', 'nav-library', tk('Knihovna'), tk('Tady najdeš celý katalog knih. Ty, které už máš, ukáže filtr Moje knihy. Otevři knihu a čti, appka si pamatuje, kde čtení skončilo.')),
+  s('library-search', 'library-search', tk('Hledání v knihovně'), tk('Najdi knihu podle názvu nebo autora a výběr zúž podle žánru.')),
+  s('shorts', 'nav-shorts', tk('shortB'), tk('Krátké knihy na jedno sezení. Listuj je do strany, po dočtení jedeš dolů na další. Feed se přizpůsobí tomu, co čteš.')),
+  s('stats', 'nav-stats', tk('Statistiky'), tk('Série čtení, měsíční cíl, zkušenosti a žebříček. Čím víc čteš, tím výš se dostaneš.')),
+  s('badges', 'nav-badges', tk('Odznaky'), tk('Odznaky za čtení i za hry. Za mince tady koupíš titul u svého jména a vzhled her.')),
+  s('games', 'nav-games', tk('Mini-hry'), tk('Krátká odbočka od čtení. Za hraní dostaneš i pár Jomarid Coinů, jednou denně.')),
+  s('coins', 'nav-coins', tk('Jomarid Coins'), tk('Mince získáváš odznaky, každodenním přihlášením a hrami. Za mince kupuješ další knihy.')),
+  s('search', 'nav-search', tk('Rychlé hledání'), tk('Knihy můžeš hledat odkudkoli v appce.')),
+  s('settings', 'nav-settings', tk('Nastavení'), tk('Tady si appku přizpůsobíš. Ukážeme ti, co všechno v ní je.')),
+  s('settings-tabs', 'settings-tabs', tk('Přizpůsob si to po svém'), tk('Ve Vzhledu je světlý, tmavý i vlastní motiv s tvými barvami. Ve Čtečce si nastavíš písmo, řádkování nebo noční filtr. V Kontrole účtu uvidíš, co je ještě potřeba doladit.')),
+  s('done', 'none', tk('To je vše'), tk('Prohlídku najdeš kdykoli v Nastavení v záložce Prohlídka appky. Příjemné čtení!')),
 ];
 
 const PUBLISHER_STEPS = [
-  s('welcome', 'none', 'Vítej v Jomarid Books', 'Jsi tu jako nakladatel, takže ti kromě čtení ukážeme i to, kde vydáš a spravuješ své knihy. Prohlídku můžeš kdykoli přeskočit a znovu spustit v Nastavení.'),
-  s('library', 'nav-library', 'Knihovna', 'Tady čteš knihy jako každý čtenář: celý katalog i filtr Moje knihy, kde máš i své vlastní knihy.'),
-  s('studio', 'nav-studio', 'Studio', 'Tvůj panel nakladatele: statistiky prodejů a čtenářů, správa knih a vydávání nových.'),
-  s('studio-tabs', 'publisher-tabs', 'Co ve Studiu najdeš', 'Přehled ukazuje prodeje a čtenáře. V záložce Moje knihy knihy spravuješ a stahuješ z prodeje, v záložce Vydat / upravit knihu vydáš nebo upravíš. V záložce Licence a profil daruješ knihu čtenáři a vidíš jméno, pod kterým se tvé knihy zobrazují.'),
-  s('shorts', 'nav-shorts', 'shortB', 'Krátké knihy do 6 000 znaků, které čtenáři listují ve feedu. Své shortB píšeš v záložce shortB ve Studiu.'),
-  s('stats', 'nav-stats', 'Statistiky', 'Tvoje čtenářské statistiky a žebříček.'),
-  s('badges', 'nav-badges', 'Odznaky', 'Odznaky za čtení i za hry. Za mince tady koupíš titul u svého jména a vzhled her.'),
-  s('coins', 'nav-coins', 'Jomarid Coins', 'Mince dostáváš odznaky, každodenním přihlášením a hrami a také z prodeje svých knih. Za mince můžeš kupovat další knihy.'),
-  s('settings', 'nav-settings', 'Nastavení', 'Tady si appku přizpůsobíš a zkontroluješ svůj účet i knihy.'),
-  s('settings-checks', 'settings-checks', 'Kontrola účtu a knih', 'V záložce Kontrola účtu uvidíš, co u tvých knih ještě chybí (text, popis, žánr) a jestli máš nastavené krycí jméno. Ve Vzhledu a Čtečce si appku přizpůsobíš.'),
-  s('done', 'none', 'To je vše', 'Prohlídku najdeš kdykoli v Nastavení v záložce Prohlídka appky. Ať se daří!'),
+  s('welcome', 'none', tk('Vítej v Jomarid Books'), tk('Jsi tu jako nakladatel, takže ti kromě čtení ukážeme i to, kde vydáš a spravuješ své knihy. Prohlídku můžeš kdykoli přeskočit a znovu spustit v Nastavení.')),
+  s('library', 'nav-library', tk('Knihovna'), tk('Tady čteš knihy jako každý čtenář: celý katalog i filtr Moje knihy, kde máš i své vlastní knihy.')),
+  s('studio', 'nav-studio', tk('Studio'), tk('Tvůj panel nakladatele: statistiky prodejů a čtenářů, správa knih a vydávání nových.')),
+  s('studio-tabs', 'publisher-tabs', tk('Co ve Studiu najdeš'), tk('Přehled ukazuje prodeje a čtenáře. V záložce Moje knihy knihy spravuješ a stahuješ z prodeje, v záložce Vydat / upravit knihu vydáš nebo upravíš. V záložce Licence a profil daruješ knihu čtenáři a vidíš jméno, pod kterým se tvé knihy zobrazují.')),
+  s('shorts', 'nav-shorts', tk('shortB'), tk('Krátké knihy do 6 000 znaků, které čtenáři listují ve feedu. Své shortB píšeš v záložce shortB ve Studiu.')),
+  s('stats', 'nav-stats', tk('Statistiky'), tk('Tvoje čtenářské statistiky a žebříček.')),
+  s('badges', 'nav-badges', tk('Odznaky'), tk('Odznaky za čtení i za hry. Za mince tady koupíš titul u svého jména a vzhled her.')),
+  s('coins', 'nav-coins', tk('Jomarid Coins'), tk('Mince dostáváš odznaky, každodenním přihlášením a hrami a také z prodeje svých knih. Za mince můžeš kupovat další knihy.')),
+  s('settings', 'nav-settings', tk('Nastavení'), tk('Tady si appku přizpůsobíš a zkontroluješ svůj účet i knihy.')),
+  s('settings-checks', 'settings-checks', tk('Kontrola účtu a knih'), tk('V záložce Kontrola účtu uvidíš, co u tvých knih ještě chybí (text, popis, žánr) a jestli máš nastavené krycí jméno. Ve Vzhledu a Čtečce si appku přizpůsobíš.')),
+  s('done', 'none', tk('To je vše'), tk('Prohlídku najdeš kdykoli v Nastavení v záložce Prohlídka appky. Ať se daří!')),
 ];
 
 // Správce má kroky čtenáře a navíc krok Administrace těsně před Nastavením.
 const ADMIN_AT = READER_STEPS.findIndex((st) => st.id === 'settings');
 const ADMIN_STEPS = [
   ...READER_STEPS.slice(0, ADMIN_AT),
-  s('admin', 'nav-admin', 'Administrace', 'Správa účtů, knih, domovské stránky a také této prohlídky. Otevřená upozornění mají u záložky číslo.'),
+  s('admin', 'nav-admin', tk('Administrace'), tk('Správa účtů, knih, domovské stránky a také této prohlídky. Otevřená upozornění mají u záložky číslo.')),
   ...READER_STEPS.slice(ADMIN_AT),
 ];
 

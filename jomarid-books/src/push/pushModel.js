@@ -1,11 +1,13 @@
 // Oznámení do zařízení (Web Push): čistá logika bez prohlížeče, jde testovat v Node (src/tests/push.test.mjs).
 import { isIosDevice } from '../pwa/installModel.js';
+import { t } from '../i18n/core.js';
+import { tk } from '../i18n/mark.js';
 
 export const VAPID_SETTINGS_KEY = 'push_vapid_public'; // site_settings: { key: "<veřejný klíč VAPID>" }
 // Zkušební oznámení se odešle až za tolik vteřin: stihneš appku zavřít, přepnout se jinam nebo zamknout telefon a oznámení opravdu uvidíš.
 export const TEST_PUSH_DELAY_SECONDS = 10;
 // Trvalá nápověda vedle tlačítka zkušebního oznámení: co zkontrolovat, když nepřišlo.
-export const TEST_PUSH_HELP = 'Nepřišlo? Zkontroluj, že jsou povolená oznámení pro prohlížeč nebo appku a že není zapnuté Nerušit. Na iPhonu musí být appka přidaná na plochu. Pomůže i oznámení tady vypnout a znovu zapnout.';
+export const TEST_PUSH_HELP = tk('Nepřišlo? Zkontroluj, že jsou povolená oznámení pro prohlížeč nebo appku a že není zapnuté Nerušit. Na iPhonu musí být appka přidaná na plochu. Pomůže i oznámení tady vypnout a znovu zapnout.');
 
 /**
  * Jde v tomhle prohlížeči zapnout oznámení? reason: 'ok' | 'ios-needs-install' (iPhone a iPad je umí jen v appce přidané na
@@ -42,23 +44,23 @@ export const sameApplicationServerKey = (sub, keyBytes) => {
 
 /** Text pro uživatele podle výsledku zapnutí. */
 export const enableMessage = (status) => ({
-  enabled: 'Oznámení jsou v tomhle zařízení zapnutá.',
-  denied: 'Oznámení jsou zablokovaná. Povol je v nastavení webu (ikona vedle adresy) nebo v nastavení zařízení u prohlížeče či appky Jomarid Books a zkus to znovu.',
-  dismissed: 'Oznámení nejsou povolená. Zapneš je kdykoli později.',
-  'not-configured': 'Oznámení do zařízení teď nejsou k dispozici. Zkus to později.',
-  'no-sw': 'Appka se ještě nenačetla do offline režimu. Zkus to za chvíli, nebo stránku obnov.',
-  error: 'Oznámení se nepodařilo zapnout. Zkus to znovu.',
+  enabled: t('Oznámení jsou v tomhle zařízení zapnutá.'),
+  denied: t('Oznámení jsou zablokovaná. Povol je v nastavení webu (ikona vedle adresy) nebo v nastavení zařízení u prohlížeče či appky Jomarid Books a zkus to znovu.'),
+  dismissed: t('Oznámení nejsou povolená. Zapneš je kdykoli později.'),
+  'not-configured': t('Oznámení do zařízení teď nejsou k dispozici. Zkus to později.'),
+  'no-sw': t('Appka se ještě nenačetla do offline režimu. Zkus to za chvíli, nebo stránku obnov.'),
+  error: t('Oznámení se nepodařilo zapnout. Zkus to znovu.'),
 }[status] || '');
 
 /** Druhy motivačních oznámení (shodují se s db/push-notifications.sql a db/push/send-push.ts): pro ukázky v Admin → Upozornění. */
 export const PUSH_KINDS = [
-  { kind: 'streak_risk', label: 'Série v ohrožení' },
-  { kind: 'streak_milestone', label: 'Milník série' },
+  { kind: 'streak_risk', label: tk('Série v ohrožení') },
+  { kind: 'streak_milestone', label: tk('Milník série') },
   { kind: 'praise', label: 'Pochvala' },
-  { kind: 'comeback', label: 'Návrat po pauze' },
-  { kind: 'continue_book', label: 'Rozečtená kniha' },
-  { kind: 'goal_progress', label: 'Měsíční cíl' },
+  { kind: 'comeback', label: tk('Návrat po pauze') },
+  { kind: 'continue_book', label: tk('Rozečtená kniha') },
+  { kind: 'goal_progress', label: tk('Měsíční cíl') },
   { kind: 'coins_to_spend', label: 'Mince na knihu' },
-  { kind: 'gentle_nudge', label: 'Popostrčení' },
-  { kind: 'new_book', label: 'Nová kniha' },
+  { kind: 'gentle_nudge', label: tk('Popostrčení') },
+  { kind: 'new_book', label: tk('Nová kniha') },
 ];

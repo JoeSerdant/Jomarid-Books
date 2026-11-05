@@ -2,6 +2,7 @@
 // Klient (supabase) se předává zvenku, ať jde modul zkoušet bez prohlížeče. Chyby se vracejí jako česká věta, nikdy se nevyhazují.
 import { foldText } from '../browse/browseModel.js';
 import { FRIENDLY } from '../lib/friendlyError.js';
+import { t } from '../i18n/core.js';
 
 export const AI_PROMPT_MAX = 2000;
 export const AI_LENGTHS = Object.freeze([
@@ -80,7 +81,7 @@ export async function generateShortText(client, request) {
       // Bez kódu z funkce: odpověď přišla od Supabase (ne od funkce) nebo se spojení nepovedlo. Pro snazší hledání příčiny se skutečná chyba vypíše do konzole.
       const status = Number(error?.context?.status);
       console.warn('shortb-ai:', error?.name, status || '', error?.message);
-      if (error?.name === 'FunctionsFetchError') return { error: FRIENDLY.network, detail: FETCH };
+      if (error?.name === 'FunctionsFetchError') return { error: t(FRIENDLY.network), detail: FETCH };
       if (error?.name === 'FunctionsRelayError') return { error: UNAVAILABLE, detail: RELAY };
       if (status === 404) return { error: UNAVAILABLE, detail: NOT_FOUND };
       if (status === 401) return { error: UNAVAILABLE, detail: REJECTED_JWT };

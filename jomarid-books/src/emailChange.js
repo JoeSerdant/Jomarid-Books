@@ -1,3 +1,5 @@
+import { tk } from './i18n/mark.js';
+import { t } from './i18n/core.js';
 // Změna e-mailu přes správce: čistá logika (bez Reactu) pro Nastavení a Admin. Funkce v databázi: db/email-change.sql.
 
 // Stejný výraz jako v db/email-change.sql: tečky jen mezi částmi domény (ne na začátku, na konci ani dvě za sebou).
@@ -20,25 +22,25 @@ export const EMAIL_REJECTED_KIND = 'email_change_rejected';
 // Texty chyb podle kódu, který vrací databáze (raise exception '<kód>'). Klíče nesmí být podřetězcem jiného klíče:
 // hledá se podle toho, jestli zpráva kód obsahuje.
 export const REQUEST_ERRORS = {
-  not_authenticated: 'Nejdřív se přihlas.',
-  invalid_email: 'Zadej platný e-mail.',
-  same_email: 'To je tvůj současný e-mail.',
-  request_already_open: 'Žádost už čeká na správce. Můžeš ji zrušit a poslat novou.',
-  too_many_requests: 'Příliš mnoho žádostí. Zkus to za pár hodin.',
+  not_authenticated: tk('Nejdřív se přihlas.'),
+  invalid_email: tk('Zadej platný e-mail.'),
+  same_email: tk('To je tvůj současný e-mail.'),
+  request_already_open: tk('Žádost už čeká na správce. Můžeš ji zrušit a poslat novou.'),
+  too_many_requests: tk('Příliš mnoho žádostí. Zkus to za pár hodin.'),
 };
 
 export const ADMIN_EMAIL_ERRORS = {
-  invalid_email: 'Neplatný e-mail.',
-  same_email: 'Účet už tenhle e-mail má.',
-  email_taken: 'Tenhle e-mail už používá jiný účet.',
-  email_mismatch: 'Tenhle e-mail není ten, o který uživatel žádal. Obnov upozornění a zkus to znovu.',
-  cannot_change_own_email: 'Vlastní e-mail si změnit nejde - požádej druhého správce, nebo ho změň v Supabase (Authentication → Users).',
-  profile_email_not_synced: 'E-mail se nepodařilo zapsat do profilu, nic se nezměnilo. Zkus to znovu.',
+  invalid_email: tk('Neplatný e-mail.'),
+  same_email: tk('Účet už tenhle e-mail má.'),
+  email_taken: tk('Tenhle e-mail už používá jiný účet.'),
+  email_mismatch: tk('Tenhle e-mail není ten, o který uživatel žádal. Obnov upozornění a zkus to znovu.'),
+  cannot_change_own_email: tk('Vlastní e-mail si změnit nejde - požádej druhého správce, nebo ho změň v Supabase (Authentication → Users).'),
+  profile_email_not_synced: tk('E-mail se nepodařilo zapsat do profilu, nic se nezměnilo. Zkus to znovu.'),
 };
 
 /** Srozumitelný text pro chybu z databáze: najde první známý kód ve zprávě, jinak vrátí náhradní text. */
 export const explainEmailError = (error, table, fallback) => {
   const msg = String(error?.message ?? error ?? '');
   const code = Object.keys(table).find((k) => msg.includes(k));
-  return code ? table[code] : fallback;
+  return code ? t(table[code]) : fallback;
 };

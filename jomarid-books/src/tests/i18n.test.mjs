@@ -20,9 +20,14 @@ const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (...p) => fs.readFileSync(path.join(SRC, ...p), 'utf8');
 
 // Texty, které se v angličtině píšou stejně jako česky (název, zkratka, obecné slovo): jen tyto smějí mít překlad shodný s klíčem.
-const IDENTICAL_OK = new Set(['Admin', 'Studio', 'E-mail', 'Text', 'Tip', 'Role']);
+const IDENTICAL_OK = new Set(['Admin', 'Studio', 'E-mail', 'Text', 'Tip', 'Role', 'shortB', 'Menu: shortB', 'Jomarid Coins']);
 // České texty, které se záměrně nepřekládají (názvy jazyků se píšou vlastním jazykem).
-const PERMANENT = { 'i18n/LanguageSwitch.jsx': ['Čeština'], 'constants/roles.js': ['správce', 'uživatel'] }; // názvy jazyků a hodnoty rolí, jak je drží databáze
+const PERMANENT = {
+  'i18n/LanguageSwitch.jsx': ['Čeština'],              // názvy jazyků se píšou vlastním jazykem
+  'constants/roles.js': ['správce', 'uživatel'],        // hodnoty rolí, jak je drží databáze
+  'offline/store.js': ['Neznámé úložiště {}'],           // chyba pro vývojáře, uživatel ji neuvidí
+  'pwa/sw.template.js': ['Máš nové oznámení.'],          // service worker nemá přístup k jazyku appky; běžně text oznámení posílá server
+};
 
 const makeStorage = (init = {}) => {
   const m = new Map(Object.entries(init));

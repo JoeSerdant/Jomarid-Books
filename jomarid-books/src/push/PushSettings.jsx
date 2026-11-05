@@ -2,10 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bell, BellOff, Loader2, Send } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { plural } from '../lib/plural';
 import { useInstallState } from '../pwa/install.js';
 import { enableMessage, pushSupport, TEST_PUSH_DELAY_SECONDS, TEST_PUSH_HELP } from './pushModel.js';
 import { deviceState, disablePush, enablePush, fetchVapidKey, getPushPrefs, sendTestPush, setPushPrefs } from './pushClient.js';
+import { t, tx } from '../i18n';
 
 const btn = 'px-3 py-2 rounded-lg border-none cursor-pointer text-xs font-black inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed';
 const solid = { backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' };
@@ -41,7 +41,7 @@ export default function PushSettings({ client = supabase }) {
     setBusy('off'); setMessage(null);
     await disablePush({ client, nav: navigator, win: window });
     setBusy('');
-    setMessage({ tone: 'info', text: 'Oznámení jsou v tomhle zařízení vypnutá.' });
+    setMessage({ tone: 'info', text: t('Oznámení jsou v tomhle zařízení vypnutá.') });
     load();
   };
   const test = async () => {
@@ -49,8 +49,8 @@ export default function PushSettings({ client = supabase }) {
     const res = await sendTestPush(client, undefined, { delay: TEST_PUSH_DELAY_SECONDS });
     setBusy('');
     setMessage(res.ok
-      ? { tone: 'ok', text: `Zkušební oznámení přijde za ${TEST_PUSH_DELAY_SECONDS} ${plural(TEST_PUSH_DELAY_SECONDS, 'sekundu', 'sekundy', 'sekund')}. Teď appku zavři, přepni se jinam nebo zamkni telefon, ať ho uvidíš.` }
-      : { tone: res.reason === 'too-many' ? 'info' : 'error', text: res.reason === 'too-many' ? 'Počkej chvilku a zkus to znovu.' : res.reason === 'not-configured' ? enableMessage('not-configured') : 'Zkušební oznámení se nepodařilo odeslat.' });
+      ? { tone: 'ok', text: t.p(TEST_PUSH_DELAY_SECONDS, 'Zkušební oznámení přijde za {n} sekundu. Teď appku zavři, přepni se jinam nebo zamkni telefon, ať ho uvidíš.', 'Zkušební oznámení přijde za {n} sekundy. Teď appku zavři, přepni se jinam nebo zamkni telefon, ať ho uvidíš.', 'Zkušební oznámení přijde za {n} sekund. Teď appku zavři, přepni se jinam nebo zamkni telefon, ať ho uvidíš.', { n: TEST_PUSH_DELAY_SECONDS }) }
+      : { tone: res.reason === 'too-many' ? 'info' : 'error', text: res.reason === 'too-many' ? t('Počkej chvilku a zkus to znovu.') : res.reason === 'not-configured' ? enableMessage('not-configured') : t('Zkušební oznámení se nepodařilo odeslat.') });
   };
 
   const toggleEngage = async (next) => {
@@ -61,28 +61,28 @@ export default function PushSettings({ client = supabase }) {
     const res = await setPushPrefs(client, next);
     if (!res.ok) {
       setState((s) => ({ ...s, engage: !next }));
-      setMessage({ tone: 'error', text: 'Nastavení se nepodařilo uložit. Zkus to za chvilku znovu.' });
+      setMessage({ tone: 'error', text: t('Nastavení se nepodařilo uložit. Zkus to za chvilku znovu.') });
     }
     setSavingEngage(false);
   };
 
   const wrap = (children) => (
     <section data-testid="push-settings" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }} className="border rounded-xl p-3 space-y-2">
-      <h4 className="text-xs font-black uppercase tracking-wider m-0 flex items-center gap-1.5"><Bell size={13} /> Oznámení do zařízení</h4>
+      <h4 className="text-xs font-black uppercase tracking-wider m-0 flex items-center gap-1.5"><Bell size={13} /> {t('Oznámení do zařízení')}</h4>
       {children}
     </section>
   );
 
-  if (!state) return wrap(<div className="flex items-center gap-2 text-xs font-bold" style={{ color: 'var(--text-muted)' }}><Loader2 size={13} className="animate-spin" /> Zjišťuji stav...</div>);
+  if (!state) return wrap(<div className="flex items-center gap-2 text-xs font-bold" style={{ color: 'var(--text-muted)' }}><Loader2 size={13} className="animate-spin" /> {t('Zjišťuji stav...')}</div>);
   if (!state.support.supported) {
     return wrap(state.support.reason === 'ios-needs-install'
-      ? <Note>Na iPhonu a iPadu fungují oznámení jen v appce přidané na plochu. Přidej ji (<Link to="/settings/app" style={{ color: 'var(--text-body)' }} className="font-black underline">Nastavení → Aplikace</Link>), otevři ji z plochy a zapni oznámení tady.</Note>
-      : <Note>Tenhle prohlížeč oznámení do zařízení neumí.</Note>);
+      ? <Note>{tx('Na iPhonu a iPadu fungují oznámení jen v appce přidané na plochu. Přidej ji ({link}), otevři ji z plochy a zapni oznámení tady.', { link: <Link to="/settings/app" style={{ color: 'var(--text-body)' }} className="font-black underline">{t('Nastavení → Aplikace')}</Link> })}</Note>
+      : <Note>{t('Tenhle prohlížeč oznámení do zařízení neumí.')}</Note>);
   }
   const { device, configured } = state;
   return wrap(
     <>
-      <Note>Nové oznámení z appky (skrytá kniha, odstraněný komentář, změna jména, dar knihy...) ti přijde i jako oznámení v zařízení, i když appku nemáš otevřenou.</Note>
+      <Note>{t('Nové oznámení z appky (skrytá kniha, odstraněný komentář, změna jména, dar knihy...) ti přijde i jako oznámení v zařízení, i když appku nemáš otevřenou.')}</Note>
       {!configured ? (
         <Note>{enableMessage('not-configured')}</Note>
       ) : device.permission === 'denied' ? (
@@ -90,24 +90,24 @@ export default function PushSettings({ client = supabase }) {
       ) : device.subscribed ? (
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <span style={{ color: 'var(--text-body)' }} className="text-xs font-black flex items-center gap-1.5"><Bell size={13} /> Zapnuto v tomhle zařízení</span>
-            <button type="button" onClick={test} disabled={!!busy} style={solid} className={btn}>{busy === 'test' ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} Poslat zkušební oznámení (za {TEST_PUSH_DELAY_SECONDS} s)</button>
-            <button type="button" onClick={turnOff} disabled={!!busy} style={soft} className={btn}>{busy === 'off' ? <Loader2 size={12} className="animate-spin" /> : <BellOff size={12} />} Vypnout</button>
+            <span style={{ color: 'var(--text-body)' }} className="text-xs font-black flex items-center gap-1.5"><Bell size={13} /> {t('Zapnuto v tomhle zařízení')}</span>
+            <button type="button" onClick={test} disabled={!!busy} style={solid} className={btn}>{busy === 'test' ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} {t('Poslat zkušební oznámení (za {n} s)', { n: TEST_PUSH_DELAY_SECONDS })}</button>
+            <button type="button" onClick={turnOff} disabled={!!busy} style={soft} className={btn}>{busy === 'off' ? <Loader2 size={12} className="animate-spin" /> : <BellOff size={12} />} {t('Vypnout')}</button>
           </div>
-          <Note>{TEST_PUSH_HELP}</Note>
+          <Note>{t(TEST_PUSH_HELP)}</Note>
         </div>
       ) : (
         <div className="space-y-2">
-          {device.stale && <Note>Oznámení v tomhle zařízení přestala fungovat. Zapni je prosím znovu.</Note>}
-          <button type="button" onClick={turnOn} disabled={!!busy} style={solid} className={btn}>{busy === 'on' ? <Loader2 size={12} className="animate-spin" /> : <Bell size={12} />} Zapnout oznámení v tomhle zařízení</button>
+          {device.stale && <Note>{t('Oznámení v tomhle zařízení přestala fungovat. Zapni je prosím znovu.')}</Note>}
+          <button type="button" onClick={turnOn} disabled={!!busy} style={solid} className={btn}>{busy === 'on' ? <Loader2 size={12} className="animate-spin" /> : <Bell size={12} />} {t('Zapnout oznámení v tomhle zařízení')}</button>
         </div>
       )}
       {configured && device.permission !== 'denied' && (
         <label className="flex items-start gap-2 cursor-pointer pt-1" style={{ color: 'var(--text-body)' }}>
           <input type="checkbox" data-testid="push-engage" checked={state.engage !== false} disabled={savingEngage} onChange={(e) => toggleEngage(e.target.checked)} className="mt-0.5 w-4 h-4 shrink-0 disabled:opacity-60" style={{ accentColor: 'var(--bg-primary)' }} />
           <span className="text-xs leading-relaxed">
-            <span className="font-black">Připomínky a novinky</span>
-            <span style={{ color: 'var(--text-muted)' }} className="block">Povzbuzení ke čtení, pochvaly za sérii, rozečtená kniha, měsíční cíl, mince na novou knihu a nové knihy v knihovně. Chodí během dne, nikdy v noci. Kdykoli si je tady vypneš.</span>
+            <span className="font-black">{t('Připomínky a novinky')}</span>
+            <span style={{ color: 'var(--text-muted)' }} className="block">{t('Povzbuzení ke čtení, pochvaly za sérii, rozečtená kniha, měsíční cíl, mince na novou knihu a nové knihy v knihovně. Chodí během dne, nikdy v noci. Kdykoli si je tady vypneš.')}</span>
           </span>
         </label>
       )}

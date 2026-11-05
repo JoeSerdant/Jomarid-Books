@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { friendlyError } from './friendlyError.js';
+import { t } from '../i18n/core.js';
 
 export const supabaseUrl = 'https://vcdnqllluagmaxtwrnmf.supabase.co'
 export const supabaseKey = 'sb_publishable_bUOqlH__G6I20FTiowth0w_-MIZrAiM'
@@ -29,18 +30,18 @@ export const MIN_PASSWORD_LENGTH = 8
 // currentPw se předává jen tam, kde existuje "současné heslo" (změna v nastavení);
 // u obnovy hesla přes e-mail žádné současné heslo není.
 export const validateNewPassword = (newPw: string, confirmPw: string, currentPw?: string): string => {
-  if (!newPw || newPw.length < MIN_PASSWORD_LENGTH) return `Nové heslo musí mít aspoň ${MIN_PASSWORD_LENGTH} znaků.`
-  if (newPw !== confirmPw) return 'Hesla se neshodují.'
-  if (currentPw !== undefined && newPw === currentPw) return 'Nové heslo musí být jiné než současné.'
+  if (!newPw || newPw.length < MIN_PASSWORD_LENGTH) return t('Nové heslo musí mít aspoň {n} znaků.', { n: MIN_PASSWORD_LENGTH })
+  if (newPw !== confirmPw) return t('Hesla se neshodují.')
+  if (currentPw !== undefined && newPw === currentPw) return t('Nové heslo musí být jiné než současné.')
   return ''
 }
 
 // Převede chybu ze Supabase Auth na srozumitelnou českou větu.
 export const mapAuthError = (err: any): string => {
   const msg = String(err?.message || '').toLowerCase()
-  if (err?.status === 429 || msg.includes('rate limit') || msg.includes('too many')) return 'Příliš mnoho pokusů. Zkus to za chvíli.'
-  if (msg.includes('different from the old') || msg.includes('same as the old')) return 'Nové heslo musí být jiné než současné.'
-  if (msg.includes('weak') || msg.includes('at least') || msg.includes('should contain')) return 'Heslo je příliš slabé - zvol delší a méně předvídatelné.'
-  if (msg.includes('jwt') || msg.includes('session') || msg.includes('not authenticated')) return 'Přihlášení vypršelo, přihlas se prosím znovu.'
-  return friendlyError(err, 'Něco se nepovedlo. Zkus to prosím znovu.')
+  if (err?.status === 429 || msg.includes('rate limit') || msg.includes('too many')) return t('Příliš mnoho pokusů. Zkus to za chvíli.')
+  if (msg.includes('different from the old') || msg.includes('same as the old')) return t('Nové heslo musí být jiné než současné.')
+  if (msg.includes('weak') || msg.includes('at least') || msg.includes('should contain')) return t('Heslo je příliš slabé - zvol delší a méně předvídatelné.')
+  if (msg.includes('jwt') || msg.includes('session') || msg.includes('not authenticated')) return t('Přihlášení vypršelo, přihlas se prosím znovu.')
+  return friendlyError(err, t('Něco se nepovedlo. Zkus to prosím znovu.'))
 }

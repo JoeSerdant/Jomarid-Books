@@ -752,7 +752,7 @@ const SelectField = ({ label, value, onChange, children }) => (
 );
 
 const toOptions = (list) => Object.fromEntries(list.map((o) => [o.key, { label: o.label }]));
-const VIEW_OPTIONS = { grid: { label: tk('Mřížka') }, list: { label: 'Seznam' } };
+const VIEW_OPTIONS = { grid: { label: tk('Mřížka') }, list: { label: tk('Seznam') } };
 const STATUS_OPTIONS = toOptions(STATUS_FILTERS);
 
 const AppearanceTab = () => {
@@ -1406,7 +1406,7 @@ const ChecksTab = ({ state, role, onRecheck }) => {
                     style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
                     className="inline-block mt-1 px-3 py-1.5 border rounded-lg no-underline text-[0.6875rem] font-black uppercase tracking-wider"
                   >
-                    {n.linkLabel || 'Opravit'}
+                    {t(n.linkLabel || 'Opravit')}
                   </Link>
                 )}
               </div>

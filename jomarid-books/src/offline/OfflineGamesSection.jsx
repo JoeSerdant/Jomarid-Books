@@ -4,11 +4,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { gameSaves, offlineSupported, syncNow } from './index.js';
 import { prepareGames, preparedGames } from './gamesPrep.js';
 import { useOnline } from './useOnline';
+import { t, formatDate } from '../i18n';
+import { tk } from '../i18n/mark.js';
 
 const GAME_NAMES = {
-  rocket: 'Rocket', warroom: 'Warroom', hannibal: 'Hannibal', cityclicker: 'City Clicker', polygonarena: 'Polygon aréna', chess: 'Chess League', koulovikamosi: 'Kouloví Kámoši',
+  rocket: 'Rocket', warroom: 'Warroom', hannibal: 'Hannibal', cityclicker: 'City Clicker', polygonarena: tk('Polygon aréna'), chess: 'Chess League', koulovikamosi: tk('Kouloví Kámoši'),
 };
-const fmtDate = (t) => new Date(t).toLocaleDateString('cs-CZ');
+const fmtDate = (ts) => formatDate(ts);
 
 // Nastavení → Aplikace → Hry offline: stáhnout hry dopředu a přehled postupu, který je v zařízení (a co z něj čeká na odeslání).
 export const OfflineGamesSection = ({ Section, Notice, ActionButton }) => {
@@ -35,8 +37,8 @@ export const OfflineGamesSection = ({ Section, Notice, ActionButton }) => {
       const { preloadGames } = await import('../pages/Games');
       const res = await prepareGames(preloadGames, { onProgress: (done, total) => setProgress([done, total]) });
       setPrepared(preparedGames());
-      setMsg(res.ok ? { type: 'success', text: 'Hry jsou připravené, jdou hrát i bez internetu.' } : { type: 'error', text: 'Některé hry se nepodařilo stáhnout. Zkus to znovu.' });
-    } catch { setMsg({ type: 'error', text: 'Stažení her se nepovedlo. Zkontroluj připojení a zkus to znovu.' }); } finally { setBusy(''); setProgress(null); }
+      setMsg(res.ok ? { type: 'success', text: t('Hry jsou připravené, jdou hrát i bez internetu.') } : { type: 'error', text: t('Některé hry se nepodařilo stáhnout. Zkus to znovu.') });
+    } catch { setMsg({ type: 'error', text: t('Stažení her se nepovedlo. Zkontroluj připojení a zkus to znovu.') }); } finally { setBusy(''); setProgress(null); }
   };
   const sendNow = async () => {
     setBusy('sync'); setMsg(null);
@@ -44,36 +46,36 @@ export const OfflineGamesSection = ({ Section, Notice, ActionButton }) => {
       const res = await syncNow(user, { force: true });
       await load();
       const failed = Object.values(res?.games || {}).some((g) => g.action === 'failed');
-      setMsg(res?.flushed && !res.flushed.stopped && !failed ? { type: 'success', text: 'Postup her je odeslaný.' } : { type: 'error', text: 'Odeslání se nepovedlo, zkusí se to znovu samo.' });
-    } catch { setMsg({ type: 'error', text: 'Odeslání se nepovedlo, zkusí se to znovu samo.' }); } finally { setBusy(''); }
+      setMsg(res?.flushed && !res.flushed.stopped && !failed ? { type: 'success', text: t('Postup her je odeslaný.') } : { type: 'error', text: t('Odeslání se nepovedlo, zkusí se to znovu samo.') });
+    } catch { setMsg({ type: 'error', text: t('Odeslání se nepovedlo, zkusí se to znovu samo.') }); } finally { setBusy(''); }
   };
   const waiting = (saves || []).filter((s) => s.dirty);
 
   return (
-    <Section title="Hry offline" description="Hry jdou hrát i bez internetu. Postup se ukládá do zařízení zašifrovaně a po připojení se sloučí s účtem: když ses mezitím hrál jinde, platí pokročilejší postup a ten druhý se uloží jako záloha. Herní odměny a rekordy z offline hraní se odešlou po připojení (o částce a denním stropu rozhoduje server).">
+    <Section title={t('Hry offline')} description={t('Hry jdou hrát i bez internetu. Postup se ukládá do zařízení zašifrovaně a po připojení se sloučí s účtem: když ses mezitím hrál jinde, platí pokročilejší postup a ten druhý se uloží jako záloha. Herní odměny a rekordy z offline hraní se odešlou po připojení (o částce a denním stropu rozhoduje server).')}>
       <div data-testid="offline-games-section" className="space-y-3">
-        {!supported && <Notice type="info">Tenhle prohlížeč nebo režim (třeba soukromé okno) ukládání postupu do zařízení nepodporuje.</Notice>}
+        {!supported && <Notice type="info">{t('Tenhle prohlížeč nebo režim (třeba soukromé okno) ukládání postupu do zařízení nepodporuje.')}</Notice>}
         {supported && (
           <>
             <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0" data-testid="offline-games-status">
-              {prepared ? `Hry jsou připravené pro offline (naposledy ${fmtDate(prepared.at)}).` : 'Hry se stahují při prvním spuštění. Chceš-li hrát i ty, které sis ještě neotevřel, připrav je dopředu.'}
+              {prepared ? t('Hry jsou připravené pro offline (naposledy {date}).', { date: fmtDate(prepared.at) }) : t('Hry se stahují při prvním spuštění. Chceš-li hrát i ty, které sis ještě neotevřel, připrav je dopředu.')}
             </p>
             <ActionButton busy={busy === 'prepare'} disabled={!online} onClick={prepare}>
-              {busy === 'prepare' && <Loader2 size={13} className="animate-spin" />} {prepared ? 'Stáhnout hry znovu' : 'Připravit hry offline'}{progress ? ` (${progress[0]}/${progress[1]})` : ''}
+              {busy === 'prepare' && <Loader2 size={13} className="animate-spin" />} {prepared ? t('Stáhnout hry znovu') : t('Připravit hry offline')}{progress ? ` (${progress[0]}/${progress[1]})` : ''}
             </ActionButton>
             {saves && saves.length > 0 && (
               <ul className="list-none p-0 m-0 space-y-1" data-testid="offline-game-saves">
                 {saves.map((s) => (
                   <li key={s.gameId} style={{ color: 'var(--text-muted)' }} className="text-xs font-bold">
-                    {GAME_NAMES[s.gameId] || s.gameId}: postup je v zařízení{s.dirty ? ', čeká na odeslání' : ''}
+                    {s.dirty ? t('{game}: postup je v zařízení, čeká na odeslání', { game: t(GAME_NAMES[s.gameId] || s.gameId) }) : t('{game}: postup je v zařízení', { game: t(GAME_NAMES[s.gameId] || s.gameId) })}
                   </li>
                 ))}
               </ul>
             )}
             {waiting.length > 0 && (
               <div className="space-y-2" data-testid="offline-games-pending">
-                <Notice>Postup {waiting.length === 1 ? 'jedné hry čeká' : `${waiting.length} her čeká`} na odeslání.</Notice>
-                <ActionButton busy={busy === 'sync'} disabled={!online} onClick={sendNow}>{busy === 'sync' && <Loader2 size={13} className="animate-spin" />} Odeslat teď</ActionButton>
+                <Notice>{waiting.length === 1 ? t('Postup jedné hry čeká na odeslání.') : t('Postup {n} her čeká na odeslání.', { n: waiting.length })}</Notice>
+                <ActionButton busy={busy === 'sync'} disabled={!online} onClick={sendNow}>{busy === 'sync' && <Loader2 size={13} className="animate-spin" />} {t('Odeslat teď')}</ActionButton>
               </div>
             )}
           </>

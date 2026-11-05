@@ -1,3 +1,4 @@
+import { t } from '../i18n/core.js';
 // Úložiště offline dat v zařízení: IndexedDB (v prohlížeči) a jeho paměťová napodobenina (testy). Obě mají stejné rozhraní:
 //   get(store, key), put(store, key, value), del(store, key), keys(store), all(store) -> [{ key, value }], clear(store), wipe()
 // Hodnoty se ukládají přes strukturované klonování, takže drží i ArrayBuffer a CryptoKey (klíč zařízení, který nejde z JavaScriptu vyexportovat).
@@ -26,7 +27,7 @@ export function createMemoryStore() {
 export function createIdbStore(idb = (typeof indexedDB !== 'undefined' ? indexedDB : null), name = DB_NAME) {
   let opening = null;
   const open = () => {
-    if (!idb) return Promise.reject(new Error('IndexedDB není dostupná'));
+    if (!idb) return Promise.reject(new Error(t('IndexedDB není dostupná')));
     if (opening) return opening;
     opening = new Promise((resolve, reject) => {
       const req = idb.open(name, 1);
@@ -36,7 +37,7 @@ export function createIdbStore(idb = (typeof indexedDB !== 'undefined' ? indexed
         db.onversionchange = () => { db.close(); opening = null; };   // jiná karta maže databázi (odhlášení)
         resolve(db);
       };
-      req.onerror = () => { opening = null; reject(req.error || new Error('IndexedDB se nepodařilo otevřít')); };
+      req.onerror = () => { opening = null; reject(req.error || new Error(t('IndexedDB se nepodařilo otevřít'))); };
       req.onblocked = () => { /* jiná karta drží starou verzi; čeká se */ };
     });
     return opening;
