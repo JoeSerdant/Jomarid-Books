@@ -214,6 +214,8 @@ function controlPlayer(p, dt) {
   if (k.a || k.arrowleft) mx -= 1;
   if (k.d || k.arrowright) mx += 1;
   if (input.stickL) { mx += input.stickL.vx; my += input.stickL.vy; }
+  const P = input.pad;                                   // ovladač (gamepad.js): levá páčka pohyb, pravá míření
+  if (P) { mx += P.lx; my += P.ly; }
   p.moveX = mx; p.moveY = my;
   p.tx = p.x; p.ty = p.y;
 
@@ -222,6 +224,10 @@ function controlPlayer(p, dt) {
   if (R) {
     if (R.mag > 0.15) { p.angle = Math.atan2(R.vy, R.vx); p.tx = p.x + Math.cos(p.angle) * 450; p.ty = p.y + Math.sin(p.angle) * 450; }
     fire = R.mag > 0.3;
+  } else if (P && (P.rmag > 0.2 || P.fire)) {
+    if (P.rmag > 0.2) p.angle = Math.atan2(P.ry, P.rx);  // bez vychýlení páčky (jen tlačítko) míří dál tam, kam mířil
+    p.tx = p.x + Math.cos(p.angle) * 450; p.ty = p.y + Math.sin(p.angle) * 450;
+    fire = P.fire;
   } else if (input.mouse.active && !input.touch) {
     const sx = view.w / 2 + (p.x - cam.x) * zp, sy = view.h / 2 + (p.y - cam.y) * zp;
     p.angle = Math.atan2(input.mouse.y - sy, input.mouse.x - sx);
