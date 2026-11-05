@@ -298,7 +298,7 @@ const ProfileTab = ({ user, role }) => {
             className="w-full p-2.5 border rounded-lg text-sm font-semibold outline-none cursor-pointer disabled:opacity-60"
           >
             <option value="">{unlocked.length === 0 ? t('Zatím nemáš žádný odemčený odznak') : t('- žádný -')}</option>
-            {unlocked.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
+            {unlocked.map(b => <option key={b.id} value={b.id}>{t(b.title)}</option>)}
           </select>
           <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 mt-1 opacity-80">{t('Zobrazuje se vedle tvého jména.')}</p>
         </div>
