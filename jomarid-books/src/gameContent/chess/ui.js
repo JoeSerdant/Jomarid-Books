@@ -43,6 +43,9 @@
     b: { k: "♚" + TXT, q: "♛" + TXT, r: "♜" + TXT, b: "♝" + TXT, n: "♞" + TXT, p: "♟" + TXT }
   };
 
+  // Popisky polí a hlášení tahů pro čtečky obrazovky jsou v speech.js (čistá logika, jde testovat v Node).
+  const { pieceLabel, sqName, describeMove, describeSelection } = Speech;
+
   // ---------- Zvuky ----------
   const SoundFX = (function () {
     let ctx = null;
@@ -267,8 +270,45 @@
   }
 
   // ---------- Šachovnice: výběr tahu klepnutím i přetažením, animace, nápověda ----------
-  function Board({ state, flipped, selected, targets, lastMove, hint, arrows, anim, interactive, showTargets, onPick, onTapRelease, onDrop, draggingFrom, onDragStart }) {
+  function Board({ state, flipped, selected, targets, lastMove, hint, arrows, anim, interactive, showTargets, onPick, onTapRelease, onDrop, draggingFrom, onDragStart, keyboard, onCancel }) {
     const boardRef = useRef(null);
+    // Klávesnice a čtečka: šachovnice je mřížka s jedním políčkem v pořadí tabulátoru (kurzor), šipky ho posouvají podle toho, co je vidět
+    // (i při otočené desce), Enter nebo mezerník dělá totéž co klepnutí (vybrat figuru, potom cílové pole), Escape zruší výběr.
+    const [kb, setKb] = useState(null);
+    const cur = kb || { vr: 6, vc: 4 };
+    function activate(sq) {
+      if (!interactive) return;
+      const isTarget = selected && targets.some((m) => m.to.r === sq.r && m.to.c === sq.c);
+      if (isTarget) { onDrop(sq, false); return; }
+      const res = onPick(sq);
+      if (res.ok && res.was) onTapRelease(sq, true);
+    }
+    function focusVis(vr, vc) {
+      const node = boardRef.current && boardRef.current.querySelector('[data-vsq="' + vr + "," + vc + '"]');
+      if (node) { setKb({ vr, vc }); node.focus(); }
+    }
+    function onKeyDown(e) {
+      if (!keyboard || e.ctrlKey || e.metaKey || e.altKey) return;
+      const el_ = e.target && e.target.closest ? e.target.closest("[data-vsq]") : null;
+      if (!el_) return;
+      const [vr, vc] = el_.getAttribute("data-vsq").split(",").map(Number);
+      let nr = vr, nc = vc;
+      switch (e.key) {
+        case "ArrowUp": nr = Math.max(0, vr - 1); break;
+        case "ArrowDown": nr = Math.min(7, vr + 1); break;
+        case "ArrowLeft": nc = Math.max(0, vc - 1); break;
+        case "ArrowRight": nc = Math.min(7, vc + 1); break;
+        case "Home": nc = 0; break;
+        case "End": nc = 7; break;
+        case "PageUp": nr = 0; break;
+        case "PageDown": nr = 7; break;
+        case "Enter": case " ": e.preventDefault(); activate({ r: flipped ? 7 - vr : vr, c: flipped ? 7 - vc : vc }); return;
+        case "Escape": if (onCancel) { e.preventDefault(); onCancel(); } return;
+        default: return;
+      }
+      e.preventDefault();
+      focusVis(nr, nc);
+    }
     const inCheck = ChessEngine.isInCheck(state, state.turn);
     const kingPos = inCheck ? ChessEngine.findKing(state.board, state.turn) : null;
 
@@ -319,8 +359,9 @@
       onDrop(sq, true);
     }
 
-    const squares = [];
+    const rows = [];
     for (let dr = 0; dr < 8; dr++) {
+      const cells = [];
       for (let dc = 0; dc < 8; dc++) {
         const r = flipped ? 7 - dr : dr;
         const c = flipped ? 7 - dc : dc;
@@ -345,13 +386,21 @@
           const sign = flipped ? -1 : 1;
           pieceStyle = { "--dx": (animFor.from.c - c) * sign * 100 + "%", "--dy": (animFor.from.r - r) * sign * 100 + "%" };
         }
-        squares.push(div({ key: r + "-" + c, className: cls.join(" "), "data-sq": r + "," + c },
+        const sqProps = { key: r + "-" + c, className: cls.join(" "), "data-sq": r + "," + c };
+        if (keyboard) {
+          const tMove = targets.find((m) => m.to.r === r && m.to.c === c);
+          const label = Speech.squareLabel(r, c, piece, { selected: isSelected, target: !!tMove, capture: !!tMove && (!!tMove.captured || tMove.flag === "ep"), check: isCheck });
+          sqProps.role = "gridcell"; sqProps["aria-label"] = label; sqProps["aria-selected"] = isSelected;
+          sqProps["data-vsq"] = dr + "," + dc; sqProps.tabIndex = cur.vr === dr && cur.vc === dc ? 0 : -1;
+        }
+        cells.push(div(sqProps,
           dc === 0 && span({ className: "coord-label coord-rank" }, 8 - r),
           dr === 7 && span({ className: "coord-label coord-file" }, String.fromCharCode(97 + c)),
           piece && span({ key: animFor ? "a" + anim.key : "p", className: "piece t-" + piece.color + piece.type + " " + (piece.color === "w" ? "white" : "black") + (animFor ? " slide" : "") + (lifted ? " lifted" : ""), style: pieceStyle }, PIECE_GLYPHS[piece.color][piece.type]),
           targetMove && !isCapture && span({ className: "move-marker" }),
           isCapture && span({ className: "capture-marker" })));
       }
+      rows.push(div({ key: "row" + dr, className: "board-row", role: keyboard ? "row" : undefined }, cells));
     }
 
     // šipky (nápověda, rozbor): souřadnice ve čtverečcích 0-8
@@ -367,9 +416,21 @@
         polygon({ points: [t.x, t.y, bx - uy * 0.26, by + ux * 0.26, bx + uy * 0.26, by - ux * 0.26].map((v) => v.toFixed(3)).join(" "), fill: a.color || "#FFC800" }));
     });
 
+    function onFocusCell(e) {
+      const el_ = e.target && e.target.closest ? e.target.closest("[data-vsq]") : null;
+      if (!el_) return;
+      const [vr, vc] = el_.getAttribute("data-vsq").split(",").map(Number);
+      if (!kb || kb.vr !== vr || kb.vc !== vc) setKb({ vr, vc });
+    }
+
     return div({ className: "board-stage" },
+      keyboard && span({ className: "sr-only", id: "board-help" }, "Šipkami se pohybuješ po šachovnici. Enter nebo mezerník vybere figuru a potom cílové pole. Escape zruší výběr."),
       div({ className: "board-wrap", onPointerDown, onPointerMove, onPointerUp: (e) => endDrag(e, false), onPointerCancel: (e) => endDrag(e, true) },
-        div({ className: "board", ref: boardRef }, squares),
+        div({
+          className: "board", ref: boardRef,
+          role: keyboard ? "grid" : undefined, "aria-label": keyboard ? "Šachovnice" : undefined, "aria-describedby": keyboard ? "board-help" : undefined, "aria-rowcount": keyboard ? 8 : undefined, "aria-colcount": keyboard ? 8 : undefined,
+          onKeyDown, onFocus: keyboard ? onFocusCell : undefined
+        }, rows),
         arrowEls.length > 0 && svg({ className: "board-arrows", viewBox: "0 0 8 8" }, arrowEls)),
       draggingFrom && h(DragGhost, { ghostRef, piece: state.board[draggingFrom.r][draggingFrom.c] }));
   }
@@ -799,7 +860,7 @@
       time != null && div({ className: "clock" + (active ? " active" : "") + (low ? " low" : "") }, fmtClock(time)));
   }
 
-  function GameScreen({ session, save, soundOn, onToggleSound, onExit, onFinished, settings }) {
+  function GameScreen({ session, save, soundOn, onToggleSound, onExit, onFinished, settings, announce }) {
     const [, bump] = useReducer((x) => x + 1, 0);
     const [selected, setSelected] = useState(null);
     const [targets, setTargets] = useState([]);
@@ -836,6 +897,7 @@
           setAnim(animNextRef.current || data.byBot ? { moves, key: session.moves.length } : null);
           animNextRef.current = true;
           setViewIdx(null);
+          announce((data.byBot ? session.bot.name : "Ty") + ": " + describeMove(m, data.state));
         } else if (type === "say") {
           if (!settingsRef.current.chat) return;
           if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
@@ -846,6 +908,7 @@
           }, 3300);
         } else if (type === "gameover") {
           if (settingsRef.current.sound) SoundFX[data.result === "win" ? "win" : data.result === "loss" ? "lose" : "draw"]();
+          announce("Konec hry: " + (data.result === "win" ? "výhra" : data.result === "loss" ? "prohra" : "remíza") + (REASON_LABELS[data.reason] ? " (" + REASON_LABELS[data.reason] + ")" : "") + ".");
         }
       };
       session.start();
@@ -901,8 +964,10 @@
       if (piece && piece.color === session.playerColor) {
         const was = !!(selected && selected.r === sq.r && selected.c === sq.c);
         if (!was) {
+          const legal = session.legalFrom(sq.r, sq.c);
           setSelected({ r: sq.r, c: sq.c });
-          setTargets(session.legalFrom(sq.r, sq.c));
+          setTargets(legal);
+          announce(describeSelection(piece, sq.r, sq.c, legal));
           if (settings.sound) SoundFX.click();
         }
         return { ok: true, was };
@@ -910,7 +975,7 @@
       clearSelection();
       return { ok: false };
     }
-    function onTapRelease(sq, was) { if (was) clearSelection(); }
+    function onTapRelease(sq, was) { if (was) { clearSelection(); announce("Výběr zrušen."); } }
 
     // Dokončení tahu na poli sq (z klepnutí nebo přetažení).
     function onDrop(sq, byDrag) {
@@ -998,7 +1063,7 @@
             h(Board, {
               state: view, flipped, selected: liveView ? selected : null, targets: liveView ? targets : [], lastMove, hint: session.hint && liveView ? session.hint : null, arrows: hintArrow, anim: topAnim,
               interactive: myTurn, showTargets, onPick, onTapRelease, onDrop, draggingFrom: dragFrom,
-              onDragStart: (from) => { setDragFrom(from); }
+              onDragStart: (from) => { setDragFrom(from); }, keyboard: true, onCancel: () => { if (selected) { clearSelection(); announce("Výběr zrušen."); } }
             }),
             h(PlayerStrip, { who: "me", name: "Ty", rating: String(save.rating), captured: capturedByPlayer, glyphColor: session.botColor, advantage: advPlayer, time: playerTime, active: clockRunning === session.playerColor, low: lowTime(playerTime), turn: !session.over && session.state.turn === session.playerColor }),
             nonLive && div({ className: "view-banner" }, "Prohlížíš starší pozici — ", button({ className: "link-btn", onClick: () => view_(session.moves.length) }, "ZPĚT NA AKTUÁLNÍ")),
@@ -1198,7 +1263,7 @@
 
   // Jedna úloha: hráč tahá za stranu na tahu, soupeř odpovídá hlavní variantou. Špatný tah se hned vrátí; nápověda má dva stupně
   // (nejdřív figura, potom celý tah) a řešení jde i ukázat (pak se úloha nepočítá jako vyřešená).
-  function PuzzleScreen({ puzzle, number, count, solvedBefore, soundOn, onToggleSound, onExit, onSolved, onNext, onRetry, settings }) {
+  function PuzzleScreen({ puzzle, number, count, solvedBefore, soundOn, onToggleSound, onExit, onSolved, onNext, onRetry, settings, announce }) {
     const init = useMemo(() => ChessEngine.fromFEN(puzzle.fen), [puzzle]);
     const sol = useMemo(() => Puzzles.solution(puzzle), [puzzle]);
     const attacker = init.turn;
@@ -1271,9 +1336,14 @@
       setNote({ kind: "good", text: "Správně! Soupeř odpovídá…" });
       later(() => {
         const reply = Puzzles.replyAfter(puzzle, step);
-        if (reply) playCoord(after, reply);
+        let text = "Pokračuj: najdi další tah.";
+        if (reply) {
+          const mvR = findMoveByCoord(after, reply);
+          const afterR = playCoord(after, reply);
+          if (mvR) text = "Soupeř zahrál " + describeMove(mvR, afterR) + " " + text;
+        }
         setStep(step + 2); setPhase("play");
-        setNote({ kind: "info", text: "Pokračuj: najdi další tah." });
+        setNote({ kind: "info", text });
       }, 650);
     }
 
@@ -1283,8 +1353,10 @@
       if (piece && piece.color === attacker) {
         const was = !!(selected && selected.r === sq.r && selected.c === sq.c);
         if (!was) {
+          const legal = ChessEngine.generateLegalMoves(state, sq.r, sq.c);
           setSelected({ r: sq.r, c: sq.c });
-          setTargets(ChessEngine.generateLegalMoves(state, sq.r, sq.c));
+          setTargets(legal);
+          announce(describeSelection(piece, sq.r, sq.c, legal));
           if (settingsRef.current.sound) SoundFX.click();
         }
         return { ok: true, was };
@@ -1292,7 +1364,7 @@
       clearSelection();
       return { ok: false };
     }
-    function onTapRelease(sq, was) { if (was) clearSelection(); }
+    function onTapRelease(sq, was) { if (was) { clearSelection(); announce("Výběr zrušen."); } }
     function onDrop(sq, byDrag) {
       setDragFrom(null);
       if (!sq || !selected) return;
@@ -1349,7 +1421,7 @@
             h(Board, {
               state, flipped, selected: playing ? selected : null, targets: playing ? targets : [], lastMove, hint: hintView, arrows: hintArrow, anim,
               interactive: playing, showTargets: settings.highlights !== false, onPick, onTapRelease, onDrop, draggingFrom: dragFrom,
-              onDragStart: (from) => setDragFrom(from)
+              onDragStart: (from) => setDragFrom(from), keyboard: true, onCancel: () => { if (selected) { clearSelection(); announce("Výběr zrušen."); } }
             }),
             div({ className: "pz-status " + (note ? note.kind : "info"), role: "status", "aria-live": "polite" }, status),
             div({ className: "board-controls" },
@@ -1406,6 +1478,7 @@
     const [save, setSave] = useState(() => League.loadSave(storage, BOT_RATINGS));
     const [savedGame, setSavedGame] = useState(() => League.loadGame(storage, BOTS.length));
     const [view, setView] = useState("menu");
+    const [announcement, setAnnouncement] = useState({ text: "", n: 0 });
     const [menuTab, setMenuTab] = useState("play");
     const [puzzleId, setPuzzleId] = useState(null);
     const [puzzleTry, setPuzzleTry] = useState(0);
@@ -1593,6 +1666,9 @@
       leavePuzzle();
     }
 
+    // Hlášení pro čtečky obrazovky (tahy, výběr figury, konec hry); stejná věta dvakrát za sebou se rozliší neviditelným znakem, aby se přečetla znovu.
+    const announce = (text) => setAnnouncement((a) => ({ text, n: a.n + 1 }));
+
     useEffect(() => () => { if (aiRef.current) aiRef.current.destroy(); if (analysisAiRef.current) analysisAiRef.current.destroy(); }, []);
 
     const settings = { sound: save.sound, highlights: save.highlights, chat: save.botChat !== false, autoQueen: !!save.autoQueen };
@@ -1604,16 +1680,17 @@
       const grp = Puzzles.groups().find((g) => g.n === pz.n);
       content = h(PuzzleScreen, {
         key: pz.id + "-" + puzzleTry, puzzle: pz, number: grp.list.findIndex((x) => x.id === pz.id) + 1, count: grp.list.length, solvedBefore: League.puzzleSolved(save, pz.id),
-        soundOn: save.sound, onToggleSound: () => updateSave({ sound: !save.sound }), onExit: leavePuzzle, onSolved: puzzleSolved, onNext: nextPuzzle, onRetry: () => setPuzzleTry((t) => t + 1), settings
+        soundOn: save.sound, onToggleSound: () => updateSave({ sound: !save.sound }), onExit: leavePuzzle, onSolved: puzzleSolved, onNext: nextPuzzle, onRetry: () => setPuzzleTry((t) => t + 1), settings, announce
       });
     } else if (view === "game" && session) {
-      content = h(GameScreen, { key: session.startedAt + "-" + session.botIdx, session, save, soundOn: save.sound, onToggleSound: () => updateSave({ sound: !save.sound }), onExit: leaveGame, onFinished, settings });
+      content = h(GameScreen, { key: session.startedAt + "-" + session.botIdx, session, save, soundOn: save.sound, onToggleSound: () => updateSave({ sound: !save.sound }), onExit: leaveGame, onFinished, settings, announce });
     } else if (view === "end" && endInfo) {
       content = h(EndScreen, { info: endInfo, bot: BOTS[endInfo.botIdx], analysis, onContinue: toMenu, onRematch: rematch, onReview: () => openReview({ moves: endInfo.moves, color: endInfo.color, botKey: BOTS[endInfo.botIdx].key }, "end") });
     } else if (view === "review" && reviewData) {
       content = h(ReviewScreen, { review: reviewData, analysisState: analysis, onBack: () => { if (reviewData.from === "end" && endInfo) setView("end"); else toMenu(); } });
     }
     return div({ className: "app-shell" },
+      div({ className: "sr-only", role: "status", "aria-live": "polite", "aria-atomic": "true" }, announcement.text + (announcement.n % 2 ? "\u200B" : "")),
       content,
       h(CheatField, { open: cheatOpen, withNav: view === "menu", onOpen: () => setCheatOpen(true) }),
       confettiKey > 0 && h("canvas", { key: confettiKey, ref: confettiRef, className: "confetti-canvas", "aria-hidden": "true" }),

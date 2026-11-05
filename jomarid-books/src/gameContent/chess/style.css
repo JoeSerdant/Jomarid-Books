@@ -835,3 +835,9 @@ body.disco .board { animation: disco-hue 2.4s linear infinite; }
 .pz-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .pz-actions .btn { flex: 1 1 auto; }
 @media (prefers-reduced-motion: reduce) { .pz-tile { transition: none; } }
+
+/* ---------- Klávesnice a čtečka obrazovky ---------- */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.board-row { display: contents; }
+.square:focus { outline: none; }
+.square:focus-visible { outline: 4px solid var(--blue); outline-offset: -4px; z-index: 3; }

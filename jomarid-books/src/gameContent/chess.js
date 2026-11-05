@@ -10,6 +10,7 @@
 //   book.js     - kniha zahájení a české názvy zahájení
 //   league.js   - Elo rating, soupeři, uložený postup
 //   puzzles.js  - šachové úlohy (data vygenerovaná z partií botů a ověřená testy) a posuzování tahů
+//   speech.js   - české popisky polí a hlášení tahů pro čtečky obrazovky
 //   bots.js     - soupeři: síla, osobnost, hlášky, tempo, vzdávání, remízy
 //   session.js  - řadič jedné partie (hodiny, tah bota, nápověda, uložení)
 //   ui.js       - React rozhraní
@@ -28,6 +29,7 @@ import search from './chess/search.js?raw';
 import book from './chess/book.js?raw';
 import league from './chess/league.js?raw';
 import puzzles from './chess/puzzles.js?raw';
+import speech from './chess/speech.js?raw';
 import bots from './chess/bots.js?raw';
 import session from './chess/session.js?raw';
 import ui from './chess/ui.js?raw';
@@ -38,6 +40,7 @@ const SCRIPTS = [
   ['book', book],
   ['league', league],
   ['puzzles', puzzles],
+  ['speech', speech],
   ['bots', bots],
   ['session', session],
   ['ui', ui],
