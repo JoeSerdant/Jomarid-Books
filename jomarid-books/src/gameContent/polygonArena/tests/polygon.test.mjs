@@ -679,3 +679,13 @@ test('omezený pohyb: kamera se neotřásá, když to systém nechce (živý dot
   assert.match(render, /const shx = quake \? \(Math\.random\(\) - 0\.5\) \* shake \* 2 : 0, shy = quake \? \(Math\.random\(\) - 0\.5\) \* shake \* 2 : 0;/);
   assert.equal((render.match(/\bshake\b/g) || []).length, 3, 'shake je v render.js jen v definici quake a ve dvou posunech');
 });
+
+test('uložení: vadné typy (jméno, rekord, zvuk) se při načtení opraví, platné zůstanou', () => {
+  const run = (stored) => loadGame({ storage: { 'polygon-arena-v1': JSON.stringify(stored) } }).G('save');
+  const ok = run({ name: 'Karel', best: 1234, sound: true });
+  assert.deepEqual([ok.name, ok.best, ok.sound], ['Karel', 1234, true], 'platné se nemění');
+  const bad = run({ name: { a: 1 }, best: 'x', sound: 'ano' });
+  assert.deepEqual([bad.name, bad.best, bad.sound], ['', 0, false]);
+  const inf = run({ name: 5, best: null, sound: 1 });
+  assert.deepEqual([inf.name, inf.best, inf.sound], ['', 0, false]);
+});

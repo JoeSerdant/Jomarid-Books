@@ -53,8 +53,8 @@ test('hra nenačítá cizí skripty (jen písmo) a ukládá pod vlastním klíč
 });
 
 /* ---------------------------------------------------------------- chod hry v Node */
-function makeEnv({ tut = true } = {}) {
-  const store = {};
+function makeEnv({ tut = true, store: preset = {} } = {}) {
+  const store = Object.assign({}, preset);
   const rewards = [];
   const records = [];
   const els = new Map();
@@ -759,4 +759,75 @@ test('omezený pohyb: kývání koulí se při nastavení systému vypne a v CSS
 test('tlačítko zvuku: má popisek podle stavu a je stejně velké jako Obchod (ne drobná ikona)', () => {
   assert.match(shell, /<button id="snd" class="sec" title="Vypnout zvuk">🔊<\/button>/, 'bez vlastní zmenšené velikosti písma');
   assert.match(game, /\$\('snd'\)\.textContent=S\.mute\?'🔇':'🔊';\$\('snd'\)\.title=S\.mute\?'Zapnout zvuk':'Vypnout zvuk';/);
+});
+
+test('uložení: poškozený nebo upravený postup hru nerozbije a platný zůstane beze změny', () => {
+  const KEY = 'koulovi-kamosi-v1';
+  const load = (saved) => makeEnv({ store: { [KEY]: typeof saved === 'string' ? saved : JSON.stringify(saved) } });
+  const snap = (e) => JSON.parse(e.run('JSON.stringify(S)'));
+  const valid = { best: 1234, games: 20, merges: 300, coins: 75, disc: 6, mute: 1, log: [[1700000000000, 150], [1700000100000, 90]], bm: { classic: 1234, zen: 80 }, st: { drops_total: 500, best_combo: 7 },
+    modes: { classic: 1, zen: 1 }, inv: { undo: 2, shake: 0, pop: 3, hit: 1 }, days: ['2026-11-01'], ps: 3, tut: 1, dc: { d: '2026-11-01', best: 55, n: 2, paid: 1 } };
+  const e0 = load(valid);
+  const s0 = snap(e0);
+  for (const k of Object.keys(valid)) assert.deepEqual(s0[k], valid[k], `platné pole ${k} se nezmění`);
+  assert.equal(e0.run('st'), 'menu');
+  // celý klíč je nesmysl: začíná se od nuly a nic nespadne
+  for (const raw of ['-1', '"x"', '[]', 'null', 'true', '5', '{rozbitý json', '']) {
+    const e = load(raw);
+    assert.equal(e.run('st'), 'menu', `klíč ${raw}`);
+    const s = snap(e);
+    assert.deepEqual([s.best, s.games, s.coins, s.log.length], [0, 0, 0, 0], `klíč ${raw} dá výchozí postup`);
+  }
+  // poškozená pole: výsledek má vždy správné typy, menu se vykreslí a statistiky se dají spočítat
+  const damaged = [
+    { coins: {} }, { coins: 'x' }, { coins: -5 }, { coins: 1e999 }, { best: null }, { merges: {} }, { games: [] }, { disc: 'x' }, { mute: 'ano' },
+    { log: false }, { log: 'x' }, { log: [1, 'x', [1], [NaN, 2], [5, 'a'], [1700000000000, 10]] }, { bm: [1, 2] }, { bm: { classic: 'x', zen: -1, time: 5 } }, { st: 5 }, { st: { a: 'x', b: 2, c: null } },
+    { modes: 'x' }, { inv: { undo: 'x', shake: -1, pop: 1.5 } }, { inv: [] }, { inv: 7 }, { days: 'x' }, { days: [1, 'a', null] }, { dc: 5 }, { dc: { d: 7 } }, { run: 5 }, { run: { mode: 'x' } },
+  ];
+  for (const d of damaged) {
+    const e = load({ ...valid, ...d });
+    assert.equal(e.run('st'), 'menu', JSON.stringify(d));
+    const s = snap(e);
+    for (const k of ['best', 'games', 'merges', 'coins', 'disc']) assert.ok(typeof s[k] === 'number' && isFinite(s[k]) && s[k] >= 0, `${JSON.stringify(d)}: ${k}`);
+    assert.ok(s.mute === 0 || s.mute === 1);
+    assert.ok(Array.isArray(s.log) && s.log.every((r) => Array.isArray(r) && r.length >= 2 && typeof r[0] === 'number' && typeof r[1] === 'number'), `${JSON.stringify(d)}: log`);
+    for (const m of [s.bm, s.st]) assert.ok(m && typeof m === 'object' && !Array.isArray(m) && Object.values(m).every((v) => typeof v === 'number' && isFinite(v) && v >= 0), JSON.stringify(d));
+    assert.ok(s.modes && typeof s.modes === 'object' && !Array.isArray(s.modes));
+    for (const k of ['undo', 'shake', 'pop', 'hit']) assert.ok(Number.isInteger(s.inv[k]) && s.inv[k] >= 0, `${JSON.stringify(d)}: inv.${k}`);
+    assert.ok(Array.isArray(s.days) && s.days.every((v) => typeof v === 'string'));
+    assert.doesNotThrow(() => e.run('stats()'), JSON.stringify(d));
+    assert.equal(e.run("$('cont').classList.contains('hide')"), true, `${JSON.stringify(d)}: vadná rozehraná hra se zahodí, tlačítko Pokračovat zůstane skryté`);
+  }
+  assert.deepEqual(snap(load({ ...valid, log: [1, 'x', [1], [NaN, 2], [5, 'a'], [1700000000000, 10]] })).log, [[1700000000000, 10]]);
+  assert.deepEqual(snap(load({ ...valid, bm: { classic: 'x', zen: -1, time: 5 } })).bm, { time: 5 });
+  assert.deepEqual(snap(load({ ...valid, inv: { undo: 'x', shake: -1, pop: 1.5 } })).inv, { undo: 0, shake: 0, pop: 0, hit: 0 });
+});
+
+test('rozehraná hra: platná se obnoví, a ta se špatným tvarem (režim, počet bodů koule, NaN, příliš mnoho koulí) se při startu zahodí', () => {
+  const a = makeEnv();
+  a.run("start('classic')");
+  for (let i = 0; i < 160; i += 1) a.run(`g.aimX = ${180 + ((i * 53) % 180)}; if (g.cool <= 0) drop(); step();`);
+  a.run('saveRun()');
+  const good = JSON.parse(a.store['koulovi-kamosi-v1']);
+  assert.ok(good.run && good.run.balls.length > 0);
+  const open = (run) => makeEnv({ store: { 'koulovi-kamosi-v1': JSON.stringify({ ...good, run }) } });
+  const same = open(good.run);
+  assert.equal(same.run("$('cont').classList.contains('hide')"), false, 'platná rozehraná hra se nabízí');
+  same.run('resume()');
+  assert.equal(same.run('g.balls.length'), good.run.balls.length);
+  const ball = good.run.balls[0];
+  const mut = (f) => { const r = JSON.parse(JSON.stringify(good.run)); f(r); return r; };
+  const broken = {
+    'neznámý režim': mut((r) => { r.mode = 'x'; }), 'koule nejsou pole': mut((r) => { r.balls = 'x'; }), 'bez koulí': mut((r) => { delete r.balls; }), 'příliš mnoho koulí': mut((r) => { r.balls = Array(301).fill(ball); }),
+    'špatný počet bodů': mut((r) => { r.balls[0].P = r.balls[0].P.slice(1); }), 'bod není čtveřice': mut((r) => { r.balls[0].P[0] = [1, 2]; }), 'NaN v bodu': mut((r) => { r.balls[0].P[0][0] = null; }),
+    'typ koule mimo rozsah': mut((r) => { r.balls[0].t = 99; }), 'záporný typ': mut((r) => { r.balls[0].t = -1; }), 'skóre text': mut((r) => { r.score = 'x'; }), 'další koule mimo rozsah': mut((r) => { r.next = 50; }),
+    'prázdná koule': mut((r) => { r.balls[0] = null; }), 'nekonečný čas': mut((r) => { r.t = 1e999; }),
+  };
+  for (const [name, run] of Object.entries(broken)) {
+    const e = open(run);
+    assert.equal(e.run('st'), 'menu', name);
+    assert.equal(e.run("$('cont').classList.contains('hide')"), true, `${name}: rozehraná hra se zahodí`);
+    assert.equal(e.run('S.run'), null, name);
+  }
+  assert.match(game, /if\(S\.run&&!okRun\(S\.run\)\)S\.run=null;\s*g=\{balls:\[\]/, 'kontrola proběhne dřív, než se poprvé vykreslí menu');
 });

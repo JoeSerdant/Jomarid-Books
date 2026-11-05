@@ -1178,17 +1178,35 @@
     };
 
     // --- PROGRESS SYSTÉM (LOCAL STORAGE) ---
+    // Postup se při čtení očistí: seznamy odemčeného musí být pole textů, rekordy a čítače čísla, jinak by hra při startu spadla nebo ukázala NaN.
+    // Platná data se nemění (neznámé klíče zůstávají), do úložiště se čistá podoba zapíše při příštím uložení.
+    function cleanProgress(raw) {
+        const p = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+        const plain = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+        const list = (v, must) => {
+            const out = Array.isArray(v) ? v.filter(x => typeof x === 'string' && x.length > 0 && x.length <= 40) : [];
+            must.forEach(m => { if (!out.includes(m)) out.push(m); });
+            return [...new Set(out)];
+        };
+        const highScores = {};
+        if (plain(p.highScores)) for (const k of Object.keys(p.highScores)) { const n = Number(p.highScores[k]); if (isFinite(n) && n >= 0) highScores[k] = n; }
+        const stats = {};
+        if (plain(p.stats)) {
+            for (const k of Object.keys(p.stats)) {
+                const v = p.stats[k];
+                if (typeof v === 'number' && isFinite(v) && v >= 0) stats[k] = v;
+                else if (plain(v) && (k === 'scen' || k === 'docts')) { const seen = {}; for (const id of Object.keys(v)) if (v[id]) seen[id] = 1; stats[k] = seen; }
+            }
+        }
+        return Object.assign({}, p, { unlockedScenarios: list(p.unlockedScenarios, ['default']), unlockedDoctrines: list(p.unlockedDoctrines, ['blitz', 'fortress']), highScores, stats });
+    }
+
     function loadProgress() {
         let saved = null;
         try { saved = localStorage.getItem('warroom_frontlines_save_v1'); } catch (e) { saved = null; }
         if (saved) {
             try {
-                let parsed = JSON.parse(saved);
-                if (!parsed.unlockedScenarios) parsed.unlockedScenarios = ['default'];
-                if (!parsed.unlockedDoctrines) parsed.unlockedDoctrines = ['blitz', 'fortress'];
-                if (!parsed.highScores) parsed.highScores = {};
-                if (!parsed.stats || typeof parsed.stats !== 'object') parsed.stats = {};
-                return parsed;
+                return cleanProgress(JSON.parse(saved));
             } catch (e) {
                 console.error("Chyba při čtení uloženého progressu.");
             }

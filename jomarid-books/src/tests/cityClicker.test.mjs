@@ -350,3 +350,67 @@ test('panorama města: okna se rozsvěcují podle počtu zón a v EndCraze svít
   assert.equal(e, 200);
   assert.ok(typeof mkSky === 'function');
 });
+
+test('uložení: sloučení kontroluje typy, takže poškozený postup hru nerozbije a platný zůstane beze změny', () => {
+  const grab = (name) => html.match(new RegExp(`  function ${name}\\([^)]*\\)\\{[\\s\\S]*?\\n  \\}\\n`))[0];
+  const ctx = vm.createContext({ Date, Array, Object, Math, isFinite, themeOrder: THEMES });
+  const decl = (re) => html.match(re)[0];
+  const consts = [decl(/  var megaprojectOrder = [^\n]*\n/), decl(/  var megaprojectDefs = \{[\s\S]*?\n  \};\n/), decl(/  var ACCELERATOR_PHASES = \[[\s\S]*?\n  \];\n/), decl(/  var ARCHA_PHASES = [^\n]*\n/)].join('');
+  vm.runInContext(`${consts}\n${grab('defaultState')}\n${grab('mergeSaved')}\n${grab('repairLoaded')}\nthis.load = (loaded) => repairLoaded(mergeSaved(defaultState(), loaded)); this.def = defaultState;`, ctx);
+  const plain = (v) => JSON.parse(JSON.stringify(v));
+  const load = (v) => plain(ctx.load(v));
+  const def = plain(ctx.def());
+  // platný, bohatý postup (všechny druhy hodnot) se načte přesně tak, jak byl uložený
+  const rich = plain(ctx.def());
+  Object.assign(rich, { budget: 1.5e12, lifetimeEarnings: 9e15, totalClicks: 12345, theme: 'mars', goldenPermits: 7, prestigeCount: 3, jumpCount: 2, relics: ['a', 'b'], stardust: 40, stardustUpgrades: { income: 3, click: 1 },
+    dimension: 'boomtown', achievements: ['first', 'rich'], stats: { clicks: 50, houses_built: 12, seen: { a: 1, b: 1 } }, soundEnabled: false, buyAmount: 'max' });
+  rich.buildings.residential.count = 120; rich.buildings.park.count = 8;
+  rich.policies.homeOffice = true; rich.megaprojects.fusion = { phase: 2, completed: true };
+  Object.assign(rich.endgame, { active: true, darkMatter: 55, faction: 'cultist', acceleratorBuilt: true, archaSpent: 123 });
+  rich.cizí = { budoucí: true };
+  assert.deepEqual(load(rich), rich, 'nic platného se neztratí ani nezmění (včetně neznámých klíčů a buyAmount "max")');
+  // desítky druhů poškození: výsledek má vždy stejné typy jako výchozí stav a nic nespadne
+  const kinds = (v) => Object.fromEntries(Object.entries(v).map(([k, x]) => [k, Array.isArray(x) ? 'array' : x === null ? 'null' : typeof x]));
+  const sameShape = (got, want, p = '') => { for (const k of Object.keys(want)) { const a = got[k], b = want[k]; if (b && typeof b === 'object' && !Array.isArray(b)) { assert.ok(a && typeof a === 'object' && !Array.isArray(a), `${p}${k} má být objekt`); sameShape(a, b, `${p}${k}.`); } else if (Array.isArray(b)) assert.ok(Array.isArray(a), `${p}${k} má být pole`); else if (b === null) assert.ok(a === null || typeof a === 'string', `${p}${k}`); else if (k !== 'buyAmount') assert.equal(typeof a, typeof b, `${p}${k}`); } };
+  const damaged = [
+    { policies: false }, { policies: '' }, { policies: [1, 2] }, { buildings: 5 }, { buildings: { commercial: 9999999999 } }, { buildings: { residential: { count: 'x' } } }, { buildings: { industrial: [] } },
+    { megaprojects: { fusion: '' } }, { megaprojects: { fusion: { phase: 'x', completed: 'ano' } } }, { megaprojects: [] }, { endgame: null }, { endgame: { active: 9999999999, darkMatter: 'x' } },
+    { theme: 'x' }, { theme: 9999999999 }, { goldenPermits: {} }, { budget: null }, { budget: 'x' }, { stardust: [] }, { relics: 'x' }, { relics: [1, null, 'ok', {}] }, { achievements: { a: 1 } },
+    { stats: 5 }, { stats: { a: 'x', b: -1, c: null, d: 4 } }, { stardustUpgrades: [1] }, { stardustUpgrades: { a: 'x', b: 2 } }, { buyAmount: {} }, { soundEnabled: 'ano' }, { dimension: 5 }, { activeCrisis: { x: 1 } },
+    { buildings: { residential: { count: -4 } } }, { buildings: { residential: { count: 2.7 } } },
+  ];
+  for (const d of damaged) {
+    const got = load(d);
+    sameShape(got, def);
+    assert.ok(THEMES.includes(got.theme), 'téma je vždy platné');
+    for (const b of Object.values(got.buildings)) assert.ok(Number.isInteger(b.count) && b.count >= 0, 'počty budov jsou celá nezáporná čísla');
+    assert.ok(got.relics.every((r) => typeof r === 'string') && got.achievements.every((r) => typeof r === 'string'));
+    assert.ok(Object.values(got.stardustUpgrades).every((n) => typeof n === 'number' && n >= 0));
+    assert.ok(Object.values(got.stats).every((n) => (typeof n === 'number' && n >= 0) || (n && typeof n === 'object')));
+  }
+  // fáze: indexy do seznamů zůstanou v rozsahu a dokončený projekt je dokončený
+  for (const phase of [9999999999, -1e308, 4.7, -1, 3]) {
+    const mp = load({ megaprojects: { spaceElevator: { phase, completed: false }, fusion: { phase: 1, completed: false } }, endgame: { acceleratorPhase: phase, archaPhase: phase } });
+    assert.ok(Number.isInteger(mp.megaprojects.spaceElevator.phase) && mp.megaprojects.spaceElevator.phase >= 0 && mp.megaprojects.spaceElevator.phase <= 3, `fáze ${phase}`);
+    assert.equal(mp.megaprojects.spaceElevator.completed, mp.megaprojects.spaceElevator.phase >= 3);
+    assert.ok(mp.endgame.acceleratorPhase >= 0 && mp.endgame.acceleratorPhase <= vm.runInContext('ACCELERATOR_PHASES.length', ctx));
+    assert.ok(mp.endgame.archaPhase >= 0 && mp.endgame.archaPhase <= vm.runInContext('ARCHA_PHASES', ctx));
+    assert.deepEqual(mp.megaprojects.fusion, { phase: 1, completed: false }, 'druhý projekt se nezmění');
+  }
+  assert.equal(load({ buyAmount: 'max' }).buyAmount, 'max');
+  assert.equal(load({ buyAmount: {} }).buyAmount, 1, 'nesmyslná hodnota nahradí výchozí');
+  assert.equal(load({ buildings: { residential: { count: 2.7 } } }).buildings.residential.count, 2);
+  assert.deepEqual(load({ relics: [1, null, 'ok', {}] }).relics, ['ok']);
+  assert.deepEqual(load({ stats: { a: 'x', b: -1, c: null, d: 4, g: { z: 1 } } }).stats, { d: 4, g: { z: 1 } });
+  // nic použitelného: výchozí stav
+  for (const junk of [null, undefined, 5, 'x', [], true]) assert.deepEqual(load(junk), { ...def, createdAt: load(junk).createdAt, lastSaveTimestamp: load(junk).lastSaveTimestamp }, String(junk));
+  // "__proto__" z uloženého JSON nesmí zasáhnout prototypy
+  const evil = JSON.parse('{"__proto__":{"polluted":1},"constructor":{"prototype":{"polluted":2}},"buildings":{"__proto__":{"polluted":3}}}');
+  load(evil);
+  assert.equal({}.polluted, undefined);
+  assert.equal(vm.runInContext('({}).polluted', ctx), undefined);
+  // obě místa, kde se postup čte (start hry a ruční načtení), používají to samé
+  assert.equal((html.match(/state = repairLoaded\(mergeSaved\(defaultState\(\), loaded\)\);/g) || []).length, 2);
+  assert.equal((html.match(/throw new Error\('uložení není objekt'\)/g) || []).length, 2);
+  assert.doesNotMatch(html, /deepMerge/, 'starý sloučitel bez kontroly typů už nikde není');
+});
