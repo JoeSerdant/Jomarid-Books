@@ -19,8 +19,10 @@ import { withStorageShim } from '../gameSave/shim';
 import { saveGameStateKeepalive } from '../gameSave/api';
 import { readLegacyStorage, clearLegacyStorage } from '../gameSave/legacy';
 import { SAVE_MESSAGES, SAVE_LOAD_ERROR, SAVE_NO_LOCAL_COPY, SAVE_PLAY_FRESH } from '../gameSave/messages';
-import { t } from '../i18n';
+import { t, getLang } from '../i18n';
 import { tk } from '../i18n/mark.js';
+import { withGameLanguage } from '../i18n/gameLayer';
+import { loadGameDictionary } from '../i18n/games';
 
 // Každá hra je velký kus textu (stovky kB, šachy i s Reactem). Stahuje se až při spuštění (dynamický import), ne spolu
 // se stránkou Her - jinak by si hráč už při otevření seznamu stáhl všechny hry najednou.
@@ -295,7 +297,11 @@ export const GameLauncher = ({ game }) => {
     if (!mountedRef.current) return;
     const { status } = sync.state(); // znovu otevřená hra ukáže štítek i tehdy, když se postup pořád neukládá
     setSaveStatus(status === 'ok' ? null : status);
-    setGameDoc(withStorageShim(src, game.id, sync.snapshot().map));
+    // Jazyk hry: v angličtině se do dokumentu vloží slovník hry a překladová vrstva (src/i18n/gameLayer.js).
+    const lang = getLang();
+    const dict = lang === 'en' ? await loadGameDictionary(game.id) : null;
+    if (!mountedRef.current) return;
+    setGameDoc(withGameLanguage(withStorageShim(src, game.id, sync.snapshot().map), lang, dict, { collect: typeof window !== 'undefined' && window.__JOMARID_I18N_COLLECT === true }));
     setLoadingGame(false);
     gameOpenedAtRef.current = Date.now();
     limitShownRef.current = false;
