@@ -25,7 +25,8 @@ const IDENTICAL_OK = new Set(['Admin', 'Studio', 'E-mail', 'Text', 'Tip', 'Role'
   'XP', 'Streak', '🔥 Streak', 'Offline', 'Coins', 'Noir', 'Retro', 'Neon', 'Lv. {n}', '{n}px', '{cur}/{need} XP', '+{n} XP', '© {year} Jomarid Books', 'streak * 10 XP', 'streak * 25 XP', 'streak * 50 XP',
   'Jomarid Rocket Game', 'Warroom: Frontlines', 'City Clicker', 'Chess League', 'Hannibal: Barca', 'Pilot',
   'Combo ×5', 'Developer', 'Domino', 'Jackpot', 'Matador', 'Megacity', 'Rating 1000', 'Rating 1300',
-  '{n} Jomarid Coins', 'Auto', 'jomarid-books/db/push/README.md', 'ShortB: {title}', 'Spam', 'VAPID_PRIVATE_KEY', 'VAPID_PUBLIC_KEY']);
+  '{n} Jomarid Coins', 'Auto', 'jomarid-books/db/push/README.md', 'ShortB: {title}', 'Spam', 'VAPID_PRIVATE_KEY', 'VAPID_PUBLIC_KEY',
+  '{day}: {sales}, {coins}', '+{n} Admin XP', '+1 Freeze', 'Export CSV', 'Streak Freeze:', 'Target:', 'Streak Freeze', 'E-mail A-Z', '1-24 %', '25-49 %', '50-74 %', '75-99 %']);
 // České texty, které se záměrně nepřekládají (názvy jazyků se píšou vlastním jazykem).
 const PERMANENT = {
   'i18n/LanguageSwitch.jsx': ['Čeština'],              // názvy jazyků se píšou vlastním jazykem

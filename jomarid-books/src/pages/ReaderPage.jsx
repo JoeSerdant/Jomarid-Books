@@ -1048,7 +1048,7 @@ export const ReaderPage = () => {
                   <div className="flex gap-1.5">
                     {Object.entries(FONT_FAMILIES).map(([key, val]) => (
                       <button key={key} onClick={() => setFontFamilyKey(key)} style={{ backgroundColor: fontFamilyKey === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: fontFamilyKey === key ? 'var(--text-primary)' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-bold">
-                        {val.label}
+                        {t(val.label)}
                       </button>
                     ))}
                   </div>
@@ -1059,7 +1059,7 @@ export const ReaderPage = () => {
                   <div className="flex gap-1.5">
                     {Object.entries(LINE_HEIGHTS).map(([key, val]) => (
                       <button key={key} onClick={() => setLineHeightKey(key)} style={{ backgroundColor: lineHeightKey === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: lineHeightKey === key ? 'var(--text-primary)' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-bold">
-                        {val.label}
+                        {t(val.label)}
                       </button>
                     ))}
                   </div>
@@ -1070,7 +1070,7 @@ export const ReaderPage = () => {
                   <div className="flex gap-1.5">
                     {Object.entries(TEXT_WIDTHS).map(([key, val]) => (
                       <button key={key} onClick={() => setTextWidthKey(key)} style={{ backgroundColor: textWidthKey === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: textWidthKey === key ? 'var(--text-primary)' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-bold">
-                        {val.label}
+                        {t(val.label)}
                       </button>
                     ))}
                   </div>
@@ -1080,7 +1080,7 @@ export const ReaderPage = () => {
                   <div className="flex gap-1.5">
                     {Object.entries(ALIGNMENTS).map(([key, val]) => (
                       <button key={key} onClick={() => setPref('align', key)} style={{ backgroundColor: prefs.align === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: prefs.align === key ? 'var(--text-primary)' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-bold">
-                        {val.label}
+                        {t(val.label)}
                       </button>
                     ))}
                   </div>
@@ -1091,7 +1091,7 @@ export const ReaderPage = () => {
                   <div className="flex gap-1.5">
                     {Object.entries(PAGE_BREAKS).map(([key, val]) => (
                       <button key={key} onClick={() => setPref('pageBreak', key)} style={{ backgroundColor: prefs.pageBreak === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: prefs.pageBreak === key ? 'var(--text-primary)' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-bold">
-                        {val.label}
+                        {t(val.label)}
                       </button>
                     ))}
                   </div>
@@ -1254,7 +1254,7 @@ export const ReaderPage = () => {
                 <button
                   key={key}
                   onClick={() => saveHighlight(key)}
-                  title={val.label}
+                  title={t(val.label)}
                   style={{ backgroundColor: val.bg.replace('0.35', '0.9') }}
                   className="w-7 h-7 rounded-full border-none cursor-pointer"
                 />

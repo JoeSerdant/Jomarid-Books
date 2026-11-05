@@ -180,7 +180,7 @@ test('SQL: funkce jsou jen pro přihlášené, tabulky mají RLS a nikdo k nim n
   assert.ok(!/update\s+public\.profiles\s+set\s+coins/i.test(sql), 'zůstatek se v profilu přímo neupravuje');
   assert.match(sql, /perform set_config\('app\.bypass_profile_column_guard', 'true', true\);\n\s+insert into public\.coin_transactions/, 'nákup si před zápisem do deníku nastaví bypass ochrany sloupců profilu');
   assert.match(sql, /v_after is distinct from v_before - 1/, 'kontrola předpokladů vyžaduje, aby zápis do deníku snížil zůstatek o zapsanou částku');
-  assert.match(read('pages', 'AdminDashboard.jsx'), /cosmetic_purchase: '[^']+'/, 'správce vidí nákupy z obchůdku pod čitelným názvem');
+  assert.match(read('pages', 'AdminDashboard.jsx'), /cosmetic_purchase: tk\('[^']+'\)/, 'správce vidí nákupy z obchůdku pod čitelným názvem');
 });
 
 /* ---------------------------------------------------------------- volání serveru */

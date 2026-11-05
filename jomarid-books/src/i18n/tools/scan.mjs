@@ -189,6 +189,7 @@ export const scanSource = (code, file = '') => {
   });
   // Konstanty na úrovni modulu s texty označenými tk(...): každé jejich použití musí jít přes t(...), jinak by zůstaly česky.
   const tkConstants = new Map(); // název -> řádek deklarace
+  const tkInits = new Map(); // název -> výraz, kterým je konstanta zadaná
   const flatNames = new Set();
   traverse(ast, {
     VariableDeclarator(path) {
@@ -196,7 +197,7 @@ export const scanSource = (code, file = '') => {
         let has = false;
         path.get('init').traverse({ CallExpression(q) { if (isCallTo(q.node, 'tk')) has = true; } });
         if (!has && path.node.init && path.node.init.type === 'CallExpression' && isCallTo(path.node.init, 'tk')) has = true;
-        if (has && path.node.id.type === 'Identifier') { tkConstants.set(path.node.id.name, path.node.loc.start.line); if (isFlatTable(path.node.init)) flatNames.add(path.node.id.name); }
+        if (has && path.node.id.type === 'Identifier') { tkConstants.set(path.node.id.name, path.node.loc.start.line); tkInits.set(path.node.id.name, path.node.init); if (isFlatTable(path.node.init)) flatNames.add(path.node.id.name); }
       }
     },
   });
@@ -214,12 +215,30 @@ export const scanSource = (code, file = '') => {
   const TEXTY = ['label', 'title', 'text', 'hint', 'description', 'desc', 'short', 'heading', 'caption', 'message', 'equipped', 'name'];
   const ITER = new Set(['map', 'filter', 'forEach', 'find', 'findIndex', 'some', 'every', 'flatMap']);
   const PASS = new Set(['filter', 'slice', 'sort', 'concat', 'reverse', 'flat']);
+  const isEntriesCall = (n) => n && n.type === 'CallExpression' && n.callee.type === 'MemberExpression' && !n.callee.computed
+    && n.callee.object.type === 'Identifier' && n.callee.object.name === 'Object' && ['entries', 'values'].includes(n.callee.property.name);
+  const rootName = (n) => {
+    if (!n) return null;
+    if (n.type === 'Identifier') return n.name;
+    if (n.type === 'CallExpression') return isEntriesCall(n) ? rootName(n.arguments[0]) : (n.callee.type === 'MemberExpression' ? rootName(n.callee.object) : null);
+    if (n.type === 'MemberExpression' || n.type === 'OptionalMemberExpression') return rootName(n.object);
+    return null;
+  };
   const isTkSource = (n) => {
     if (!n) return false;
     if (n.type === 'Identifier') return tkConstants.has(n.name) || importedTk.has(n.name);
+    if (isEntriesCall(n)) return isTkSource(n.arguments[0]);
     if (n.type === 'CallExpression' && n.callee.type === 'MemberExpression' && !n.callee.computed) return PASS.has(n.callee.property.name) && isTkSource(n.callee.object);
     if ((n.type === 'MemberExpression' || n.type === 'OptionalMemberExpression') && !n.computed) return isTkSource(n.object);
     return false;
+  };
+  // Pole dvojic [['all', tk('Vše')], ...]: na kterých místech dvojice je text (tk(...)), tam je při rozbalení [v, l] text
+  const tupleTextPositions = (name) => {
+    const pos = new Set();
+    const init = name ? tkInits.get(name) : null;
+    const rows = init && init.type === 'ArrayExpression' ? init.elements : [];
+    for (const row of rows) if (row && row.type === 'ArrayExpression') row.elements.forEach((el, i) => { if (el && el.type === 'CallExpression' && isCallTo(el, 'tk')) pos.add(i); });
+    return pos;
   };
   const derivedBindings = new Map(); // Binding -> { flat }
   traverse(ast, {
@@ -231,7 +250,16 @@ export const scanSource = (code, file = '') => {
       const param = fn.node.params[0];
       if (!param) return;
       if (param.type === 'Identifier') { const b = fn.scope.getBinding(param.name); if (b) derivedBindings.set(b, { flat: false }); }
-      else if (param.type === 'ObjectPattern') {
+      else if (param.type === 'ArrayPattern') {
+        const fromEntries = isEntriesCall(c.object);
+        param.elements.forEach((el, idx) => {
+          if (!el || el.type !== 'Identifier') return;
+          const b = fn.scope.getBinding(el.name);
+          if (!b) return;
+          if (TEXTY.includes(el.name) || tupleTextPositions(rootName(c.object)).has(idx)) derivedBindings.set(b, { flat: true });
+          else if (fromEntries && idx === 1) derivedBindings.set(b, { flat: flatNames.has(rootName(c.object)) });
+        });
+      } else if (param.type === 'ObjectPattern') {
         for (const pr of param.properties) {
           if (pr.type !== 'ObjectProperty' || pr.computed || pr.value.type !== 'Identifier') continue;
           if (TEXTY.includes(pr.key.name || pr.key.value)) { const b = fn.scope.getBinding(pr.value.name); if (b) derivedBindings.set(b, { flat: true }); }
