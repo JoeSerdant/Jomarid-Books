@@ -118,6 +118,22 @@ cv.addEventListener('pointerdown',e=>{if(st!=='play')return;if(!S.tut){S.tut=1;s
 cv.addEventListener('pointermove',e=>{if(st==='play'&&g.aiming&&e.pointerId===g.pid)g.aimX=pt(e)[0]});
 cv.addEventListener('pointerup',e=>{if(st==='play'&&g.aiming&&e.pointerId===g.pid){g.aimX=pt(e)[0];g.aiming=false;drop()}});
 cv.addEventListener('pointercancel',e=>{if(g.aiming&&e.pointerId===g.pid)g.aiming=false});
+// Klávesnice (počítač): ← → míří, mezerník, Enter nebo ↓ pustí kouli, 1 až 4 jsou vylepšení (Zpět, Zatřást, Rozbít, Zásah) a C je Cash Out.
+// Platí stejné pojistky jako u klepnutí: první stisk jen zavře návod a okno s novou koulí; v textovém poli (tajný kód) klávesy zůstávají jeho.
+const kb={l:0,r:0};
+document.addEventListener('keydown',e=>{
+ if(st!=='play'||e.ctrlKey||e.metaKey||e.altKey||(e.target&&e.target.tagName==='INPUT'))return;
+ const k=e.key,dir=k==='ArrowLeft'?'l':k==='ArrowRight'?'r':'',drp=k===' '||k==='Enter'||k==='ArrowDown',it='1234'.indexOf(k),cash=k==='c'||k==='C';
+ if(!(dir||drp||it>=0||cash))return;
+ e.preventDefault();
+ if(!S.tut){S.tut=1;save();return}
+ if(g.disc){g.disc=null;return}
+ if(dir){kb[dir]=1;return}
+ if(e.repeat)return;
+ if(drp){if(!g.tgt)drop();return}
+ if(it>=0)ability(BTN[it][0]);else cashOut()});
+document.addEventListener('keyup',e=>{if(e.key==='ArrowLeft')kb.l=0;if(e.key==='ArrowRight')kb.r=0});
+addEventListener('blur',()=>{kb.l=kb.r=0});
 // drawing
 const shd=(h,a)=>{const n=parseInt(h.slice(1),16),t=a<0?0:255,k=Math.abs(a),m=v=>Math.round(v+(t-v)*k);return 'rgb('+m(n>>16)+','+m(n>>8&255)+','+m(n&255)+')'};
 function rr(x,y,w,h,r,f){ctx.beginPath();ctx.roundRect(x,y+5,w,h,r);ctx.fillStyle='#111';ctx.fill();   // spodní hrana
@@ -166,11 +182,11 @@ function draw(){
  for(const p of g.pt){ctx.fillStyle=p.c;ctx.globalAlpha=Math.min(1,p.l/18);ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rt||0);const z=p.z||4;
   if(p.k===1)ctx.fillRect(-z,-z/2,z*2,z);else if(p.k===2){ctx.beginPath();for(let k=0;k<8;k++){const q=k%2?z*.4:z*1.3,a=k*.7854;k?ctx.lineTo(Math.cos(a)*q,Math.sin(a)*q):ctx.moveTo(Math.cos(a)*q,Math.sin(a)*q)}ctx.closePath();ctx.fill()}else{ctx.beginPath();ctx.arc(0,0,z,0,7);ctx.fill()}ctx.restore()}ctx.globalAlpha=1;for(const p of g.pp)txt(p.s||'+'+p.v,p.x,p.y,p.s?30:34,'center',p.c);if(g.tgt)txt('Klepni na kouli',W/2,300,32,'center','#ffd92e');if(st==='play'&&!S.tut)tut();if(g.disc){ctx.fillStyle='rgba(0,0,0,.65)';ctx.fillRect(0,0,W,H);{const a0=performance.now()/2500;ctx.fillStyle='rgba(255,217,46,.14)';for(let k=0;k<12;k++){const a=a0+k*.5236;ctx.beginPath();ctx.moveTo(W/2,500);ctx.arc(W/2,500,560,a,a+.2618);ctx.closePath();ctx.fill()}}txt('Nová koule objevena!',W/2,280,44,'center');ball(W/2,500,110,g.disc.t);txt('Klepni pro pokračování',W/2,700,26,'center')}}
 // První hra: krátký návod přes plátno (klepnutím zmizí a už se neukáže)
-function tut(){ctx.fillStyle='rgba(0,0,0,.62)';ctx.fillRect(0,0,W,H);rr(50,230,440,480,26,'#7a2fd0');txt('Jak hrát',W/2,290,50,'center','#ffd92e');
+function tut(){ctx.fillStyle='rgba(0,0,0,.62)';ctx.fillRect(0,0,W,H);const pc=!!(window.matchMedia&&matchMedia('(pointer: fine)').matches);rr(50,230,440,pc?520:480,26,'#7a2fd0');txt('Jak hrát',W/2,290,50,'center','#ffd92e');
  const L=['Táhni prstem doleva a doprava,','pusť a koule spadne.','Dvě stejné koule se spojí','do větší a dají body.','Nenech miskou přetéct:','koule, která vypadne, ukončí hru.'];
- L.forEach((s,i)=>txt(s,W/2,368+i*40+(i>1?16:0)+(i>3?16:0),28,'center','#fff'));txt('Klepni a hraj',W/2,664,36,'center','#5be04a')}
+ L.forEach((s,i)=>txt(s,W/2,368+i*40+(i>1?16:0)+(i>3?16:0),28,'center','#fff'));if(pc)txt('Na počítači: ← → a mezerník',W/2,646,24,'center','#cfe8ff');txt('Klepni a hraj',W/2,pc?704:664,36,'center','#5be04a')}
 function loop(t){requestAnimationFrame(loop);const dt=Math.min(.05,(t-last)/1000||0);last=t;if(st==='menu')return;
- if(st==='play'){acc=S.tut?acc+dt:0;while(acc>=1/60){if(g.disc){g.disc.l--;if(g.disc.l<1)g.disc=null}else step();acc-=1/60;if(st!=='play')break}}draw()}
+ if(st==='play'){if(S.tut&&!g.aiming&&(kb.l||kb.r))g.aimX=clamp(g.aimX+(kb.r-kb.l)*dt*480,AL,AR);acc=S.tut?acc+dt:0;while(acc>=1/60){if(g.disc){g.disc.l--;if(g.disc.l<1)g.disc=null}else step();acc-=1/60;if(st!=='play')break}}draw()}
 // Skryté pole (číslo verze dole v menu) a cheat menu, kód je u všech her 67MILUJU. Cheaty slouží k testování odznaků bez hodin hraní, takže mění skutečný
 // postup: ukládá se a hlásí appce jako jakýkoli jiný výsledek.
 const CHEAT='67MILUJU',vf=$('vf'),chm=$('cheatm'),cmsg=$('cmsg');
