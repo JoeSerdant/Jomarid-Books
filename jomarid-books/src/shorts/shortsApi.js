@@ -2,6 +2,7 @@
 // Čtení nikdy nevyhazuje chybu: dokud SQL v databázi neběží nebo když volání selže, vrací se prázdný výsledek s příznakem unavailable.
 import { cleanGenres } from '../browse/libraryModel.js';
 import { classifyError, FRIENDLY } from '../lib/friendlyError.js';
+import { t } from '../i18n/core.js';
 
 const int = (v, d = 0) => { const n = Math.floor(Number(v)); return Number.isFinite(n) ? n : d; };
 const str = (v) => (typeof v === 'string' ? v : '');
@@ -140,7 +141,7 @@ export const shortErrorMessage = (err) => {
   if (code) return ERROR_TEXT[code];
   if (/function .* does not exist|could not find the function|schema cache/i.test(msg)) return 'ShortB zatím nejsou v databázi nastavené.';
   const kind = classifyError(err);
-  if (FRIENDLY[kind]) return FRIENDLY[kind];
+  if (FRIENDLY[kind]) return t(FRIENDLY[kind]);
   return 'ShortB se nepodařilo uložit. Zkus to znovu.';
 };
 

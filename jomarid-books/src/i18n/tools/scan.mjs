@@ -25,7 +25,7 @@ export const listSourceFiles = (dir = SRC_DIR, base = SRC_DIR) => {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
     if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) out.push(...listSourceFiles(p, base)); }
-    else if (/\.(jsx|js)$/.test(e.name)) out.push(path.relative(base, p).split(path.sep).join('/'));
+    else if (/\.(jsx|js|ts|tsx)$/.test(e.name) && !/\.d\.ts$/.test(e.name)) out.push(path.relative(base, p).split(path.sep).join('/'));
   }
   return out.sort();
 };
@@ -133,15 +133,33 @@ export const scanSource = (code, file = '') => {
       const p = path.parent;
       if (/^(ImportDeclaration|ExportNamedDeclaration|ExportAllDeclaration|JSXAttribute)$/.test(p.type)) return;
       if ((p.type === 'ObjectProperty' || p.type === 'ObjectMethod') && p.key === path.node && !p.computed) return;
-      if (!CZECH_DIACRITIC.test(path.node.value)) return;
+      const v = path.node.value;
       if (wrappedBy(path) || insideConsole(path)) return;
-      raw.push({ kind: 'string', text: path.node.value, line: path.node.loc.start.line });
+      if (CZECH_DIACRITIC.test(v)) { raw.push({ kind: 'string', text: v, line: path.node.loc.start.line }); return; }
+      // Český text bez diakritiky: poznat se dá jen podle místa. Přímo vypsaný text v JSX ({a ? 'Ano' : 'Ne'}), text v atributech jako title nebo aria-label
+      // a hodnoty vlastností label, title, description... v seznamech a katalozích.
+      if (!/\p{L}{2,}/u.test(v) || /^[a-z0-9_.:\/#@-]+$/.test(v) && !/\s/.test(v) && /^[a-z]/.test(v)) return; // identifikátory, cesty, ID: malá písmena bez mezer
+      let top = path;
+      while (top.parentPath && (top.parentPath.isConditionalExpression() || top.parentPath.isLogicalExpression())) top = top.parentPath;
+      const holder = top.parentPath;
+      if (holder && holder.isJSXExpressionContainer()) {
+        const owner = holder.parent;
+        if (owner.type === 'JSXElement' || owner.type === 'JSXFragment') raw.push({ kind: 'string', text: v, line: path.node.loc.start.line });
+        else if (owner.type === 'JSXAttribute' && owner.name.type === 'JSXIdentifier' && TEXT_ATTRS.has(owner.name.name)) raw.push({ kind: 'string', text: v, line: path.node.loc.start.line });
+        return;
+      }
+      if (p.type === 'ObjectProperty' && p.value === path.node && !p.computed && ['label', 'title', 'description', 'hint', 'text', 'message', 'caption', 'placeholder'].includes(p.key.name || p.key.value)) raw.push({ kind: 'string', text: v, line: path.node.loc.start.line });
     },
     TemplateLiteral(path) {
       const text = path.node.quasis.map((q) => q.value.cooked).join('{}');
-      if (!CZECH_DIACRITIC.test(text)) return;
       if (wrappedBy(path) || insideConsole(path)) return;
-      raw.push({ kind: 'template', text, line: path.node.loc.start.line });
+      if (CZECH_DIACRITIC.test(text)) { raw.push({ kind: 'template', text, line: path.node.loc.start.line }); return; }
+      // šablona v atributu s textem (aria-label={`Smazat krok ${i}`}) nebo přímo vypsaná v JSX
+      const holder = path.parentPath;
+      if (holder && holder.isJSXExpressionContainer() && /\p{L}{3,}/u.test(text.replace(/\{\}/g, ' '))) {
+        const owner = holder.parent;
+        if (owner.type === 'JSXElement' || owner.type === 'JSXFragment' || (owner.type === 'JSXAttribute' && owner.name.type === 'JSXIdentifier' && TEXT_ATTRS.has(owner.name.name))) raw.push({ kind: 'template', text, line: path.node.loc.start.line });
+      }
     },
   });
   // Konstanty na úrovni modulu s texty označenými tk(...): každé jejich použití musí jít přes t(...), jinak by zůstaly česky.
@@ -176,8 +194,12 @@ export const scanSource = (code, file = '') => {
       if (!path.getFunctionParent()) return;
       // Vypsání: konstanta (nebo její položka) přímo ve výrazu v JSX, nebo uložená jako text/label/title/message. Odvozené použití
       // (Object.entries(X).map(...), X.filter(...)) tu nejde sledovat, to hlídá zkouška v prohlížeči (viditelný český klíč ve slovníku).
-      let top = path;
-      while (top.parentPath && ((top.parentPath.isMemberExpression() && top.parentPath.node.object === top.node) || top.parentPath.isOptionalMemberExpression() || top.parentPath.isLogicalExpression() || top.parentPath.isConditionalExpression())) top = top.parentPath;
+      let top = path; let lastProp = null;
+      while (top.parentPath && ((top.parentPath.isMemberExpression() && top.parentPath.node.object === top.node) || top.parentPath.isOptionalMemberExpression() || top.parentPath.isLogicalExpression() || top.parentPath.isConditionalExpression())) {
+        top = top.parentPath;
+        if ((top.isMemberExpression() || top.isOptionalMemberExpression()) && !top.node.computed) lastProp = top.node.property.name; else if (top.isMemberExpression()) lastProp = null;
+      }
+      if (lastProp && !['label', 'title', 'text', 'hint', 'description', 'desc', 'short', 'heading', 'caption', 'message', 'equipped', 'name'].includes(lastProp)) return; // položka, která není text (route, key, id...)
       const sinkParent = top.parent;
       const isOptionsAttr = sinkParent.type === 'JSXExpressionContainer' && top.parentPath.parent.type === 'JSXAttribute' && top.parentPath.parent.name.name === 'options'; // texty přeloží přijímající komponenta
       const isSink = !isOptionsAttr && (sinkParent.type === 'JSXExpressionContainer'

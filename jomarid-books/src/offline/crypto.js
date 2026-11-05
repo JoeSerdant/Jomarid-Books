@@ -3,13 +3,14 @@
 // (AAD): záznam přenesený k jinému čtenáři nebo na jinou knihu se nerozšifruje a změněná data prozradí chybu. Rozšifrovat to dokáže jen appka, a to je záměr:
 // není to ochrana před čtenářem, který si text chce přečíst v nástrojích prohlížeče, ale před kopírováním souboru, cizí appkou a omylem.
 import { STORES } from './store.js';
+import { t } from '../i18n/core.js';
 
 const KEY_RECORD = 'deviceKey';
 export class OfflineCryptoError extends Error { constructor(message) { super(message); this.name = 'OfflineCryptoError'; } }
 
 const subtle = () => {
   const s = typeof globalThis !== 'undefined' && globalThis.crypto && globalThis.crypto.subtle;
-  if (!s) throw new OfflineCryptoError('Šifrování není v tomhle prohlížeči dostupné.');
+  if (!s) throw new OfflineCryptoError(t('Šifrování není v tomhle prohlížeči dostupné.'));
   return s;
 };
 const enc = new TextEncoder();
@@ -36,13 +37,13 @@ export async function seal(key, value, aad) {
 }
 
 export async function open(key, sealed, aad) {
-  if (!sealed || sealed.v !== 1 || !sealed.iv || !sealed.data) throw new OfflineCryptoError('Stažená data jsou poškozená.');
+  if (!sealed || sealed.v !== 1 || !sealed.iv || !sealed.data) throw new OfflineCryptoError(t('Stažená data jsou poškozená.'));
   try {
     const plain = await subtle().decrypt({ name: 'AES-GCM', iv: sealed.iv, additionalData: enc.encode(aad) }, key, sealed.data);
     return JSON.parse(dec.decode(plain));
   } catch (e) {
     if (e instanceof OfflineCryptoError) throw e;
-    throw new OfflineCryptoError('Stažená data se nepodařilo otevřít (jiný účet, jiné zařízení, nebo jsou poškozená).');
+    throw new OfflineCryptoError(t('Stažená data se nepodařilo otevřít (jiný účet, jiné zařízení, nebo jsou poškozená).'));
   }
 }
 

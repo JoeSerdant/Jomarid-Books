@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useOnline } from './useOnline';
 import { useOfflineBook } from './useOffline';
 import { daysLeft } from './model';
+import { t } from '../i18n';
 
 // Tlačítko v detailu knihy: stáhnout pro čtení bez internetu (šifrovaně do zařízení), nebo stažené smazat.
 export const OfflineDownloadButton = ({ bookId }) => {
@@ -16,10 +17,10 @@ export const OfflineDownloadButton = ({ bookId }) => {
       {meta ? (
         <div className="flex items-center gap-2">
           <p style={textStyle} className="text-[0.6875rem] font-bold m-0 flex-1" data-testid="offline-status">
-            Staženo pro čtení offline, platí ještě {daysLeft(meta.expiresAt, Date.now())} dní (po připojení se prodlouží).
+            {(() => { const n = daysLeft(meta.expiresAt, Date.now()); return t.p(n, 'Staženo pro čtení offline, platí ještě {n} den (po připojení se prodlouží).', 'Staženo pro čtení offline, platí ještě {n} dny (po připojení se prodlouží).', 'Staženo pro čtení offline, platí ještě {n} dní (po připojení se prodlouží).', { n }); })()}
           </p>
           <button type="button" onClick={remove} disabled={busy} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="px-3 py-2 rounded-lg border-none cursor-pointer text-[0.625rem] font-black uppercase tracking-wider flex items-center gap-1.5 disabled:opacity-50">
-            {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} aria-hidden="true" />} Smazat
+            {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} aria-hidden="true" />} {t('Smazat')}
           </button>
         </div>
       ) : (
@@ -30,7 +31,7 @@ export const OfflineDownloadButton = ({ bookId }) => {
           style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }}
           className="w-full py-2.5 rounded-xl border-none cursor-pointer text-[0.6875rem] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {busy ? <><Loader2 size={13} className="animate-spin" /> Stahuji…</> : !online ? <><WifiOff size={13} aria-hidden="true" /> Stáhnout jde jen online</> : <><Download size={13} aria-hidden="true" /> Stáhnout pro čtení offline</>}
+          {busy ? <><Loader2 size={13} className="animate-spin" /> {t('Stahuji…')}</> : !online ? <><WifiOff size={13} aria-hidden="true" /> {t('Stáhnout jde jen online')}</> : <><Download size={13} aria-hidden="true" /> {t('Stáhnout pro čtení offline')}</>}
         </button>
       )}
       {error && <p role="alert" className="text-red-500 text-[0.6875rem] font-bold m-0">{error}</p>}

@@ -1,14 +1,16 @@
+import { t } from '../i18n/core.js';
+import { tk } from '../i18n/mark.js';
 // Přátelské hlášky o chybách: místo "503" nebo "Failed to fetch" uživatel dostane lidskou větu a ví, co dělat.
 // Technický text se do appky nevypisuje (je jen v konzoli, kam ho appka zapisuje sama). Čistá logika bez Reactu, zkouší se v Node (src/tests/friendlyError.test.mjs).
 
 export const FRIENDLY = Object.freeze({
-  network: 'Nemůžu se spojit s internetem. Zkontroluj připojení a zkus to znovu.',
-  server: 'Promiň! Appka teď zažívá závratě. Počkej chvilku a zkus to znovu.',
-  timeout: 'Tohle trvá nějak dlouho. Zkus to za chvilku znovu.',
-  rate: 'Pomalu, pomalu! Teď je toho na server moc. Zkus to za minutku.',
-  auth: 'Vypršelo ti přihlášení. Přihlas se prosím znovu.',
-  forbidden: 'K tomuhle teď nemáš oprávnění.',
-  missing: 'Tohle teď není dostupné. Zkus to později.',
+  network: tk('Nemůžu se spojit s internetem. Zkontroluj připojení a zkus to znovu.'),
+  server: tk('Promiň! Appka teď zažívá závratě. Počkej chvilku a zkus to znovu.'),
+  timeout: tk('Tohle trvá nějak dlouho. Zkus to za chvilku znovu.'),
+  rate: tk('Pomalu, pomalu! Teď je toho na server moc. Zkus to za minutku.'),
+  auth: tk('Vypršelo ti přihlášení. Přihlas se prosím znovu.'),
+  forbidden: tk('K tomuhle teď nemáš oprávnění.'),
+  missing: tk('Tohle teď není dostupné. Zkus to později.'),
 });
 
 const statusOf = (err) => {
@@ -38,15 +40,15 @@ export function classifyError(err) {
 }
 
 /** Přátelská věta k chybě. U druhů, kterým uživatel rozumí a může je řešit (síť, přetížení, přihlášení...) vrací jejich větu, jinak fallback. */
-export function friendlyError(err, fallback = 'Něco se nepovedlo. Zkus to prosím znovu.') {
+export function friendlyError(err, fallback = t('Něco se nepovedlo. Zkus to prosím znovu.')) {
   const kind = classifyError(err);
-  return FRIENDLY[kind] || fallback;
+  return FRIENDLY[kind] ? t(FRIENDLY[kind]) : fallback;
 }
 
 /** Stejné, ale k větě se u neznámé chyby přidá stručný technický text (pro správce, který chybu potřebuje poslat dál). */
-export function friendlyErrorWithDetail(err, fallback = 'Něco se nepovedlo. Zkus to prosím znovu.') {
+export function friendlyErrorWithDetail(err, fallback = t('Něco se nepovedlo. Zkus to prosím znovu.')) {
   const kind = classifyError(err);
-  if (FRIENDLY[kind]) return FRIENDLY[kind];
+  if (FRIENDLY[kind]) return t(FRIENDLY[kind]);
   const raw = String(typeof err === 'string' ? err : err?.message ?? '').replace(/\s+/g, ' ').trim().slice(0, 160);
-  return raw ? `${fallback} (technicky: ${raw})` : fallback;
+  return raw ? t('{fallback} (technicky: {raw})', { fallback, raw }) : fallback;
 }

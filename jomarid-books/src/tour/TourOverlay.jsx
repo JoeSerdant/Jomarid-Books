@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { computeCardPosition, computeSpotlight } from './tourLayout';
+import { t } from '../i18n';
 
 // Prohlídka: ztmavená plocha se zvýrazněným prvkem a karta s popisem kroku.
 // Ovládání: tlačítka, šipky vlevo/vpravo, Esc = přeskočit. Na telefonu je karta přilepená k dolnímu okraji;
@@ -210,7 +211,7 @@ export const TourOverlay = ({ steps, index, onIndex, onClose }) => {
         ref={cardRef}
         role="dialog"
         aria-modal="true"
-        aria-label={step.title ? undefined : 'Prohlídka appky'}
+        aria-label={step.title ? undefined : t('Prohlídka appky')}
         aria-labelledby={step.title ? titleId : undefined}
         aria-describedby={step.text ? `${counterId} ${textId}` : counterId}
         data-testid="tour-card"
@@ -224,9 +225,9 @@ export const TourOverlay = ({ steps, index, onIndex, onClose }) => {
       >
         {/* Text se v případě potřeby posouvá, tlačítka pod ním zůstávají vidět. */}
         <div ref={bodyRef} tabIndex={-1} data-testid="tour-body" style={{ overscrollBehavior: 'contain' }} className="min-h-0 overflow-y-auto p-4 sm:p-5 pb-2 sm:pb-2 outline-none">
-          <p id={counterId} style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider m-0">Krok {index + 1} z {steps.length}</p>
-          {step.title && <h2 id={titleId} className="text-base font-black m-0 mt-1 leading-snug break-words">{step.title}</h2>}
-          {step.text && <p id={textId} className="text-sm m-0 mt-2 leading-relaxed whitespace-pre-line break-words">{step.text}</p>}
+          <p id={counterId} style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider m-0">{t('Krok {n} z {total}', { n: index + 1, total: steps.length })}</p>
+          {step.title && <h2 id={titleId} className="text-base font-black m-0 mt-1 leading-snug break-words">{t(step.title)}</h2>}
+          {step.text && <p id={textId} className="text-sm m-0 mt-2 leading-relaxed whitespace-pre-line break-words">{t(step.text)}</p>}
         </div>
 
         <div className="shrink-0 px-4 sm:px-5 pb-4 sm:pb-5 pt-2">
@@ -238,16 +239,16 @@ export const TourOverlay = ({ steps, index, onIndex, onClose }) => {
           {/* V pořadí pro Tab je první Další, pak Zpět a až nakonec Přeskočit; vizuálně je Přeskočit vlevo. */}
           <div className="flex flex-row-reverse items-center justify-between gap-3 mt-3">
             <div className="flex flex-row-reverse items-center gap-3">
-              <button type="button" data-testid="tour-next" onClick={() => api.current.next()} style={primary} className={btn}>{isLast ? 'Hotovo' : 'Další'}</button>
-              {!isFirst && <button type="button" data-testid="tour-prev" onClick={() => api.current.prev()} style={ghost} className={btn}>Zpět</button>}
+              <button type="button" data-testid="tour-next" onClick={() => api.current.next()} style={primary} className={btn}>{isLast ? t('Hotovo') : t('Další')}</button>
+              {!isFirst && <button type="button" data-testid="tour-prev" onClick={() => api.current.prev()} style={ghost} className={btn}>{t('Zpět')}</button>}
             </div>
             {isLast
               ? <span />
-              : <button type="button" data-testid="tour-skip" onClick={() => api.current.close()} style={{ color: 'var(--text-muted)' }} className="min-h-[44px] px-2 bg-transparent border-none font-black uppercase text-[0.6875rem] tracking-wider cursor-pointer">Přeskočit</button>}
+              : <button type="button" data-testid="tour-skip" onClick={() => api.current.close()} style={{ color: 'var(--text-muted)' }} className="min-h-[44px] px-2 bg-transparent border-none font-black uppercase text-[0.6875rem] tracking-wider cursor-pointer">{t('Přeskočit')}</button>}
           </div>
         </div>
         {/* Čtečky obrazovky tak ohlásí změnu kroku i při listování šipkami, kdy se zaměření nemění. */}
-        <p role="status" aria-live="polite" className="sr-only">Krok {index + 1} z {steps.length}{step.title ? `: ${step.title}` : ''}</p>
+        <p role="status" aria-live="polite" className="sr-only">{t('Krok {n} z {total}', { n: index + 1, total: steps.length })}{step.title ? `: ${t(step.title)}` : ''}</p>
       </div>
     </div>,
     document.body,

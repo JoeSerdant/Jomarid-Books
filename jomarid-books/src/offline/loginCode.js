@@ -1,3 +1,5 @@
+import { tk } from '../i18n/mark.js';
+import { t } from '../i18n/core.js';
 // Přihlašovací kód: tvar, opis a volání serveru (db/login-code.sql, Edge Function db/auth/code-login.ts).
 // Kód je 32 znaků 0-9 A-F, v zobrazení po čtyřech s pomlčkami. Klient ho posílá funkci code-login, ta vrátí jednorázový token a appka jím dokončí přihlášení.
 
@@ -14,16 +16,16 @@ export function normalizeCode(raw) {
 export const formatCode = (raw) => (normalizeCode(raw) || '').replace(/(.{4})(?=.)/g, '$1-');
 
 export const CODE_ERRORS = {
-  invalid_input: 'Kód má 32 znaků (číslice a písmena A-F). Zkontroluj, jestli je celý.',
-  invalid: 'Kód nesedí. Zkontroluj ho, nebo se přihlas heslem a v Nastavení si vygeneruj nový.',
-  throttled: 'Moc pokusů. Zkus to za deset minut, nebo se přihlas heslem.',
-  unavailable: 'Přihlášení kódem teď není dostupné. Přihlas se heslem.',
-  offline: 'Bez internetu se kódem poprvé přihlásit nejde. Až budeš online, přihlásíš se a na tomto zařízení pak zůstaneš přihlášený i offline.',
-  upstream: 'Přihlášení kódem se teď nepovedlo. Zkus to za chvíli, nebo se přihlas heslem.',
+  invalid_input: tk('Kód má 32 znaků (číslice a písmena A-F). Zkontroluj, jestli je celý.'),
+  invalid: tk('Kód nesedí. Zkontroluj ho, nebo se přihlas heslem a v Nastavení si vygeneruj nový.'),
+  throttled: tk('Moc pokusů. Zkus to za deset minut, nebo se přihlas heslem.'),
+  unavailable: tk('Přihlášení kódem teď není dostupné. Přihlas se heslem.'),
+  offline: tk('Bez internetu se kódem poprvé přihlásit nejde. Až budeš online, přihlásíš se a na tomto zařízení pak zůstaneš přihlášený i offline.'),
+  upstream: tk('Přihlášení kódem se teď nepovedlo. Zkus to za chvíli, nebo se přihlas heslem.'),
 };
 
 export class CodeLoginError extends Error {
-  constructor(code, message) { super(message || CODE_ERRORS[code] || CODE_ERRORS.upstream); this.name = 'CodeLoginError'; this.code = code; }
+  constructor(code, message) { super(t(message || CODE_ERRORS[code] || CODE_ERRORS.upstream)); this.name = 'CodeLoginError'; this.code = code; }
 }
 
 // Přihlásí kódem: kód pošle funkci code-login, z odpovědi (token_hash) dokončí přihlášení v Supabase. Vrací data z verifyOtp (session, user).

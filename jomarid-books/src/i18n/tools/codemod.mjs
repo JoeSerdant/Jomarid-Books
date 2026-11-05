@@ -18,7 +18,8 @@ const DATA_PROPS = new Set(['title', 'label', 'description', 'desc', 'name', 'hi
 const quote = (s) => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n')}'`;
 
 export const transform = (code, rel, { strings = false, data = false } = {}) => {
-  const ast = parse(code, { sourceType: 'module', plugins: ['jsx'] });
+  const plugins = /\.tsx?$/.test(rel) ? ['jsx', 'typescript'] : ['jsx'];
+  const ast = parse(code, { sourceType: 'module', plugins });
   const edits = []; const report = []; let usesT = false; let usesTk = false;
   const hasImport = (name) => ast.program.body.some((n) => n.type === 'ImportDeclaration' && /i18n(\/(index|core|mark)\.js)?$/.test(n.source.value) && n.specifiers.some((s) => s.local.name === name));
   const shadow = []; const handled = new Set(); const replacedCallees = new Set();
@@ -102,7 +103,7 @@ export const transform = (code, rel, { strings = false, data = false } = {}) => 
 
   // Importy se řeší až nad hotovým textem (druhý průchod): odebere se nepoužitý import { plural } a přidá se import překladů.
   const nl = code.includes('\r\n') ? '\r\n' : '\n';
-  const ast2 = parse(out, { sourceType: 'module', plugins: ['jsx'] });
+  const ast2 = parse(out, { sourceType: 'module', plugins });
   const spec = (() => {
     const rel2 = path.relative(path.dirname(path.join(SRC_DIR, rel)), path.join(SRC_DIR, 'i18n')).split(path.sep).join('/');
     return rel2.startsWith('.') ? rel2 : `./${rel2}`;
@@ -123,7 +124,7 @@ export const transform = (code, rel, { strings = false, data = false } = {}) => 
     });
   }
   const newImports = [];
-  if (usesT && !has('t')) newImports.push(`import { t } from '${spec}';`);
+  if (usesT && !has('t')) newImports.push(`import { t } from '${rel.endsWith('.jsx') ? spec : `${spec}/core.js`}';`); // moduly bez Reactu berou t přímo z jádra
   if (usesTk && !has('tk')) newImports.push(`import { tk } from '${spec}/mark.js';`);
   if (newImports.length) {
     const imps = ast2.program.body.filter((n) => n.type === 'ImportDeclaration');

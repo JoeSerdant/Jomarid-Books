@@ -4,8 +4,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { offlineBooks, offlineSupported, pendingChanges, syncNow } from './index.js';
 import { daysLeft } from './model';
 import { useOnline } from './useOnline';
+import { t, formatNumber } from '../i18n';
 
-const mb = (bytes) => `${Math.max(0.1, bytes / 1048576).toFixed(1).replace('.', ',')} MB`;
+const mb = (bytes) => `${formatNumber(Math.max(0.1, bytes / 1048576), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} MB`;
 
 // Nastavení → Aplikace → Offline knihy: co je v zařízení stažené, kolik to zabírá, kolik změn čeká na odeslání, a smazání.
 export const OfflineBooksSection = ({ Section, Notice, ActionButton }) => {
@@ -29,22 +30,22 @@ export const OfflineBooksSection = ({ Section, Notice, ActionButton }) => {
   if (!user) return null;
   const supported = offlineSupported();
 
-  const removeOne = async (id) => { setBusy(id); setMsg(null); try { await offlineBooks.remove(user.id, id); await load(); } catch { setMsg({ type: 'error', text: 'Smazání se nepovedlo.' }); } finally { setBusy(''); } };
+  const removeOne = async (id) => { setBusy(id); setMsg(null); try { await offlineBooks.remove(user.id, id); await load(); } catch { setMsg({ type: 'error', text: t('Smazání se nepovedlo.') }); } finally { setBusy(''); } };
   const sendNow = async () => {
     setBusy('sync'); setMsg(null);
     try {
       const res = await syncNow(user, { force: true });
       await load();
-      setMsg(res?.flushed && !res.flushed.stopped ? { type: 'success', text: 'Změny jsou odeslané.' } : { type: 'error', text: 'Odeslání se nepovedlo, zkusí se to znovu samo.' });
-    } catch { setMsg({ type: 'error', text: 'Odeslání se nepovedlo, zkusí se to znovu samo.' }); } finally { setBusy(''); }
+      setMsg(res?.flushed && !res.flushed.stopped ? { type: 'success', text: t('Změny jsou odeslané.') } : { type: 'error', text: t('Odeslání se nepovedlo, zkusí se to znovu samo.') });
+    } catch { setMsg({ type: 'error', text: t('Odeslání se nepovedlo, zkusí se to znovu samo.') }); } finally { setBusy(''); }
   };
 
   return (
-    <Section title="Offline knihy" description="Knihy, které sis stáhl pro čtení bez internetu. Jsou v zařízení zašifrované a otevřou se jen v téhle appce a jen tomuhle účtu. Po odhlášení se z zařízení smažou. Licence se po připojení vždy znovu ověří; bez připojení kniha platí 30 dní.">
+    <Section title={t('Offline knihy')} description={t('Knihy, které sis stáhl pro čtení bez internetu. Jsou v zařízení zašifrované a otevřou se jen v téhle appce a jen tomuhle účtu. Po odhlášení se z zařízení smažou. Licence se po připojení vždy znovu ověří; bez připojení kniha platí 30 dní.')}>
       <div data-testid="offline-books-section" className="space-y-3">
-        {!supported && <Notice type="info">Tenhle prohlížeč nebo režim (třeba soukromé okno) ukládání knih do zařízení nepodporuje.</Notice>}
-        {supported && books === null && <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0">Načítám…</p>}
-        {supported && books && books.length === 0 && <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0" data-testid="offline-books-empty">Zatím nemáš stažené žádné knihy. Stáhneš je v detailu knihy v knihovně.</p>}
+        {!supported && <Notice type="info">{t('Tenhle prohlížeč nebo režim (třeba soukromé okno) ukládání knih do zařízení nepodporuje.')}</Notice>}
+        {supported && books === null && <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0">{t('Načítám…')}</p>}
+        {supported && books && books.length === 0 && <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0" data-testid="offline-books-empty">{t('Zatím nemáš stažené žádné knihy. Stáhneš je v detailu knihy v knihovně.')}</p>}
         {supported && books && books.length > 0 && (
           <>
             <ul className="list-none p-0 m-0 space-y-2">
@@ -52,21 +53,21 @@ export const OfflineBooksSection = ({ Section, Notice, ActionButton }) => {
                 <li key={b.id} data-testid={`offline-row-${b.id}`} style={{ borderColor: 'var(--border-color)' }} className="border rounded-lg px-3 py-2 flex items-center gap-3">
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs font-black truncate">{b.title}</span>
-                    <span style={{ color: 'var(--text-muted)' }} className="block text-[0.6875rem] font-bold">{mb(b.chars * 2)} · platí ještě {daysLeft(b.expiresAt, Date.now())} dní</span>
+                    <span style={{ color: 'var(--text-muted)' }} className="block text-[0.6875rem] font-bold">{(() => { const n = daysLeft(b.expiresAt, Date.now()); return t.p(n, '{size} · platí ještě {n} den', '{size} · platí ještě {n} dny', '{size} · platí ještě {n} dní', { size: mb(b.chars * 2), n }); })()}</span>
                   </span>
-                  <ActionButton variant="ghost" busy={busy === b.id} onClick={() => removeOne(b.id)} aria-label={`Smazat stažené: ${b.title}`}>
-                    <Trash2 size={13} aria-hidden="true" /> Smazat
+                  <ActionButton variant="ghost" busy={busy === b.id} onClick={() => removeOne(b.id)} aria-label={t('Smazat stažené: {title}', { title: b.title })}>
+                    <Trash2 size={13} aria-hidden="true" /> {t('Smazat')}
                   </ActionButton>
                 </li>
               ))}
             </ul>
-            <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0">Dohromady asi {mb(bytes)}.</p>
+            <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0">{t('Dohromady asi {size}.', { size: mb(bytes) })}</p>
           </>
         )}
         {supported && pending > 0 && (
           <div className="space-y-2" data-testid="offline-pending">
-            <Notice>Čeká na odeslání: {pending} {pending === 1 ? 'změna' : pending < 5 ? 'změny' : 'změn'} z offline režimu (čtení a hry).</Notice>
-            <ActionButton busy={busy === 'sync'} disabled={!online} onClick={sendNow}>{busy === 'sync' && <Loader2 size={13} className="animate-spin" />} Odeslat teď</ActionButton>
+            <Notice>{t.p(pending, 'Čeká na odeslání: {n} změna z offline režimu (čtení a hry).', 'Čeká na odeslání: {n} změny z offline režimu (čtení a hry).', 'Čeká na odeslání: {n} změn z offline režimu (čtení a hry).', { n: pending })}</Notice>
+            <ActionButton busy={busy === 'sync'} disabled={!online} onClick={sendNow}>{busy === 'sync' && <Loader2 size={13} className="animate-spin" />} {t('Odeslat teď')}</ActionButton>
           </div>
         )}
         {msg && <Notice type={msg.type}>{msg.text}</Notice>}

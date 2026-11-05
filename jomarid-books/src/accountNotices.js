@@ -12,8 +12,8 @@
 // kontrola se jen označí jako neúplná.
 
 import { findBookTexts } from './bookText/bookText.js';
-import { plural } from './lib/plural.js';
 import { ROLE_PUBLISHER, ROLE_ADMIN } from './constants/roles.js';
+import { t } from './i18n/core.js';
 
 export const LEVEL_WARN = 'warn';  // je potřeba opravit
 export const LEVEL_INFO = 'info';  // tip nebo připomenutí
@@ -25,7 +25,7 @@ export const MAX_ITEMS = 5; // kolik názvů knih se ukáže v jednom upozorněn
 const CONTENT_CHUNK = 40;   // kolik knih se ptáme na text najednou (limit délky adresy dotazu)
 
 const isBlank = (v) => typeof v !== 'string' || v.trim() === '';
-const titleOf = (b) => (typeof b?.title === 'string' && b.title.trim() ? b.title.trim() : 'Bez názvu');
+const titleOf = (b) => (typeof b?.title === 'string' && b.title.trim() ? b.title.trim() : t('Bez názvu'));
 const sortedTitles = (books) => books.map(titleOf).sort((a, b) => a.localeCompare(b, 'cs'));
 
 // Seznam knih do upozornění: prvních MAX_ITEMS názvů + počet zbylých.
@@ -48,24 +48,24 @@ export const buildAccountNotices = ({ role, profile, books, bookIdsWithContent }
   if (profile === null) {
     out.push({
       id: 'profile-missing', level: LEVEL_WARN,
-      title: 'Profil ještě není založený',
-      detail: 'Dokud se nezaloží (stane se při příštím přihlášení), nejdou nastavit jméno ani veřejné údaje. Zkus se odhlásit a přihlásit znovu.',
+      title: t('Profil ještě není založený'),
+      detail: t('Dokud se nezaloží (stane se při příštím přihlášení), nejdou nastavit jméno ani veřejné údaje. Zkus se odhlásit a přihlásit znovu.'),
     });
   } else if (profile) {
     if (isBlank(profile.username)) {
       out.push({
         id: 'username-missing', level: LEVEL_WARN,
-        title: 'Chybí uživatelské jméno',
-        detail: 'Bez něj se v žebříčku ukážeš jako Anonym a na dalších místech (třeba v nabídce nebo na úvodní stránce) se použije začátek tvého e-mailu před zavináčem.',
-        to: '/settings/profile', linkLabel: 'Nastavit jméno',
+        title: t('Chybí uživatelské jméno'),
+        detail: t('Bez něj se v žebříčku ukážeš jako Anonym a na dalších místech (třeba v nabídce nebo na úvodní stránce) se použije začátek tvého e-mailu před zavináčem.'),
+        to: '/settings/profile', linkLabel: t('Nastavit jméno'),
       });
     }
     if (ROLES_WITH_BOOKS.includes(role) && isBlank(profile.pen_name)) {
       out.push({
         id: 'pen-name-missing', level: LEVEL_INFO,
-        title: 'Nemáš nastavené krycí jméno',
-        detail: 'Krycí jméno se ukazuje u tvých knih místo uživatelského jména. Nastav si ho, ať čtenáři vidí, kdo knihy napsal.',
-        to: '/settings/profile', linkLabel: 'Nastavit krycí jméno',
+        title: t('Nemáš nastavené krycí jméno'),
+        detail: t('Krycí jméno se ukazuje u tvých knih místo uživatelského jména. Nastav si ho, ať čtenáři vidí, kdo knihy napsal.'),
+        to: '/settings/profile', linkLabel: t('Nastavit krycí jméno'),
       });
     }
   }
@@ -74,7 +74,7 @@ export const buildAccountNotices = ({ role, profile, books, bookIdsWithContent }
     const hidden = books.filter((b) => b?.is_hidden === true);
     // Rozepsané (skryté) knihy ještě nemusí být hotové, proto se na chybějící údaje kontrolují jen zveřejněné.
     const published = books.filter((b) => b && b.is_hidden !== true);
-    const link = { to: '/publisher', linkLabel: 'Otevřít panel nakladatele' };
+    const link = { to: '/publisher', linkLabel: t('Otevřít panel nakladatele') };
 
     if (bookIdsWithContent != null) {
       const withContent = new Set(bookIdsWithContent);
@@ -82,8 +82,8 @@ export const buildAccountNotices = ({ role, profile, books, bookIdsWithContent }
       if (noText.length) {
         out.push({
           id: 'books-no-content', level: LEVEL_WARN,
-          title: `${noText.length} ${plural(noText.length, 'zveřejněná kniha nemá text', 'zveřejněné knihy nemají text', 'zveřejněných knih nemá text')}`,
-          detail: 'Čtenář by po koupi otevřel prázdnou knihu. Doplň text, nebo knihu stáhni z prodeje.',
+          title: `${noText.length} ${t.p(noText.length, 'zveřejněná kniha nemá text', 'zveřejněné knihy nemají text', 'zveřejněných knih nemá text')}`,
+          detail: t('Čtenář by po koupi otevřel prázdnou knihu. Doplň text, nebo knihu stáhni z prodeje.'),
           ...link, ...listBooks(noText),
         });
       }
@@ -93,8 +93,8 @@ export const buildAccountNotices = ({ role, profile, books, bookIdsWithContent }
     if (noDescription.length) {
       out.push({
         id: 'books-no-description', level: LEVEL_WARN,
-        title: `${noDescription.length} ${plural(noDescription.length, 'zveřejněná kniha nemá popis', 'zveřejněné knihy nemají popis', 'zveřejněných knih nemá popis')}`,
-        detail: 'Popis se ukazuje v katalogu a pomáhá čtenářům vybrat.',
+        title: `${noDescription.length} ${t.p(noDescription.length, 'zveřejněná kniha nemá popis', 'zveřejněné knihy nemají popis', 'zveřejněných knih nemá popis')}`,
+        detail: t('Popis se ukazuje v katalogu a pomáhá čtenářům vybrat.'),
         ...link, ...listBooks(noDescription),
       });
     }
@@ -103,8 +103,8 @@ export const buildAccountNotices = ({ role, profile, books, bookIdsWithContent }
     if (noGenres.length) {
       out.push({
         id: 'books-no-genres', level: LEVEL_INFO,
-        title: `${noGenres.length} ${plural(noGenres.length, 'zveřejněná kniha nemá žánr', 'zveřejněné knihy nemají žánr', 'zveřejněných knih nemá žánr')}`,
-        detail: 'Podle žánrů čtenáři knihy filtrují, bez žánru se hůř hledá.',
+        title: `${noGenres.length} ${t.p(noGenres.length, 'zveřejněná kniha nemá žánr', 'zveřejněné knihy nemají žánr', 'zveřejněných knih nemá žánr')}`,
+        detail: t('Podle žánrů čtenáři knihy filtrují, bez žánru se hůř hledá.'),
         ...link, ...listBooks(noGenres),
       });
     }
@@ -112,8 +112,8 @@ export const buildAccountNotices = ({ role, profile, books, bookIdsWithContent }
     if (hidden.length) {
       out.push({
         id: 'books-hidden', level: LEVEL_INFO,
-        title: `${hidden.length} ${plural(hidden.length, 'kniha je skrytá', 'knihy jsou skryté', 'knih je skrytých')}`,
-        detail: 'Skryté knihy čtenáři v katalogu nevidí a nejdou koupit. Až budou hotové, zveřejníš je v panelu nakladatele.',
+        title: `${hidden.length} ${t.p(hidden.length, 'kniha je skrytá', 'knihy jsou skryté', 'knih je skrytých')}`,
+        detail: t('Skryté knihy čtenáři v katalogu nevidí a nejdou koupit. Až budou hotové, zveřejníš je v panelu nakladatele.'),
         ...link, ...listBooks(hidden),
       });
     }

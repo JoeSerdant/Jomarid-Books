@@ -648,7 +648,7 @@ export const ChangeEmailDialog = ({ target, onClose, onDone }) => {
   const newEmail = normalizeEmail(fixedNew ? target.newEmail : draft);
   const isSame = sameEmail(newEmail, target.currentEmail);
   const canSubmit = isValidEmail(newEmail) && !isSame;
-  const draftHint = !fixedNew && draft.trim() !== '' ? (!isValidEmail(newEmail) ? ADMIN_EMAIL_ERRORS.invalid_email : isSame ? ADMIN_EMAIL_ERRORS.same_email : '') : '';
+  const draftHint = !fixedNew && draft.trim() !== '' ? (!isValidEmail(newEmail) ? t(ADMIN_EMAIL_ERRORS.invalid_email) : isSame ? t(ADMIN_EMAIL_ERRORS.same_email) : '') : '';
 
   const change = async () => {
     if (!canSubmit || busy) return;
@@ -701,7 +701,7 @@ export const ChangeEmailDialog = ({ target, onClose, onDone }) => {
                 {draftHint && <span style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] block mt-1">{draftHint}</span>}
               </label>
             )}
-            {fixedNew && isSame && <InlineMessage>{ADMIN_EMAIL_ERRORS.same_email}</InlineMessage>}
+            {fixedNew && isSame && <InlineMessage>{t(ADMIN_EMAIL_ERRORS.same_email)}</InlineMessage>}
             <ul style={{ color: 'var(--text-muted)' }} className="text-xs m-0 pl-4 space-y-1.5 leading-relaxed">
               <li>Potvrzovací e-mail se neposílá, nový e-mail se rovnou bere jako potvrzený.</li>
               <li>Uživatel zůstane přihlášený a heslo se nemění; přihlašovat se bude novým e-mailem.</li>

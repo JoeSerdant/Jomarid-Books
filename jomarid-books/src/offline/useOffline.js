@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { OFFLINE_ERRORS, OfflineBookError } from './books.js';
 import { offlineBooks, offlineSupported } from './index.js';
+import { t } from '../i18n/core.js';
 
 // Stav stažení jedné knihy pro tlačítko: { supported, meta, busy, error, download, remove }.
 export function useOfflineBook(user, bookId) {
@@ -29,7 +30,7 @@ export function useOfflineBook(user, bookId) {
     if (!uid || busy) return;
     setBusy(true); setError('');
     try { await offlineBooks.remove(uid, bookId); if (alive.current) setMeta(null); }
-    catch { if (alive.current) setError('Smazání se nepovedlo. Zkus to znovu.'); }
+    catch { if (alive.current) setError(t('Smazání se nepovedlo. Zkus to znovu.')); }
     finally { if (alive.current) setBusy(false); }
   }, [uid, bookId, busy]);
 

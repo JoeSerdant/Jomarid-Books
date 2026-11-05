@@ -8,18 +8,20 @@ import { STORES } from './store.js';
 import { aadFor, getDeviceKey, open as openSealed, resetClock, seal, trustedNow } from './crypto.js';
 import { LICENSE_MS, MAX_BOOKS, MAX_TEXT_CHARS, bookKey, canReadBook, emptyNotes, isLocalId, sortHighlights } from './model.js';
 import { fetchBookText } from '../bookText/bookText.js';
+import { t } from '../i18n/core.js';
+import { tk } from '../i18n/mark.js';
 
 export class OfflineBookError extends Error {
   constructor(code, message) { super(message); this.name = 'OfflineBookError'; this.code = code; }
 }
 export const OFFLINE_ERRORS = {
-  no_access: 'K téhle knize nemáš aktivní licenci, stáhnout ji nejde.',
-  no_text: 'Text knihy se nepodařilo načíst. Zkus to znovu.',
-  too_big: 'Kniha je na stažení moc velká.',
-  too_many: 'Na zařízení máš stažený maximální počet knih. Nějakou smaž a zkus to znovu.',
-  network: 'Stažení se nepovedlo, zkontroluj připojení a zkus to znovu.',
-  not_found: 'Knihu se nepodařilo najít.',
-  storage: 'Na zařízení není místo, nebo je ukládání zakázané. Smaž něco a zkus to znovu.',
+  no_access: tk('K téhle knize nemáš aktivní licenci, stáhnout ji nejde.'),
+  no_text: tk('Text knihy se nepodařilo načíst. Zkus to znovu.'),
+  too_big: tk('Kniha je na stažení moc velká.'),
+  too_many: tk('Na zařízení máš stažený maximální počet knih. Nějakou smaž a zkus to znovu.'),
+  network: tk('Stažení se nepovedlo, zkontroluj připojení a zkus to znovu.'),
+  not_found: tk('Knihu se nepodařilo najít.'),
+  storage: tk('Na zařízení není místo, nebo je ukládání zakázané. Smaž něco a zkus to znovu.'),
 };
 const fail = (code) => new OfflineBookError(code, OFFLINE_ERRORS[code]);
 
@@ -39,13 +41,13 @@ export function createOfflineBooks({ store, client, now = Date.now }) {
     license: expiresAt ? await seal(key, { expiresAt }, aadFor(userId, bookId, 'license')) : undefined,
   });
 
-  const metaOf = (book, content, userBook, expiresAt, t, oldMeta) => ({
+  const metaOf = (book, content, userBook, expiresAt, stamp, oldMeta) => ({
     id: book.id,
-    title: book.title || 'Bez názvu',
+    title: book.title || t('Bez názvu'),
     author: book.author_display || book.author || book.pen_name || '',
     chars: content.length,
-    downloadedAt: oldMeta?.downloadedAt ?? t,
-    refreshedAt: t,
+    downloadedAt: oldMeta?.downloadedAt ?? stamp,
+    refreshedAt: stamp,
     expiresAt,
     bookUpdatedAt: book.updated_at || null,
     hadRow: !!userBook,

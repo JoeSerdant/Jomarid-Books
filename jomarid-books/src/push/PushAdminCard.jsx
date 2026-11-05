@@ -2,23 +2,23 @@ import { useEffect, useState } from 'react';
 import { friendlyErrorWithDetail } from '../lib/friendlyError';
 import { Copy, KeyRound, Loader2, Send } from 'lucide-react';
 import { Card } from '../components/ui';
-import { plural } from '../lib/plural';
 import { PUSH_KINDS, TEST_PUSH_DELAY_SECONDS, VAPID_SETTINGS_KEY } from './pushModel.js';
 import { fetchVapidKey, sendTestPush } from './pushClient.js';
 import { generateVapidKeys } from './vapid.js';
+import { t, tx } from '../i18n';
 
 const btn = 'px-3 py-2 rounded-lg border-none cursor-pointer text-[0.6875rem] font-black uppercase tracking-wider inline-flex items-center gap-1.5 disabled:opacity-50';
 const mono = { backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' };
 
-const KeyBox = ({ label, value }) => {
+const KeyBox = ({ label, value, kind }) => {
   const [copied, setCopied] = useState(false);
   const copy = async () => { try { await navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ručně označit */ } };
   return (
     <div className="space-y-1">
       <p style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider m-0">{label}</p>
       <div className="flex items-stretch gap-2">
-        <code data-testid={`vapid-${label.includes('Soukromý') ? 'private' : 'public'}`} style={mono} className="flex-1 min-w-0 border rounded-lg px-2.5 py-2 text-xs break-all select-all">{value}</code>
-        <button type="button" onClick={copy} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className={btn}><Copy size={12} /> {copied ? 'Zkopírováno' : 'Kopírovat'}</button>
+        <code data-testid={`vapid-${kind}`} style={mono} className="flex-1 min-w-0 border rounded-lg px-2.5 py-2 text-xs break-all select-all">{value}</code>
+        <button type="button" onClick={copy} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className={btn}><Copy size={12} /> {copied ? t('Zkopírováno') : t('Kopírovat')}</button>
       </div>
     </div>
   );
@@ -39,17 +39,17 @@ export default function PushAdminCard({ client }) {
     setPreview({
       busy: '',
       tone: res.ok ? 'ok' : res.reason === 'too-many' ? 'info' : 'error',
-      text: res.ok ? `Ukázka „${label}“ přijde za ${TEST_PUSH_DELAY_SECONDS} ${plural(TEST_PUSH_DELAY_SECONDS, 'sekundu', 'sekundy', 'sekund')} na tvoje zařízení s povolenými oznámeními. Teď appku zavři nebo se přepni jinam, ať ji uvidíš.`
-        : res.reason === 'too-many' ? 'Počkej pár vteřin před další ukázkou.'
-        : res.reason === 'not-configured' ? 'Odesílání oznámení ještě není nastavené (viz jomarid-books/db/push/README.md).'
-        : res.reason === 'forbidden' ? 'Ukázky smí posílat jen správce.' : 'Ukázku se nepodařilo odeslat.',
+      text: res.ok ? t.p(TEST_PUSH_DELAY_SECONDS, 'Ukázka „{label}“ přijde za {n} sekundu na tvoje zařízení s povolenými oznámeními. Teď appku zavři nebo se přepni jinam, ať ji uvidíš.', 'Ukázka „{label}“ přijde za {n} sekundy na tvoje zařízení s povolenými oznámeními. Teď appku zavři nebo se přepni jinam, ať ji uvidíš.', 'Ukázka „{label}“ přijde za {n} sekund na tvoje zařízení s povolenými oznámeními. Teď appku zavři nebo se přepni jinam, ať ji uvidíš.', { label: t(label), n: TEST_PUSH_DELAY_SECONDS })
+        : res.reason === 'too-many' ? t('Počkej pár vteřin před další ukázkou.')
+        : res.reason === 'not-configured' ? t('Odesílání oznámení ještě není nastavené (viz jomarid-books/db/push/README.md).')
+        : res.reason === 'forbidden' ? t('Ukázky smí posílat jen správce.') : t('Ukázku se nepodařilo odeslat.'),
     });
   };
 
   useEffect(() => { let on = true; fetchVapidKey(client).then((r) => { if (on) { setSaved(!r.error && !!r.key); setSavedKey(!r.error && r.key ? r.key : null); } }); return () => { on = false; }; }, [client]);
 
   const generate = async () => {
-    if (saved && !confirm('Klíče už jsou nastavené. Když je vyměníš, všichni si musí oznámení v zařízení zapnout znovu. Pokračovat?')) return;
+    if (saved && !confirm(t('Klíče už jsou nastavené. Když je vyměníš, všichni si musí oznámení v zařízení zapnout znovu. Pokračovat?'))) return;
     setBusy(true); setError(''); setKeys(null);
     try {
       const pair = await generateVapidKeys();
@@ -57,51 +57,48 @@ export default function PushAdminCard({ client }) {
       if (saveError) throw saveError;
       setKeys(pair); setSaved(true); setSavedKey(pair.publicKey);
     } catch (e) {
-      setError(friendlyErrorWithDetail(e, 'Klíče se nepodařilo vytvořit nebo uložit.'));
+      setError(friendlyErrorWithDetail(e, t('Klíče se nepodařilo vytvořit nebo uložit.')));
     }
     setBusy(false);
   };
 
   return (
     <Card>
-      <h3 className="text-sm font-black uppercase tracking-wider mb-1 mt-0 flex items-center gap-2"><KeyRound size={15} /> Oznámení do telefonu</h3>
+      <h3 className="text-sm font-black uppercase tracking-wider mb-1 mt-0 flex items-center gap-2"><KeyRound size={15} /> {t('Oznámení do telefonu')}</h3>
       <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-1 mb-3 leading-relaxed">
-        Aby se oznámení z appky ukázala i v telefonu, potřebuje server pár klíčů. Veřejný se uloží sám, soukromý se ukáže jen jednou: vlož ho do Supabase
-        (Edge Functions → Secrets jako <code>VAPID_PRIVATE_KEY</code>). Celý postup je v souboru <code>jomarid-books/db/push/README.md</code> v repozitáři.
+        {tx('Aby se oznámení z appky ukázala i v telefonu, potřebuje server pár klíčů. Veřejný se uloží sám, soukromý se ukáže jen jednou: vlož ho do Supabase (Edge Functions → Secrets jako {name}). Celý postup je v souboru {file} v repozitáři.', { name: <code>VAPID_PRIVATE_KEY</code>, file: <code>jomarid-books/db/push/README.md</code> })}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={generate} disabled={busy || saved === null} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className={btn}>
-          {busy && <Loader2 size={12} className="animate-spin" />}Vygenerovat klíče
+          {busy && <Loader2 size={12} className="animate-spin" />}{t('Vygenerovat klíče')}
         </button>
-        <span data-testid="vapid-status" style={{ color: 'var(--text-muted)' }} className="text-xs font-bold">{saved === null ? 'Zjišťuji...' : saved ? 'Veřejný klíč je uložený.' : 'Klíče zatím nejsou nastavené.'}</span>
+        <span data-testid="vapid-status" style={{ color: 'var(--text-muted)' }} className="text-xs font-bold">{saved === null ? t('Zjišťuji...') : saved ? t('Veřejný klíč je uložený.') : t('Klíče zatím nejsou nastavené.')}</span>
       </div>
       {!keys && savedKey && (
         <div className="mt-4 space-y-2">
-          <KeyBox label="Veřejný klíč (VAPID_PUBLIC_KEY)" value={savedKey} />
+          <KeyBox kind="public" label={t('Veřejný klíč (VAPID_PUBLIC_KEY)')} value={savedKey} />
           <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">
-            Tenhle klíč patří i do Supabase jako <code>VAPID_PUBLIC_KEY</code> (Edge Functions → Secrets), vedle soukromého klíče. Soukromý klíč se po vygenerování znovu zobrazit nedá;
-            nemáš-li ho uložený, vygeneruj klíče znovu (zařízení si pak musí oznámení zapnout znovu).
+            {tx('Tenhle klíč patří i do Supabase jako {name} (Edge Functions → Secrets), vedle soukromého klíče. Soukromý klíč se po vygenerování znovu zobrazit nedá; nemáš-li ho uložený, vygeneruj klíče znovu (zařízení si pak musí oznámení zapnout znovu).', { name: <code>VAPID_PUBLIC_KEY</code> })}
           </p>
         </div>
       )}
       {error && <p role="alert" className="text-xs font-bold mt-3 mb-0" style={{ color: '#ef4444' }}>{error}</p>}
       {keys && (
         <div className="mt-4 space-y-3">
-          <p role="status" style={{ color: '#d97706' }} className="text-xs font-bold m-0 leading-relaxed">Soukromý klíč se ukáže jen teď. Zkopíruj ho do Supabase, než okno zavřeš.</p>
-          <KeyBox label="Veřejný klíč (VAPID_PUBLIC_KEY)" value={keys.publicKey} />
-          <KeyBox label="Soukromý klíč (VAPID_PRIVATE_KEY)" value={keys.privateKey} />
+          <p role="status" style={{ color: '#d97706' }} className="text-xs font-bold m-0 leading-relaxed">{t('Soukromý klíč se ukáže jen teď. Zkopíruj ho do Supabase, než okno zavřeš.')}</p>
+          <KeyBox kind="public" label={t('Veřejný klíč (VAPID_PUBLIC_KEY)')} value={keys.publicKey} />
+          <KeyBox kind="private" label={t('Soukromý klíč (VAPID_PRIVATE_KEY)')} value={keys.privateKey} />
         </div>
       )}
       <div className="mt-5 pt-4 border-t" style={{ borderColor: 'var(--border-color)' }}>
-        <h4 className="text-xs font-black uppercase tracking-wider m-0 mb-1">Ukázky motivačních oznámení</h4>
+        <h4 className="text-xs font-black uppercase tracking-wider m-0 mb-1">{t('Ukázky motivačních oznámení')}</h4>
         <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-1 mb-3 leading-relaxed">
-          Čtenářům chodí během dne povzbuzení podle toho, co se hodí (série, rozečtená kniha, cíl, pochvala...). Četnost se nastavuje v databázi (viz jomarid-books/db/push/README.md). Tady si každý druh vyzkoušíš s ukázkovými údaji;
-          odešle se za {TEST_PUSH_DELAY_SECONDS} {plural(TEST_PUSH_DELAY_SECONDS, 'sekundu', 'sekundy', 'sekund')} na tvoje zařízení, kde máš v Nastavení → Oznámení zapnutá oznámení, takže stihneš appku zavřít nebo se přepnout jinam a ukázku opravdu uvidíš. Texty se pokaždé losují z víc variant.
+          {t.p(TEST_PUSH_DELAY_SECONDS, 'Čtenářům chodí během dne povzbuzení podle toho, co se hodí (série, rozečtená kniha, cíl, pochvala...). Četnost se nastavuje v databázi (viz jomarid-books/db/push/README.md). Tady si každý druh vyzkoušíš s ukázkovými údaji; odešle se za {n} sekundu na tvoje zařízení, kde máš v Nastavení → Oznámení zapnutá oznámení, takže stihneš appku zavřít nebo se přepnout jinam a ukázku opravdu uvidíš. Texty se pokaždé losují z víc variant.', 'Čtenářům chodí během dne povzbuzení podle toho, co se hodí (série, rozečtená kniha, cíl, pochvala...). Četnost se nastavuje v databázi (viz jomarid-books/db/push/README.md). Tady si každý druh vyzkoušíš s ukázkovými údaji; odešle se za {n} sekundy na tvoje zařízení, kde máš v Nastavení → Oznámení zapnutá oznámení, takže stihneš appku zavřít nebo se přepnout jinam a ukázku opravdu uvidíš. Texty se pokaždé losují z víc variant.', 'Čtenářům chodí během dne povzbuzení podle toho, co se hodí (série, rozečtená kniha, cíl, pochvala...). Četnost se nastavuje v databázi (viz jomarid-books/db/push/README.md). Tady si každý druh vyzkoušíš s ukázkovými údaji; odešle se za {n} sekund na tvoje zařízení, kde máš v Nastavení → Oznámení zapnutá oznámení, takže stihneš appku zavřít nebo se přepnout jinam a ukázku opravdu uvidíš. Texty se pokaždé losují z víc variant.', { n: TEST_PUSH_DELAY_SECONDS })}
         </p>
         <div className="flex flex-wrap gap-2" data-testid="push-kinds">
           {PUSH_KINDS.map(({ kind, label }) => (
             <button key={kind} type="button" onClick={() => sendPreview(kind, label)} disabled={!!preview.busy || !saved} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', border: '1px solid var(--border-color)' }} className={btn}>
-              {preview.busy === kind ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}{label}
+              {preview.busy === kind ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}{t(label)}
             </button>
           ))}
         </div>
