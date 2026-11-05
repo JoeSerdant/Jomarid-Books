@@ -1,5 +1,6 @@
 import { X, Coins, BookOpen, CloudOff } from 'lucide-react';
 import { SAVE_CHIPS } from '../gameSave/messages';
+import { t, formatNumber } from '../i18n';
 
 // Lišta nad hrou: hra běží přes celou obrazovku, takže tohle je jediné, co z appky zůstane vidět. Drží se motivu appky
 // (barvy z proměnných), ukazuje, kdo hraje (úroveň) a živý zůstatek Jomarid Coins, a je to jediné místo, kde se potvrzují
@@ -20,43 +21,43 @@ export const GameBar = ({ title, onClose, coins, coinsLoaded, level, levelName, 
     </span>
 
     <div className="shrink-0 flex items-center gap-1.5 [@media(orientation:landscape)_and_(max-height:500px)]:flex-col [@media(orientation:landscape)_and_(max-height:500px)]:gap-2 [@media(orientation:landscape)_and_(max-height:500px)]:w-full">
-      {saveStatus && SAVE_CHIPS[saveStatus] && (
+      {saveStatus && SAVE_CHIPS[saveStatus] /* i18n-ok */ && (
         <span
           data-testid="game-bar-save"
           role="status"
-          title={SAVE_CHIPS[saveStatus]}
+          title={t(SAVE_CHIPS[saveStatus])}
           style={saveStatus === 'offline' ? { backgroundColor: 'var(--bg-badge)', borderColor: 'var(--border-color)', color: 'var(--text-badge)' } : { backgroundColor: '#fee2e2', borderColor: '#ef4444', color: '#991b1b' }}
           className="flex items-center gap-1 px-2 py-1.5 rounded-xl border text-xs font-black leading-none whitespace-nowrap [@media(orientation:landscape)_and_(max-height:500px)]:order-4 [@media(orientation:landscape)_and_(max-height:500px)]:flex-col [@media(orientation:landscape)_and_(max-height:500px)]:text-[0.625rem] [@media(orientation:landscape)_and_(max-height:500px)]:px-1 [@media(orientation:landscape)_and_(max-height:500px)]:gap-0.5"
         >
           <CloudOff size={13} aria-hidden="true" />
-          <span className="[@media(orientation:landscape)_and_(max-height:500px)]:sr-only">{SAVE_CHIPS[saveStatus]}</span>
+          <span className="[@media(orientation:landscape)_and_(max-height:500px)]:sr-only">{t(SAVE_CHIPS[saveStatus])}</span>
         </span>
       )}
       {level != null && (
         <span
           data-testid="game-bar-level"
-          title={levelName || 'Tvoje úroveň čtenáře'}
+          title={levelName ? t(levelName) : t('Tvoje úroveň čtenáře')}
           style={{ backgroundColor: 'var(--bg-badge)', borderColor: 'var(--border-color)', color: 'var(--text-badge)' }}
           className="px-2 py-1.5 rounded-xl border text-xs font-black leading-none whitespace-nowrap [@media(orientation:landscape)_and_(max-height:500px)]:order-2 [@media(orientation:landscape)_and_(max-height:500px)]:text-[0.625rem] [@media(orientation:landscape)_and_(max-height:500px)]:px-1"
         >
-          Lv. {level}
+          {t('Lv. {n}', { n: level })}
         </span>
       )}
       {coinsLoaded && (
         <span
           data-testid="game-bar-coins"
-          title="Tvoje Jomarid Coins"
+          title={t('Tvoje Jomarid Coins')}
           style={{ backgroundColor: 'var(--bg-badge)', borderColor: 'var(--border-color)', color: 'var(--text-badge)' }}
           className="flex items-center gap-1 px-2 py-1.5 rounded-xl border text-xs font-black leading-none whitespace-nowrap [@media(orientation:landscape)_and_(max-height:500px)]:order-3 [@media(orientation:landscape)_and_(max-height:500px)]:flex-col [@media(orientation:landscape)_and_(max-height:500px)]:text-[0.625rem] [@media(orientation:landscape)_and_(max-height:500px)]:px-1 [@media(orientation:landscape)_and_(max-height:500px)]:gap-0.5"
         >
           <Coins size={13} className="text-amber-500 fill-amber-500/20" aria-hidden="true" />
-          <span>{Number(coins || 0).toLocaleString('cs-CZ')}</span>
+          <span>{formatNumber(coins)}</span>
         </span>
       )}
       <button
         onClick={onClose}
-        title="Zavřít hru"
-        aria-label="Zavřít hru"
+        title={t('Zavřít hru')}
+        aria-label={t('Zavřít hru')}
         style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
         className="w-9 h-9 shrink-0 rounded-xl cursor-pointer border flex items-center justify-center [@media(orientation:landscape)_and_(max-height:500px)]:order-1"
       >

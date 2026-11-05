@@ -128,5 +128,11 @@ export const formatNumber = (n, options) => Number(n || 0).toLocaleString(getLoc
 export const formatDate = (value, options) => new Date(value).toLocaleDateString(getLocale(), options);
 export const formatDateTime = (value, options) => new Date(value).toLocaleString(getLocale(), options);
 
+const capital = (s) => s.charAt(0).toLocaleUpperCase(getLocale()) + s.slice(1);
+/** Název měsíce (0 = leden) velkým písmenem v aktuálním jazyce: česky Leden / Led, anglicky January / Jan. */
+export const monthName = (i, month = 'long') => capital(new Intl.DateTimeFormat(getLocale(), { month, timeZone: 'UTC' }).format(new Date(Date.UTC(2021, i, 15))));
+/** Název dne v týdnu (0 = neděle) velkým písmenem v aktuálním jazyce: česky Ne, Po, ..., anglicky Sun, Mon, ... */
+export const weekdayName = (i, weekday = 'short') => capital(new Intl.DateTimeFormat(getLocale(), { weekday, timeZone: 'UTC' }).format(new Date(Date.UTC(2021, 0, 3 + i))));
+
 /** Pro testy: vrátí stav na výchozí (čeština, bez slovníku, bez posluchačů). */
 export const resetForTests = () => { current = DEFAULT_LANG; dict = null; listeners.clear(); loading = null; };

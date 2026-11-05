@@ -541,13 +541,13 @@ test('napojení: hry berou postup z kopie, slučují se po připojení, odměny 
   assert.match(g, /window\.addEventListener\('online', onOnline\)/);
   assert.match(g, /const onOnline = \(\) => \{ syncRef\.current\?\.retryNow\(\); \};/);
   assert.match(g, /setSaveLoadError\(err instanceof NoLocalSaveError \? 'nocopy' : true\)/);
-  assert.match(g, /saveLoadError === 'nocopy' \? SAVE_NO_LOCAL_COPY : SAVE_LOAD_ERROR/);
+  assert.match(g, /saveLoadError === 'nocopy' \? t\(SAVE_NO_LOCAL_COPY\) : t\(SAVE_LOAD_ERROR\)/);
   assert.match(g, /await sync\.load\(\{ allowEmpty: allowEmpty === true \}\)/);
   assert.match(g, /onClick=\{\(\) => handleOpenGame\(true\)\}\n\s+data-testid="play-fresh-offline"/);
   assert.match(g, /requestCoins\(\{ client: supabase, outbox, userId: user\.id, gameId: game\.id, amount, reason, offline: navigator\.onLine === false \}\)/);
   assert.match(g, /if \(navigator\.onLine === false\) \{ queueRecord\(outbox, user\.id, rec\)/);
   assert.match(g, /onTransient: \(r\) => \{ queueRecord\(outbox, user\.id, r\)/);
-  assert.match(g, /!online \? \(\n\s+<>Odměna za hraní jde jen online/);
+  assert.match(g, /!online \? \(\n\s+<>\{t\('Odměna za hraní jde jen online'\)\}/);
   assert.match(g, /export async function preloadGames\(/);
   assert.doesNotMatch(g, /supabase\.rpc\('award_game_coins'/, 'odměny jdou přes frontu');
   assert.match(read('components', 'SettingsModal.jsx'), /<OfflineGamesSection Section=\{Section\} Notice=\{Notice\} ActionButton=\{ActionButton\} \/>/);

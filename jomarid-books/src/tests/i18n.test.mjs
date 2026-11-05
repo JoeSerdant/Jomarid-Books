@@ -12,7 +12,7 @@ import * as core from '../i18n/core.js';
 import { tx } from '../i18n/react.js';
 import dict, { PARTS } from '../i18n/en/index.js';
 import { listSourceFiles, scanFile, rawTexts, placeholdersOf, hasCzechDiacritics } from '../i18n/tools/scan.mjs';
-import { readBaseline } from '../i18n/tools/baseline.mjs';
+import { readBaseline, readDynamic } from '../i18n/tools/baseline.mjs';
 import { transform } from '../i18n/tools/codemod.mjs';
 import { parseTodo, parseAnswers } from '../i18n/tools/apply.mjs';
 
@@ -20,7 +20,10 @@ const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (...p) => fs.readFileSync(path.join(SRC, ...p), 'utf8');
 
 // Texty, které se v angličtině píšou stejně jako česky (název, zkratka, obecné slovo): jen tyto smějí mít překlad shodný s klíčem.
-const IDENTICAL_OK = new Set(['Admin', 'Studio', 'E-mail', 'Text', 'Tip', 'Role', 'shortB', 'Menu: shortB', 'Jomarid Coins']);
+const IDENTICAL_OK = new Set(['Admin', 'Studio', 'E-mail', 'Text', 'Tip', 'Role', 'shortB', 'Menu: shortB', 'Jomarid Coins',
+  // názvy her, zkratky a jednotky, které se píšou stejně
+  'XP', 'Streak', '🔥 Streak', 'Offline', 'Coins', 'Noir', 'Retro', 'Neon', 'Lv. {n}', '{n}px', '{cur}/{need} XP', '+{n} XP', '© {year} Jomarid Books', 'streak * 10 XP', 'streak * 25 XP', 'streak * 50 XP',
+  'Jomarid Rocket Game', 'Warroom: Frontlines', 'City Clicker', 'Chess League', 'Hannibal: Barca', 'Pilot']);
 // České texty, které se záměrně nepřekládají (názvy jazyků se píšou vlastním jazykem).
 const PERMANENT = {
   'i18n/LanguageSwitch.jsx': ['Čeština'],              // názvy jazyků se píšou vlastním jazykem
@@ -223,6 +226,19 @@ test('kód: v nic nepřibyl nepřeložený český text (seznam src/i18n/tools/b
     for (const g of gone) problems.push(`${f}: už je přeložený, odeber ze seznamu (npm run i18n:baseline): ${g.slice(0, 80)}`);
   }
   for (const f of Object.keys(baseline)) if (!files.includes(f)) problems.push(`${f}: soubor už neexistuje, odeber ze seznamu`);
+  assert.deepEqual(problems, []);
+});
+
+test('kód: každé t(výraz) s nepevným textem je prohlédnuté (src/i18n/tools/dynamic.json): výraz vrací text označený tk(...) nebo už přeložený', () => {
+  const known = readDynamic();
+  const problems = [];
+  for (const f of files) {
+    const now = [...new Set(scans.get(f).dynamic.map((d) => d.arg))].sort();
+    const was = known[f] || [];
+    for (const a of now.filter((x) => !was.includes(x))) problems.push(`${f}: nové t(${a}): ověř, že výraz vrací text označený tk(...) nebo přeložený, a pak npm run i18n:baseline`);
+    for (const g of was.filter((x) => !now.includes(x))) problems.push(`${f}: t(${g}) už v kódu není (npm run i18n:baseline)`);
+  }
+  for (const f of Object.keys(known)) if (!files.includes(f)) problems.push(`${f}: soubor už neexistuje (npm run i18n:baseline)`);
   assert.deepEqual(problems, []);
 });
 

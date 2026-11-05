@@ -7,7 +7,6 @@ import { sumBadgeXp } from '../constants/badgeXp';
 import { loadGameProgress } from '../gameRecords/api';
 import { STREAK_FREEZE_PRICE, DEFAULT_BOOK_PRICE } from '../constants/economy';
 import { calculateLevelAndProgress, getLevelVisuals, computeTotalXp } from '../constants/leveling';
-import { plural } from '../lib/plural';
 import { THEMES as THEME_VARS, THEME_LABELS, FONT_SIZE_RANGE } from '../theme';
 import { FaqItem } from '../components/FaqItem';
 import { APP_VERSION_LABEL, APP_VERSION_SHORT, CONTACT_EMAIL } from '../appInfo';
@@ -18,6 +17,8 @@ import {
   Rocket, Swords, Building2, Target, Crown, Smile, ArrowRight, Feather, Calendar, Gamepad2,
   Type, Bookmark, Star, MessageCircle, Trophy, Loader2, TrendingUp, BarChart3,
 } from 'lucide-react';
+import { t } from '../i18n';
+import { tk } from '../i18n/mark.js';
 
 // ============================================================================
 // Odznaky a hry jsou skutečná data aplikace. Texty hero, podtitulu, doporučených
@@ -26,10 +27,11 @@ import {
 // ============================================================================
 
 const BADGE_COUNT = BOOK_BADGES.length;
-const BADGES_TEXT = `${BADGE_COUNT} ${plural(BADGE_COUNT, 'odznak', 'odznaky', 'odznaků')}`;
+// Počet odznaků se skládá až při vykreslení (jazyk se načítá dřív než první obrazovka, ale t se na úrovni modulu nevolá).
+const badgesText = () => t.p(BADGE_COUNT, '{n} odznak', '{n} odznaky', '{n} odznaků', { n: BADGE_COUNT });
 
 // Názvy kategorií odznaků stejné jako ve filtru na stránce Odznaky.
-const BADGE_CATEGORY_LABELS = { books: 'Knihy', streak: 'Streak', levels: 'Úrovně', monthly: 'Výzvy', special: 'Speciální' };
+const BADGE_CATEGORY_LABELS = { books: tk('Knihy'), streak: tk('Streak'), levels: tk('Úrovně'), monthly: tk('Výzvy'), special: tk('Speciální') };
 
 // Ukázkové odznaky se berou přímo z katalogu odznaků, takže se nikdy nerozejdou s tím, co uživatel uvidí na stránce Odznaky.
 const SAMPLE_BADGE_IDS = ['bookworm_1', 'streak_7', 'level_4', 'coins_500', 'badge_collector_25'];
@@ -46,19 +48,19 @@ const SAMPLE_BADGES = SAMPLE_BADGE_IDS
   }));
 
 const GAMES_PREVIEW = [
-  { icon: Rocket, title: 'Jomarid Rocket Game', tagline: 'Vesmírná arkádová střílečka s vlastními vylepšeními a postupem.', detail: 'Nepřátelé občas upustí bonusovou minci navíc k tomu, co si vyděláš jen za to, že si dnes zahraješ.' },
-  { icon: Swords, title: 'Warroom: Frontlines', tagline: 'Velitelská taktická hra - řiď frontu, jednotky a zdroje.', detail: 'Rozhoduješ o nasazení jednotek a zdrojích z velitelského stanu, ne v přímé palbě.' },
-  { icon: Building2, title: 'City Clicker', tagline: 'Vybuduj si vlastní město klikáním.', detail: 'Čtyři zcela odlišné vizuální styly na výběr - stejné město, jiná nálada.' },
-  { icon: Target, title: 'Polygon aréna', tagline: 'Rozstřílej tvary, poskládej si stavbu z více než 500 tanků a přežij mezi chytrými boty.', detail: 'Osm režimů od vln nepřátel po zužující se bouři a obtížnost až do Pekla.' },
-  { icon: Crown, title: 'Chess League', tagline: 'Šachy proti pěti botům s vlastní osobností - skutečný Elo rating, hodiny, nápověda, rozbor partie a šachové úlohy na hledání matu.', detail: 'Silnější soupeře si odemykáš postupně, výhrou za výhrou.' },
-  { icon: Smile, title: 'Kouloví Kámoši', tagline: 'Pouštěj do misky měkké koule a spojuj stejné, ať vyroste ta největší.', detail: 'Pět režimů od klasiky po zemětřesení a obchod s vylepšeními za herní mince.' },
+  { icon: Rocket, title: tk('Jomarid Rocket Game'), tagline: tk('Vesmírná arkádová střílečka s vlastními vylepšeními a postupem.'), detail: tk('Nepřátelé občas upustí bonusovou minci navíc k tomu, co si vyděláš jen za to, že si dnes zahraješ.') },
+  { icon: Swords, title: tk('Warroom: Frontlines'), tagline: tk('Velitelská taktická hra - řiď frontu, jednotky a zdroje.'), detail: tk('Rozhoduješ o nasazení jednotek a zdrojích z velitelského stanu, ne v přímé palbě.') },
+  { icon: Building2, title: tk('City Clicker'), tagline: tk('Vybuduj si vlastní město klikáním.'), detail: tk('Čtyři zcela odlišné vizuální styly na výběr - stejné město, jiná nálada.') },
+  { icon: Target, title: tk('Polygon aréna'), tagline: tk('Rozstřílej tvary, poskládej si stavbu z více než 500 tanků a přežij mezi chytrými boty.'), detail: tk('Osm režimů od vln nepřátel po zužující se bouři a obtížnost až do Pekla.') },
+  { icon: Crown, title: tk('Chess League'), tagline: tk('Šachy proti pěti botům s vlastní osobností - skutečný Elo rating, hodiny, nápověda, rozbor partie a šachové úlohy na hledání matu.'), detail: tk('Silnější soupeře si odemykáš postupně, výhrou za výhrou.') },
+  { icon: Smile, title: tk('Kouloví Kámoši'), tagline: tk('Pouštěj do misky měkké koule a spojuj stejné, ať vyroste ta největší.'), detail: tk('Pět režimů od klasiky po zemětřesení a obchod s vylepšeními za herní mince.') },
 ];
 
 const COIN_SOURCES = [
-  { label: 'Denní přihlášení', coins: 15, icon: Calendar },
-  { label: 'Zahraná minihra dnes', coins: 20, icon: Gamepad2 },
-  { label: 'Odznak „První Průzkumník“', coins: 50, icon: Footprints },
-  { label: 'Splněný měsíční cíl', coins: 250, icon: Target },
+  { label: tk('Denní přihlášení'), coins: 15, icon: Calendar },
+  { label: tk('Zahraná minihra dnes'), coins: 20, icon: Gamepad2 },
+  { label: tk('Odznak „První Průzkumník“'), coins: 50, icon: Footprints },
+  { label: tk('Splněný měsíční cíl'), coins: 250, icon: Target },
 ];
 
 // Ukázkové dlaždice vzhledů: názvy a barvy se berou z theme.js.
@@ -72,20 +74,25 @@ const THEME_COUNT = Object.keys(THEME_LABELS).length;
 
 const DEFAULT_SETTINGS = {
   homepage_hero: {
-    headline: 'Otevři knihu a sleduj, jak stoupá tvoje úroveň',
-    subtitle: `Tři originální knižní řady, ${BADGE_COUNT} ${plural(BADGE_COUNT, 'sběratelský odznak', 'sběratelské odznaky', 'sběratelských odznaků')} a vlastní herní měna, kterou si vyděláš čtením - nebo si mezitím zahraješ jednu ze šesti miniher.`,
+    headline: tk('Otevři knihu a sleduj, jak stoupá tvoje úroveň'),
+    // Čte se až při vykreslení, takže se přeloží podle aktuálního jazyka.
+    get subtitle() {
+      return t('Tři originální knižní řady, {badges} a vlastní herní měna, kterou si vyděláš čtením - nebo si mezitím zahraješ jednu ze šesti miniher.', {
+        badges: t.p(BADGE_COUNT, '{n} sběratelský odznak', '{n} sběratelské odznaky', '{n} sběratelských odznaků', { n: BADGE_COUNT }),
+      });
+    },
   },
   homepage_featured_books: { book_ids: [] },
   homepage_font_demo: {
-    quote: 'A tak se Hobin Rood vydal do první vesnice, netuše, že z ní za týden nezbude jediná mince…',
-    attribution: 'Hobin Rood: Díl 1',
+    quote: 'A tak se Hobin Rood vydal do první vesnice, netuše, že z ní za týden nezbude jediná mince…', // i18n-ok: ukázka z knihy zůstává v původním jazyce
+    attribution: 'Hobin Rood: Díl 1', // i18n-ok: název knihy
   },
   homepage_why_read: {
     items: [
-      { title: 'Bez stahování, bez čekání', description: 'Text se načítá přímo v prohlížeči - na počítači, tabletu i telefonu. Žádné PDF, žádné instalace.' },
-      { title: 'Kurátorovaný fond', description: 'Žádná masová knihovna plná balastu - jen původní tituly a edice, které jinde nenajdeš.' },
-      { title: 'Rozhraní bez reklam', description: 'Tvoje soustředění je priorita. Žádné bannery, žádné sociální sítě, jen text a tvůj postup.' },
-      { title: 'Streak, co se dá zachránit', description: 'Zmeškaný den nemusí znamenat konec série - Streak Freeze ji na jeden den ochrání.' },
+      { title: tk('Bez stahování, bez čekání'), description: tk('Text se načítá přímo v prohlížeči - na počítači, tabletu i telefonu. Žádné PDF, žádné instalace.') },
+      { title: tk('Kurátorovaný fond'), description: tk('Žádná masová knihovna plná balastu - jen původní tituly a edice, které jinde nenajdeš.') },
+      { title: tk('Rozhraní bez reklam'), description: tk('Tvoje soustředění je priorita. Žádné bannery, žádné sociální sítě, jen text a tvůj postup.') },
+      { title: tk('Streak, co se dá zachránit'), description: tk('Zmeškaný den nemusí znamenat konec série - Streak Freeze ji na jeden den ochrání.') },
     ],
   },
 };
@@ -313,11 +320,11 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
               style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' }}
               className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full font-semibold text-xs mb-8"
             >
-              <Library size={13} /> Digitální čítárna s postupem
+              <Library size={13} /> {t('Digitální čítárna s postupem')}
             </div>
 
             <h1 className="font-heading text-4xl md:text-[3.25rem] font-extrabold tracking-tight mb-6 leading-[1.08]">
-              {hero.headline}
+              {t(hero.headline)}
             </h1>
 
             <p style={{ color: 'var(--text-muted)' }} className="text-base md:text-lg max-w-lg mb-9 leading-relaxed">
@@ -330,10 +337,10 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
                 style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
                 className="px-7 py-3.5 font-bold text-sm border-none rounded-xl shadow-md hover:shadow-lg hover:brightness-105 active:scale-[0.98] transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer"
               >
-                Začít číst zdarma <ArrowRight size={16} />
+                {t('Začít číst zdarma')} <ArrowRight size={16} />
               </button>
               <span style={{ color: 'var(--text-muted)' }} className="text-xs font-medium opacity-70">
-                Účet si založíš přímo u vstupu, okamžitě a zdarma.
+                {t('Účet si založíš přímo u vstupu, okamžitě a zdarma.')}
               </span>
             </div>
           </div>
@@ -345,13 +352,13 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
               className="border rounded-2xl p-6 shadow-lg"
             >
               <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] font-semibold uppercase tracking-wide mb-1">
-                Vyzkoušej to hned teď
+                {t('Vyzkoušej to hned teď')}
               </p>
-              <h3 className="font-heading text-lg font-bold mb-4">Co tě dnes láká?</h3>
+              <h3 className="font-heading text-lg font-bold mb-4">{t('Co tě dnes láká?')}</h3>
 
               {allGenres.length === 0 ? (
                 <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed opacity-70">
-                  Žánry se právě načítají z katalogu…
+                  {t('Žánry se právě načítají z katalogu…')}
                 </p>
               ) : (
                 <div className="flex flex-wrap gap-2 mb-4">
@@ -363,7 +370,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
                     }}
                     className="px-3 py-1.5 rounded-lg border-none cursor-pointer text-xs font-bold transition-all"
                   >
-                    Vše
+                    {t('Vše')}
                   </button>
                   {allGenres.map(g => (
                     <button
@@ -383,8 +390,8 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
 
               <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">
                 {selectedGenre
-                  ? `Sekce "Hlavní tituly" níž teď ukazuje jen tituly v žánru ${selectedGenre}.`
-                  : 'Vyber žánr a podívej se, co z aktuální nabídky sedí přesně tobě - sekce níž se rovnou přizpůsobí.'}
+                  ? t('Sekce "Hlavní tituly" níž teď ukazuje jen tituly v žánru {genre}.', { genre: selectedGenre })
+                  : t('Vyber žánr a podívej se, co z aktuální nabídky sedí přesně tobě - sekce níž se rovnou přizpůsobí.')}
               </p>
             </div>
           </div>
@@ -397,7 +404,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
          ============================================================ */}
       <section className="max-w-6xl mx-auto px-4 pb-20">
         <h2 style={{ color: 'var(--text-muted)' }} className="text-sm font-semibold mb-6 opacity-70">
-          Hlavní tituly {selectedGenre ? `· ${selectedGenre}` : ''}
+          {selectedGenre ? t('Hlavní tituly · {genre}', { genre: selectedGenre }) : t('Hlavní tituly')}
         </h2>
         {loading ? (
           <div className="flex items-center justify-center py-12">
@@ -406,8 +413,8 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
         ) : visibleBooks.length === 0 ? (
           <p style={{ color: 'var(--text-muted)' }} className="text-sm opacity-70 py-8">
             {featuredBooks.length === 0
-              ? 'Doporučené tituly se právě chystají. Celý katalog uvidíš po přihlášení.'
-              : 'V tomhle žánru zrovna nic doporučeného nemáme - zkus jiný, nebo se podívej na "Vše".'}
+              ? t('Doporučené tituly se právě chystají. Celý katalog uvidíš po přihlášení.')
+              : t('V tomhle žánru zrovna nic doporučeného nemáme - zkus jiný, nebo se podívej na "Vše".')}
           </p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -438,7 +445,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
                     <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] leading-snug line-clamp-2 opacity-75 mb-2">{book.description}</p>
                   )}
                   <span style={{ color: 'var(--bg-primary)' }} className="text-[0.625rem] font-bold opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-1">
-                    Otevřít knihu <ChevronRight size={10} />
+                    {t('Otevřít knihu')} <ChevronRight size={10} />
                   </span>
                 </div>
               </div>
@@ -452,13 +459,13 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
          ============================================================ */}
       <section style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border-y py-20">
         <div className="max-w-5xl mx-auto px-4">
-          <h2 className="font-heading text-2xl md:text-3xl font-bold mb-14 max-w-md">Jak to celé funguje</h2>
+          <h2 className="font-heading text-2xl md:text-3xl font-bold mb-14 max-w-md">{t('Jak to celé funguje')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 md:gap-6">
             {[
-              { n: '1', title: 'Vyber si knihu', text: 'Procházej katalog, přečti si popis a hodnocení od ostatních čtenářů přímo u knihy.' },
-              { n: '2', title: 'Čti a vydělávej', text: 'Za dočtené knihy (víc při splněných vyšších měsíčních cílech) a denní sérii získáváš XP, další přidávají odznaky. Za odznaky, denní přihlášení a minihry sbíráš Jomarid Coins.' },
-              { n: '3', title: 'Odemykej další', text: 'Mincemi si v knihovně rovnou kupuješ přístup k dalším titulům - žádné čekání na schválení.' },
-              { n: '4', title: 'Postupuj a sbírej', text: `Levely, denní streak, měsíční cíle a ${BADGES_TEXT} drží motivaci i po týdnech čtení.` },
+              { n: '1', title: t('Vyber si knihu'), text: t('Procházej katalog, přečti si popis a hodnocení od ostatních čtenářů přímo u knihy.') },
+              { n: '2', title: t('Čti a vydělávej'), text: t('Za dočtené knihy (víc při splněných vyšších měsíčních cílech) a denní sérii získáváš XP, další přidávají odznaky. Za odznaky, denní přihlášení a minihry sbíráš Jomarid Coins.') },
+              { n: '3', title: t('Odemykej další'), text: t('Mincemi si v knihovně rovnou kupuješ přístup k dalším titulům - žádné čekání na schválení.') },
+              { n: '4', title: t('Postupuj a sbírej'), text: t('Levely, denní streak, měsíční cíle a {badges} drží motivaci i po týdnech čtení.', { badges: badgesText() }) },
             ].map((step) => (
               <div key={step.n} className="relative">
                 <span style={{ color: 'var(--border-color)' }} className="font-heading text-5xl font-extrabold block mb-3 opacity-60">{step.n}</span>
@@ -476,10 +483,9 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
       <section className="max-w-6xl mx-auto px-4 py-20">
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-start">
           <div className="lg:col-span-2">
-            <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">{BADGES_TEXT} čeká na odemknutí</h2>
+            <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">{t('{badges} čeká na odemknutí', { badges: badgesText() })}</h2>
             <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed mb-6">
-              Rozdělené do pěti kategorií - od prvního přečtení přes streaky a úrovně až po
-              měsíční výzvy a speciální odznaky. Klikni na kterýkoliv z pěti níže a podívej se, co obnáší.
+              {t('Rozdělené do pěti kategorií - od prvního přečtení přes streaky a úrovně až po měsíční výzvy a speciální odznaky. Klikni na kterýkoliv z pěti níže a podívej se, co obnáší.')}
             </p>
             <div className="flex flex-wrap gap-2">
               {SAMPLE_BADGES.map((badge, idx) => {
@@ -509,12 +515,12 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
                   <ActiveBadgeIcon size={30} />
                 </div>
                 <div className="min-w-0">
-                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide">{activeBadgeData.category}</span>
-                  <h3 className="font-heading font-bold text-xl mb-1.5">{activeBadgeData.title}</h3>
-                  <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed mb-4">{activeBadgeData.description}</p>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide">{t(activeBadgeData.category)}</span>
+                  <h3 className="font-heading font-bold text-xl mb-1.5">{t(activeBadgeData.title)}</h3>
+                  <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed mb-4">{t(activeBadgeData.description)}</p>
                   <div className="flex items-center gap-4">
-                    <span style={{ color: 'var(--text-body)' }} className="text-xs font-bold flex items-center gap-1.5"><Coins size={13} className="text-amber-500" /> +{activeBadgeData.coins} coinů</span>
-                    <span style={{ color: 'var(--text-body)' }} className="text-xs font-bold flex items-center gap-1.5"><Zap size={13} className="text-violet-500" /> +{activeBadgeData.xp} XP</span>
+                    <span style={{ color: 'var(--text-body)' }} className="text-xs font-bold flex items-center gap-1.5"><Coins size={13} className="text-amber-500" /> {t('+{n} coinů', { n: activeBadgeData.coins })}</span>
+                    <span style={{ color: 'var(--text-body)' }} className="text-xs font-bold flex items-center gap-1.5"><Zap size={13} className="text-violet-500" /> {t('+{n} XP', { n: activeBadgeData.xp })}</span>
                   </div>
                 </div>
               </div>
@@ -528,10 +534,9 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
          ============================================================ */}
       <section style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border-y py-20">
         <div className="max-w-5xl mx-auto px-4">
-          <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">Šest miniher, jedna herní měna</h2>
+          <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">{t('Šest miniher, jedna herní měna')}</h2>
           <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed max-w-lg mb-10">
-            Odskoč si od čtení, kdykoliv budeš chtít. Za zahrání si navíc jednou denně připíšeš
-            bonusové Jomarid Coins - stejné mince, za které kupuješ knihy.
+            {t('Odskoč si od čtení, kdykoliv budeš chtít. Za zahrání si navíc jednou denně připíšeš bonusové Jomarid Coins - stejné mince, za které kupuješ knihy.')}
           </p>
           <div className="flex flex-wrap gap-2 mb-6">
             {GAMES_PREVIEW.map((game, idx) => {
@@ -544,7 +549,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
                   style={{ backgroundColor: isActive ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: isActive ? 'var(--text-primary)' : 'var(--text-body)' }}
                   className="px-4 py-2.5 rounded-xl border-none cursor-pointer text-xs font-bold flex items-center gap-2 transition-all duration-200"
                 >
-                  <Icon size={14} /> {game.title}
+                  <Icon size={14} /> {t(game.title)}
                 </button>
               );
             })}
@@ -554,9 +559,9 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
               <ActiveGameIcon size={26} />
             </div>
             <div>
-              <h3 className="font-heading font-bold text-lg mb-1">{activeGameData.title}</h3>
-              <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed mb-2">{activeGameData.tagline}</p>
-              <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed opacity-75">{activeGameData.detail}</p>
+              <h3 className="font-heading font-bold text-lg mb-1">{t(activeGameData.title)}</h3>
+              <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed mb-2">{t(activeGameData.tagline)}</p>
+              <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed opacity-75">{t(activeGameData.detail)}</p>
             </div>
           </div>
         </div>
@@ -566,16 +571,15 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
           6. ČTECÍ ZÁŽITEK
          ============================================================ */}
       <section className="max-w-5xl mx-auto px-4 py-20">
-        <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">Čtečka, která se ti přizpůsobí</h2>
+        <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">{t('Čtečka, která se ti přizpůsobí')}</h2>
         <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed max-w-lg mb-10">
-          Posuň jezdec a vyzkoušej si, jak si nastavíš velikost písma přímo při čtení -
-          ukázka je přímo z jednoho z našich titulů.
+          {t('Posuň jezdec a vyzkoušej si, jak si nastavíš velikost písma přímo při čtení - ukázka je přímo z jednoho z našich titulů.')}
         </p>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
-              <span style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] font-bold uppercase tracking-wide flex items-center gap-1.5"><Type size={13} /> Velikost písma</span>
-              <span style={{ color: 'var(--bg-primary)' }} className="text-xs font-bold tabular-nums">{demoFontSize}px</span>
+              <span style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] font-bold uppercase tracking-wide flex items-center gap-1.5"><Type size={13} /> {t('Velikost písma')}</span>
+              <span style={{ color: 'var(--bg-primary)' }} className="text-xs font-bold tabular-nums">{t('{n}px', { n: demoFontSize })}</span>
             </div>
             <input
               type="range" min={FONT_SIZE_RANGE.min} max={FONT_SIZE_RANGE.max} value={demoFontSize}
@@ -584,7 +588,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
               style={{ accentColor: 'var(--bg-primary)' }}
             />
             <p style={{ fontSize: `${demoFontSize}px`, color: 'var(--text-body)' }} className="font-serif leading-relaxed transition-all duration-100 mb-2">
-              „{fontDemo.quote}“
+              {t('„{quote}“', { quote: fontDemo.quote })}
             </p>
             {fontDemo.attribution && (
               <span style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] opacity-60">— {fontDemo.attribution}</span>
@@ -594,19 +598,19 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex gap-3">
               <Bookmark size={18} style={{ color: 'var(--bg-primary)' }} className="shrink-0 mt-0.5" />
-              <div><h3 className="font-heading font-bold text-sm mb-1">Pojmenované záložky</h3><p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">Ulož si víc míst v jedné knize, ne jen tam, kde čtení skončilo.</p></div>
+              <div><h3 className="font-heading font-bold text-sm mb-1">{t('Pojmenované záložky')}</h3><p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">{t('Ulož si víc míst v jedné knize, ne jen tam, kde čtení skončilo.')}</p></div>
             </div>
             <div className="flex gap-3">
               <BookOpen size={18} style={{ color: 'var(--bg-primary)' }} className="shrink-0 mt-0.5" />
-              <div><h3 className="font-heading font-bold text-sm mb-1">Pozice napříč zařízeními</h3><p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">Odložíš na počítači, otevřeš na mobilu přesně na stejném místě.</p></div>
+              <div><h3 className="font-heading font-bold text-sm mb-1">{t('Pozice napříč zařízeními')}</h3><p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">{t('Odložíš na počítači, otevřeš na mobilu přesně na stejném místě.')}</p></div>
             </div>
             <div className="flex gap-3">
               <Star size={18} style={{ color: 'var(--bg-primary)' }} className="shrink-0 mt-0.5" />
-              <div><h3 className="font-heading font-bold text-sm mb-1">Hvězdičkové hodnocení</h3><p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">Ohodnoť knihu po přečtení, ať vidíš i to, co si myslí ostatní.</p></div>
+              <div><h3 className="font-heading font-bold text-sm mb-1">{t('Hvězdičkové hodnocení')}</h3><p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">{t('Ohodnoť knihu po přečtení, ať vidíš i to, co si myslí ostatní.')}</p></div>
             </div>
             <div className="flex gap-3">
               <MessageCircle size={18} style={{ color: 'var(--bg-primary)' }} className="shrink-0 mt-0.5" />
-              <div><h3 className="font-heading font-bold text-sm mb-1">Krátké komentáře</h3><p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">Jedna stručná věta u knihy - tvoje, nebo od ostatních čtenářů.</p></div>
+              <div><h3 className="font-heading font-bold text-sm mb-1">{t('Krátké komentáře')}</h3><p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">{t('Jedna stručná věta u knihy - tvoje, nebo od ostatních čtenářů.')}</p></div>
             </div>
           </div>
         </div>
@@ -617,18 +621,19 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
          ============================================================ */}
       <section style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border-y py-20">
         <div className="max-w-5xl mx-auto px-4">
-          <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">Vzhled podle tvého gusta</h2>
+          <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">{t('Vzhled podle tvého gusta')}</h2>
           <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed max-w-lg mb-10">
-            V nastavení si kdykoliv přepneš vzhled celé appky - platí okamžitě a všude, od knihovny přes čtečku až po minihry.
-            Na výběr je {THEME_COUNT} {plural(THEME_COUNT, 'motiv', 'motivy', 'motivů')}, tady jsou tři z nich.
+            {t('V nastavení si kdykoliv přepneš vzhled celé appky - platí okamžitě a všude, od knihovny přes čtečku až po minihry. Na výběr je {themes}, tady jsou tři z nich.', {
+              themes: t.p(THEME_COUNT, '{n} motiv', '{n} motivy', '{n} motivů', { n: THEME_COUNT }),
+            })}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {THEME_TILES.map(t => (
-              <div key={t.id} style={{ backgroundColor: 'var(--bg-body)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-5 flex items-center gap-4">
-                <div style={{ backgroundColor: t.swatch, borderColor: t.accent }} className="w-12 h-12 rounded-xl border-2 shrink-0" />
+            {THEME_TILES.map(tile => (
+              <div key={tile.id} style={{ backgroundColor: 'var(--bg-body)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-5 flex items-center gap-4">
+                <div style={{ backgroundColor: tile.swatch, borderColor: tile.accent }} className="w-12 h-12 rounded-xl border-2 shrink-0" />
                 <div>
-                  <h3 className="font-heading font-bold text-sm">{t.name}</h3>
-                  <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] opacity-70">Přepnutelné v Nastavení</p>
+                  <h3 className="font-heading font-bold text-sm">{t(tile.name)}</h3>
+                  <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] opacity-70">{t('Přepnutelné v Nastavení')}</p>
                 </div>
               </div>
             ))}
@@ -640,7 +645,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
           8. PROČ ČÍST TADY (admin-editovatelné)
          ============================================================ */}
       <section className="max-w-5xl mx-auto px-4 py-20">
-        <h2 className="font-heading text-2xl md:text-3xl font-bold mb-12">Proč číst tady</h2>
+        <h2 className="font-heading text-2xl md:text-3xl font-bold mb-12">{t('Proč číst tady')}</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
           {whyRead.map((item, idx) => {
             const Icon = WHY_READ_ICONS[idx] || Sparkles;
@@ -648,8 +653,8 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
               <div key={idx} className="flex gap-4">
                 <Icon size={20} style={{ color: 'var(--bg-primary)' }} className="shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="font-heading font-bold text-sm mb-1.5">{item.title}</h3>
-                  <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">{item.description}</p>
+                  <h3 className="font-heading font-bold text-sm mb-1.5">{t(item.title)}</h3>
+                  <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">{t(item.description)}</p>
                 </div>
               </div>
             );
@@ -662,10 +667,9 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
          ============================================================ */}
       <section style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border-y py-20">
         <div className="max-w-5xl mx-auto px-4">
-          <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">Odkud se berou Jomarid Coins</h2>
+          <h2 className="font-heading text-2xl md:text-3xl font-bold mb-4">{t('Odkud se berou Jomarid Coins')}</h2>
           <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed max-w-lg mb-8">
-            Mincemi v knihovně přímo platíš za další tituly, nebo si za {STREAK_FREEZE_PRICE} koupíš
-            Streak Freeze - pojistku na jeden zmeškaný den bez ztráty série.
+            {t('Mincemi v knihovně přímo platíš za další tituly, nebo si za {price} koupíš Streak Freeze - pojistku na jeden zmeškaný den bez ztráty série.', { price: STREAK_FREEZE_PRICE })}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {COIN_SOURCES.map((src, idx) => {
@@ -673,7 +677,7 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
               return (
                 <div key={idx} style={{ backgroundColor: 'var(--bg-body)', borderColor: 'var(--border-color)' }} className="border rounded-xl p-4 flex items-center gap-3">
                   <div style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' }} className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"><Icon size={17} /></div>
-                  <span style={{ color: 'var(--text-body)' }} className="text-sm font-bold flex-1">{src.label}</span>
+                  <span style={{ color: 'var(--text-body)' }} className="text-sm font-bold flex-1">{t(src.label)}</span>
                   <span style={{ color: 'var(--bg-primary)' }} className="text-sm font-black shrink-0">+{src.coins}</span>
                 </div>
               );
@@ -689,14 +693,12 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
         <div className="flex flex-col md:flex-row items-start md:items-center gap-8">
           <div style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' }} className="w-16 h-16 rounded-2xl flex items-center justify-center shrink-0"><Feather size={28} /></div>
           <div className="flex-1">
-            <h2 className="font-heading text-xl md:text-2xl font-bold mb-2">Máš vlastní příběh?</h2>
+            <h2 className="font-heading text-xl md:text-2xl font-bold mb-2">{t('Máš vlastní příběh?')}</h2>
             <p style={{ color: 'var(--text-muted)' }} className="text-sm leading-relaxed mb-4 max-w-2xl">
-              Jomarid Books má i nakladatelský panel pro autory - statistiky prodejů a čtenářů,
-              správu vydaných knih, výdělek v mincích a darování knih čtenářům. Přístup k roli
-              nakladatele přiděluje tým Jomarid Books ručně, tak nám napiš.
+              {t('Jomarid Books má i nakladatelský panel pro autory - statistiky prodejů a čtenářů, správu vydaných knih, výdělek v mincích a darování knih čtenářům. Přístup k roli nakladatele přiděluje tým Jomarid Books ručně, tak nám napiš.')}
             </p>
             <a href={`mailto:${CONTACT_EMAIL}`} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs no-underline hover:brightness-105 transition-all">
-              Napsat ohledně publikování <ArrowRight size={14} />
+              {t('Napsat ohledně publikování')} <ArrowRight size={14} />
             </a>
           </div>
         </div>
@@ -706,18 +708,18 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
           11. FAQ
          ============================================================ */}
       <section className="max-w-2xl mx-auto px-4 py-20">
-        <h2 className="font-heading text-2xl md:text-3xl font-bold mb-8 text-center">Časté otázky</h2>
+        <h2 className="font-heading text-2xl md:text-3xl font-bold mb-8 text-center">{t('Časté otázky')}</h2>
         <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="p-6 rounded-2xl border shadow-sm space-y-2">
-          <FaqItem question="Jak funguje systém gamifikace a získávání odznaků?" answer={`XP sbíráš za dočtené knihy (víc při splněných vyšších měsíčních cílech), za denní sérii a za odznaky. Podmínky odznaků se vyhodnotí, když otevřeš Statistiky nebo Odznaky - na stránce Odznaky pak hned uvidíš nově odemčené odznaky z celkové sbírky ${BADGES_TEXT}.`} />
-          <FaqItem question="Jak získám přístup ke konkrétním knihám?" answer="V knihovně vidíš celý katalog i knihy, které ještě nevlastníš. Klikem na knihu otevřeš její detail s popisem, hodnocením a komentáři - a rovnou si ji tam koupíš za Jomarid Coins. Přístup se odemkne okamžitě." />
-          <FaqItem question="Co jsou ty minihry a musím je hrát?" answer="Vůbec ne - je to šest volitelných her v samostatné sekci appky, čistě pro zábavu mimo čtení. Když si zahraješ alespoň chvilku, dostaneš jednou denně bonusové Jomarid Coins navrch." />
-          <FaqItem question="Jak funguje Streak Freeze?" answer={`Koupíš si ho v sekci Statistiky za ${STREAK_FREEZE_PRICE} Jomarid Coins. Jakmile ho vlastníš, jeden zmeškaný den se automaticky počítá jako pokrytý a tvoje série se nepřeruší.`} />
-          <FaqItem question="Musím něco stahovat nebo instalovat?" answer="Nemusíš. Jomarid Books funguje ve webovém prohlížeči na počítači, tabletu i telefonu. Chceš-li, přidej si ji na plochu jako aplikaci (Nastavení → Aplikace). Na iPhonu je to potřeba pro oznámení." />
-          <FaqItem question="Pamatuje si systém, kde čtení skončilo?" answer="Ano. Tvoje přesná pozice v otevřené knize se ukládá do cloudu, takže můžeš plynule navázat na mobilu přesně tam, kde čtení na počítači skončilo." />
-          <FaqItem question="Zapomenuté heslo" answer="Na přihlašovací stránce otevři odkaz pro zapomenuté heslo a pošli žádost. Správce ti vydá dočasné heslo a předá ti ho mimo aplikaci. Po přihlášení si v Nastavení → Zabezpečení nastavíš vlastní." />
-          <FaqItem question="Nechodí mi oznámení" answer="Zkontroluj v nastavení zařízení, jestli má prohlížeč nebo aplikace povolená oznámení a jestli není zapnutý režim Nerušit. Na iPhonu oznámení fungují jen v aplikaci přidané na plochu. Pomoct může i oznámení v Nastavení → Oznámení vypnout a znovu zapnout." />
-          <FaqItem question="Jak se stanu nakladatelem a publikuji vlastní knihu?" answer="Roli nakladatele přiděluje ručně tým Jomarid Books. Napiš na kontaktní e-mail v patičce stránky a domluvíme se na dalším postupu." />
-          <FaqItem question="Kolik stojí založení účtu?" answer="Založení profilu a přístup do základního rozhraní čítárny je úplně zdarma." />
+          <FaqItem question={t('Jak funguje systém gamifikace a získávání odznaků?')} answer={t('XP sbíráš za dočtené knihy (víc při splněných vyšších měsíčních cílech), za denní sérii a za odznaky. Podmínky odznaků se vyhodnotí, když otevřeš Statistiky nebo Odznaky - na stránce Odznaky pak hned uvidíš nově odemčené odznaky z celkové sbírky {badges}.', { badges: badgesText() })} />
+          <FaqItem question={t('Jak získám přístup ke konkrétním knihám?')} answer={t('V knihovně vidíš celý katalog i knihy, které ještě nevlastníš. Klikem na knihu otevřeš její detail s popisem, hodnocením a komentáři - a rovnou si ji tam koupíš za Jomarid Coins. Přístup se odemkne okamžitě.')} />
+          <FaqItem question={t('Co jsou ty minihry a musím je hrát?')} answer={t('Vůbec ne - je to šest volitelných her v samostatné sekci appky, čistě pro zábavu mimo čtení. Když si zahraješ alespoň chvilku, dostaneš jednou denně bonusové Jomarid Coins navrch.')} />
+          <FaqItem question={t('Jak funguje Streak Freeze?')} answer={t('Koupíš si ho v sekci Statistiky za {price} Jomarid Coins. Jakmile ho vlastníš, jeden zmeškaný den se automaticky počítá jako pokrytý a tvoje série se nepřeruší.', { price: STREAK_FREEZE_PRICE })} />
+          <FaqItem question={t('Musím něco stahovat nebo instalovat?')} answer={t('Nemusíš. Jomarid Books funguje ve webovém prohlížeči na počítači, tabletu i telefonu. Chceš-li, přidej si ji na plochu jako aplikaci (Nastavení → Aplikace). Na iPhonu je to potřeba pro oznámení.')} />
+          <FaqItem question={t('Pamatuje si systém, kde čtení skončilo?')} answer={t('Ano. Tvoje přesná pozice v otevřené knize se ukládá do cloudu, takže můžeš plynule navázat na mobilu přesně tam, kde čtení na počítači skončilo.')} />
+          <FaqItem question={t('Zapomenuté heslo')} answer={t('Na přihlašovací stránce otevři odkaz pro zapomenuté heslo a pošli žádost. Správce ti vydá dočasné heslo a předá ti ho mimo aplikaci. Po přihlášení si v Nastavení → Zabezpečení nastavíš vlastní.')} />
+          <FaqItem question={t('Nechodí mi oznámení')} answer={t('Zkontroluj v nastavení zařízení, jestli má prohlížeč nebo aplikace povolená oznámení a jestli není zapnutý režim Nerušit. Na iPhonu oznámení fungují jen v aplikaci přidané na plochu. Pomoct může i oznámení v Nastavení → Oznámení vypnout a znovu zapnout.')} />
+          <FaqItem question={t('Jak se stanu nakladatelem a publikuji vlastní knihu?')} answer={t('Roli nakladatele přiděluje ručně tým Jomarid Books. Napiš na kontaktní e-mail v patičce stránky a domluvíme se na dalším postupu.')} />
+          <FaqItem question={t('Kolik stojí založení účtu?')} answer={t('Založení profilu a přístup do základního rozhraní čítárny je úplně zdarma.')} />
         </div>
       </section>
 
@@ -727,10 +729,10 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
       <section className="max-w-5xl mx-auto px-4 pb-20">
         <div style={{ backgroundColor: 'var(--text-body)', color: 'var(--bg-body)' }} className="rounded-2xl p-10 md:p-14 text-center shadow-xl relative overflow-hidden">
           <div style={{ backgroundColor: 'var(--bg-primary)' }} className="absolute -right-16 -top-16 w-56 h-56 opacity-20 rounded-full blur-3xl" />
-          <h3 className="font-heading relative text-2xl md:text-3xl font-bold mb-3">Tvoje první úroveň čeká</h3>
-          <p style={{ color: 'var(--bg-body)' }} className="relative text-sm max-w-md mx-auto mb-8 opacity-80">Založ si účet, otevři první knihu a začni sbírat XP.</p>
+          <h3 className="font-heading relative text-2xl md:text-3xl font-bold mb-3">{t('Tvoje první úroveň čeká')}</h3>
+          <p style={{ color: 'var(--bg-body)' }} className="relative text-sm max-w-md mx-auto mb-8 opacity-80">{t('Založ si účet, otevři první knihu a začni sbírat XP.')}</p>
           <button onClick={() => navigate('/login')} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="relative px-8 py-3.5 border-none font-bold text-sm rounded-xl shadow-md hover:brightness-105 active:scale-[0.98] transition-all duration-150">
-            Spustit aplikaci
+            {t('Spustit aplikaci')}
           </button>
         </div>
       </section>
@@ -746,13 +748,13 @@ const LoggedOutHome = ({ settings, featuredBooks, loading, navigate }) => {
 // ============================================================================
 const LoggedInHome = ({ user, personal, loading, navigate }) => {
   const { username: accountName } = useAuth();
-  const username = accountName || (user.email ? user.email.split('@')[0] : 'čtenáři');
+  const username = accountName || (user.email ? user.email.split('@')[0] : t('čtenáři'));
 
   if (loading || !personal) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-24 flex flex-col items-center justify-center gap-3">
         <Loader2 size={28} className="animate-spin opacity-40" />
-        <p style={{ color: 'var(--text-muted)' }} className="text-xs opacity-60">Připravuji tvůj přehled…</p>
+        <p style={{ color: 'var(--text-muted)' }} className="text-xs opacity-60">{t('Připravuji tvůj přehled…')}</p>
       </div>
     );
   }
@@ -767,19 +769,19 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
           1. OSOBNÍ PŘEHLED - skutečný level, streak, mince
          ============================================================ */}
       <section className="max-w-5xl mx-auto px-4 pt-14 pb-10">
-        <h1 className="font-heading text-2xl md:text-3xl font-extrabold tracking-tight mb-1">Vítej zpátky, {username}</h1>
+        <h1 className="font-heading text-2xl md:text-3xl font-extrabold tracking-tight mb-1">{t('Vítej zpátky, {name}', { name: username })}</h1>
         <p style={{ color: 'var(--text-muted)' }} className="text-sm mb-8">{visuals.name}</p>
 
         {/* Na telefonu: úroveň přes celou šířku a série s mincemi vedle sebe (tři karty pod sebou zabíraly ~410 px). */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
           <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="col-span-2 sm:col-span-1 border rounded-2xl p-4 sm:p-5">
             <div className="flex items-center justify-between mb-2">
-              <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide">Úroveň</span>
+              <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide">{t('Úroveň')}</span>
               <TrendingUp size={14} style={{ color: 'var(--bg-primary)' }} />
             </div>
             <div className="flex items-end justify-between mb-2">
               <span className="font-heading text-3xl font-extrabold tabular-nums" style={{ color: 'var(--bg-primary)' }}>{level}</span>
-              <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-medium mb-1">{xpInCurrentLevel}/{xpNeededForNext} XP</span>
+              <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-medium mb-1">{t('{cur}/{need} XP', { cur: xpInCurrentLevel, need: xpNeededForNext })}</span>
             </div>
             <div style={{ backgroundColor: 'var(--bg-secondary)' }} className="w-full h-2 rounded-full overflow-hidden">
               <div style={{ backgroundColor: 'var(--bg-primary)', width: `${progressPct}%` }} className="h-full rounded-full transition-all duration-500" />
@@ -788,22 +790,22 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
 
           <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-4 sm:p-5">
             <div className="flex items-center justify-between mb-2">
-              <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide">Streak</span>
+              <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide">{t('Streak')}</span>
               <Flame size={14} className="text-orange-500" />
             </div>
-            <span className="font-heading text-2xl sm:text-3xl font-extrabold tabular-nums block mb-1">{streak} {streak === 1 ? 'den' : streak >= 2 && streak <= 4 ? 'dny' : 'dní'}</span>
+            <span className="font-heading text-2xl sm:text-3xl font-extrabold tabular-nums block mb-1">{streak} {streak === 1 ? 'den' : streak >= 2 && streak <= 4 ? 'dny' : t('dní')}</span>
             <span style={{ color: readToday ? '#22c55e' : '#f59e0b' }} className="text-[0.6875rem] font-bold">
-              {readToday ? '✓ Dnes už splněno' : streak > 0 ? '⚠ Dnes ještě bez čtení' : 'Začni dnes svou sérii'}
+              {readToday ? t('✓ Dnes už splněno') : streak > 0 ? t('⚠ Dnes ještě bez čtení') : t('Začni dnes svou sérii')}
             </span>
           </div>
 
           <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-4 sm:p-5">
             <div className="flex items-center justify-between mb-2">
-              <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide">Jomarid Coins</span>
+              <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide">{t('Jomarid Coins')}</span>
               <Coins size={14} className="text-amber-500" />
             </div>
             <span className="font-heading text-2xl sm:text-3xl font-extrabold tabular-nums block mb-1">{coins}</span>
-            <span style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] opacity-70">{totalBadges} odznaků odemčeno</span>
+            <span style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] opacity-70">{t.p(totalBadges, '{n} odznak odemčen', '{n} odznaky odemčeny', '{n} odznaků odemčeno', { n: totalBadges })}</span>
           </div>
         </div>
 
@@ -811,7 +813,7 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
           <div style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', borderColor: '#f59e0b' }} className="border rounded-xl p-4 flex items-center gap-3 mb-2">
             <Flame size={18} className="text-amber-500 shrink-0" />
             <p className="text-xs font-bold flex-1" style={{ color: 'var(--text-body)' }}>
-              Tvoje {streak}denní série ještě dnes čeká na pokrytí. Přečti alespoň kousek, ať nepřijdeš o postup.
+              {t('Tvoje {n}denní série ještě dnes čeká na pokrytí. Přečti alespoň kousek, ať nepřijdeš o postup.', { n: streak })}
             </p>
           </div>
         )}
@@ -826,28 +828,28 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
           {continueBook ? (
             <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 flex flex-col justify-between">
               <div>
-                <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide block mb-2">Pokračovat ve čtení</span>
+                <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide block mb-2">{t('Pokračovat ve čtení')}</span>
                 <h3 className="font-heading font-bold text-lg mb-1">{continueBook.title}</h3>
                 <p style={{ color: 'var(--text-muted)' }} className="text-xs mb-4">{continueBook.author_display || continueBook.author}</p>
                 <div style={{ backgroundColor: 'var(--bg-secondary)' }} className="w-full h-2 rounded-full overflow-hidden mb-2">
                   <div style={{ backgroundColor: 'var(--bg-primary)', width: `${continueProgress}%` }} className="h-full rounded-full" />
                 </div>
-                <span style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] opacity-70">{continueProgress}% přečteno</span>
+                <span style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] opacity-70">{t('{n}% přečteno', { n: continueProgress })}</span>
               </div>
               <button
                 onClick={() => navigate(`/read/${continueBook.id}`)}
                 style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
                 className="mt-5 w-full py-3 rounded-xl font-bold text-sm border-none cursor-pointer hover:brightness-105 transition-all flex items-center justify-center gap-2"
               >
-                <BookOpen size={15} /> Pokračovat
+                <BookOpen size={15} /> {t('Pokračovat')}
               </button>
             </div>
           ) : (
             <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 flex flex-col justify-center items-center text-center">
               <BookOpen size={28} style={{ color: 'var(--text-muted)' }} className="opacity-40 mb-3" />
-              <p style={{ color: 'var(--text-muted)' }} className="text-sm mb-4">Zrovna nemáš žádnou rozečtenou knihu.</p>
+              <p style={{ color: 'var(--text-muted)' }} className="text-sm mb-4">{t('Zrovna nemáš žádnou rozečtenou knihu.')}</p>
               <button onClick={() => navigate('/app')} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="px-5 py-2.5 rounded-xl font-bold text-xs border-none cursor-pointer hover:brightness-105 transition-all">
-                Otevřít knihovnu
+                {t('Otevřít knihovnu')}
               </button>
             </div>
           )}
@@ -855,7 +857,7 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
           {recommended ? (
             <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 flex flex-col justify-between">
               <div>
-                <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide block mb-2">Doporučeno pro tebe</span>
+                <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide block mb-2">{t('Doporučeno pro tebe')}</span>
                 <h3 className="font-heading font-bold text-lg mb-1">{recommended.title}</h3>
                 <p style={{ color: 'var(--text-muted)' }} className="text-xs mb-3">{recommended.author_display || recommended.author}</p>
                 {recommended.description && (
@@ -870,13 +872,13 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
                 style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }}
                 className="mt-5 w-full py-3 rounded-xl font-bold text-sm border-none cursor-pointer hover:opacity-90 transition-all flex items-center justify-center gap-2"
               >
-                <Coins size={15} /> {recommended.price_coins ?? DEFAULT_BOOK_PRICE} mincí v knihovně
+                <Coins size={15} /> {t('{price} mincí v knihovně', { price: recommended.price_coins ?? DEFAULT_BOOK_PRICE })}
               </button>
             </div>
           ) : (
             <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 flex flex-col justify-center items-center text-center">
               <Sparkles size={28} style={{ color: 'var(--text-muted)' }} className="opacity-40 mb-3" />
-              <p style={{ color: 'var(--text-muted)' }} className="text-sm">Zatím vlastníš celý dostupný katalog. Sleduj novinky!</p>
+              <p style={{ color: 'var(--text-muted)' }} className="text-sm">{t('Zatím vlastníš celý dostupný katalog. Sleduj novinky!')}</p>
             </div>
           )}
         </div>
@@ -898,7 +900,7 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
                     <Trophy size={28} />
                   </div>
                   <div>
-                    <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide">Naposledy odemčeno</span>
+                    <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide">{t('Naposledy odemčeno')}</span>
                     <h3 className="font-heading font-bold text-lg">{latestBadge.title}</h3>
                     <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">{latestBadge.description}</p>
                   </div>
@@ -909,9 +911,9 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
                     <Footprints size={28} />
                   </div>
                   <div>
-                    <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide">Tvůj první odznak čeká</span>
-                    <h3 className="font-heading font-bold text-lg">První Průzkumník</h3>
-                    <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">Přečti svou první knihu a odemkni ho.</p>
+                    <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide">{t('Tvůj první odznak čeká')}</span>
+                    <h3 className="font-heading font-bold text-lg">{t('První Průzkumník')}</h3>
+                    <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">{t('Přečti svou první knihu a odemkni ho.')}</p>
                   </div>
                 </>
               )}
@@ -923,22 +925,22 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
               className="rounded-2xl p-6 border-none cursor-pointer hover:brightness-105 transition-all flex flex-col items-center justify-center gap-2"
             >
               <BarChart3 size={24} />
-              <span className="font-bold text-sm">Zobrazit statistiky</span>
+              <span className="font-bold text-sm">{t('Zobrazit statistiky')}</span>
             </button>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
             <button onClick={() => navigate('/app')} style={{ backgroundColor: 'var(--bg-body)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="border rounded-xl p-4 cursor-pointer hover:opacity-80 transition-all flex flex-col items-center gap-2 text-xs font-bold">
-              <Library size={18} /> Knihovna
+              <Library size={18} /> {t('Knihovna')}
             </button>
             <button onClick={() => navigate('/games')} style={{ backgroundColor: 'var(--bg-body)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="border rounded-xl p-4 cursor-pointer hover:opacity-80 transition-all flex flex-col items-center gap-2 text-xs font-bold">
-              <Gamepad2 size={18} /> Minihry
+              <Gamepad2 size={18} /> {t('Minihry')}
             </button>
             <button onClick={() => navigate('/badges')} style={{ backgroundColor: 'var(--bg-body)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="border rounded-xl p-4 cursor-pointer hover:opacity-80 transition-all flex flex-col items-center gap-2 text-xs font-bold">
-              <Trophy size={18} /> Odznaky
+              <Trophy size={18} /> {t('Odznaky')}
             </button>
             <a href={`mailto:${CONTACT_EMAIL}`} style={{ backgroundColor: 'var(--bg-body)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="border rounded-xl p-4 no-underline hover:opacity-80 transition-all flex flex-col items-center gap-2 text-xs font-bold">
-              <Mail size={18} /> Podpora
+              <Mail size={18} /> {t('Podpora')}
             </a>
           </div>
         </div>
@@ -961,7 +963,7 @@ const VersionBanner = () => (
   <div style={{ backgroundColor: 'var(--bg-badge)', borderColor: 'var(--border-color)' }} className="border rounded-xl px-4 py-3 flex items-center gap-2.5 text-xs">
     <Sparkles size={15} style={{ color: 'var(--text-badge)' }} className="shrink-0" />
     <p style={{ color: 'var(--text-badge)' }} className="m-0 font-semibold">
-      Jomarid Books je ve verzi {APP_VERSION_SHORT}! Díky, že čteš s námi.
+      {t('Jomarid Books je ve verzi {version}! Díky, že čteš s námi.', { version: APP_VERSION_SHORT })}
     </p>
   </div>
 );
@@ -969,15 +971,15 @@ const VersionBanner = () => (
 const Footer = () => (
   <footer style={{ borderColor: 'var(--border-color)' }} className="max-w-6xl mx-auto px-4 pt-8 pb-12 border-t flex flex-col sm:flex-row items-center justify-between text-xs gap-4">
     <div style={{ color: 'var(--text-muted)' }} className="flex flex-col sm:flex-row items-center gap-1 sm:gap-3">
-      <span className="font-semibold">© {new Date().getFullYear()} Jomarid Books</span>
+      <span className="font-semibold">{t('© {year} Jomarid Books', { year: new Date().getFullYear() })}</span>
       <span className="hidden sm:inline opacity-40">·</span>
-      <span>Digitální čítárna s postupem</span>
+      <span>{t('Digitální čítárna s postupem')}</span>
       <span className="hidden sm:inline opacity-40">·</span>
       <span>{APP_VERSION_LABEL}</span>
     </div>
-    <nav aria-label="Odkazy v patičce" className="flex items-center gap-4 font-semibold">
-      <Link to="/settings" style={{ color: 'var(--text-body)' }} className="no-underline hover:underline underline-offset-2">Nastavení</Link>
-      <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: 'var(--text-body)' }} className="no-underline hover:underline underline-offset-2">Kontakt</a>
+    <nav aria-label={t('Odkazy v patičce')} className="flex items-center gap-4 font-semibold">
+      <Link to="/settings" style={{ color: 'var(--text-body)' }} className="no-underline hover:underline underline-offset-2">{t('Nastavení')}</Link>
+      <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: 'var(--text-body)' }} className="no-underline hover:underline underline-offset-2">{t('Kontakt')}</a>
     </nav>
     <a
       href={`mailto:${CONTACT_EMAIL}`}

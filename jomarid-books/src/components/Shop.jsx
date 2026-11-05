@@ -3,8 +3,9 @@ import { Coins, Check, Lock, Loader2, Store } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { SHOP_KINDS, KIND_GAMEFX, KIND_TITLE, groupsOfKind, itemState, missingCoins, ownedSecretItems, requirementText, shopErrorText } from '../shop/catalog';
 import { buyCosmetic, equipCosmetic, loadMyCosmetics } from '../shop/api';
+import { t, tx, formatNumber } from '../i18n';
 
-const fmt = (n) => Number(n || 0).toLocaleString('cs-CZ');
+const fmt = (n) => formatNumber(n);
 
 // Náhled vzhledu her: pestrá plocha, na kterou se použije stejný filtr jako na hru.
 const FxPreview = ({ filter }) => (
@@ -28,12 +29,12 @@ const ItemCard = ({ item, state, coins, busy, onBuy, onEquip, onUnequip }) => {
     >
       <div className="flex items-start justify-between gap-2">
         <span className="min-w-0">
-          <span className="block text-sm font-black">{item.label}</span>
-          {item.description && <span style={{ color: 'var(--text-muted)' }} className="block text-[0.6875rem] font-bold">{item.description}</span>}
+          <span className="block text-sm font-black">{t(item.label)}</span>
+          {item.description && <span style={{ color: 'var(--text-muted)' }} className="block text-[0.6875rem] font-bold">{t(item.description)}</span>}
         </span>
         {state === 'equipped' && (
           <span style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="shrink-0 rounded-md px-1.5 py-0.5 text-[0.5625rem] font-black uppercase tracking-wide inline-flex items-center gap-1">
-            <Check size={10} aria-hidden="true" /> Nasazeno
+            <Check size={10} aria-hidden="true" /> {t('Nasazeno')}
           </span>
         )}
       </div>
@@ -42,13 +43,13 @@ const ItemCard = ({ item, state, coins, busy, onBuy, onEquip, onUnequip }) => {
 
       {state === 'locked' && need && (
         <span style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] font-bold inline-flex items-start gap-1.5">
-          <Lock size={12} className="mt-0.5 shrink-0" aria-hidden="true" /> Odemkne se: {need}
+          <Lock size={12} className="mt-0.5 shrink-0" aria-hidden="true" /> {t('Odemkne se: {need}', { need })}
         </span>
       )}
 
       <div className="mt-auto flex items-center justify-between gap-2">
         {item.secret ? (
-          <span style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] font-bold">Získáno za skrytý odznak</span>
+          <span style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] font-bold">{t('Získáno za skrytý odznak')}</span>
         ) : (
           <span style={{ color: owned ? 'var(--text-muted)' : 'var(--text-body)' }} className="text-xs font-black inline-flex items-center gap-1">
             <Coins size={12} className="text-amber-500" aria-hidden="true" /> {fmt(item.price)}
@@ -62,14 +63,14 @@ const ItemCard = ({ item, state, coins, busy, onBuy, onEquip, onUnequip }) => {
             style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
             className="px-3 py-1.5 rounded-lg text-[0.6875rem] font-black uppercase tracking-wider cursor-pointer border disabled:cursor-wait"
           >
-            {busy ? <Loader2 size={12} className="animate-spin" aria-label="Pracuju" /> : state === 'equipped' ? 'Sundat' : 'Nasadit'}
+            {busy ? <Loader2 size={12} className="animate-spin" aria-label={t('Pracuju')} /> : state === 'equipped' ? t('Sundat') : t('Nasadit')}
           </button>
         ) : (
           <button
             type="button"
             disabled={busy || state === 'locked' || state === 'poor'}
             onClick={() => onBuy(item)}
-            title={state === 'poor' ? `Chybí ti ${fmt(missing)} ${missing === 1 ? 'mince' : 'mincí'}` : undefined}
+            title={state === 'poor' ? t.p(missing, 'Chybí ti {n} mince', 'Chybí ti {n} mince', 'Chybí ti {n} mincí', { n: fmt(missing) }) : undefined}
             style={{
               backgroundColor: state === 'available' ? 'var(--bg-primary)' : 'var(--bg-card)',
               color: state === 'available' ? 'var(--text-primary)' : 'var(--text-muted)',
@@ -77,7 +78,7 @@ const ItemCard = ({ item, state, coins, busy, onBuy, onEquip, onUnequip }) => {
             }}
             className="px-3 py-1.5 rounded-lg text-[0.6875rem] font-black uppercase tracking-wider cursor-pointer border disabled:cursor-not-allowed"
           >
-            {busy ? <Loader2 size={12} className="animate-spin" aria-label="Pracuju" /> : state === 'locked' ? 'Zamčeno' : state === 'poor' ? `Chybí ${fmt(missing)}` : 'Koupit'}
+            {busy ? <Loader2 size={12} className="animate-spin" aria-label={t('Pracuju')} /> : state === 'locked' ? t('Zamčeno') : state === 'poor' ? t('Chybí {n}', { n: fmt(missing) }) : t('Koupit')}
           </button>
         )}
       </div>
@@ -115,14 +116,14 @@ export const Shop = ({ cosmetics, coins, unlocked, onCosmetics, onBalance }) => 
     }
     onCosmetics({ owned: [...cosmetics.owned, item.id], equipped: { ...cosmetics.equipped, [item.kind]: item.id } });
     if (res.newBalance != null) onBalance(res.newBalance);
-    say(item.kind === KIND_GAMEFX ? `Koupeno: ${item.label}. Vzhled her máš nasazený, uvidíš ho při další hře.` : `Koupeno: ${item.label}. Titul máš nasazený.`);
+    say(item.kind === KIND_GAMEFX ? t('Koupeno: {name}. Vzhled her máš nasazený, uvidíš ho při další hře.', { name: t(item.label) }) : t('Koupeno: {name}. Titul máš nasazený.', { name: t(item.label) }));
   });
 
   const equip = (item) => withBusy(item, async () => {
     const res = await equipCosmetic(supabase, item.kind, item.id);
     if (!res.ok) { say(shopErrorText(res.reason), true); await refresh(); return; }
     onCosmetics({ ...cosmetics, equipped: { ...cosmetics.equipped, [item.kind]: item.id } });
-    say(`Nasazeno: ${item.label}.`);
+    say(t('Nasazeno: {name}.', { name: t(item.label) }));
   });
 
   const unequip = (item) => withBusy(item, async () => {
@@ -131,7 +132,7 @@ export const Shop = ({ cosmetics, coins, unlocked, onCosmetics, onBalance }) => 
     const equipped = { ...cosmetics.equipped };
     delete equipped[item.kind];
     onCosmetics({ ...cosmetics, equipped });
-    say(`Sundáno: ${item.label}.`);
+    say(t('Sundáno: {name}.', { name: t(item.label) }));
   });
 
   const state = { owned: cosmetics.owned, equipped: cosmetics.equipped, unlocked, coins };
@@ -140,14 +141,14 @@ export const Shop = ({ cosmetics, coins, unlocked, onCosmetics, onBalance }) => 
     <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 shadow-sm mb-8" data-testid="shop">
       <div className="mb-4">
         <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider text-left flex items-center gap-1.5 m-0">
-          <Store size={16} style={{ color: 'var(--bg-primary)' }} /> Obchůdek
+          <Store size={16} style={{ color: 'var(--bg-primary)' }} /> {t('Obchůdek')}
         </h3>
         <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-1 m-0 opacity-70">
-          Jomarid Coins se dají utratit i za něco, co se nečte: tituly u jména a vzhledy her. Nic z toho nedává výhodu, je to jen vzhled. Máš {fmt(coins)} <Coins size={11} className="inline text-amber-500 -mt-0.5" aria-hidden="true" />
+          {tx('Jomarid Coins se dají utratit i za něco, co se nečte: tituly u jména a vzhledy her. Nic z toho nedává výhodu, je to jen vzhled. Máš {n} {icon}', { n: fmt(coins), icon: <Coins size={11} className="inline text-amber-500 -mt-0.5" aria-hidden="true" /> })}
         </p>
       </div>
 
-      <div className="flex gap-2 mb-3" role="group" aria-label="Druh zboží">
+      <div className="flex gap-2 mb-3" role="group" aria-label={t('Druh zboží')}>
         {SHOP_KINDS.map((k) => (
           <button
             key={k.kind}
@@ -158,11 +159,11 @@ export const Shop = ({ cosmetics, coins, unlocked, onCosmetics, onBalance }) => 
             style={{ backgroundColor: k.kind === kind ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: k.kind === kind ? 'var(--text-primary)' : 'var(--text-body)', borderColor: 'var(--border-color)' }}
             className="px-3 py-1.5 rounded-lg text-[0.6875rem] font-black uppercase tracking-wider cursor-pointer border"
           >
-            {k.label}
+            {t(k.label)}
           </button>
         ))}
       </div>
-      <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] font-bold m-0 mb-3">{current.hint}</p>
+      <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] font-bold m-0 mb-3">{t(current.hint)}</p>
 
       {groupsOfKind(kind).map((group) => (
         <section key={group.id} data-testid={`shop-group-${group.id}`} aria-label={group.label || undefined} className="mb-5 last:mb-0">
@@ -185,8 +186,8 @@ export const Shop = ({ cosmetics, coins, unlocked, onCosmetics, onBalance }) => 
       ))}
 
       {kind === KIND_TITLE && ownedSecretItems(cosmetics.owned).length > 0 && (
-        <section data-testid="shop-group-secret" aria-label="Skryté" className="mt-5">
-          <h4 style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider m-0 mb-2">Skryté</h4>
+        <section data-testid="shop-group-secret" aria-label={t('Skryté')} className="mt-5">
+          <h4 style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider m-0 mb-2">{t('Skryté')}</h4>
           <ul className="list-none m-0 p-0 grid grid-cols-1 sm:grid-cols-2 gap-2">
             {ownedSecretItems(cosmetics.owned).map((item) => (
               <ItemCard key={item.id} item={item} state={itemState(item, state)} coins={coins} busy={busyId === item.id} onBuy={buy} onEquip={equip} onUnequip={unequip} />

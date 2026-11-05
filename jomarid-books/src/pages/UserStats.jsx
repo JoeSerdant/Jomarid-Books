@@ -10,9 +10,9 @@ import { FROZEN_ICON_COLOR, FROZEN_LABEL, boardRowStyle, isFrozenRow } from '../
 import { CountUp } from '../lively/CountUp';
 import { calculateGoalMultiplier, DEFAULT_MONTHLY_GOAL } from '../constants/leveling';
 import { STREAK_FREEZE_PRICE } from '../constants/economy';
-import { plural } from '../lib/plural';
 import { titleLabel } from '../shop/catalog';
 import { Award, Calendar, CheckCircle, ChevronRight, Coins, Flame, Loader2, Lock, Shield, ShieldCheck, ShieldOff, Snowflake, Sparkles, TrendingUp, Trophy, Users } from 'lucide-react';
+import { t, formatNumber } from '../i18n';
 
 export const UserStats = () => {
   const { user } = useAuth();
@@ -97,10 +97,10 @@ export const UserStats = () => {
         } catch (refreshErr) {
           console.error('Nepodařilo se ověřit aktuální zůstatek:', refreshErr);
         }
-        alert(`Nemáš dost Jomarid Coinů. Streak Freeze stojí ${STREAK_FREEZE_PRICE}, ty máš ${realBalance}.`);
+        alert(t('Nemáš dost Jomarid Coinů. Streak Freeze stojí {price}, ty máš {balance}.', { price: STREAK_FREEZE_PRICE, balance: realBalance }));
       } else {
         console.error('Streak Freeze:', err);
-        alert(friendlyError(err, 'Nákup se nezdařil. Zkus to znovu.'));
+        alert(friendlyError(err, t('Nákup se nezdařil. Zkus to znovu.')));
       }
     } finally {
       setBuyingFreeze(false);
@@ -110,17 +110,17 @@ export const UserStats = () => {
   const handleSaveGoal = async () => {
     const goalNum = parseInt(newGoalInput, 10);
     setGoalError('');
-    if (isNaN(goalNum) || goalNum < 1) return setGoalError('Zadej platné číslo.');
-    if (goalNum > 500) return setGoalError('Nejvýš 500 knih.');
+    if (isNaN(goalNum) || goalNum < 1) return setGoalError(t('Zadej platné číslo.'));
+    if (goalNum > 500) return setGoalError(t('Nejvýš 500 knih.'));
     // Jakmile je dosaženo aspoň poloviny současného cíle v tomhle měsíci, cíl
     // už nejde změnit vůbec (ani nahoru, ani dolů) - server (trigger) totéž
     // vynucuje nezávisle na téhle kontrole, tohle je jen rychlejší zpětná vazba.
     if (stats.goalLockedCompletely) {
-      return setGoalError(`Cíl už nejde změnit - máš splněno ${stats.goalProgress} z ${stats.monthlyGoal} (aspoň polovina). Zkus to zas příští měsíc.`);
+      return setGoalError(t('Cíl už nejde změnit - máš splněno {done} z {goal} (aspoň polovina). Zkus to zas příští měsíc.', { done: stats.goalProgress, goal: stats.monthlyGoal }));
     }
     // Jinak lze zvýšit vždy. Snížit jen pokud tenhle měsíc ještě nebyl cíl měněný.
     if (goalNum < stats.monthlyGoal && stats.goalLocked) {
-      return setGoalError('Tento měsíc lze cíl už jen zvýšit, ne snížit.');
+      return setGoalError(t('Tento měsíc lze cíl už jen zvýšit, ne snížit.'));
     }
 
     try {
@@ -134,7 +134,7 @@ export const UserStats = () => {
       fetchFullStats();
     } catch (err) {
       console.error('Měsíční cíl:', err);
-      setGoalError(friendlyError(err, 'Cíl se nepodařilo uložit. Zkus to znovu.'));
+      setGoalError(friendlyError(err, t('Cíl se nepodařilo uložit. Zkus to znovu.')));
     }
   };
 
@@ -142,7 +142,7 @@ export const UserStats = () => {
     return (
       <div className="max-w-4xl mx-auto px-4 py-20 text-center">
         <div style={{ borderTopColor: 'transparent', borderLeftColor: 'var(--bg-primary)' }} className="w-10 h-10 border-4 rounded-full animate-spin mx-auto mb-4"></div>
-        <p style={{ color: 'var(--text-muted)' }} className="text-sm font-bold opacity-60 animate-pulse">Sestavuji tvůj kompletní přehled a síň slávy...</p>
+        <p style={{ color: 'var(--text-muted)' }} className="text-sm font-bold opacity-60 animate-pulse">{t('Sestavuji tvůj kompletní přehled a síň slávy...')}</p>
       </div>
     );
   }
@@ -151,11 +151,11 @@ export const UserStats = () => {
   const xpPercent = Math.min(100, Math.round((stats.xp / stats.xpNeededForNext) * 100));
   const myTitle = titleLabel(cosmetics?.equipped?.title);
   const categories = [
-    { id: 'streak', label: 'Plamínky 🔥', icon: Flame, suffix: n => plural(n, 'den', 'dny', 'dní') },
-    { id: 'level', label: 'Úroveň 🏆', icon: Trophy, suffix: 'lvl' },
-    { id: 'totalRead', label: 'Celkem knih 📚', icon: CheckCircle, suffix: n => plural(n, 'kniha', 'knihy', 'knih') },
-    { id: 'monthlyRead', label: 'Tento měsíc 📅', icon: Calendar, suffix: n => plural(n, 'kniha', 'knihy', 'knih') },
-    { id: 'xp', label: 'Celkové XP ⭐', icon: Sparkles, suffix: 'XP' }
+    { id: 'streak', label: t('Plamínky 🔥'), icon: Flame, suffix: n => t.p(n, 'den', 'dny', 'dní') },
+    { id: 'level', label: t('Úroveň 🏆'), icon: Trophy, suffix: 'lvl' },
+    { id: 'totalRead', label: t('Celkem knih 📚'), icon: CheckCircle, suffix: n => t.p(n, 'kniha', 'knihy', 'knih') },
+    { id: 'monthlyRead', label: t('Tento měsíc 📅'), icon: Calendar, suffix: n => t.p(n, 'kniha', 'knihy', 'knih') },
+    { id: 'xp', label: t('Celkové XP ⭐'), icon: Sparkles, suffix: 'XP' }
   ];
 
   return (
@@ -166,12 +166,12 @@ export const UserStats = () => {
         <div className="flex items-center gap-3 text-left">
           {stats.showInLeaderboard ? <div className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg"><Shield size={20} /></div> : <div className="p-2 bg-red-500/10 text-red-500 rounded-lg"><ShieldOff size={20} /></div>}
           <div>
-            <h4 className="text-sm font-black m-0">Zveřejnění v Síni slávy</h4>
-            <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0">{stats.showInLeaderboard ? "Ostatní čtenáři tě vidí v žebříčcích." : "Tvůj profil je skrytý. Výsledky vidíš pouze ty."}</p>
+            <h4 className="text-sm font-black m-0">{t('Zveřejnění v Síni slávy')}</h4>
+            <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0">{stats.showInLeaderboard ? t('Ostatní čtenáři tě vidí v žebříčcích.') : t('Tvůj profil je skrytý. Výsledky vidíš pouze ty.')}</p>
           </div>
         </div>
         <button onClick={togglePrivacy} disabled={isUpdatingPrivacy} style={{ backgroundColor: stats.showInLeaderboard ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-primary)', color: stats.showInLeaderboard ? '#ef4444' : 'var(--text-primary)' }} className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer border-none shadow-sm hover:opacity-90 transition-all">
-          {isUpdatingPrivacy ? 'Aktualizuji...' : stats.showInLeaderboard ? 'Skrýt výsledky 🔒' : 'Chci soutěžit! 🌍'}
+          {isUpdatingPrivacy ? t('Aktualizuji...') : stats.showInLeaderboard ? t('Skrýt výsledky 🔒') : t('Chci soutěžit! 🌍')}
         </button>
       </div>
 
@@ -183,10 +183,10 @@ export const UserStats = () => {
     <div className="text-left">
       <div className="flex items-center gap-2 mb-2">
         <span className={`text-xs px-3 py-1 rounded-full font-black uppercase tracking-wider inline-block ${stats.levelBadgeClass}`}>
-          {stats.levelName}
+          {t(stats.levelName)}
         </span>
         <span className="text-xs px-3 py-1 rounded-full font-black uppercase tracking-wider bg-amber-500/20 text-amber-400 flex items-center gap-1">
-          <Coins size={12} /> <CountUp value={stats.jomaridCoins} /> Coins
+          <Coins size={12} /> <CountUp value={stats.jomaridCoins} /> {t('Coins')}
         </span>
         {myTitle && (
           <span data-testid="own-title" style={{ borderColor: 'var(--bg-primary)', color: 'var(--text-body)' }} className="text-xs px-3 py-1 rounded-full font-black uppercase tracking-wider border">
@@ -194,8 +194,8 @@ export const UserStats = () => {
           </span>
         )}
       </div>
-      <h1 className="text-3xl font-black tracking-tight mb-1" style={{ color: 'var(--text-body)' }}>Moje Statistiky</h1>
-      <p style={{ color: 'var(--text-muted)' }} className="text-sm font-medium opacity-80">XP dostáváš za dočtené knihy (víc při splněných vyšších cílech), za denní sérii a za odznaky. Odznaky se vyhodnotí, když otevřeš tuhle stránku nebo stránku Odznaky.</p>
+      <h1 className="text-3xl font-black tracking-tight mb-1" style={{ color: 'var(--text-body)' }}>{t('Moje Statistiky')}</h1>
+      <p style={{ color: 'var(--text-muted)' }} className="text-sm font-medium opacity-80">{t('XP dostáváš za dočtené knihy (víc při splněných vyšších cílech), za denní sérii a za odznaky. Odznaky se vyhodnotí, když otevřeš tuhle stránku nebo stránku Odznaky.')}</p>
     </div>
     
     {/* LEVEL BAR */}
@@ -205,8 +205,8 @@ export const UserStats = () => {
       </div>
       <div className="flex-1 space-y-1 text-left">
         <div className="flex justify-between text-[0.625rem] font-black uppercase tracking-wider opacity-60" style={{ color: 'var(--text-body)' }}>
-          <span>Úroveň čtenáře</span>
-          <span><CountUp value={stats.xp} /> / {stats.xpNeededForNext} XP</span>
+          <span>{t('Úroveň čtenáře')}</span>
+          <span><CountUp value={stats.xp} /> / {stats.xpNeededForNext} {t('XP')}</span>
         </div>
         <div className="w-full bg-black/20 dark:bg-white/10 h-2 rounded-full overflow-hidden">
           <div data-lv-grow className="h-full rounded-full transition-all duration-500" style={{ width: `${xpPercent}%`, backgroundColor: 'var(--bg-primary)' }}></div>
@@ -224,15 +224,15 @@ export const UserStats = () => {
         <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 shadow-sm flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div className="space-y-1 text-left">
-              <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider">Aktuální Streak</h3>
-              <p className="text-4xl font-black text-amber-600 flex items-baseline gap-1 m-0"><CountUp value={stats.streak} /> <span style={{ color: 'var(--text-muted)' }} className="text-xs uppercase font-bold opacity-60">{plural(stats.streak, 'den', 'dny', 'dní')}</span></p>
+              <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider">{t('Aktuální Streak')}</h3>
+              <p className="text-4xl font-black text-amber-600 flex items-baseline gap-1 m-0"><CountUp value={stats.streak} /> <span style={{ color: 'var(--text-muted)' }} className="text-xs uppercase font-bold opacity-60">{t.p(stats.streak, 'den', 'dny', 'dní')}</span></p>
             </div>
             <div className="p-3 bg-amber-500/10 text-amber-600 rounded-xl"><Flame size={24} className={stats.streak > 0 ? "fill-amber-500" : ""} /></div>
           </div>
           <div style={{ borderColor: 'var(--border-color)' }} className="mt-2 pt-2 border-t text-left text-[0.625rem] space-y-0.5">
-            <div className={`flex justify-between ${stats.streak < 10 ? 'font-black text-amber-600' : 'opacity-60'}`}><span>0-9 dní série:</span><span>streak * 10 XP</span></div>
-            <div className={`flex justify-between ${stats.streak >= 10 && stats.streak < 50 ? 'font-black text-indigo-500' : 'opacity-60'}`}><span>10-49 dní 🔥:</span><span>streak * 25 XP</span></div>
-            <div className={`flex justify-between ${stats.streak >= 50 ? 'font-black text-emerald-500 animate-pulse' : 'opacity-60'}`}><span>50+ dní 👑:</span><span>streak * 50 XP</span></div>
+            <div className={`flex justify-between ${stats.streak < 10 ? 'font-black text-amber-600' : 'opacity-60'}`}><span>{t('0-9 dní série:')}</span><span>{t('streak * 10 XP')}</span></div>
+            <div className={`flex justify-between ${stats.streak >= 10 && stats.streak < 50 ? 'font-black text-indigo-500' : 'opacity-60'}`}><span>{t('10-49 dní 🔥:')}</span><span>{t('streak * 25 XP')}</span></div>
+            <div className={`flex justify-between ${stats.streak >= 50 ? 'font-black text-emerald-500 animate-pulse' : 'opacity-60'}`}><span>{t('50+ dní 👑:')}</span><span>{t('streak * 50 XP')}</span></div>
           </div>
         </div>
 
@@ -241,7 +241,7 @@ export const UserStats = () => {
           <div className="space-y-3">
             <div className="flex justify-between items-start">
               <div className="space-y-1 text-left">
-                <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider">Výzva na {stats.currentMonthName}</h3>
+                <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider">{t('Výzva na {month}', { month: stats.currentMonthName })}</h3>
                 <p style={{ color: 'var(--text-badge)' }} className="text-4xl font-black m-0"><CountUp value={stats.monthlyRead} /> <span style={{ color: 'var(--text-muted)' }} className="text-xs uppercase font-bold opacity-60">z {stats.monthlyGoal}</span></p>
               </div>
               <div style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' }} className="p-3 rounded-xl"><Calendar size={24} /></div>
@@ -251,7 +251,7 @@ export const UserStats = () => {
                 <div data-lv-grow className="h-full rounded-full transition-all duration-500" style={{ width: `${progressPercent}%`, backgroundColor: 'var(--bg-primary)' }}></div>
               </div>
               <div style={{ color: 'var(--text-muted)' }} className="flex justify-between text-[0.625rem] font-black uppercase opacity-80">
-                <span>{progressPercent}% splněno</span><span>{stats.daysRemainingInMonth === 0 ? "Poslední den!" : `${plural(stats.daysRemainingInMonth, 'Zbývá', 'Zbývají', 'Zbývá')} ${stats.daysRemainingInMonth} ${plural(stats.daysRemainingInMonth, 'den', 'dny', 'dní')}`}</span>
+                <span>{t('{pct}% splněno', { pct: progressPercent })}</span><span>{stats.daysRemainingInMonth === 0 ? t('Poslední den!') : t.p(stats.daysRemainingInMonth, 'Zbývá {n} den', 'Zbývají {n} dny', 'Zbývá {n} dní', { n: stats.daysRemainingInMonth })}</span>
               </div>
             </div>
           </div>
@@ -260,20 +260,20 @@ export const UserStats = () => {
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2 w-full">
                   <input type="number" min={stats.goalLocked ? stats.monthlyGoal : 1} max="500" disabled={stats.goalLockedCompletely} value={newGoalInput} onChange={(e) => setNewGoalInput(e.target.value)} style={{ backgroundColor: 'var(--bg-body)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }} className="w-16 px-2 py-1 border rounded-md outline-none text-sm font-bold text-center disabled:opacity-50" />
-                  <button disabled={stats.goalLockedCompletely} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} onClick={handleSaveGoal} className="px-2 py-1 rounded font-black uppercase text-[0.625rem] cursor-pointer border-none shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">Uložit</button>
-                  <button style={{ color: 'var(--text-muted)' }} onClick={() => { setIsEditingGoal(false); setGoalError(''); }} className="px-1 py-1 font-bold cursor-pointer bg-transparent border-none">Zrušit</button>
+                  <button disabled={stats.goalLockedCompletely} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} onClick={handleSaveGoal} className="px-2 py-1 rounded font-black uppercase text-[0.625rem] cursor-pointer border-none shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">{t('Uložit')}</button>
+                  <button style={{ color: 'var(--text-muted)' }} onClick={() => { setIsEditingGoal(false); setGoalError(''); }} className="px-1 py-1 font-bold cursor-pointer bg-transparent border-none">{t('Zrušit')}</button>
                 </div>
                 <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] opacity-70">
                   {stats.goalLockedCompletely ? (
-                    `Cíl už nejde měnit - máš splněno ${stats.goalProgress} z ${stats.monthlyGoal} (aspoň polovina). Zas příští měsíc.`
+                    t('Cíl už nejde měnit - máš splněno {done} z {goal} (aspoň polovina). Zas příští měsíc.', { done: stats.goalProgress, goal: stats.monthlyGoal })
                   ) : (() => {
                     const n = parseInt(newGoalInput, 10);
                     const cur = Math.round(calculateGoalMultiplier(stats.highestGoalCompleted) * 100);
                     if (!isNaN(n) && n > stats.highestGoalCompleted) {
                       const after = Math.round(calculateGoalMultiplier(n) * 100);
-                      return `Bonus XP dostaneš až SPLNĚNÍM cíle: přečteš-li ${n} knih za měsíc, budeš mít natrvalo ${after}% tempa (teď ${cur}%). Za nesplněný cíl nic. Po dosažení poloviny nejde měnit.`;
+                      return t('Bonus XP dostaneš až SPLNĚNÍM cíle: přečteš-li {n} knih za měsíc, budeš mít natrvalo {after}% tempa (teď {cur}%). Za nesplněný cíl nic. Po dosažení poloviny nejde měnit.', { n, after, cur });
                     }
-                    return `Teď máš ${cur}% XP tempa (nejvyšší splněný cíl: ${stats.highestGoalCompleted}). Po dosažení poloviny cíle už nejde měnit.`;
+                    return t('Teď máš {cur}% XP tempa (nejvyšší splněný cíl: {goal}). Po dosažení poloviny cíle už nejde měnit.', { cur, goal: stats.highestGoalCompleted });
                   })()}
                 </span>
                 {goalError && <span className="text-red-500 text-[0.625rem]">{goalError}</span>}
@@ -281,12 +281,12 @@ export const UserStats = () => {
             ) : (
               <div className="flex items-center justify-between">
                 <span style={{ color: 'var(--text-muted)' }} className="opacity-70 flex items-center gap-1">
-                  Měsíční cíl:
-                  {stats.goalLockedCompletely && <Lock size={12} className="text-red-500" title={`Uzamčeno - dosaženo ${stats.goalProgress} z ${stats.monthlyGoal}`} />}
-                  {stats.goalLocked && !stats.goalLockedCompletely && <Lock size={12} className="text-amber-500" title="Tento měsíc lze cíl už jen zvýšit" />}
+                  {t('Měsíční cíl:')}
+                  {stats.goalLockedCompletely && <Lock size={12} className="text-red-500" title={t('Uzamčeno - dosaženo {done} z {goal}', { done: stats.goalProgress, goal: stats.monthlyGoal })} />}
+                  {stats.goalLocked && !stats.goalLockedCompletely && <Lock size={12} className="text-amber-500" title={t('Tento měsíc lze cíl už jen zvýšit')} />}
                 </span>
                 <button onClick={() => { setIsEditingGoal(true); setNewGoalInput(stats.monthlyGoal.toString()); }} style={{ color: stats.goalLockedCompletely ? 'var(--text-muted)' : 'var(--text-badge)' }} className="font-black uppercase tracking-wider p-0 bg-transparent border-none cursor-pointer text-[0.625rem]">
-                  {stats.goalLockedCompletely ? 'Uzamčeno' : stats.goalLocked ? 'Zvýšit Cíl' : 'Změnit Cíl'}
+                  {stats.goalLockedCompletely ? t('Uzamčeno') : stats.goalLocked ? t('Zvýšit Cíl') : t('Změnit Cíl')}
                 </button>
               </div>
             )}
@@ -297,25 +297,25 @@ export const UserStats = () => {
         <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 shadow-sm flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div className="space-y-1 text-left">
-              <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider">Celková knihovna</h3>
-              <p style={{ color: 'var(--text-body)' }} className="text-4xl font-black m-0"><CountUp value={stats.totalRead} /> <span style={{ color: 'var(--text-muted)' }} className="text-xs uppercase font-bold opacity-60">{plural(stats.totalRead, 'kniha', 'knihy', 'knih')}</span></p>
+              <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider">{t('Celková knihovna')}</h3>
+              <p style={{ color: 'var(--text-body)' }} className="text-4xl font-black m-0"><CountUp value={stats.totalRead} /> <span style={{ color: 'var(--text-muted)' }} className="text-xs uppercase font-bold opacity-60">{t.p(stats.totalRead, 'kniha', 'knihy', 'knih')}</span></p>
             </div>
             <div style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' }} className="p-3 rounded-xl"><CheckCircle size={24} /></div>
           </div>
           <p style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }} className="text-xs font-medium mt-4 pt-3 border-t text-left flex items-center gap-1">
-            <Sparkles size={12} style={{ color: 'var(--bg-primary)' }} /> Všechna přečtená díla od začátku.
+            <Sparkles size={12} style={{ color: 'var(--bg-primary)' }} /> {t('Všechna přečtená díla od začátku.')}
           </p>
         </div>
       </div>
 
       {/* TÝDENNÍ AKTIVITA */}
       <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 shadow-sm mb-8">
-        <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider mb-4 text-left flex items-center gap-1.5"><TrendingUp size={14} /> Tvoje aktivita</h3>
+        <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider mb-4 text-left flex items-center gap-1.5"><TrendingUp size={14} /> {t('Tvoje aktivita')}</h3>
         <div className="grid grid-cols-7 gap-2 md:gap-4 text-center">
           {stats.weeklyActivity.map((day, idx) => (
             <div key={idx} style={{ borderColor: day.isToday ? 'var(--bg-primary)' : 'transparent', backgroundColor: day.isToday ? 'var(--bg-badge)' : 'transparent' }} className="p-3 rounded-xl flex flex-col items-center gap-2 border">
               <span style={{ color: day.isToday ? 'var(--text-badge)' : 'var(--text-muted)' }} className={`text-xs font-black uppercase ${!day.isToday && 'opacity-60'}`}>{day.dayLabel}</span>
-              <div style={{ backgroundColor: day.isActive ? (day.isFrozen ? 'rgba(56, 189, 248, 1)' : 'rgba(245, 158, 11, 1)') : 'rgba(0,0,0,0.05)', color: day.isActive ? '#ffffff' : 'var(--text-muted)' }} className="w-8 h-8 rounded-full flex items-center justify-center shadow-sm" title={day.isFrozen ? 'Zachráněno Streak Freezem' : undefined}>
+              <div style={{ backgroundColor: day.isActive ? (day.isFrozen ? 'rgba(56, 189, 248, 1)' : 'rgba(245, 158, 11, 1)') : 'rgba(0,0,0,0.05)', color: day.isActive ? '#ffffff' : 'var(--text-muted)' }} className="w-8 h-8 rounded-full flex items-center justify-center shadow-sm" title={day.isFrozen ? t('Zachráněno Streak Freezem') : undefined}>
                 {day.isFrozen ? <ShieldCheck size={16} className="text-white" /> : day.isActive ? <Flame size={16} className="fill-white text-white" /> : <div style={{ backgroundColor: 'currentColor' }} className="w-1.5 h-1.5 rounded-full opacity-40"></div>}
               </div>
             </div>
@@ -325,7 +325,7 @@ export const UserStats = () => {
 
       {/* TREND ČTENÍ (POSLEDNÍCH 6 MĚSÍCŮ) */}
       <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 shadow-sm mb-8">
-        <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider mb-4 text-left flex items-center gap-1.5"><TrendingUp size={14} /> Trend čtení (posledních 6 měsíců)</h3>
+        <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider mb-4 text-left flex items-center gap-1.5"><TrendingUp size={14} /> {t('Trend čtení (posledních 6 měsíců)')}</h3>
         {(() => {
           const maxCount = Math.max(1, ...stats.readingTrend.map(m => m.count));
           const barW = 40, gap = 24, chartH = 90, topPad = 18;
@@ -358,8 +358,8 @@ export const UserStats = () => {
             <ShieldCheck size={20} />
           </div>
           <div>
-            <h4 className="font-black text-sm uppercase m-0">Streak Freeze — {stats.streakFreezes} k dispozici</h4>
-            <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 opacity-70">Zmeškaný den nezlomí sérii, pokud máš aspoň jednu pojistku.</p>
+            <h4 className="font-black text-sm uppercase m-0">{t('Streak Freeze — {n} k dispozici', { n: stats.streakFreezes })}</h4>
+            <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 opacity-70">{t('Zmeškaný den nezlomí sérii, pokud máš aspoň jednu pojistku.')}</p>
           </div>
         </div>
         <button
@@ -368,15 +368,15 @@ export const UserStats = () => {
           style={{ backgroundColor: stats.jomaridCoins < STREAK_FREEZE_PRICE ? 'var(--bg-secondary)' : 'var(--bg-primary)', color: stats.jomaridCoins < STREAK_FREEZE_PRICE ? 'var(--text-muted)' : 'var(--text-primary)' }}
           className="px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer border-none shadow-sm whitespace-nowrap disabled:cursor-not-allowed flex items-center gap-1.5"
         >
-          {buyingFreeze ? <Loader2 size={14} className="animate-spin" /> : <>Koupit za {STREAK_FREEZE_PRICE} <Coins size={12} /></>}
+          {buyingFreeze ? <Loader2 size={14} className="animate-spin" /> : <>{t('Koupit za {n}', { n: STREAK_FREEZE_PRICE })} <Coins size={12} /></>}
         </button>
       </div>
 
       {/* SÍŇ SLÁVY */}
       <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 shadow-sm mb-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-          <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider m-0 flex items-center gap-1.5"><Users size={16} style={{ color: 'var(--bg-primary)' }} /> Globální Síň Slávy Jomarid Books</h3>
-          {!stats.showInLeaderboard && <span className="text-[0.625rem] font-bold bg-red-500/10 text-red-400 px-2.5 py-1 rounded-md uppercase">Režim inkognito 🔒</span>}
+          <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider m-0 flex items-center gap-1.5"><Users size={16} style={{ color: 'var(--bg-primary)' }} /> {t('Globální Síň Slávy Jomarid Books')}</h3>
+          {!stats.showInLeaderboard && <span className="text-[0.625rem] font-bold bg-red-500/10 text-red-400 px-2.5 py-1 rounded-md uppercase">{t('Režim inkognito 🔒')}</span>}
         </div>
         <div className="flex flex-wrap gap-2 mb-6 border-b pb-4" style={{ borderColor: 'var(--border-color)' }}>
           {categories.map(cat => (
@@ -387,7 +387,7 @@ export const UserStats = () => {
         </div>
         <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
           {leaderboards[activeTab]?.length === 0 ? (
-            <p style={{ color: 'var(--text-muted)' }} className="text-sm font-bold text-center py-6 opacity-60">V této kategorii zatím nikdo nesoutěží.</p>
+            <p style={{ color: 'var(--text-muted)' }} className="text-sm font-bold text-center py-6 opacity-60">{t('V této kategorii zatím nikdo nesoutěží.')}</p>
           ) : (
             leaderboards[activeTab].map((row, index) => {
               const cat = categories.find(c => c.id === activeTab);
@@ -406,12 +406,12 @@ export const UserStats = () => {
                         <FeaturedIcon size={12} />
                       </span>
                     )}
-                    <span className="text-sm tracking-wide truncate max-w-[200px] sm:max-w-[350px]">{row.email} {row.isMe && <span className="text-[0.625rem] bg-[var(--bg-primary)] text-[var(--text-primary)] px-1.5 py-0.5 rounded ml-1 uppercase font-black">Ty</span>}</span>
+                    <span className="text-sm tracking-wide truncate max-w-[200px] sm:max-w-[350px]">{row.email} {row.isMe && <span className="text-[0.625rem] bg-[var(--bg-primary)] text-[var(--text-primary)] px-1.5 py-0.5 rounded ml-1 uppercase font-black">{t('Ty')}</span>}</span>
                     {rowTitle && <span data-testid="lb-title" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }} className="text-[0.625rem] font-black uppercase tracking-wide border rounded px-1.5 py-0.5 shrink-0">{rowTitle}</span>}
                   </div>
                   <div className="text-right font-black text-sm flex items-center gap-1">
-                    {frozenRow && <Snowflake size={14} role="img" aria-label={FROZEN_LABEL} data-testid="lb-frozen" style={{ color: FROZEN_ICON_COLOR }} className="shrink-0"><title>{FROZEN_LABEL}</title></Snowflake>}
-                    <span><CountUp value={row[activeTab]} format={(n) => n.toLocaleString()} delay={400} /></span>
+                    {frozenRow && <Snowflake size={14} role="img" aria-label={t(FROZEN_LABEL)} data-testid="lb-frozen" style={{ color: FROZEN_ICON_COLOR }} className="shrink-0"><title>{t(FROZEN_LABEL)}</title></Snowflake>}
+                    <span><CountUp value={row[activeTab]} format={(n) => formatNumber(n)} delay={400} /></span>
                     <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase opacity-60">{typeof cat?.suffix === 'function' ? cat.suffix(row[activeTab]) : cat?.suffix}</span>
                   </div>
                 </div>
@@ -422,7 +422,7 @@ export const UserStats = () => {
         {activeTab === 'streak' && leaderboards.streak?.some(r => isFrozenRow(r, 'streak')) && (
           <p data-testid="lb-frozen-legend" style={{ color: 'var(--text-muted)' }} className="text-xs m-0 mt-3 flex items-center gap-1.5">
             <Snowflake size={12} aria-hidden="true" style={{ color: FROZEN_ICON_COLOR }} className="shrink-0" />
-            Modrý řádek: sérii drží pojistka (Streak Freeze), takže neskončila.
+            {t('Modrý řádek: sérii drží pojistka (Streak Freeze), takže neskončila.')}
           </p>
         )}
       </div>
@@ -436,9 +436,9 @@ export const UserStats = () => {
       >
         <span style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' }} className="w-11 h-11 shrink-0 rounded-xl flex items-center justify-center"><Award size={20} aria-hidden="true" /></span>
         <span className="min-w-0 flex-1">
-          <span style={{ color: 'var(--text-muted)' }} className="block text-xs font-black uppercase tracking-wider">Odznaky, tituly a vzhled her</span>
+          <span style={{ color: 'var(--text-muted)' }} className="block text-xs font-black uppercase tracking-wider">{t('Odznaky, tituly a vzhled her')}</span>
           <span style={{ color: 'var(--text-muted)' }} className="block text-xs mt-1 opacity-70">
-            Odznaky knih: {stats.unlockedBadges.length} z {BOOK_BADGES.length}. Odznaky her: {countGameBadges(stats.gameProgress?.unlocked).unlocked} z {countGameBadges(stats.gameProgress?.unlocked).total}.
+            {t('Odznaky knih: {a} z {b}. Odznaky her: {c} z {d}.', { a: stats.unlockedBadges.length, b: BOOK_BADGES.length, c: countGameBadges(stats.gameProgress?.unlocked).unlocked, d: countGameBadges(stats.gameProgress?.unlocked).total })}
           </span>
         </span>
         <ChevronRight size={18} style={{ color: 'var(--text-muted)' }} aria-hidden="true" />
@@ -448,7 +448,7 @@ export const UserStats = () => {
       <div className="flex justify-end">
         <Link to="/app" className="no-underline">
           <button style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="flex items-center gap-1 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider hover:opacity-90 transition-opacity border-none cursor-pointer shadow-md">
-            Zpět do knihovny <ChevronRight size={14} />
+            {t('Zpět do knihovny')} <ChevronRight size={14} />
           </button>
         </Link>
       </div>

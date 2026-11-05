@@ -131,9 +131,9 @@ test('server (db/game-coins.sql) pustí k Coinům všechny hry z Games.jsx a ž�
 
 /* ---------------------------------------------------------------- hub a lišta */
 test('Games.jsx používá lištu, potvrzení ukazuje jen v ní a nic zbytečného neposílá hře', () => {
-  assert.match(gamesPage, /<GameBar title=\{game\.title\} onClose=\{handleCloseGame\}/);
+  assert.match(gamesPage, /<GameBar title=\{t\(game\.title\)\} onClose=\{handleCloseGame\}/);
   assert.match(gamesPage, /showFlash\(\{ text: `\+\$\{data\.granted\}`, label: rewardLabel\(reason\) \}\)/);
-  assert.match(gamesPage, /showFlash\(\{ text: REWARD_LIMIT_NOTE, warn: true \}\)/);
+  assert.match(gamesPage, /showFlash\(\{ text: t\(REWARD_LIMIT_NOTE\), warn: true \}\)/);
   assert.match(gamesPage, /limitShownRef\.current = false;/, 'poznámka o limitu se při dalším otevření hry ukáže znovu');
   assert.doesNotMatch(gamesPage, /type: 'coin-result'/);
   assert.doesNotMatch(gamesPage, /type: 'balance'|sendBalance/, 'hrám se zůstatek neposílá, ukazuje ho lišta');
@@ -142,12 +142,12 @@ test('Games.jsx používá lištu, potvrzení ukazuje jen v ní a nic zbytečné
 
 test('lišta je v motivu appky, má křížek s popiskem a zachovává svislé rozložení na nízké obrazovce na šířku', () => {
   assert.match(bar, /data-testid="game-bar"/);
-  assert.match(bar, /aria-label="Zavřít hru"/);
+  assert.match(bar, /aria-label=\{t\('Zavřít hru'\)\}/);
   assert.match(bar, /var\(--bg-card\)/);
   assert.match(bar, /var\(--border-color\)/);
   assert.doesNotMatch(bar, /#05050f|rgba\(255,255,255,0\.1\)/, 'žádné pevné tmavé barvy');
   assert.match(bar, /paddingTop: 'var\(--sat\)', paddingRight: 'var\(--sar\)'/, 'výřez displeje');
   assert.ok((bar.match(/\[@media\(orientation:landscape\)_and_\(max-height:500px\)\]/g) || []).length >= 12);
   assert.match(bar, /role="status"/);
-  assert.match(bar, /Lv\. \{level\}/);
+  assert.match(bar, /Lv\. \{n\}/);
 });

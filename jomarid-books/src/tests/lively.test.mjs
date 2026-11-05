@@ -759,7 +759,7 @@ describe('zapojení do stránek', () => {
   const stats = read('src', 'pages', 'UserStats.jsx');
   test('Statistiky: čísla se dotáčejí, ukazatele se plní, řádky žebříčku se při přepnutí záložky znovu objeví', () => {
     for (const v of ['stats.jomaridCoins', 'stats.level', 'stats.xp', 'stats.streak', 'stats.monthlyRead', 'stats.totalRead']) assert.match(stats, new RegExp(`<CountUp value=\\{${v.replace('.', '\\.')}\\} />`), v);
-    assert.match(stats, /<CountUp value=\{row\[activeTab\]\} format=\{\(n\) => n\.toLocaleString\(\)\}/);
+    assert.match(stats, /<CountUp value=\{row\[activeTab\]\} format=\{\(n\) => formatNumber\(n\)\}/);
     assert.equal((stats.match(/data-lv-grow/g) || []).length, 2, 'ukazatel úrovně a měsíčního cíle');
     assert.match(stats, /key=\{`\$\{activeTab\}-\$\{index\}`\}/);
   });

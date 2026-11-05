@@ -1,3 +1,4 @@
+import { t } from '../i18n/core.js';
 // Sdílené výpočty úrovně/XP: jediné místo, kde se počítá level. Cokoliv, co ukazuje
 // úroveň (Statistiky, domovská stránka po přihlášení, žebříček...), čerpá odsud.
 
@@ -28,28 +29,28 @@ export const calculateLevelAndProgress = (totalXp) => {
 
 export const getLevelVisuals = (lvl) => {
   if (lvl >= 20) return {
-    name: "Bůh zapomenutých příběhů 🌌",
+    name: t('Bůh zapomenutých příběhů 🌌'),
     badge: "border border-amber-500/40 text-amber-500 bg-amber-500/10 font-black animate-pulse",
     box: "bg-gradient-to-br from-amber-500 to-amber-700 text-black shadow-lg"
   };
   if (lvl >= 15) return {
-    name: "Mág nejvyšší knihovny 🧙‍♂️",
+    name: t('Mág nejvyšší knihovny 🧙‍♂️'),
     badge: "border border-emerald-500/30 text-emerald-400 bg-emerald-500/10 font-bold",
     box: "bg-emerald-700 text-white"
   };
   if (lvl >= 10) return {
-    name: "Mistr skrytých pravd 🗝️",
+    name: t('Mistr skrytých pravd 🗝️'),
     badge: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30 font-bold",
     box: "bg-indigo-600 text-white"
   };
   if (lvl >= 5) return {
-    name: "Pravidelný knihomol 🐛",
+    name: t('Pravidelný knihomol 🐛'),
     badge: "bg-[var(--bg-secondary)] text-[var(--text-secondary)] border border-[var(--border-color)]",
     box: "bg-[var(--bg-primary)] text-[var(--text-primary)]"
   };
 
   return {
-    name: "Začínající čtenář 🌱",
+    name: t('Začínající čtenář 🌱'),
     badge: "bg-[var(--bg-badge)] text-[var(--text-badge)]",
     box: "bg-[var(--bg-primary)] text-[var(--text-primary)]"
   };

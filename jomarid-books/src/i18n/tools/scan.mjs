@@ -17,6 +17,7 @@ const HAS_LETTERS = /\p{L}{2,}/u;
 export const TEXT_ATTRS = new Set([
   'title', 'aria-label', 'aria-description', 'aria-placeholder', 'aria-roledescription', 'alt', 'placeholder', 'label', 'description', 'hint',
   'subtitle', 'heading', 'caption', 'tooltip', 'helper', 'text', 'message', 'ariaLabel', 'emptyText', 'confirmLabel', 'cancelLabel',
+  'question', 'answer',
 ]);
 
 /** Všechny zdrojové soubory appky (jsx a js bez her, testů a nástrojů), cesty relativní k src/. */
@@ -39,11 +40,34 @@ const staticString = (n) => {
   if (n.type === 'TemplateLiteral' && n.expressions.length === 0) return n.quasis[0].value.cooked;
   return null;
 };
+// Všechny statické texty, které výraz může vrátit (podmínka a ? 'x' : 'y', rezerva a || 'x'); dynamic = je v něm i něco, co se nedá přečíst ze zdroje.
+const staticStrings = (n) => {
+  const one = staticString(n);
+  if (one !== null) return { list: [one], dynamic: false };
+  if (n && n.type === 'ConditionalExpression') {
+    const a = staticStrings(n.consequent); const b = staticStrings(n.alternate);
+    return { list: [...a.list, ...b.list], dynamic: a.dynamic || b.dynamic };
+  }
+  if (n && n.type === 'LogicalExpression' && (n.operator === '||' || n.operator === '??')) {
+    const a = staticStrings(n.left); const b = staticStrings(n.right);
+    return { list: [...a.list, ...b.list], dynamic: a.dynamic || b.dynamic };
+  }
+  return { list: [], dynamic: true };
+};
 
 // Které konstanty na úrovni modulu obsahují texty označené tk(...) a jsou exportované (jiný soubor je musí při použití přeložit).
 const tkExportCache = new Map();
+const unwrapFreeze = (n) => (n && n.type === 'CallExpression' && n.callee.type === 'MemberExpression' && n.callee.object.name === 'Object' && n.callee.property.name === 'freeze' ? n.arguments[0] : n);
+// "Plochá" tabulka textů: každá hodnota je tk('...'), takže i obyčejný přístup X.klíč je text.
+const isFlatTable = (init) => {
+  const o = unwrapFreeze(init);
+  if (!o) return false;
+  if (o.type === 'CallExpression') return o.callee.type === 'Identifier' && o.callee.name === 'tk';
+  if (o.type === 'ObjectExpression') return o.properties.length > 0 && o.properties.every((pr) => pr.type === 'ObjectProperty' && pr.value.type === 'CallExpression' && pr.value.callee.type === 'Identifier' && pr.value.callee.name === 'tk');
+  return false;
+};
 const topLevelTkNames = (ast) => {
-  const names = new Set(); const exported = new Set();
+  const names = new Set(); const exported = new Set(); const flat = new Set();
   traverse(ast, {
     VariableDeclarator(path) {
       const decl = path.parentPath; const top = decl.parentPath;
@@ -51,7 +75,7 @@ const topLevelTkNames = (ast) => {
       if (!isTop || path.node.id.type !== 'Identifier') return;
       let has = path.node.init && isCallTo(path.node.init, 'tk');
       if (!has && path.node.init) path.get('init').traverse({ CallExpression(q) { if (isCallTo(q.node, 'tk')) has = true; } });
-      if (has) { names.add(path.node.id.name); if (top.isExportNamedDeclaration()) exported.add(path.node.id.name); }
+      if (has) { names.add(path.node.id.name); if (isFlatTable(path.node.init)) flat.add(path.node.id.name); if (top.isExportNamedDeclaration()) exported.add(path.node.id.name); }
     },
     ExportNamedDeclaration(path) {
       if (!path.node.source && path.node.specifiers.length) for (const sp of path.node.specifiers) if (sp.local && sp.exported) exported.add(`__spec:${sp.local.name}:${sp.exported.name}`);
@@ -63,14 +87,14 @@ const topLevelTkNames = (ast) => {
     const [, local, ext] = e.split(':');
     if (names.has(local)) exported.add(ext);
   }
-  return { names, exported };
+  return { names, exported, flat };
 };
 export const tkExportsOf = (rel) => {
   if (tkExportCache.has(rel)) return tkExportCache.get(rel);
-  let out = new Set();
+  let out = { exported: new Set(), flat: new Set() };
   try {
     const code = fs.readFileSync(path.join(SRC_DIR, rel), 'utf8');
-    if (code.includes('tk(')) out = topLevelTkNames(parse(code, { sourceType: 'module', plugins: ['jsx'] })).exported;
+    if (code.includes('tk(')) { const r = topLevelTkNames(parse(code, { sourceType: 'module', plugins: /\.tsx?$/.test(rel) ? ['jsx', 'typescript'] : ['jsx'] })); out = { exported: r.exported, flat: r.flat }; }
   } catch { /* soubor chybí nebo nejde přeložit: nic neexportuje */ }
   tkExportCache.set(rel, out);
   return out;
@@ -84,7 +108,7 @@ const resolveImport = (fromRel, source) => {
   return null;
 };
 
-/** Zdroj -> { keys: [{ key, kind, line }], raw: [{ kind, text, line }], dynamic: [{ line }], problems: [{ kind, line }] }.
+/** Zdroj -> { keys: [{ key, kind, line }], raw: [{ kind, text, line }], dynamic: [{ line, arg }], problems: [{ kind, line }] }.
  *  problems: 'unbound' (t není importované), 'shadowed' (t je jiná proměnná), 'moduleLevel' (t zavolané na úrovni modulu, kde ještě není načtený jazyk). */
 export const scanSource = (code, file = '') => {
   const ast = parse(code, { sourceType: 'module', plugins: file.endsWith('.ts') || file.endsWith('.tsx') ? ['jsx', 'typescript'] : ['jsx'] });
@@ -112,11 +136,12 @@ export const scanSource = (code, file = '') => {
         if (!path.getFunctionParent()) problems.push({ kind: 'moduleLevel', line: n.loc.start.line });
       }
       if (isCallTo(n, 't') || isCallTo(n, 'tk')) {
-        const s = staticString(n.arguments[0]);
-        if (s === null) dynamic.push({ line: n.loc.start.line }); else keys.push({ key: s, kind: isCallTo(n, 'tk') ? 'tk' : 't', line: n.loc.start.line });
+        const r = staticStrings(n.arguments[0]);
+        for (const key of r.list) keys.push({ key, kind: isCallTo(n, 'tk') ? 'tk' : 't', line: n.loc.start.line });
+        if (r.dynamic) dynamic.push({ line: n.loc.start.line, arg: code.slice(n.arguments[0].start, n.arguments[0].end).replace(/\s+/g, ' ') });
       } else if (isPluralCall(n)) {
         const forms = [n.arguments[1], n.arguments[2], n.arguments[3]].map(staticString);
-        if (forms.some((f) => f === null)) dynamic.push({ line: n.loc.start.line }); else keys.push({ key: forms.join('|'), kind: 'plural', line: n.loc.start.line });
+        if (forms.some((f) => f === null)) dynamic.push({ line: n.loc.start.line, arg: `t.p(${n.arguments.slice(1, 4).map((a) => code.slice(a.start, a.end)).join(', ')})` }); else keys.push({ key: forms.join('|'), kind: 'plural', line: n.loc.start.line });
       }
     },
     JSXText(path) {
@@ -164,13 +189,14 @@ export const scanSource = (code, file = '') => {
   });
   // Konstanty na úrovni modulu s texty označenými tk(...): každé jejich použití musí jít přes t(...), jinak by zůstaly česky.
   const tkConstants = new Map(); // název -> řádek deklarace
+  const flatNames = new Set();
   traverse(ast, {
     VariableDeclarator(path) {
       if (path.parentPath.parentPath.isProgram() || (path.parentPath.parentPath.isExportNamedDeclaration() && path.parentPath.parentPath.parentPath.isProgram())) {
         let has = false;
         path.get('init').traverse({ CallExpression(q) { if (isCallTo(q.node, 'tk')) has = true; } });
         if (!has && path.node.init && path.node.init.type === 'CallExpression' && isCallTo(path.node.init, 'tk')) has = true;
-        if (has && path.node.id.type === 'Identifier') tkConstants.set(path.node.id.name, path.node.loc.start.line);
+        if (has && path.node.id.type === 'Identifier') { tkConstants.set(path.node.id.name, path.node.loc.start.line); if (isFlatTable(path.node.init)) flatNames.add(path.node.id.name); }
       }
     },
   });
@@ -181,7 +207,7 @@ export const scanSource = (code, file = '') => {
     const target = file ? resolveImport(file, n.source.value) : null;
     if (!target) continue;
     const ex = tkExportsOf(target);
-    for (const sp of n.specifiers) if (sp.type === 'ImportSpecifier' && ex.has(sp.imported.name || sp.imported.value)) importedTk.add(sp.local.name);
+    for (const sp of n.specifiers) if (sp.type === 'ImportSpecifier' && ex.exported.has(sp.imported.name || sp.imported.value)) { importedTk.add(sp.local.name); if (ex.flat.has(sp.imported.name || sp.imported.value)) flatNames.add(sp.local.name); }
   }
   const unwrappedUses = [];
   traverse(ast, {
@@ -199,7 +225,7 @@ export const scanSource = (code, file = '') => {
         top = top.parentPath;
         if ((top.isMemberExpression() || top.isOptionalMemberExpression()) && !top.node.computed) lastProp = top.node.property.name; else if (top.isMemberExpression()) lastProp = null;
       }
-      if (lastProp && !['label', 'title', 'text', 'hint', 'description', 'desc', 'short', 'heading', 'caption', 'message', 'equipped', 'name'].includes(lastProp)) return; // položka, která není text (route, key, id...)
+      if (lastProp && !flatNames.has(name) && !['label', 'title', 'text', 'hint', 'description', 'desc', 'short', 'heading', 'caption', 'message', 'equipped', 'name'].includes(lastProp)) return; // položka, která není text (route, key, id...); v ploché tabulce textů je text každá
       const sinkParent = top.parent;
       const isOptionsAttr = sinkParent.type === 'JSXExpressionContainer' && top.parentPath.parent.type === 'JSXAttribute' && top.parentPath.parent.name.name === 'options'; // texty přeloží přijímající komponenta
       const isSink = !isOptionsAttr && (sinkParent.type === 'JSXExpressionContainer'
@@ -214,7 +240,10 @@ export const scanSource = (code, file = '') => {
       unwrappedUses.push({ name, line: path.node.loc.start.line });
     },
   });
-  return { keys, raw, dynamic, problems, tkUses: unwrappedUses };
+  // Řádek označený i18n-ok je záměrně v původním jazyce (ukázka z knihy, jméno): nehlásí se jako nepřeložený text.
+  const lines = code.split('\n');
+  const rawChecked = raw.filter((r) => !(lines[r.line - 1] || '').includes('i18n-ok'));
+  return { keys, raw: rawChecked, dynamic, problems, tkUses: unwrappedUses };
 };
 
 /** Soubor ze src/ -> výsledek scanSource. */
