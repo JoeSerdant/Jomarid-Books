@@ -108,3 +108,34 @@ test('zapojení do rozhraní: obě obrazovky mají klávesnici, hlášení a pop
   const review = ui.slice(ui.indexOf('function ReviewScreen'), ui.indexOf('// ---------- Šachové úlohy'));
   assert.ok(!/keyboard: true/.test(review));
 });
+
+test('přístupnost: hlavní oblast, nadpis na každé obrazovce, jméno pole ze skrytého textu a popisky tlačítek obsahují viditelný text', () => {
+  const ui = fs.readFileSync(path.join(DIR, 'ui.js'), 'utf8');
+  const css = fs.readFileSync(path.join(DIR, 'style.css'), 'utf8');
+  assert.match(ui, /div\(\{ className: "app-shell", role: "main" \}/);
+  // nadpis úrovně 1: hra, úloha a rozbor mají skrytý, záložky a konec zápasu viditelný
+  for (const re of [/h\("h1", \{ className: "sr-only" \}, "Partie proti soupeři " \+ bot\.name\)/, /h\("h1", \{ className: "sr-only" \}, "Šachová úloha: " \+ mateLabel\.toLowerCase\(\)\)/, /h\("h1", \{ className: "sr-only" \}, "Rozbor partie"\)/]) assert.match(ui, re);
+  for (const t of ['Tvůj rating', 'Nastavení', 'Šachové úlohy']) assert.match(ui, new RegExp('role: "heading", "aria-level": 1 \\}, "' + t));
+  assert.match(ui, /className: "end-title", role: "heading", "aria-level": 1/);
+  assert.match(ui, /h\("h2", null, g\.label\)/, 'skupiny úloh jsou nadpis 2. úrovně pod nadpisem stránky');
+  // pole: jméno je skrytý text uvnitř a nikoli aria-label, který by se rozcházel s viditelným textem; glyf, souřadnice a značky jsou pro čtečku skryté
+  assert.match(ui, /label && span\(\{ className: "sr-only" \}, label\)/);
+  assert.ok(!/sqProps\["aria-label"\]/.test(ui));
+  assert.equal((ui.match(/"aria-hidden": hid/g) || []).length, 5, 'glyf, dvě souřadnice a dvě značky tahu');
+  assert.match(ui, /className: "pz-steps", role: "img", "aria-label": "Postup: "/);
+  // popisky tlačítek obsahují to, co je na nich napsáno (WCAG 2.5.3)
+  assert.match(ui, /"aria-label": "Remíza: nabídnout soupeři"/);
+  assert.match(ui, /"aria-label": hintLevel === 0 \? "Nápověda" : "Ukázat tah"/);
+  // kontrast bílého textu na tlačítkách: tmavší modrá a červená než původní #1CB0F6 (2,4 : 1) a #FF4B4B (3,3 : 1)
+  const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return 0.2126 * lin(n >> 16) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255); };
+  const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  for (const cls of ['btn-secondary', 'btn-danger']) {
+    const bg = css.match(new RegExp('\\.' + cls + ' \\{ background: (#[0-9a-f]{6});'))[1];
+    assert.ok(contrast('#ffffff', bg) >= 4.5, cls + ' ' + bg + ': ' + contrast('#ffffff', bg).toFixed(2));
+  }
+  const lightChip = css.match(/:root\[data-theme="light"\] \.color-chip\.active \{ color: (#[0-9a-f]{6}); \}/)[1];
+  assert.ok(contrast(lightChip, '#e0f2fe') >= 4.5, 'vybraný čip ve světlém motivu');
+  const lightSub = css.match(/:root\[data-theme="light"\] \.pz-teaser-sub \{ color: (#[0-9a-f]{6}); \}/)[1];
+  assert.ok(contrast(lightSub, '#e0f2fe') >= 4.5, 'text karty úloh ve světlém motivu');
+});
