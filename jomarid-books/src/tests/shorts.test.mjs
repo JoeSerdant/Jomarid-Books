@@ -357,9 +357,9 @@ test('Nakladatelský panel i správa mají záložku shortB, správce vidí vše
   const admin = fs.readFileSync(path.join(SRC, 'pages', 'AdminDashboard.jsx'), 'utf8');
   const studio = fs.readFileSync(path.join(SRC, 'components', 'ShortsStudio.jsx'), 'utf8');
   assert.match(pub, /import ShortsStudio from '\.\.\/components\/ShortsStudio';/);
-  assert.match(pub, /\{ id: 'shorts', label: 'shortB', icon: Feather \}/);
+  assert.match(pub, /\{ id: 'shorts', label: tk\('shortB'\), icon: Feather \}/);
   assert.match(pub, /\{tab === 'shorts' && <ShortsStudio \/>\}/);
-  assert.match(admin, /\{ id: 'shorts', label: 'shortB', icon: <Feather size=\{14\} \/> \}/);
+  assert.match(admin, /\{ id: 'shorts', label: t\('shortB'\), icon: <Feather size=\{14\} \/> \}/);
   assert.match(admin, /\{activeTab === 'shorts' && <ShortsStudio all \/>\}/);
   assert.match(studio, /loadMyShorts\(supabase, all\)/);
   assert.match(studio, /validateShort\(/, 'formulář kontroluje vstup stejnou funkcí jako server');

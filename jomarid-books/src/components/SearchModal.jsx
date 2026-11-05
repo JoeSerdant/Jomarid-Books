@@ -32,7 +32,7 @@ export const DEFAULT_SEARCH_PREFS = {
   likedOnly: false,
 };
 
-const FIELD_OPTIONS = [['title', tk('Název')], ['author', 'Autor'], ['genres', tk('Žánry')], ['description', 'Popis']];
+const FIELD_OPTIONS = [['title', tk('Název')], ['author', tk('Autor')], ['genres', tk('Žánry')], ['description', tk('Popis')]];
 const SORT_OPTIONS = [
   ['smart', tk('Nejrelevantnější')], ['recent', tk('Naposledy čtené')], ['title_asc', tk('Název A-Z')], ['title_desc', tk('Název Z-A')], ['author_asc', 'Autor A-Z'],
   ['newest', tk('Nejnovější')], ['oldest', tk('Nejstarší')], ['price_asc', tk('Cena: od nejlevnější')], ['price_desc', tk('Cena: od nejdražší')],
@@ -364,7 +364,7 @@ export const SearchModal = ({ isOpen, onClose }) => {
           <div className="flex items-center gap-1.5 flex-wrap">
             <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider mr-0.5">{t('Hledat v:')}</span>
             {FIELD_OPTIONS.map(([v, label]) => (
-              <Chip key={v} active={prefs.fields.includes(v)} onClick={() => { const next = toggleIn(prefs.fields, v); if (next.length) patch({ fields: next }); }} title={prefs.fields.length === 1 && prefs.fields[0] === v ? t('Aspoň jedno pole musí zůstat zapnuté') : undefined}>{label}</Chip>
+              <Chip key={v} active={prefs.fields.includes(v)} onClick={() => { const next = toggleIn(prefs.fields, v); if (next.length) patch({ fields: next }); }} title={prefs.fields.length === 1 && prefs.fields[0] === v ? t('Aspoň jedno pole musí zůstat zapnuté') : undefined}>{t(label)}</Chip>
             ))}
           </div>
 
