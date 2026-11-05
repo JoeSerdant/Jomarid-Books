@@ -541,7 +541,7 @@ test('Games.jsx: hra se spustí až po načtení postupu, iframe dostává dokum
   assert.match(g, /import \{ createGameSync, NoLocalSaveError \} from '\.\.\/gameSave\/sync';/);
   assert.match(g, /srcDoc=\{gameDoc\}/);
   assert.ok(!/srcDoc=\{html\}/.test(g), 'iframe nesmí dostat dokument bez náhrady úložiště');
-  assert.match(g, /setGameDoc\(withStorageShim\(src, game\.id, sync\.snapshot\(\)\.map\)\)/);
+  assert.match(g, /setGameDoc\(withGameLanguage\(withStorageShim\(src, game\.id, sync\.snapshot\(\)\.map\), lang, dict,/);
   const open = g.slice(g.indexOf('const handleOpenGame'), g.indexOf('// Při najetí myší'));
   assert.ok(open.indexOf('await sync.load({ allowEmpty: allowEmpty === true })') > -1 && open.indexOf('await sync.load({ allowEmpty: allowEmpty === true })') < open.indexOf('setShowGame(true)'), 'postup se načte dřív, než se hra ukáže');
   assert.match(open, /if \(mountedRef\.current\) \{ setSaveLoadError\(err instanceof NoLocalSaveError \? 'nocopy' : true\); setLoadingGame\(false\); \}\n\s+return;/, 'při chybě se hra nespustí');
