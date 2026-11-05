@@ -312,8 +312,25 @@ const League = (function () {
     } catch (e) { return migrate(null, botRatings); }
   }
   function persistSave(storage, save) { try { storage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* nevadí */ } }
-  function loadGame(storage) {
-    try { const raw = storage.getItem(GAME_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+  // Rozehraná partie z úložiště musí mít platný tvar, jinak by menu nebo Pokračovat spadlo (dřív stačilo moves jako číslo). Vadná se zahodí (null),
+  // platná se vrátí jako kopie jen s příslušnými poli. botCount (nepovinný) je počet soupeřů, ať botIdx nemíří mimo seznam.
+  const COORD_RE = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
+  function cleanGame(g, botCount) {
+    if (!g || typeof g !== "object" || Array.isArray(g) || g.v !== 1) return null;
+    if (!Array.isArray(g.moves) || g.moves.length > 1000 || !g.moves.every((c) => typeof c === "string" && COORD_RE.test(c))) return null;
+    if (g.color !== "w" && g.color !== "b") return null;
+    if (!Number.isInteger(g.botIdx) || g.botIdx < 0 || (botCount !== undefined && g.botIdx >= botCount)) return null;
+    const num = (v) => typeof v === "number" && isFinite(v) && v >= 0;
+    const int = (v) => (Number.isInteger(v) && v >= 0 ? v : 0);
+    return {
+      v: 1, botIdx: g.botIdx, botKey: typeof g.botKey === "string" ? g.botKey : undefined, color: g.color,
+      tc: TIME_CONTROLS.some((t) => t.key === g.tc) ? g.tc : "none", moves: g.moves.slice(),
+      times: g.times && num(g.times.w) && num(g.times.b) ? { w: g.times.w, b: g.times.b } : null,
+      assisted: !!g.assisted, hints: int(g.hints), undos: int(g.undos), startedAt: num(g.startedAt) ? g.startedAt : undefined
+    };
+  }
+  function loadGame(storage, botCount) {
+    try { const raw = storage.getItem(GAME_KEY); return raw ? cleanGame(JSON.parse(raw), botCount) : null; } catch (e) { return null; }
   }
   function persistGame(storage, game) {
     try { if (game) storage.setItem(GAME_KEY, JSON.stringify(game)); else storage.removeItem(GAME_KEY); } catch (e) { /* nevadí */ }
@@ -376,7 +393,7 @@ const League = (function () {
   return {
     SAVE_KEY, GAME_KEY, START_RATING, RATING_FLOOR, PROVISIONAL_GAMES, TIME_CONTROLS, CATEGORY_LABELS, BOT_KEYS,
     expectedScore, kFactor, ratingChange, ratingTitle, winPercent, moveAccuracy, classify, summarizeAnalysis,
-    defaultSave, migrate, loadSave, persistSave, loadGame, persistGame, finishGame,
+    defaultSave, migrate, loadSave, persistSave, loadGame, cleanGame, persistGame, finishGame,
     STAT_KEYS, CHEAT_STATS, summarizeMoves, recordAccuracy, recordStats, cheatAllBadges
   };
 })();

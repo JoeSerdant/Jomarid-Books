@@ -815,3 +815,56 @@ describe('barva šachovnice a bublina soupeře', () => {
     assert.match(ui, /div\(\{ className: "board-col" \+ \(botTime != null \? " timed" : ""\) \},/);
   });
 });
+
+describe('uložená rozehraná partie', () => {
+  const ai = {
+    search: (req) => Promise.resolve().then(() => F.handle(Object.assign({ type: 'search' }, req))),
+    evalPos: (req) => Promise.resolve().then(() => F.handle(Object.assign({ type: 'eval' }, req))),
+    newGame: () => F.handle({ type: 'newgame' }), cancel() {}
+  };
+  const mk = (opts) => new GameSession(Object.assign({ bot: B.BOTS[0], botIdx: 0, playerColor: 'w', ai, delayScale: 0, chat: true }, opts));
+  const storeWith = (value) => ({ getItem: () => value, setItem() {}, removeItem() {} });
+
+  test('platná partie ze serialize() projde beze změny, i bez hodin, a jde z ní obnovit', async () => {
+    let now = 5000;
+    const s = mk({ tcKey: 'blitz5', now: () => now }); s.start();
+    const m = findByCoord(s.state, 'e2e4'); s.playerMove(m);
+    await until(() => s.moves.length === 2);
+    now += 7000;
+    const ser = plain(s.serialize()); s.destroy();
+    assert.deepEqual(plain(L.cleanGame(ser, B.BOTS.length)), ser, 'nic platného se neztratí ani nezmění');
+    assert.deepEqual(plain(L.loadGame(storeWith(JSON.stringify(ser)), B.BOTS.length)), ser);
+    const r = mk({ tcKey: ser.tc, now: () => now }).restore(plain(L.cleanGame(ser)));
+    assert.equal(r.moves.length, 2);
+    const free = mk({}); free.start(); free.playerMove(findByCoord(free.state, 'd2d4')); await until(() => free.moves.length === 2);
+    const serFree = plain(free.serialize()); free.destroy();
+    assert.equal(serFree.times, null);
+    assert.deepEqual(plain(L.cleanGame(serFree, B.BOTS.length)), serFree, 'partie bez hodin');
+  });
+
+  test('poškozená partie se zahodí (null) a nikdy nevyhodí výjimku; vadná volitelná pole se opraví', () => {
+    const base = { v: 1, botIdx: 1, botKey: 'x', color: 'w', tc: 'blitz5', moves: ['e2e4', 'e7e5'], times: { w: 1000, b: 2000 }, assisted: false, hints: 1, undos: 0, startedAt: 1700000000000 };
+    for (const junk of [null, undefined, 5, 'x', [], true, {}, '{rozbité']) assert.equal(L.cleanGame(junk, 10), null, String(junk));
+    for (const d of [{ v: 2 }, { v: undefined }, { moves: 5 }, { moves: 'e2e4' }, { moves: null }, { moves: [5] }, { moves: ['e2e4', null] }, { moves: ['x1y2'] }, { moves: ['e2e4e5'] }, { moves: Array(1001).fill('e2e4') },
+      { color: 'x' }, { color: undefined }, { botIdx: -1 }, { botIdx: 1.5 }, { botIdx: 'x' }, { botIdx: 10 }, { botIdx: undefined }]) {
+      assert.equal(L.cleanGame({ ...base, ...d }, 10), null, JSON.stringify(d));
+    }
+    assert.ok(L.cleanGame({ ...base, botIdx: 10 }), 'bez počtu soupeřů se rozsah nehlídá');
+    const fixed = plain(L.cleanGame({ ...base, tc: 'neexistuje', times: { w: 'x', b: -1 }, assisted: 'ano', hints: -3, undos: 'x', startedAt: 'včera', botKey: 5 }, 10));
+    assert.deepEqual(fixed, { v: 1, botIdx: 1, color: 'w', tc: 'none', moves: ['e2e4', 'e7e5'], times: null, assisted: true, hints: 0, undos: 0 });
+    assert.equal(L.cleanGame({ ...base, times: { w: NaN, b: 5 } }, 10).times, null);
+    assert.equal(L.cleanGame({ ...base, times: 5 }, 10).times, null);
+    // promoce jsou platné souřadnice
+    assert.ok(L.cleanGame({ ...base, moves: ['e7e8q', 'a2a1n'] }, 10));
+    // loadGame: nesmysl v úložišti i výjimka při čtení dají null
+    assert.equal(L.loadGame(storeWith('{rozbité'), 10), null);
+    assert.equal(L.loadGame(storeWith('5'), 10), null);
+    assert.equal(L.loadGame(storeWith(null), 10), null);
+    assert.equal(L.loadGame({ getItem() { throw new Error('zakázáno'); } }, 10), null);
+    assert.equal(L.loadGame(storeWith(JSON.stringify({ ...base, moves: 5 })), 10), null);
+  });
+  test('menu zjišťuje počet soupeřů při čtení partie', () => {
+    const ui = fs.readFileSync(path.join(DIR, 'ui.js'), 'utf8');
+    assert.match(ui, /useState\(\(\) => League\.loadGame\(storage, BOTS\.length\)\)/);
+  });
+});

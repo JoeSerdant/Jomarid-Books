@@ -403,7 +403,9 @@ test('uložení: sloučení kontroluje typy, takže poškozený postup hru neroz
   assert.deepEqual(load({ relics: [1, null, 'ok', {}] }).relics, ['ok']);
   assert.deepEqual(load({ stats: { a: 'x', b: -1, c: null, d: 4, g: { z: 1 } } }).stats, { d: 4, g: { z: 1 } });
   // nic použitelného: výchozí stav
-  for (const junk of [null, undefined, 5, 'x', [], true]) assert.deepEqual(load(junk), { ...def, createdAt: load(junk).createdAt, lastSaveTimestamp: load(junk).lastSaveTimestamp }, String(junk));
+  // časové značky se berou z okamžiku vytvoření stavu, takže se při porovnání vynechají (jinak by test selhal, když mezi voláními přeskočí milisekunda)
+  const noTime = (o) => { const c = { ...o }; delete c.createdAt; delete c.lastSaveTimestamp; return c; };
+  for (const junk of [null, undefined, 5, 'x', [], true]) assert.deepEqual(noTime(load(junk)), noTime(def), String(junk));
   // "__proto__" z uloženého JSON nesmí zasáhnout prototypy
   const evil = JSON.parse('{"__proto__":{"polluted":1},"constructor":{"prototype":{"polluted":2}},"buildings":{"__proto__":{"polluted":3}}}');
   load(evil);

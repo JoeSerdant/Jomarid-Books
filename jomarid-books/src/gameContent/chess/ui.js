@@ -1155,7 +1155,7 @@
   function App() {
     const storage = window.localStorage;
     const [save, setSave] = useState(() => League.loadSave(storage, BOT_RATINGS));
-    const [savedGame, setSavedGame] = useState(() => League.loadGame(storage));
+    const [savedGame, setSavedGame] = useState(() => League.loadGame(storage, BOTS.length));
     const [view, setView] = useState("menu");
     const [session, setSession] = useState(null);
     const [endInfo, setEndInfo] = useState(null);
