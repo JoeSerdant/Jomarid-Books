@@ -106,7 +106,7 @@ h1{margin:0 0 6px;font-size:clamp(30px,9vw,44px);line-height:1;font-weight:700;l
 .mgrid button b{font-size:14px;font-weight:700;line-height:1.1}
 .mgrid button small{font-size:11px;font-weight:500;color:var(--dim);line-height:1.15}
 .mgrid button[aria-checked="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
-.mgrid button[aria-checked="true"] small{color:inherit;opacity:.78}
+.mgrid button[aria-checked="true"] small{color:inherit;opacity:.92}
 .btn{width:100%;height:54px;border-radius:14px;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:18px;transition:transform .08s}
 .btn:active{transform:scale(.98)}
 .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);height:46px;font-size:15px;margin-top:8px}

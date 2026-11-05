@@ -689,3 +689,13 @@ test('uložení: vadné typy (jméno, rekord, zvuk) se při načtení opraví, p
   const inf = run({ name: 5, best: null, sound: 1 });
   assert.deepEqual([inf.name, inf.best, inf.sound], ['', 0, false]);
 });
+
+test('kontrast: popisek vybraného režimu v nabídce je dost čitelný na fialovém pozadí (průhlednost bílé aspoň 0,9)', () => {
+  const css = fs.readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  assert.match(css, /\.mgrid button\[aria-checked="true"\] small\{color:inherit;opacity:\.92\}/);
+  // bílá s touto průhledností na fialové #7c3aed má kontrast aspoň 4,5:1
+  const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  const bg = [0x7c, 0x3a, 0xed], a = 0.92, fg = bg.map((v) => 255 * a + v * (1 - a));
+  assert.ok((lum(fg) + 0.05) / (lum(bg) + 0.05) >= 4.5);
+});

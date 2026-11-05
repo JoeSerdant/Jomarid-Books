@@ -417,7 +417,7 @@ test('zvuk: tlačítka v menu, velitelství i bitvě sdílejí jeden stav, kláv
   assert.match(html, /\.battle-hud > div:last-child \.btn\.sound-toggle \{ flex: 0 0 auto; min-width: 34px; \}/, 'i na telefonu, kde se tlačítka v řádku mačkají (min-width: 0)');
   assert.match(html, /else if \(e\.key === 'm' \|\| e\.key === 'M'\) \{ Game\.toggleSound\(\); \}/);
   assert.match(html, /window\.gameEngine = new TacticalEngine\('gameCanvas'\);\s*Game\.refreshSoundButtons\(\);/, 'popisky se při startu srovnají s uloženým nastavením');
-  const mkBtn = (full) => { const attrs = {}; return { dataset: full ? { full: '1' } : {}, textContent: '', title: '', attrs, setAttribute(k, v) { attrs[k] = v; } }; };
+  const mkBtn = (full) => { const attrs = {}; return { dataset: full ? { full: '1' } : {}, textContent: '', title: '', attrs, setAttribute(k, v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; } }; };
   const sandbox = {
     buttons: [mkBtn(true), mkBtn(false), mkBtn(false)],
     audioFX: { muted: false, inits: 0, marches: 0, setMuted(m) { this.muted = m; }, init() { this.inits++; }, playMarch() { this.marches++; } },
@@ -432,7 +432,8 @@ test('zvuk: tlačítka v menu, velitelství i bitvě sdílejí jeden stav, kláv
   assert.deepEqual(sandbox.buttons.map((b) => b.textContent), ['🔇 Zvuk: vypnutý', '🔇', '🔇']);
   assert.deepEqual(sandbox.buttons.map((b) => b.attrs['aria-pressed']), ['false', 'false', 'false']);
   assert.equal(sandbox.buttons[1].title, 'Zapnout zvuk');
-  assert.equal(sandbox.buttons[1].attrs['aria-label'], 'Zapnout zvuk');
+  assert.equal(sandbox.buttons[1].attrs['aria-label'], 'Zapnout zvuk', 'ikona bez popisku má název');
+  assert.ok(!('aria-label' in sandbox.buttons[0].attrs), 'tlačítko s viditelným popiskem se jmenuje podle něj (název musí obsahovat viditelný text)');
   assert.equal(sandbox.audioFX.marches, 0, 'vypnutí nic nezahraje');
   game.toggleSound();
   assert.equal(sandbox.audioFX.muted, false);
@@ -539,4 +540,14 @@ test('uložený postup kampaně: při čtení se vadné hodnoty opraví a nic pl
   const playerTypes = [...info.matchAll(/^\s+(\w+):\s+\{ label:/gm)].map((m) => m[1]);
   assert.deepEqual(playerTypes.sort(), ['balearic_sling', 'carthage_spearmen', 'celtiberian_swordsman', 'elephants', 'hannibal', 'libyan_heavy', 'numidian_cavalry']);
   for (const m of html.matchAll(/\{ id: 'u_\w+', type: '(\w+)'/g)) assert.ok(playerTypes.includes(m[1]), `počáteční armáda: ${m[1]}`);
+});
+
+test('čeština: množné číslo jednotek v hlášce o doplnění armády (1 jednotka, 2 až 4 jednotky, jinak jednotek)', () => {
+  const src = html.match(/    function czPlural\(n, one, few, many\) \{[\s\S]*?\n    \}\n/)[0];
+  const f = vm.runInNewContext(`(${src.trim().replace(/^function czPlural/, 'function')})`, { Math });
+  const cases = { 0: 'jednotek', 1: 'jednotka', 2: 'jednotky', 3: 'jednotky', 4: 'jednotky', 5: 'jednotek', 10: 'jednotek', 11: 'jednotek', 12: 'jednotek', 13: 'jednotek', 14: 'jednotek', 15: 'jednotek',
+    20: 'jednotek', 21: 'jednotek', 22: 'jednotky', 24: 'jednotky', 25: 'jednotek', 100: 'jednotek', 101: 'jednotek', 102: 'jednotky', 111: 'jednotek', 112: 'jednotek', 1000: 'jednotek' };
+  for (const [n, word] of Object.entries(cases)) assert.equal(f(Number(n), 'jednotka', 'jednotky', 'jednotek'), word, `${n}`);
+  assert.equal(f(-2, 'a', 'b', 'c'), 'b');
+  assert.match(html, /Doplněno \$\{healed\} \$\{czPlural\(healed, 'jednotka', 'jednotky', 'jednotek'\)\}/);
 });

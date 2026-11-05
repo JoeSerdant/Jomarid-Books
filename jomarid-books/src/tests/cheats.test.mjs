@@ -48,7 +48,7 @@ test('každá hra má pole „Tajný kód“, které vypadá jako číslo verze,
     warroom: /id=\\?"cheat-input\\?"[\s\S]{0,80}value=\\?"v\d+\.\d+/,
   };
   for (const [id, re] of Object.entries(fields)) assert.match(GAMES[id].page, re, id);
-  for (const id of ['chess', 'rocket', 'polygonarena', 'koulovikamosi', 'cityclicker']) {
+  for (const id of ['chess', 'rocket', 'polygonarena', 'koulovikamosi', 'cityclicker', 'warroom']) {
     assert.match(GAMES[id].page, /aria-label="Tajný kód"|"aria-label": "Tajný kód"/, id + ': název pro čtečky');
     assert.doesNotMatch(GAMES[id].page, /placeholder="Tajný kód"|Aktivovat(?! EndCraze)|ukrytý tajný cheat kód|Zkus jej napsat/, id + ': žádný viditelný popisek ani nápověda');
   }

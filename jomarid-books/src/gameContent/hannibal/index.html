@@ -1201,6 +1201,14 @@
     /* ==========================================================================
        2. META STRATEGY MANAGER
        ========================================================================== */
+    // České množné číslo: 1 jednotka, 2 až 4 jednotky (i 22 až 24), jinak jednotek (i 11 až 14, 21 a 101)
+    function czPlural(n, one, few, many) {
+      n = Math.abs(Math.round(n));
+      if (n === 1) return one;
+      const d = n % 10, t = n % 100;
+      return d >= 2 && d <= 4 && !(t >= 12 && t <= 14) ? few : many;
+    }
+
     class MetaStrategyManager {
       constructor() {
         this.gold = 500;
@@ -1390,7 +1398,7 @@
           const c = this.meta.replenishCost(u);
           if (this.meta.replenishUnit(u.id)) { healed++; spentG += c.gold; spentM += c.mp; }
         });
-        if (healed > 0) Game.toast(`Doplněno ${healed} jednotek (−${spentG} zlata, −${spentM.toLocaleString('cs-CZ')} lidí).`);
+        if (healed > 0) Game.toast(`Doplněno ${healed} ${czPlural(healed, 'jednotka', 'jednotky', 'jednotek')} (−${spentG} zlata, −${spentM.toLocaleString('cs-CZ')} lidí).`);
         else Game.toast('Není co doplňovat, nebo nemáš dost zdrojů.');
         this.renderHub();
       },
@@ -3691,9 +3699,11 @@
         const muted = audioFX.muted;
         document.querySelectorAll('.sound-toggle').forEach(b => {
           const label = muted ? 'Zapnout zvuk' : 'Vypnout zvuk';
-          b.textContent = (muted ? '🔇' : '🔊') + (b.dataset.full === '1' ? (muted ? ' Zvuk: vypnutý' : ' Zvuk: zapnutý') : '');
+          const full = b.dataset.full === '1';
+          b.textContent = (muted ? '🔇' : '🔊') + (full ? (muted ? ' Zvuk: vypnutý' : ' Zvuk: zapnutý') : '');
           b.title = label;
-          b.setAttribute('aria-label', label);
+          // tlačítko s viditelným popiskem se jmenuje podle něj (název musí obsahovat viditelný text), ikona bez popisku dostane název
+          if (full) b.removeAttribute('aria-label'); else b.setAttribute('aria-label', label);
           b.setAttribute('aria-pressed', String(!muted));
         });
       },

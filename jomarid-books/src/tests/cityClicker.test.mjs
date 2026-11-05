@@ -416,3 +416,19 @@ test('uložení: sloučení kontroluje typy, takže poškozený postup hru neroz
   assert.equal((html.match(/throw new Error\('uložení není objekt'\)/g) || []).length, 2);
   assert.doesNotMatch(html, /deepMerge/, 'starý sloučitel bez kontroly typů už nikde není');
 });
+
+test('přístupnost: každé dialogové okno má název, tlačítko radnice se jmenuje podle viditelného textu a posuvná nápověda jde ovládat klávesnicí', () => {
+  const dialogs = [...html.matchAll(/<div class="modal hidden" id="(\w+)" role="dialog" aria-modal="true"( aria-labelledby="(\w+)")?>/g)];
+  assert.equal(dialogs.length, 7, 'sedm dialogových oken');
+  for (const [, id, , labelled] of dialogs) {
+    assert.equal(labelled, `${id}Title`, `${id} má aria-labelledby`);
+    const at = html.indexOf(`id="${id}"`);
+    assert.ok(html.slice(at, at + 260).includes(`<h2 id="${id}Title">`), `${id}: nadpis s odpovídajícím id hned na začátku okna`);
+  }
+  const btn = html.match(/<button type="button" class="btn-townhall" id="townhallBtn"[^>]*>/)[0];
+  assert.doesNotMatch(btn, /aria-label/, 'název tlačítka je jeho viditelný text, ne jiný popisek');
+  assert.match(btn, /aria-describedby="townhallHint"/);
+  assert.match(html, /<span class="sr-only" id="townhallHint">Radnice: každé kliknutí přidá peníze do rozpočtu\.<\/span>/);
+  assert.match(css, /\.sr-only\{ position:absolute; width:1px; height:1px;/);
+  assert.match(html, /<div class="help-body" tabindex="0">/);
+});
