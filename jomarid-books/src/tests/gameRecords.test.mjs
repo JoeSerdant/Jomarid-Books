@@ -295,6 +295,13 @@ test('každá hra hlásí všechny statistiky ze svého katalogu a ostatní hry 
       for (const m of list[1].matchAll(/'(\w+)'/g)) if (m[1] !== 'runs_') reported.add(m[1]);
       if (/\.\.\.RUN_MODES\.map\(m => 'runs_' \+ m\)/.test(list[1])) for (const m of ['normal', 'hard', 'inferno', 'insane', 'blitz', 'rush', 'zen', 'daily']) reported.add('runs_' + m);
     }
+    // Warroom skládá hodnoty ve statValues (odvozené statistiky) a reportRecords je hlásí ve smyčce, stejné hodnoty ukazuje okno Statistiky
+    if (g.id === 'warroom') {
+      const fn = text.match(/function statValues\(prog\) \{[\s\S]*?const out = \{([\s\S]*?)\n        \};/);
+      assert.ok(fn, 'warroom: chybí statValues');
+      assert.match(text, /const v = statValues\(prog\);\s*Object\.keys\(v\)\.forEach\(k => jomaridRecord\(k, v\[k\]\)\);/, 'warroom: reportRecords hlásí všechny hodnoty ze statValues');
+      for (const m of fn[1].matchAll(/^\s*([a-z_]+):/gm)) reported.add(m[1]);
+    }
     if (g.id === 'koulovikamosi') {
       assert.match(text, /for\(const m of\['classic','time','drops','chaos','zen'\]\)jomaridRecord\('score_'\+m,S\.bm\[m\]\)/);
       for (const m of ['classic', 'time', 'drops', 'chaos', 'zen']) reported.add('score_' + m);
