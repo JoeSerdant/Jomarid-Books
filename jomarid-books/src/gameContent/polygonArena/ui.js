@@ -22,6 +22,7 @@ function updateStatsUI() {
     const v = p.stats[i], r = statRows[i];
     for (let j = 0; j < STAT_CAP; j++) r.pe[j].classList.toggle('on', j < v);
     r.btn.disabled = pts <= 0 || v >= STAT_CAP; r.btn.classList.toggle('max', v >= STAT_CAP); r.btn.classList.toggle('over', v >= STAT_MAX);
+    r.btn.classList.toggle('padsel', ui.padSeen && i === ui.padStat);
     const od = v >= STAT_CAP ? 'MAX' : v > STAT_MAX ? '+' + (v - STAT_MAX) : ''; if (r.sod.textContent !== od) r.sod.textContent = od;
   }
 }
@@ -207,10 +208,45 @@ $('pauseBtn').addEventListener('click', () => setPause(true));
 elAuto.addEventListener('click', () => setAuto(!input.auto));
 $('soundBtn').addEventListener('click', () => { save.sound = !save.sound; persist(); refreshMenu(); beep('click'); });
 
+/* ---------- ovladač ---------- */
+// Jednou za snímek: plynulé hodnoty (páčky, střelba) zůstanou v input.pad pro ai.js, jednorázové stisky se vyřizují tady.
+const PAD_HOW = 'Ovladač: páčky pohyb a míření, RT střelba, LB skok, X Auto, křížek nahoru a dolů + Y vylepšení, Start pauza.';
+function padSeen() {
+  if (ui.padSeen) return;
+  ui.padSeen = true; ui.statsDirty = true;
+  if (ui.how) { $('hintText').textContent = ui.how + ' ' + PAD_HOW; $('pauseHint').textContent = ui.how + ' ' + PAD_HOW; }
+  if (state === 'play') banner('Ovladač připojen', 'info');
+}
+function padFrame() {
+  const s = Pad.poll();
+  input.pad = null;
+  if (!s) return;
+  padSeen();
+  const e = s.edge;
+  if (state === 'play') {
+    if (typeof collState !== 'undefined' && collState.paused) return;     // sbírka tříd si pauzu řídí sama
+    if (e.start || (paused && e.confirm)) { setPause(!paused); return; }
+    if (paused) return;
+    input.pad = s;
+    if (e.dash) dash(player);
+    if (e.auto) setAuto(!input.auto);
+    if (e.up || e.down) { ui.padStat = (ui.padStat + (e.down ? 1 : STATS.length - 1)) % STATS.length; ui.statsDirty = true; }
+    if (e.buy) buyStat(player, ui.padStat);
+  } else if (e.confirm || e.start) {
+    const overlayOpen = ['coll', 'settings', 'cheat'].some(id => !$(id).classList.contains('hidden'));
+    if (overlayOpen) return;
+    if (state === 'menu') startGame(true);
+    else if (state === 'dead' && !elDead.classList.contains('hidden')) startGame(world.over);
+  }
+}
+window.addEventListener('gamepadconnected', () => padSeen());
+window.addEventListener('gamepaddisconnected', () => { Pad.reset(); input.pad = null; });
+
 /* ---------- hlavní smyčka ---------- */
 let lastT = 0, acc = 0;
 function frame(now) {
   requestAnimationFrame(frame);
+  padFrame();
   let dt = (now - lastT) / 1000; lastT = now;
   const w0 = performance.now(), rawDt = dt;
   if (!(dt > 0)) dt = 0; if (dt > 0.1) dt = 0.1;
@@ -247,8 +283,9 @@ function boot() {
   const HOW = coarse
     ? 'Levý palec pohybuje, pravý míří a střílí. Tlačítko Skok uhýbá, Auto míří za tebe. Body vylepšení rozdáváš klepnutím na panel vlevo.'
     : 'WASD pohyb, myš míří, klik nebo mezerník střílí. Shift = skok, 1–8 vylepšují stavbu, E zapíná Auto, P pauza.';
-  $('hintText').textContent = HOW;
-  $('pauseHint').textContent = HOW;   // ovládání je vidět i v pauze, kdyby ho hráč zapomněl
+  ui.how = HOW;
+  $('hintText').textContent = ui.padSeen ? HOW + ' ' + PAD_HOW : HOW;
+  $('pauseHint').textContent = ui.padSeen ? HOW + ' ' + PAD_HOW : HOW;   // ovládání je vidět i v pauze, kdyby ho hráč zapomněl
   refreshMenu();
   requestAnimationFrame(t => { lastT = t; requestAnimationFrame(frame); });
 }

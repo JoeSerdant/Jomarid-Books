@@ -669,7 +669,7 @@ test('úzký displej: okna (menu, pauza, konec hry) začínají pod šipkou zpě
 
 test('ovládání je vidět i v pauze, ze stejného textu jako v menu (dotyk a klávesnice zvlášť)', () => {
   assert.match(polyHtml, /<p class="hint" id="pauseHint"><\/p>/);
-  assert.match(polyUi, /\$\('hintText'\)\.textContent = HOW;\s*\n\s*\$\('pauseHint'\)\.textContent = HOW;/);
+  assert.match(polyUi, /ui\.how = HOW;\s*\n\s*\$\('hintText'\)\.textContent = ui\.padSeen \? HOW \+ ' ' \+ PAD_HOW : HOW;\s*\n\s*\$\('pauseHint'\)\.textContent = ui\.padSeen \? HOW \+ ' ' \+ PAD_HOW : HOW;/);
   const how = polyUi.match(/const HOW = coarse\s*\n\s*\? '([^']+)'\s*\n\s*: '([^']+)';/);
   assert.ok(how, 'text ovládání');
   assert.match(how[1], /Levý palec pohybuje/);
@@ -707,4 +707,192 @@ test('kontrast: popisek vybraného režimu v nabídce je dost čitelný na fialo
   const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
   const bg = [0x7c, 0x3a, 0xed], a = 0.92, fg = bg.map((v) => 255 * a + v * (1 - a));
   assert.ok((lum(fg) + 0.05) / (lum(bg) + 0.05) >= 4.5);
+});
+
+/* =====================================================================
+   Ovladač (Gamepad API)
+   ===================================================================== */
+const padFake = (over = {}) => Object.assign({ id: 'Test Pad (STANDARD GAMEPAD)', mapping: 'standard', connected: true, axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) }, over);
+const padPress = (pad, ...idx) => { idx.forEach((i) => { pad.buttons[i] = { pressed: true, value: 1 }; }); };
+const padRelease = (pad) => { pad.buttons = pad.buttons.map(() => ({ pressed: false, value: 0 })); };
+const padGame = (seed) => {
+  const g = fresh({ seed });
+  const pad = padFake();
+  g.ctx.__pads = [pad];
+  g.run('navigator.getGamepads = () => __pads');
+  let t = 1000;
+  g.run('lastT = 1000');
+  const tick = (n = 1) => { for (let i = 0; i < n; i++) { t += 17; g.run(`frame(${t})`); } };
+  return { g, pad, tick };
+};
+
+test('ovladač: páčka má mrtvou zónu a od ní roste plynule, směr zůstává', () => {
+  const g = fresh({ seed: 71 });
+  const st = (x, y) => JSON.parse(g.run(`JSON.stringify(Pad.stick(${x}, ${y}))`));
+  assert.deepEqual(st(0, 0), { x: 0, y: 0, mag: 0 });
+  assert.deepEqual(st(0.1, -0.1), { x: 0, y: 0, mag: 0 }, 'v mrtvé zóně nula');
+  assert.deepEqual(st(0.19, 0), { x: 0, y: 0, mag: 0 });
+  const half = st(0.6, 0);
+  assert.ok(Math.abs(half.mag - 0.5) < 1e-9 && Math.abs(half.x - 0.5) < 1e-9 && half.y === 0, 'za zónou od nuly: ' + JSON.stringify(half));
+  const up = st(0, -1);
+  assert.ok(Math.abs(up.y + 1) < 1e-9 && up.x === 0);
+  const diag = st(1, 1);                              // v rozích čtverce je délka větší než 1: ořízne se na 1 a směr zůstane
+  assert.ok(Math.abs(diag.mag - 1) < 1e-9 && Math.abs(diag.x - Math.SQRT1_2) < 1e-9 && Math.abs(diag.y - Math.SQRT1_2) < 1e-9);
+});
+
+test('ovladač: tlačítka (i analogové spouště), hrany jen při stisku a výběr ovladače', () => {
+  const g = fresh({ seed: 72 });
+  const pad = padFake();
+  g.ctx.__list = [pad];
+  const poll = () => JSON.parse(g.run('JSON.stringify(Pad.poll(__list))'));
+  assert.equal(JSON.stringify(g.run('Pad.poll([])')), 'null', 'bez ovladače nic');
+  let s = poll();
+  assert.ok(s && s.fire === false && s.edge.dash === false);
+  // analogová spoušť RT stačí z poloviny
+  pad.buttons[7] = { pressed: false, value: 0.6 };
+  assert.equal(poll().fire, true, 'RT přes 0,5');
+  pad.buttons[7] = { pressed: false, value: 0.4 };
+  assert.equal(poll().fire, false, 'RT pod 0,5 nestřílí');
+  padRelease(pad);
+  // RB a A střílejí taky, A je zároveň potvrzení
+  padPress(pad, 5); assert.equal(poll().fire, true); padRelease(pad);
+  padPress(pad, 0); s = poll(); assert.equal(s.fire, true); assert.equal(s.btn.confirm, true); padRelease(pad);
+  // silné vychýlení pravé páčky střílí i bez tlačítka, slabé jen míří
+  pad.axes[3] = -0.5; s = poll(); assert.equal(s.fire, false); assert.ok(s.rmag > 0.2 && s.ry < 0);
+  pad.axes[3] = -1; s = poll(); assert.equal(s.fire, true);
+  pad.axes[3] = 0;
+  // hrana je jen v prvním snímku po stisku, držení další hrany nedělá a po puštění a novém stisku je zase
+  padRelease(pad); poll();
+  padPress(pad, 4);
+  assert.equal(poll().edge.dash, true, 'první snímek');
+  assert.equal(poll().edge.dash, false, 'držení');
+  padRelease(pad); poll(); padPress(pad, 1);
+  assert.equal(poll().edge.dash, true, 'B je taky skok');
+  // standardní rozložení má přednost před jiným ovladačem, ovladač bez 4 os a 10 tlačítek se ignoruje, odpojený taky
+  const odd = padFake({ id: 'Divný', mapping: '', axes: [0, 0, 0, 0] });
+  const tiny = padFake({ id: 'Malý', mapping: '', axes: [0, 0], buttons: [{ pressed: false, value: 0 }] });
+  g.ctx.__list = [tiny, odd, pad];
+  assert.equal(poll().id, 'Test Pad (STANDARD GAMEPAD)');
+  g.ctx.__list = [tiny, odd];
+  assert.equal(poll().id, 'Divný');
+  g.ctx.__list = [tiny];
+  assert.equal(JSON.stringify(g.run('Pad.poll(__list)')), 'null');
+  g.ctx.__list = [Object.assign(padFake(), { connected: false }), null];
+  assert.equal(JSON.stringify(g.run('Pad.poll(__list)')), 'null');
+});
+
+test('ovladač ve hře: levá páčka jede, pravá míří a střílí, mrtvá zóna nehýbe, odpojení vše zastaví', () => {
+  const { g, pad, tick } = padGame(73);
+  g.arena.mode = 'ffa'; g.arena.startGame(true);
+  tick(5);
+  const x0 = g.run('player.x'), y0 = g.run('player.y');
+  pad.axes[0] = 0.15; pad.axes[1] = 0.1;                 // jen drobné vychýlení v mrtvé zóně
+  tick(30);
+  assert.ok(Math.hypot(g.run('player.x') - x0, g.run('player.y') - y0) < 2, 'mrtvá zóna tank nehýbe');
+  pad.axes[0] = 1; pad.axes[1] = 0;
+  tick(60);
+  assert.ok(g.run('player.x') > x0 + 20, 'tank jede doprava: ' + (g.run('player.x') - x0));
+  assert.equal(g.run('input.pad.lx') > 0.9, true);
+  // pravá páčka nahoru míří nahoru; slabé vychýlení nestřílí, silné ano
+  pad.axes[0] = 0; pad.axes[2] = 0; pad.axes[3] = -0.45;
+  tick(3);
+  assert.ok(Math.abs(g.run('player.angle') + Math.PI / 2) < 0.01, 'míří nahoru');
+  assert.equal(g.run('player.wantFire'), false, 'slabé vychýlení jen míří');
+  pad.axes[3] = -1;
+  tick(2);
+  assert.equal(g.run('player.wantFire'), true, 'silné vychýlení střílí');
+  // tlačítko střílí i bez vychýlení a tank míří dál tam, kam mířil
+  pad.axes[3] = 0; padPress(pad, 7);
+  tick(2);
+  assert.equal(g.run('player.wantFire'), true);
+  assert.ok(Math.abs(g.run('player.angle') + Math.PI / 2) < 0.01, 'úhel zůstal');
+  padRelease(pad);
+  // odpojení: zmizí input.pad a tank se přestane hýbat podle páčky
+  pad.axes[0] = 1;
+  g.ctx.__pads = [];
+  tick(3);
+  assert.equal(g.run('input.pad'), null);
+  assert.equal(g.run('player.moveX'), 0);
+});
+
+test('ovladač ve hře: LB skáče, X přepíná Auto, Start dává pauzu a znovu ji ruší, křížek vybírá vylepšení a Y ho koupí', () => {
+  const { g, pad, tick } = padGame(74);
+  g.arena.mode = 'ffa'; g.arena.startGame(true);
+  tick(3);
+  assert.equal(g.run('player.dashT'), 0);
+  padPress(pad, 4); tick(1);
+  assert.ok(g.run('player.dashT') > 0 || g.run('player.dashCd') > 0, 'LB spustí skok');
+  padRelease(pad); tick(1);
+  // Auto
+  assert.equal(g.run('input.auto'), false);
+  padPress(pad, 2); tick(1); padRelease(pad); tick(1);
+  assert.equal(g.run('input.auto'), true, 'X zapne Auto');
+  padPress(pad, 2); tick(1); padRelease(pad); tick(1);
+  assert.equal(g.run('input.auto'), false, 'a vypne');
+  // vylepšení: kurzor jede dolů a kolem dokola, Y koupí vybrané a bez bodů nic
+  assert.equal(g.run('ui.padStat'), 0);
+  padPress(pad, 3); tick(1); padRelease(pad); tick(1);
+  assert.equal(g.run('player.stats.reduce((a, b) => a + b, 0)'), g.run('player.stats.reduce((a, b) => a + b, 0)'));
+  g.run('player.points = 3');
+  const before = JSON.parse(g.run('JSON.stringify(player.stats)'));
+  padPress(pad, 13); tick(1); padRelease(pad); tick(1);
+  assert.equal(g.run('ui.padStat'), 1, 'křížek dolů');
+  padPress(pad, 3); tick(1); padRelease(pad); tick(1);
+  const after = JSON.parse(g.run('JSON.stringify(player.stats)'));
+  assert.equal(after[1], before[1] + 1, 'Y koupilo druhé vylepšení');
+  assert.equal(g.run('player.points'), 2);
+  padPress(pad, 12); tick(1); padRelease(pad); tick(1);
+  padPress(pad, 12); tick(1); padRelease(pad); tick(1);
+  assert.equal(g.run('ui.padStat'), g.run('STATS.length') - 1, 'nahoru z prvního řádku na poslední');
+  // pauza
+  assert.equal(g.run('paused'), false);
+  padPress(pad, 9); tick(1); padRelease(pad); tick(1);
+  assert.equal(g.run('paused'), true, 'Start dá pauzu');
+  assert.equal(g.run('input.pad'), null, 'v pauze se páčky nečtou');
+  padPress(pad, 9); tick(1); padRelease(pad); tick(1);
+  assert.equal(g.run('paused'), false, 'Start pauzu zruší');
+  padPress(pad, 9); tick(1); padRelease(pad); tick(1);
+  padPress(pad, 0); tick(1); padRelease(pad); tick(1);
+  assert.equal(g.run('paused'), false, 'v pauze ji A taky zruší');
+});
+
+test('ovladač: v menu a na obrazovce konce zápasu A nebo Start spustí hru; hint s ovládáním se ukáže po prvním použití', () => {
+  const { g, pad, tick } = padGame(75);
+  // atrapa dokumentu vrací u všech prvků "není skrytý"; sbírka, nastavení a cheat okno musí být ve skutečnosti zavřené
+  const orig = g.ctx.document.getElementById;
+  const closed = { classList: { contains: (c) => c === 'hidden', add() {}, remove() {}, toggle() {} } };
+  g.ctx.document.getElementById = (id) => (['coll', 'settings', 'cheat'].includes(id) ? closed : orig(id));
+  assert.equal(g.run('state'), 'menu');
+  assert.equal(g.run('ui.padSeen'), false);
+  tick(2);
+  assert.equal(g.run('ui.padSeen'), true, 'po zaznamenání ovladače se ukáže hint');
+  padPress(pad, 9); tick(1); padRelease(pad); tick(1);
+  assert.equal(g.run('state'), 'play', 'Start v menu spustí hru');
+  // otevřená sbírka nebo nastavení: A ani Start hru nespustí (ovladač je tam jen host)
+  g.run('toMenu()');
+  const open = { classList: { contains: () => false, add() {}, remove() {}, toggle() {} } };
+  g.ctx.document.getElementById = (id) => (id === 'coll' ? open : ['settings', 'cheat'].includes(id) ? closed : orig(id));
+  padPress(pad, 0); tick(1); padRelease(pad); tick(1);
+  assert.equal(g.run('state'), 'menu', 'v otevřené sbírce se hra nespustí');
+  // bez ovladače se nic neděje a klávesnice a myš zůstávají (poll vrátí null)
+  const g2 = fresh({ seed: 76 });
+  g2.run('lastT = 1000; frame(1017); frame(1034)');
+  assert.equal(g2.run('input.pad'), null);
+  assert.equal(g2.run('ui.padSeen'), false);
+  assert.equal(g2.run('state'), 'menu');
+});
+
+test('ovladač: zapojení do rozhraní (načtení po vstupech, hlášení, hint a vybraný řádek vylepšení)', () => {
+  const order = fs.readFileSync(new URL('../../polygonArena.js', import.meta.url), 'utf8').match(/\['[a-z0-9]+', [a-z0-9]+\]/g).map((s) => s.match(/'([a-z0-9]+)'/)[1]);
+  assert.ok(order.indexOf('gamepad') > order.indexOf('input') && order.indexOf('gamepad') < order.indexOf('ui'), 'gamepad.js je mezi input.js a ui.js: ' + order.join(','));
+  const ai = fs.readFileSync(new URL('../ai.js', import.meta.url), 'utf8');
+  assert.match(ai, /const P = input\.pad;/);
+  assert.match(ai, /if \(P\) \{ mx \+= P\.lx; my \+= P\.ly; \}/);
+  assert.match(ai, /\} else if \(P && \(P\.rmag > 0\.2 \|\| P\.fire\)\) \{/);
+  assert.match(polyUi, /function padFrame\(\)/);
+  assert.match(polyUi, /requestAnimationFrame\(frame\);\s*\n\s*padFrame\(\);/, 'ovladač se čte na začátku každého snímku');
+  assert.match(polyUi, /const PAD_HOW = 'Ovladač: páčky pohyb a míření, RT střelba, LB skok, X Auto, křížek nahoru a dolů \+ Y vylepšení, Start pauza\.';/);
+  assert.match(polyUi, /r\.btn\.classList\.toggle\('padsel', ui\.padSeen && i === ui\.padStat\)/);
+  assert.match(polyCss, /\.srow\.padsel\{outline:2px solid var\(--accent\)/);
+  assert.match(polyUi, /window\.addEventListener\('gamepadconnected', \(\) => padSeen\(\)\)/);
 });

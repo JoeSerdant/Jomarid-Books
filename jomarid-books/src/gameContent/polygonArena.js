@@ -20,6 +20,7 @@
 //   world.js       - hlavní krok, zóny, bonusy, bossové, události, zápas
 //   modes.js       - herní režimy (Klasika, Týmy, Přežití, Král kopce, Poslední přeživší, Hon na bossy, Zlatá horečka, Cvičiště)
 //   input.js       - vstupy
+//   gamepad.js     - ovladač (Gamepad API)
 //   draw.js        - kreslení tanků, tvarů, střel a bonusů
 //   render.js      - vykreslování scény, mini mapa
 //   ui.js          - rozhraní, stavy hry, hlavní smyčka
@@ -46,6 +47,7 @@ import ai from './polygonArena/ai.js?raw';
 import world from './polygonArena/world.js?raw';
 import modes from './polygonArena/modes.js?raw';
 import input from './polygonArena/input.js?raw';
+import gamepad from './polygonArena/gamepad.js?raw';
 import draw from './polygonArena/draw.js?raw';
 import render from './polygonArena/render.js?raw';
 import ui from './polygonArena/ui.js?raw';
@@ -69,6 +71,7 @@ const SCRIPTS = [
   ['world', world],
   ['modes', modes],
   ['input', input],
+  ['gamepad', gamepad],
   ['draw', draw],
   ['render', render],
   ['ui', ui],

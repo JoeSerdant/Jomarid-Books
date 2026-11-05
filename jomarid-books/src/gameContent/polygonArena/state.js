@@ -30,7 +30,7 @@ let nextId = 1, time = 0, state = 'menu', paused = false, diffKey = 'normal', bu
 let player = null;
 const cam = { x: HALF, y: HALF, z: 1 };
 const view = { w: 800, h: 600, dpr: 1, scale: 1 };
-const ui = { vig: 0, statsDirty: true, offerKey: '', lbT: 0, deadT: 0, spec: null, specT: 0, miniT: 0, statsOpen: false, perkDirty: true, perkKey: '', bannerT: 0, trackT: 1 };
+const ui = { padStat: 0, padSeen: false, vig: 0, statsDirty: true, offerKey: '', lbT: 0, deadT: 0, spec: null, specT: 0, miniT: 0, statsOpen: false, perkDirty: true, perkKey: '', bannerT: 0, trackT: 1 };
 const deathInfo = { by: '', level: 1, score: 0, kills: 0, time: 0 };
 let mode = 'ffa', shake = 0;
 // Systém hlásí „omezit pohyb“: kamera se při zásazích a výbuších neotřásá (živý dotaz, změna nastavení za hry se projeví hned)

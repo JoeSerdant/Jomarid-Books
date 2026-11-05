@@ -64,6 +64,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .srow.over .sname{color:#f5c542}
 .srow .skey{position:absolute;right:6px;top:5px;font-size:11px;color:var(--dim);width:16px;text-align:center;border:1px solid var(--line);border-radius:4px;line-height:1.3}
 .srow:not(:disabled){background:color-mix(in srgb,var(--c) 16%,transparent)}
+.srow.padsel{outline:2px solid var(--accent);outline-offset:-2px}
 .srow:not(:disabled):active{transform:scale(.97)}
 .srow:disabled{cursor:default}
 #app.touch .srow{height:33px}
