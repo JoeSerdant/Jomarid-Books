@@ -658,6 +658,15 @@ test('úzký displej: odkaz zpět je jen šipka a tlačítka nahoře začínají
   assert.match(polyCss, /@media \(max-width:360px\)\{[\s\S]*?#topbtns\{left:56px;/);
 });
 
+test('úzký displej: okna (menu, pauza, konec hry) začínají pod šipkou zpět, takže nezakrývá název hry', () => {
+  const m = polyCss.match(/@media \(max-width:520px\)\{([\s\S]*?)\n\}/)[1];
+  const pad = m.match(/\.overlay\{padding-top:calc\((\d+)px \+ env\(safe-area-inset-top,0px\)\)\}/);
+  assert.ok(pad, 'okna mají nahoře odsazení podle výřezu displeje');
+  // šipka: top 10 px (inline styl) + výška 30 px (pravidlo výše) = 40 px musí být nad začátkem okna
+  const h = Number(m.match(/#btn-back-to-jomarid\{[^}]*height:(\d+)px/)[1]);
+  assert.ok(10 + h <= Number(pad[1]), 'šipka by zasahovala do okna: ' + (10 + h) + ' > ' + pad[1]);
+});
+
 test('ovládání je vidět i v pauze, ze stejného textu jako v menu (dotyk a klávesnice zvlášť)', () => {
   assert.match(polyHtml, /<p class="hint" id="pauseHint"><\/p>/);
   assert.match(polyUi, /\$\('hintText'\)\.textContent = HOW;\s*\n\s*\$\('pauseHint'\)\.textContent = HOW;/);
