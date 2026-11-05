@@ -569,7 +569,7 @@ describe('viewTransition.js: kruhový přechod při změně motivu', () => {
   });
   test('App: změna motivu i akcentu jde přes přechod a barvy se mění v layout effectu (před snímkem)', () => {
     const app = read('src', 'App.jsx');
-    assert.match(app, /changeTheme: \(t\) => withViewTransition\(/);
+    assert.match(app, /changeTheme: \(themeKey\) => withViewTransition\(/);
     assert.match(app, /changeAccent: \(a\) => withViewTransition\(/);
     assert.match(app, /flush: flushSync/);
     assert.match(app, /useLayoutEffect\(\(\) => \{\s*const base = resolveTheme\(currentTheme\)/);

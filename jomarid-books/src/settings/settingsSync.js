@@ -11,6 +11,7 @@ import {
 } from '../theme.js';
 import { REMEMBER_PREF_KEY, SORT_PREF_KEY, STATUS_PREF_KEY, VIEW_KEY } from '../browse/browseStore.js';
 import { notifySettingsApplied } from './settingsEvents.js';
+import { LANG_KEY } from '../i18n/core.js';
 
 export const SEARCH_PREFS_KEY = 'jomarid-search-prefs'; // filtry vyhledávacího okna (SearchModal.jsx importuje klíč odsud)
 const META_KEY = 'jomarid-settings-sync'; // {userId, serverAt, dirty}: co z účtu se naposledy použilo a zda je co odeslat
@@ -23,6 +24,7 @@ export const SYNC_KEYS = [
   THEME_KEY, CUSTOM_THEME_STORAGE, ACCENT_KEY, UI_SCALE_KEY, UI_DENSITY_KEY, MOTION_KEY, LIVELY_KEY,
   ...Object.values(READER_STORAGE),
   VIEW_KEY, SORT_PREF_KEY, STATUS_PREF_KEY, REMEMBER_PREF_KEY, SEARCH_PREFS_KEY,
+  LANG_KEY, // jazyk appky (čeština / angličtina)
 ];
 
 const defaultStorage = () => { try { return globalThis.localStorage; } catch { return null; } };
