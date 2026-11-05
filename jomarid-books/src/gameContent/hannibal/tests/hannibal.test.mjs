@@ -551,3 +551,101 @@ test('čeština: množné číslo jednotek v hlášce o doplnění armády (1 je
   assert.equal(f(-2, 'a', 'b', 'c'), 'b');
   assert.match(html, /Doplněno \$\{healed\} \$\{czPlural\(healed, 'jednotka', 'jednotky', 'jednotek'\)\}/);
 });
+
+/* ============================ Tah nepřítele po jednotkách ============================ */
+const engineFn = (...names) => vm.runInNewContext(`({ ${names.map((n) => methodSrc(n)).join(',\n')} })`, { Math, Object, Map, Set, Date, setTimeout: (fn, ms) => ({ fn, ms }), clearTimeout: () => {}, document: { getElementById: () => ({ classList: { contains: () => true } }) }, Game: { toast() {} } });
+
+test('tah nepřítele: rozhodnutí (planEnemy) je bez vedlejších účinků a drží původní pravidla (útěk, nejslabší cíl v dosahu, bok a záda, přiblížení)', () => {
+  const eng = engineFn('planEnemy');
+  const mkU = (o) => ({ hp: 100, maxHp: 100, range: 1, routed: false, ...o });
+  const setup = (units, reach, angle = () => 'front') => Object.assign(eng, { units, isVisibleTo: () => true, getReachableTiles: () => reach, classifyAngle: angle });
+  const enemy = mkU({ id: 'e', team: 'enemy', x: 5, y: 3 });
+  // nikdo k vidění
+  setup([enemy], {});
+  assert.deepEqual(plain(eng.planEnemy(enemy)), { kind: 'none' });
+  // v panice prchá (a je vidět, před kým)
+  const p1 = mkU({ id: 'p1', team: 'player', x: 6, y: 3 });
+  setup([enemy, p1], { '4,3': 1 });
+  assert.equal(eng.planEnemy({ ...enemy, routed: true }).kind, 'flee');
+  // v dosahu bije nejslabšího, bez přesunu
+  const weak = mkU({ id: 'p2', team: 'player', x: 4, y: 3, hp: 10 });
+  setup([enemy, p1, weak], { '4,2': 1 });
+  const atk = eng.planEnemy(enemy);
+  assert.equal(atk.kind, 'attack'); assert.equal(atk.target, weak);
+  // mimo dosah: vybere pole, ze kterého zasáhne zezadu, i když je delší cesta
+  const far = mkU({ id: 'p3', team: 'player', x: 8, y: 3 });
+  setup([enemy, far], { '7,3': 2, '8,4': 3, '8,2': 3 }, (from) => (from.x === 8 && from.y === 4 ? 'rear' : from.x === 7 ? 'front' : 'flank'));
+  const mv = eng.planEnemy(enemy);
+  assert.equal(mv.kind, 'moveAttack'); assert.deepEqual(plain(mv.dest), { x: 8, y: 4, cost: 3 }); assert.equal(mv.target, far);
+  // úplně mimo dosah: přiblíží se k nejbližšímu hráči (nejkratší vzdálenost), případně zůstane stát
+  const veryFar = mkU({ id: 'p4', team: 'player', x: 11, y: 3 });
+  setup([enemy, veryFar], { '6,3': 1, '5,2': 1, '7,3': 2 });
+  assert.deepEqual(plain(eng.planEnemy(enemy)), { kind: 'approach', dest: { x: 7, y: 3 } });
+  setup([enemy, veryFar], {});
+  assert.deepEqual(plain(eng.planEnemy(enemy)), { kind: 'approach', dest: null });
+  // plánování nic nemění
+  assert.deepEqual([enemy.x, enemy.y, enemy.hp, weak.hp], [5, 3, 100, 10]);
+});
+
+test('tah nepřítele: pauzy jdou přeskočit (rozdělaná skončí hned, další se nečekají) a ústup nebo nová bitva tah ukončí', () => {
+  const timers = [];
+  const eng = vm.runInNewContext(`({ ${methodSrc('phaseAlive')}, ${methodSrc('phaseWait')}, ${methodSrc('skipEnemyAnimation')} })`, {
+    Math, clearTimeout: (t) => { t.cleared = true; }, setTimeout: (fn, ms) => { const t = { fn, ms }; timers.push(t); return t; },
+    document: { getElementById: () => ({ classList: { contains: () => eng.screenActive !== false } }) },
+  });
+  eng._battleSeq = 3;
+  const ph = eng._phase = { seq: 3, skip: false, pending: null, scale: 0.5 };
+  const log = [];
+  eng.phaseWait(ph, 400, () => log.push('a'));
+  assert.equal(timers.length, 1); assert.equal(timers[0].ms, 200, 'pauza se zkracuje podle počtu nepřátel (scale)');
+  assert.deepEqual(log, []);
+  eng.skipEnemyAnimation();
+  assert.deepEqual(log, ['a'], 'rozdělaná pauza skončí hned');
+  assert.ok(timers[0].cleared && ph.pending === null && ph.skip === true);
+  eng.phaseWait(ph, 400, () => log.push('b'));
+  assert.deepEqual(log, ['a', 'b'], 'po přeskočení se nečeká vůbec');
+  eng.skipEnemyAnimation(); // opakované přeskočení nic nedělá
+  eng.phaseWait({ ...ph, skip: false, pending: null }, 0, () => log.push('c'));
+  assert.deepEqual(log, ['a', 'b', 'c'], 'nulová pauza proběhne hned');
+  // ústup (obrazovka bitvy není aktivní) nebo nová bitva (jiné číslo) uprostřed pauzy: nic se nedovykoná
+  const ph2 = eng._phase = { seq: 3, skip: false, pending: null, scale: 1 };
+  eng.phaseWait(ph2, 300, () => log.push('d'));
+  eng.screenActive = false;
+  timers[timers.length - 1].fn();
+  assert.ok(!log.includes('d'), 'po odchodu z bitvy se nic nevyhodnotí');
+  eng.screenActive = true;
+  const ph3 = eng._phase = { seq: 3, skip: false, pending: null, scale: 1 };
+  eng.phaseWait(ph3, 300, () => log.push('e'));
+  eng._battleSeq = 4;
+  timers[timers.length - 1].fn();
+  assert.ok(!log.includes('e'), 'nová bitva ukončí tah nepřítele z té předchozí');
+  assert.equal(eng.phaseAlive(ph3), false);
+  assert.equal(eng.skipEnemyAnimation.call({ _phase: null }), undefined);
+});
+
+test('tah nepřítele: zapojení (klepnutí a Mezerník přeskočí, odložený start patří své bitvě, nová bitva čísluje, jednající jednotka se zvýrazní)', () => {
+  assert.match(methodSrc('handleCanvasClick'), /handleCanvasClick\(e\) \{\n\s*if \(this\.turn === 'enemy'\) \{ this\.skipEnemyAnimation\(\); return; \}\n\s*if \(this\.turn !== 'player'\) return;/);
+  assert.match(methodSrc('handleKey'), /if \(this\.turn === 'enemy' && \(e\.key === 'Enter' \|\| e\.key === ' '\)\) \{ e\.preventDefault\(\); this\.skipEnemyAnimation\(\); return; \}/);
+  const end = methodSrc('endTurn');
+  assert.match(end, /const seq = this\._battleSeq;\s*setTimeout\(\(\) => \{[\s\S]*?this\._battleSeq === seq && screen && screen\.classList\.contains\('active'\)\) this\.runEnemyPhase\(\);/, 'ústup během půlsekundy před tahem nepřítele nespustí tah v cizí bitvě');
+  assert.match(methodSrc('resetBattleUiState'), /this\._battleSeq = \(this\._battleSeq \|\| 0\) \+ 1;[\s\S]*?this\._phase = null;\s*this\.actingUnit = null;/);
+  assert.match(html, /if \(this\.selectedUnit === u \|\| this\.actingUnit === u\) \{\s*this\.ctx\.strokeStyle = this\.actingUnit === u \? '#ff7043' : '#ffd700';/);
+  // konec fáze se vyhodnotí jednou, až po posledním nepříteli, a stejně jako dřív (stopy, obnovení příznaků, kontrola konce)
+  const fin = methodSrc('finishEnemyPhase');
+  assert.match(fin, /this\._phase = null;[\s\S]*?this\.applyGlobalAttrition\(\);\s*this\.tickStatuses\(\);[\s\S]*?this\.turnNumber \+= 1;\s*this\.turn = 'player';[\s\S]*?this\.checkBattleEnd\(\);\s*this\.autoFleeRoutedPlayers\(\);/);
+  const run = methodSrc('runEnemyPhase');
+  assert.match(run, /if \(i >= queue\.length\) \{ this\.finishEnemyPhase\(ph\); return; \}/);
+  assert.match(run, /Tah nepřítele jde přeskočit klepnutím na plátno nebo klávesou Mezerník\./);
+  assert.doesNotMatch(methodSrc('stepEnemy'), /checkBattleEnd/, 'konec bitvy se nevyhodnocuje po jednotlivých jednotkách');
+});
+
+test('záhlaví bitvy roste podle obsahu (dřív mělo pevnou výšku a na šířkách 1000 až 1280 px ořezávalo název nahoře)', () => {
+  const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+  const hud = css.match(/\n    \.battle-hud \{([^}]*)\}/)[1];
+  assert.match(hud, /min-height: 65px;/);
+  assert.doesNotMatch(hud, /(^|[^-])height: 65px/, 'žádná pevná výška');
+  assert.match(hud, /padding: 6px 20px;/);
+  assert.match(css, /\.battle-hud > div:first-child \{ min-width: 0; \}/);
+  // úzké obrazovky mají vlastní pravidlo s height: auto, to zůstává
+  assert.match(css, /\.battle-hud, \.minigame-hud \{ height: auto; min-height: 48px;/);
+});
