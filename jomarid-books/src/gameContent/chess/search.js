@@ -948,10 +948,22 @@ const FastChess = (function () {
     return out.sort();
   }
   function stateInfo() { return { side, castle, ep, half, sp }; }
+  // Pro nástroje a testy šachových úloh (tests/puzzleTools.mjs): legální tahy jako čísla (pro makeMove/unmakeMove),
+  // rychlé "má strana na tahu nějaký legální tah" a "je v šachu". Hledání je nepoužívá, jen stojí vedle legalCoords.
+  function legalMoves() {
+    const n = genMoves(0, false), out = [];
+    for (let i = 0; i < n; i++) { const m = moves[i]; if (makeLegal(m)) { unmakeMove(); out.push(m); } }
+    return out;
+  }
+  function hasLegalMove() {
+    const n = genMoves(0, false);
+    for (let i = 0; i < n; i++) { if (makeLegal(moves[i])) { unmakeMove(); return true; } }
+    return false;
+  }
 
   return {
     handle, setFEN, START_FEN, perft, perftFEN, hashIsConsistent, legalCoords, stateInfo, evaluate, mulberry32,
-    parseCoord, makeMove, unmakeMove, moveCoord, setupFromMoves, DEFAULTS, MATE
+    parseCoord, makeMove, unmakeMove, moveCoord, setupFromMoves, DEFAULTS, MATE, legalMoves, hasLegalMove, inCheck
   };
 })();
 

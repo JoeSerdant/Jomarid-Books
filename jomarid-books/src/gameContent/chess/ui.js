@@ -331,7 +331,7 @@
         const isLast = !!(lastMove && ((lastMove.from.r === r && lastMove.from.c === c) || (lastMove.to.r === r && lastMove.to.c === c)));
         const isCheck = !!(kingPos && kingPos.r === r && kingPos.c === c);
         const isHintFrom = !!(hint && hint.from.r === r && hint.from.c === c);
-        const isHintTo = !!(hint && hint.to.r === r && hint.to.c === c);
+        const isHintTo = !!(hint && hint.to && hint.to.r === r && hint.to.c === c);
         const animFor = anim && anim.moves.find((a) => a.to.r === r && a.to.c === c);
         const lifted = draggingFrom && draggingFrom.r === r && draggingFrom.c === c;
         const cls = ["square", (r + c) % 2 === 0 ? "light" : "dark"];
@@ -708,11 +708,26 @@
     }));
   }
 
-  function MenuScreen({ save, savedGame, onStart, onResume, onAbandon, onUpdate, onOpenReview, onResetProgress, theme, setTheme }) {
+  function PuzzleTeaser({ save, onOpen, onShowAll }) {
+    const total = Puzzles.LIST.length;
+    if (!total) return null;
+    const isSolved = (id) => League.puzzleSolved(save, id);
+    const done = Puzzles.LIST.filter((pz) => isSolved(pz.id)).length;
+    const next = Puzzles.nextUnsolved(isSolved, null);
+    return div({ className: "pz-teaser" },
+      span({ className: "pz-teaser-icon", "aria-hidden": "true" }, "🧩"),
+      div({ className: "pz-teaser-body" },
+        div({ className: "pz-teaser-title" }, "Šachové úlohy"),
+        div({ className: "pz-teaser-sub" }, done >= total ? "Všech " + total + " úloh je vyřešených." : done > 0 ? "Vyřešeno " + done + " z " + total : total + " úloh: najdi mat v 1 až 3 tazích")),
+      next
+        ? button({ className: "btn btn-secondary btn-sm", onClick: () => onOpen(next.id) }, done ? "Pokračovat" : "Vyzkoušet")
+        : button({ className: "btn btn-ghost btn-sm", onClick: onShowAll }, "Zobrazit"));
+  }
+
+  function MenuScreen({ save, savedGame, onStart, onResume, onAbandon, onUpdate, onOpenReview, onResetProgress, theme, setTheme, menuTab, setMenuTab, onOpenPuzzle }) {
     const [colorChoice, setColorChoice] = useState(save.playerColor === "b" ? "b" : "w");
     const [tc, setTc] = useState(save.tc || "none");
-    const [menuTab, setMenuTab] = useState("play");
-    const navItems = [["play", "🏠", "Hrát"], ["rating", "📈", "Rating"], ["settings", "⚙️", "Nastavení"]];
+    const navItems = [["play", "🏠", "Hrát"], ["puzzles", "🧩", "Úlohy"], ["rating", "📈", "Rating"], ["settings", "⚙️", "Nastavení"]];
     const start = (idx) => {
       const color = colorChoice === "r" ? (Math.random() < 0.5 ? "w" : "b") : colorChoice;
       onStart(idx, color, tc, colorChoice);
@@ -736,10 +751,13 @@
               h(BotAvatar, { bot: resumeBot, small: true }),
               div({ className: "resume-body" }, div({ className: "resume-title" }, "Rozehraná partie s ", resumeBot.name), div({ className: "resume-sub" }, Math.ceil(savedGame.moves.length / 2), ". tah · ", savedGame.color === "w" ? "bílými" : "černými", savedGame.assisted ? " · cvičná" : " · hodnocená")),
               div({ className: "resume-actions" }, button({ className: "btn btn-primary btn-sm", onClick: onResume }, "Pokračovat"), button({ className: "btn btn-ghost btn-sm", onClick: onAbandon }, "Vzdát"))),
+            h(PuzzleTeaser, { save, onOpen: onOpenPuzzle, onShowAll: () => setMenuTab("puzzles") }),
             h(SetupPicker, { save, colorChoice, setColorChoice, tc, setTc }),
             h(BotCards, { save, onStart: start }),
             div({ className: "section-head" }, "Historie zápasů", total > 0 && small(null, save.record.w, "–", save.record.d, "–", save.record.l)),
             h(HistoryList, { recentGames: save.recentGames, onOpen: onOpenReview }))),
+
+        menuTab === "puzzles" && h(PuzzlesTab, { save, onOpen: onOpenPuzzle }),
 
         menuTab === "rating" && div({ className: "dash-body single" }, div({ className: "dash-main" },
           div({ className: "section-head" }, "Tvůj rating"),
@@ -763,7 +781,7 @@
             div({ className: "settings-row" }, span(null, "Automaticky povyšovat na dámu", small(null, "Bez ptaní, když pěšec dojde na konec desky.")), h(Toggle, { on: save.autoQueen, label: "Automaticky povyšovat na dámu", onChange: (v) => onUpdate({ autoQueen: v }) })),
             div({ className: "settings-row" }, span(null, "Motiv"), h(ThemeSeg, { value: theme, onChange: setTheme })),
             div({ className: "settings-row settings-col" }, span(null, "Barva šachovnice"), h(BoardSeg, { value: save.board || "green", onChange: (v) => onUpdate({ board: v }) })),
-            div({ className: "settings-row" }, span(null, "Resetovat postup", small(null, "Smaže rating, rekordy, výhry i odemčené soupeře.")), button({ className: "btn btn-danger btn-sm", onClick: onResetProgress }, "Resetovat")))))));
+            div({ className: "settings-row" }, span(null, "Resetovat postup", small(null, "Smaže rating, rekordy, výhry, odemčené soupeře i vyřešené úlohy.")), button({ className: "btn btn-danger btn-sm", onClick: onResetProgress }, "Resetovat")))))));
   }
 
   // ---------- Hra ----------
@@ -1127,6 +1145,237 @@
             recs.length >= 1 && h(PgnButton, { getPgn: () => buildPgn({ coords: moves, color, result: review.result, reason: review.reason, botName: bot ? bot.name : null, botRating: bot ? bot.rating : null, myRating: null, date: new Date() }) })))));
   }
 
+  // ---------- Šachové úlohy ----------
+  // Zápis hlavní varianty ("1. Qxf7+ Ke7 2. Nd5#") od pozice state; coords je pole tahů.
+  function sanFrom(state, coords) {
+    const out = [];
+    let st = state;
+    for (const c of coords) {
+      const m = findMoveByCoord(st, c);
+      if (!m) break;
+      const all = ChessEngine.generateAllLegalMoves(st, st.turn);
+      const after = ChessEngine.applyMove(st, m);
+      out.push(toSAN(m, all, after));
+      st = after;
+    }
+    let text = "";
+    const startNo = state.fullmoveNumber || 1;
+    out.forEach((san, k) => {
+      const white = (state.turn === "w") === (k % 2 === 0);
+      const no = startNo + Math.floor((k + (state.turn === "w" ? 0 : 1)) / 2);
+      if (white) text += (k ? " " : "") + no + ". " + san;
+      else text += (k ? " " : "") + (k === 0 ? no + "... " : "") + san;
+    });
+    return text;
+  }
+
+  function PuzzlesTab({ save, onOpen }) {
+    const total = Puzzles.LIST.length;
+    const isSolved = (id) => League.puzzleSolved(save, id);
+    const done = Puzzles.LIST.filter((pz) => isSolved(pz.id)).length;
+    const next = Puzzles.nextUnsolved(isSolved, null);
+    const nextGroup = next ? Puzzles.groups().find((g) => g.n === next.n) : null;
+    return div({ className: "dash-body single" }, div({ className: "dash-main" },
+      div({ className: "section-head" }, "Šachové úlohy", total > 0 && small(null, done, " z ", total)),
+      total === 0
+        ? div({ className: "panel-card" }, div({ className: "rc-note" }, "Úlohy se právě připravují."))
+        : div({ className: "panel-card pz-intro" },
+          p(null, "Najdi mat. U každé úlohy je správné řešení jen jedno a počítač ho předem ověřil. Úlohy jsou seřazené od nejlehčích."),
+          div({ className: "progress-track", role: "progressbar", "aria-label": "Vyřešené úlohy", "aria-valuemin": 0, "aria-valuemax": total, "aria-valuenow": done }, div({ className: "progress-fill", style: { width: (done / total) * 100 + "%" } })),
+          next
+            ? button({ className: "btn btn-primary btn-block", onClick: () => onOpen(next.id) }, done ? "Pokračovat: " : "Začít: ", next.n === 1 ? "mat v 1 tahu" : "mat ve " + next.n + " tazích", nextGroup ? " (" + (nextGroup.list.findIndex((pz) => pz.id === next.id) + 1) + ")" : "")
+            : div({ className: "pz-all-done" }, "🏆 Všechny úlohy jsou vyřešené. Skvělá práce!")),
+      Puzzles.groups().map((g) => {
+        const solvedHere = g.list.filter((pz) => isSolved(pz.id)).length;
+        return div({ key: g.n, className: "pz-group" },
+          div({ className: "pz-group-head" }, h("h3", null, g.label), small(null, solvedHere, " / ", g.list.length)),
+          div({ className: "pz-grid" }, g.list.map((pz, k) => {
+            const ok = isSolved(pz.id);
+            return button({ key: pz.id, className: "pz-tile" + (ok ? " done" : ""), onClick: () => onOpen(pz.id), "aria-label": g.label + ", úloha " + (k + 1) + (ok ? ", vyřešená" : "") }, ok ? "✓" : k + 1);
+          })));
+      })));
+  }
+
+  // Jedna úloha: hráč tahá za stranu na tahu, soupeř odpovídá hlavní variantou. Špatný tah se hned vrátí; nápověda má dva stupně
+  // (nejdřív figura, potom celý tah) a řešení jde i ukázat (pak se úloha nepočítá jako vyřešená).
+  function PuzzleScreen({ puzzle, number, count, solvedBefore, soundOn, onToggleSound, onExit, onSolved, onNext, onRetry, settings }) {
+    const init = useMemo(() => ChessEngine.fromFEN(puzzle.fen), [puzzle]);
+    const sol = useMemo(() => Puzzles.solution(puzzle), [puzzle]);
+    const attacker = init.turn;
+    const [state, setState] = useState(init);
+    const [lastMove, setLastMove] = useState(null);
+    const [step, setStep] = useState(0);
+    const [phase, setPhase] = useState("play"); // play | reply | wrong | solved | shown
+    const [selected, setSelected] = useState(null);
+    const [targets, setTargets] = useState([]);
+    const [promotion, setPromotion] = useState(null);
+    const [dragFrom, setDragFrom] = useState(null);
+    const [anim, setAnim] = useState(null);
+    const [flipped, setFlipped] = useState(attacker === "b");
+    const [mistakes, setMistakes] = useState(0);
+    const [hints, setHints] = useState(0);
+    const [hintLevel, setHintLevel] = useState(0);
+    const [note, setNote] = useState(null);
+    const timers = useRef([]);
+    const animNext = useRef(true);
+    const settingsRef = useRef(settings);
+    settingsRef.current = settings;
+    const doneRef = useRef(false);
+
+    useEffect(() => () => { timers.current.forEach(clearTimeout); timers.current = []; }, []);
+    function later(fn, ms) { const id = setTimeout(fn, ms); timers.current.push(id); return id; }
+    function sfx(kind) { if (settingsRef.current.sound && SoundFX[kind]) SoundFX[kind](); }
+    function soundFor(move, after) {
+      if (move.promotion) sfx("promote");
+      else if (move.flag === "castleK" || move.flag === "castleQ") sfx("castle");
+      else if (move.captured || move.flag === "ep") sfx("capture");
+      else sfx("move");
+      if (ChessEngine.isInCheck(after, after.turn) && !ChessEngine.isCheckmate(after)) later(() => sfx("check"), 120);
+    }
+    function animOf(move, byDrag) {
+      const moves = [{ from: move.from, to: move.to }];
+      if (move.flag === "castleK") moves.push({ from: { r: move.from.r, c: 7 }, to: { r: move.from.r, c: 5 } });
+      if (move.flag === "castleQ") moves.push({ from: { r: move.from.r, c: 0 }, to: { r: move.from.r, c: 3 } });
+      return byDrag ? null : { moves, key: Math.random() };
+    }
+    function clearSelection() { setSelected(null); setTargets([]); }
+
+    // Odehraje tah ze souřadnic (odpověď soupeře, ukázka řešení). Vrací pozici po tahu.
+    function playCoord(st, coord) {
+      const mv = findMoveByCoord(st, coord);
+      if (!mv) return st;
+      const after = ChessEngine.applyMove(st, mv);
+      setState(after); setLastMove(mv); setAnim(animOf(mv, false)); soundFor(mv, after);
+      return after;
+    }
+
+    function commit(move, byDrag) {
+      clearSelection(); setDragFrom(null); setHintLevel(0);
+      const after = ChessEngine.applyMove(state, move);
+      const verdict = Puzzles.judge(puzzle, step, moveToCoord(move), after);
+      const before = state, beforeLast = lastMove;
+      setState(after); setLastMove(move); setAnim(animOf(move, byDrag)); soundFor(move, after);
+      if (verdict === "wrong") {
+        setPhase("wrong"); setMistakes((m) => m + 1);
+        setNote({ kind: "bad", text: "Tenhle tah k matu nevede. Zkus to znovu." });
+        later(() => { setState(before); setLastMove(beforeLast); setAnim(null); setPhase("play"); setNote(null); }, 950);
+        return;
+      }
+      if (verdict === "mate") {
+        setPhase("solved"); setNote({ kind: "good", text: "Mat! Úloha je vyřešená." });
+        if (!doneRef.current) { doneRef.current = true; later(() => sfx("win"), 250); onSolved({ m: mistakes, h: hints }); }
+        return;
+      }
+      // správný mezitah: soupeř odpoví hlavní variantou
+      setPhase("reply"); setStep(step + 1);
+      setNote({ kind: "good", text: "Správně! Soupeř odpovídá…" });
+      later(() => {
+        const reply = Puzzles.replyAfter(puzzle, step);
+        if (reply) playCoord(after, reply);
+        setStep(step + 2); setPhase("play");
+        setNote({ kind: "info", text: "Pokračuj: najdi další tah." });
+      }, 650);
+    }
+
+    function onPick(sq) {
+      if (phase !== "play") return { ok: false };
+      const piece = state.board[sq.r][sq.c];
+      if (piece && piece.color === attacker) {
+        const was = !!(selected && selected.r === sq.r && selected.c === sq.c);
+        if (!was) {
+          setSelected({ r: sq.r, c: sq.c });
+          setTargets(ChessEngine.generateLegalMoves(state, sq.r, sq.c));
+          if (settingsRef.current.sound) SoundFX.click();
+        }
+        return { ok: true, was };
+      }
+      clearSelection();
+      return { ok: false };
+    }
+    function onTapRelease(sq, was) { if (was) clearSelection(); }
+    function onDrop(sq, byDrag) {
+      setDragFrom(null);
+      if (!sq || !selected) return;
+      const variants = targets.filter((m) => m.to.r === sq.r && m.to.c === sq.c);
+      if (variants.length === 0) { if (!byDrag) clearSelection(); return; }
+      if (variants.length > 1 && variants[0].promotion) { setPromotion({ variants, byDrag }); return; } // v úlohách se vždy ptá, na co se pěšec mění
+      commit(variants[0], byDrag);
+    }
+    function choosePromotion(t) {
+      const v = promotion.variants.find((x) => x.promotion === t);
+      const byDrag = promotion.byDrag;
+      setPromotion(null);
+      commit(v, byDrag);
+    }
+
+    function showHint() {
+      if (phase !== "play") return;
+      const level = Math.min(2, hintLevel + 1);
+      if (level > hintLevel) { setHintLevel(level); setHints((x) => x + 1); }
+      clearSelection();
+    }
+    // Ukáže celé řešení. Úloha se pak nepočítá jako vyřešená (nikdo ji nevyřešil).
+    function showSolution() {
+      if (phase === "reply" || phase === "wrong") return;
+      timers.current.forEach(clearTimeout); timers.current = [];
+      clearSelection(); setPromotion(null); setDragFrom(null); setHintLevel(0);
+      setPhase("shown"); setNote({ kind: "info", text: "Takhle vypadá řešení." });
+      let st = init; setState(init); setLastMove(null); setStep(0);
+      sol.forEach((coord, k) => { later(() => { st = playCoord(st, coord); }, 500 + k * 900); });
+    }
+
+    const mateLabel = Puzzles.mateText(puzzle.n);
+    const sideName = attacker === "w" ? "Bílý" : "Černý";
+    const playing = phase === "play";
+    const hint = playing && hintLevel > 0 ? Puzzles.hintFor(puzzle, step) : null;
+    const hintArrow = hint && hintLevel >= 2 ? [{ from: hint.from, to: hint.to, color: "#FFC800" }] : [];
+    const hintView = hint ? { from: hint.from, to: hintLevel >= 2 ? hint.to : null } : null;
+    const stepsDone = Math.floor(step / 2) + (phase === "solved" ? 1 : 0);
+    const solved = phase === "solved";
+    const finished = solved || phase === "shown";
+    const status = note ? note.text : sideName + " je na tahu. Najdi " + mateLabel.toLowerCase() + ".";
+    const inCheckNow = ChessEngine.isInCheck(state, state.turn) && !ChessEngine.isCheckmate(state);
+    const reveal = Puzzles.reveal(puzzle);
+
+    return div({ className: "screen puzzle-screen" },
+      promotion && h(PromotionModal, { color: attacker, onChoose: choosePromotion, onCancel: () => setPromotion(null) }),
+      div({ className: "topbar" },
+        button({ className: "icon-btn", onClick: onExit, "aria-label": "Zpět na seznam úloh" }, "←"),
+        div({ className: "turn-banner" + (inCheckNow ? " check" : "") }, span({ className: "dot" }), span(null, mateLabel)),
+        button({ className: "icon-btn", onClick: onToggleSound, "aria-label": "Přepnout zvuk" }, soundOn ? "🔊" : "🔇")),
+      div({ className: "container" },
+        div({ className: "game-layout" },
+          div({ className: "board-col puzzle-col" },
+            h(Board, {
+              state, flipped, selected: playing ? selected : null, targets: playing ? targets : [], lastMove, hint: hintView, arrows: hintArrow, anim,
+              interactive: playing, showTargets: settings.highlights !== false, onPick, onTapRelease, onDrop, draggingFrom: dragFrom,
+              onDragStart: (from) => setDragFrom(from)
+            }),
+            div({ className: "pz-status " + (note ? note.kind : "info"), role: "status", "aria-live": "polite" }, status),
+            div({ className: "board-controls" },
+              button({ className: "btn btn-ghost btn-sm", onClick: showHint, disabled: !playing || hintLevel >= 2, "aria-label": "Nápověda" }, "💡", span({ className: "lbl" }, hintLevel === 0 ? " Nápověda" : " Ukázat tah")),
+              button({ className: "btn btn-ghost btn-sm", onClick: showSolution, disabled: phase === "reply" || phase === "wrong" || finished, "aria-label": "Ukázat řešení" }, "👁", span({ className: "lbl" }, " Řešení")),
+              button({ className: "btn btn-ghost btn-sm", onClick: onRetry, "aria-label": "Začít úlohu znovu" }, "🔁", span({ className: "lbl" }, " Znovu")),
+              button({ className: "btn btn-ghost btn-sm btn-icon", onClick: () => setFlipped((f) => !f), "aria-label": "Otočit desku" }, "⇅"))),
+          div({ className: "side-panel" },
+            div({ className: "panel-card" },
+              div({ className: "panel-title" }, "Zadání · úloha " + number + " z " + count),
+              div({ className: "pz-side" }, span({ className: "pz-side-dot " + attacker }), sideName, " je na tahu"),
+              div({ className: "pz-goal" }, "Najdi ", b(null, mateLabel.toLowerCase()), "."),
+              div({ className: "pz-steps", "aria-label": "Postup" }, Array.from({ length: puzzle.n }, (_, k) => span({ key: k, className: "pz-step" + (k < stepsDone ? " done" : "") }))),
+              div({ className: "rc-note" }, "Chyby: ", mistakes, " · nápovědy: ", hints),
+              solvedBefore && !finished && div({ className: "rc-note" }, "✓ Tuhle úlohu už máš vyřešenou.")),
+            finished && div({ className: "panel-card pz-result" },
+              div({ className: "panel-title" }, solved ? "✓ Vyřešeno" : "Řešení"),
+              h("div", { className: "pz-line" }, sanFrom(init, sol)),
+              reveal.length > 0 && div({ className: "pz-reveal" }, reveal.map((t) => span({ key: t, className: "trait-chip" }, t))),
+              solved && div({ className: "rc-note" }, mistakes === 0 && hints === 0 ? "Bez jediné chyby a bez nápovědy." : "Chyby: " + mistakes + ", nápovědy: " + hints + "."),
+              !solved && div({ className: "rc-note" }, "Ukázané řešení se nepočítá. Zkus to znovu a najdi ho sám."),
+              div({ className: "pz-actions" },
+                !solved && button({ className: "btn btn-ghost btn-sm", onClick: onRetry }, "Zkusit znovu"),
+                button({ className: "btn btn-primary btn-sm", onClick: onNext }, solved ? "Další úloha →" : "Přeskočit na další →")))))));
+  }
+
   // ---------- Aplikace ----------
   class ErrorBoundary extends React.Component {
     constructor(props) { super(props); this.state = { hasError: false }; }
@@ -1157,6 +1406,9 @@
     const [save, setSave] = useState(() => League.loadSave(storage, BOT_RATINGS));
     const [savedGame, setSavedGame] = useState(() => League.loadGame(storage, BOTS.length));
     const [view, setView] = useState("menu");
+    const [menuTab, setMenuTab] = useState("play");
+    const [puzzleId, setPuzzleId] = useState(null);
+    const [puzzleTry, setPuzzleTry] = useState(0);
     const [session, setSession] = useState(null);
     const [endInfo, setEndInfo] = useState(null);
     const [analysis, setAnalysis] = useState(null);
@@ -1320,12 +1572,40 @@
       setSaveFull(League.defaultSave());
     }
 
+    // ---------- Úlohy ----------
+    function openPuzzle(id) {
+      if (!Puzzles.byId(id)) return;
+      stopAnalysis();
+      setPuzzleId(id); setPuzzleTry((t) => t + 1); setView("puzzle");
+    }
+    function leavePuzzle() { setPuzzleId(null); setMenuTab("puzzles"); setView("menu"); }
+    function puzzleSolved(info) {
+      if (!puzzleId) return;
+      setSaveFull(League.markPuzzle(saveRef.current, puzzleId, info, todayStr()));
+    }
+    // Další úloha: nejbližší nevyřešená za touhle; když jsou všechny hotové, další v pořadí; po poslední zpět na seznam.
+    function nextPuzzle() {
+      const cur = puzzleId;
+      const nxt = Puzzles.nextUnsolved((id) => League.puzzleSolved(saveRef.current, id), cur);
+      if (nxt && nxt.id !== cur) { openPuzzle(nxt.id); return; }
+      const idx = Puzzles.LIST.findIndex((pz) => pz.id === cur);
+      if (idx >= 0 && idx + 1 < Puzzles.LIST.length) { openPuzzle(Puzzles.LIST[idx + 1].id); return; }
+      leavePuzzle();
+    }
+
     useEffect(() => () => { if (aiRef.current) aiRef.current.destroy(); if (analysisAiRef.current) analysisAiRef.current.destroy(); }, []);
 
     const settings = { sound: save.sound, highlights: save.highlights, chat: save.botChat !== false, autoQueen: !!save.autoQueen };
     let content;
     if (view === "menu") {
-      content = h(MenuScreen, { save, savedGame, onStart: startGame, onResume: resumeGame, onAbandon: () => setConfirm({ abandon: true }), onUpdate: updateSave, onOpenReview: (g) => openReview(g, "menu"), onResetProgress: () => setConfirm({ reset: true }), theme, setTheme: (t) => updateSave({ theme: t }) });
+      content = h(MenuScreen, { save, savedGame, onStart: startGame, onResume: resumeGame, onAbandon: () => setConfirm({ abandon: true }), onUpdate: updateSave, onOpenReview: (g) => openReview(g, "menu"), onResetProgress: () => setConfirm({ reset: true }), theme, setTheme: (t) => updateSave({ theme: t }), menuTab, setMenuTab, onOpenPuzzle: openPuzzle });
+    } else if (view === "puzzle" && puzzleId && Puzzles.byId(puzzleId)) {
+      const pz = Puzzles.byId(puzzleId);
+      const grp = Puzzles.groups().find((g) => g.n === pz.n);
+      content = h(PuzzleScreen, {
+        key: pz.id + "-" + puzzleTry, puzzle: pz, number: grp.list.findIndex((x) => x.id === pz.id) + 1, count: grp.list.length, solvedBefore: League.puzzleSolved(save, pz.id),
+        soundOn: save.sound, onToggleSound: () => updateSave({ sound: !save.sound }), onExit: leavePuzzle, onSolved: puzzleSolved, onNext: nextPuzzle, onRetry: () => setPuzzleTry((t) => t + 1), settings
+      });
     } else if (view === "game" && session) {
       content = h(GameScreen, { key: session.startedAt + "-" + session.botIdx, session, save, soundOn: save.sound, onToggleSound: () => updateSave({ sound: !save.sound }), onExit: leaveGame, onFinished, settings });
     } else if (view === "end" && endInfo) {
@@ -1339,7 +1619,7 @@
       confettiKey > 0 && h("canvas", { key: confettiKey, ref: confettiRef, className: "confetti-canvas", "aria-hidden": "true" }),
       cheatOpen && h(CheatMenu, { session: view === "game" ? session : null, disco, soundOn: save.sound, onDisco: () => setDisco((d) => !d), onConfetti: () => { setConfettiKey((k) => k + 1); }, onBadges: () => setSaveFull(League.cheatAllBadges(saveRef.current)), onClose: () => setCheatOpen(false) }),
       confirm && confirm.abandon && h(ConfirmModal, { title: "Vzdát rozehranou partii?", text: "Zápas se započítá jako prohra.", confirmLabel: "Vzdát", danger: true, onConfirm: () => { setConfirm(null); doAbandon(); }, onCancel: () => setConfirm(null) }),
-      confirm && confirm.reset && h(ConfirmModal, { title: "Resetovat veškerý postup?", text: "Smaže se rating, rekordy, výhry i odemčení soupeři. Tohle nejde vrátit.", confirmLabel: "Resetovat", danger: true, onConfirm: () => { setConfirm(null); doReset(); }, onCancel: () => setConfirm(null) }),
+      confirm && confirm.reset && h(ConfirmModal, { title: "Resetovat veškerý postup?", text: "Smaže se rating, rekordy, výhry, odemčení soupeři i vyřešené úlohy. Tohle nejde vrátit.", confirmLabel: "Resetovat", danger: true, onConfirm: () => { setConfirm(null); doReset(); }, onCancel: () => setConfirm(null) }),
       confirm && confirm.start && h(ConfirmModal, { title: "Máš rozehranou partii", text: "Když začneš novou, rozehraná partie se započítá jako prohra.", confirmLabel: "Začít novou", danger: true, onConfirm: () => { const c = confirm.start; setConfirm(null); doAbandon(); reallyStart(c.botIdx, c.color, c.tc, c.colorChoice); }, onCancel: () => setConfirm(null) }));
   }
 

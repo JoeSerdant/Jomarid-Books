@@ -252,6 +252,45 @@ const League = (function () {
     return s;
   }
 
+  // ---------- Postup v šachových úlohách ----------
+  // puzzles.solved[id] = { m: chyby, h: nápovědy (u nejlepšího řešení), d: datum prvního vyřešení }. Id úlohy je krátký řetězec (např. "m2-07");
+  // kolik úloh ve hře je, tu neví (data jsou v puzzles.js), proto se tu jen hlídá tvar, ať poškozená data nic neshodí.
+  const PUZZLE_ID_RE = /^[a-z0-9-]{1,16}$/;
+  const PUZZLE_CAP = 500;
+  function cleanPuzzles(raw) {
+    const out = { solved: {} };
+    const src = raw && typeof raw === "object" && raw.solved && typeof raw.solved === "object" && !Array.isArray(raw.solved) ? raw.solved : null;
+    if (!src) return out;
+    const int = (v) => (Number.isInteger(v) && v >= 0 ? Math.min(v, 99) : 0);
+    let n = 0;
+    for (const id of Object.keys(src)) {
+      if (n >= PUZZLE_CAP) break;
+      const e = src[id];
+      if (!PUZZLE_ID_RE.test(id) || !e || typeof e !== "object") continue;
+      out.solved[id] = { m: int(e.m), h: int(e.h), d: typeof e.d === "string" ? e.d.slice(0, 10) : "" };
+      n++;
+    }
+    return out;
+  }
+  // Zapíše vyřešenou úlohu (vrací nový postup). Opakované vyřešení zlepší jen počty chyb a nápověd, datum zůstává první.
+  function markPuzzle(save, id, info, today) {
+    const s = JSON.parse(JSON.stringify(save));
+    s.puzzles = cleanPuzzles(s.puzzles);
+    if (!PUZZLE_ID_RE.test(String(id))) return s;
+    const m = Math.min(99, Math.max(0, Math.floor(Number(info && info.m)) || 0)), h = Math.min(99, Math.max(0, Math.floor(Number(info && info.h)) || 0));
+    const prev = s.puzzles.solved[id];
+    if (!prev) {
+      if (Object.keys(s.puzzles.solved).length >= PUZZLE_CAP) return s;
+      s.puzzles.solved[id] = { m, h, d: today || "" };
+    } else if (m + h < prev.m + prev.h) {
+      s.puzzles.solved[id] = { m, h, d: prev.d };
+    }
+    return s;
+  }
+  function puzzleSolved(save, id) {
+    return !!(save && save.puzzles && save.puzzles.solved && Object.prototype.hasOwnProperty.call(save.puzzles.solved, id));
+  }
+
   // ---------- Uložený postup ----------
   function emptyRecord() { return { w: 0, d: 0, l: 0 }; }
   const BOT_KEYS = ["beginner", "easy", "medium", "hard", "expert"];
@@ -268,7 +307,7 @@ const League = (function () {
       rating: START_RATING, peak: START_RATING, ratedGames: 0,
       ratingHistory: [], record: emptyRecord(), botStats,
       winStreak: 0, bestWinStreak: 0,
-      stats: emptyStats(), statDays: []
+      stats: emptyStats(), statDays: [], puzzles: { solved: {} }
     };
   }
 
@@ -288,6 +327,7 @@ const League = (function () {
     merged.record = { ...emptyRecord(), ...(raw.record || {}) };
     merged.stats = cleanStats(raw.stats);
     merged.statDays = Array.isArray(raw.statDays) ? raw.statDays.filter((d) => typeof d === "string").slice(-STAT_DAYS_CAP) : [];
+    merged.puzzles = cleanPuzzles(raw.puzzles);
     // Denní výzvy, série dní a XP s ligami už ve hře nejsou (to dělá Jomarid Books samotný); zbylé hodnoty ze starého postupu se zahodí.
     ['xp', 'streak', 'lastPlayedDate', 'questClaims'].forEach((k) => { delete merged[k]; });
     if (!raw.v || raw.v < 2) {
@@ -394,6 +434,7 @@ const League = (function () {
     SAVE_KEY, GAME_KEY, START_RATING, RATING_FLOOR, PROVISIONAL_GAMES, TIME_CONTROLS, CATEGORY_LABELS, BOT_KEYS,
     expectedScore, kFactor, ratingChange, ratingTitle, winPercent, moveAccuracy, classify, summarizeAnalysis,
     defaultSave, migrate, loadSave, persistSave, loadGame, cleanGame, persistGame, finishGame,
+    cleanPuzzles, markPuzzle, puzzleSolved,
     STAT_KEYS, CHEAT_STATS, summarizeMoves, recordAccuracy, recordStats, cheatAllBadges
   };
 })();
