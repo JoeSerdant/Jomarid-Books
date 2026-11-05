@@ -901,8 +901,8 @@ const LoggedInHome = ({ user, personal, loading, navigate }) => {
                   </div>
                   <div>
                     <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold uppercase tracking-wide">{t('Naposledy odemčeno')}</span>
-                    <h3 className="font-heading font-bold text-lg">{latestBadge.title}</h3>
-                    <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">{latestBadge.description}</p>
+                    <h3 className="font-heading font-bold text-lg">{t(latestBadge.title)}</h3>
+                    <p style={{ color: 'var(--text-muted)' }} className="text-xs leading-relaxed">{t(latestBadge.description)}</p>
                   </div>
                 </>
               ) : (

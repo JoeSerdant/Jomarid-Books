@@ -34,6 +34,7 @@
     "USERNAME_HINTS[check]",
     "a.label",
     "active.label",
+    "b.title",
     "label",
     "n.linkLabel || 'Opravit'",
     "o.label",
@@ -115,11 +116,14 @@
     "hero.headline",
     "item.description",
     "item.title",
+    "latestBadge.description",
+    "latestBadge.title",
     "src.label",
     "tile.name"
   ],
   "pages/UserStats.jsx": [
     "FROZEN_LABEL",
+    "featuredBadgeDef.title",
     "stats.levelName"
   ],
   "push/PushAdminCard.jsx": [

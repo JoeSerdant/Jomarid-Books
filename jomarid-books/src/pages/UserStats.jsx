@@ -402,7 +402,7 @@ export const UserStats = () => {
                   <div className="flex items-center gap-4 text-left">
                     <span className={medalStyle}>{rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}.`}</span>
                     {FeaturedIcon && (
-                      <span title={featuredBadgeDef.title} className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+                      <span title={t(featuredBadgeDef.title)} className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
                         <FeaturedIcon size={12} />
                       </span>
                     )}
