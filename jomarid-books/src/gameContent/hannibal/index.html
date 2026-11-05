@@ -144,16 +144,19 @@
     /* BATTLE SCREEN */
     #battle-screen { background: #050403; }
     .battle-hud {
-      height: 65px;
+      min-height: 65px;
       background: #0d0a07;
       border-bottom: 2px solid var(--border-color);
-      padding: 0 20px;
+      padding: 6px 20px;
+      gap: 12px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       color: #fff;
       z-index: 5;
     }
+    /* záhlaví roste podle obsahu (název, tah a cíl se mohou zalomit); dřív mělo pevnou výšku a na šířkách 1000 až 1280 px ořezávalo název nahoře */
+    .battle-hud > div:first-child { min-width: 0; }
     .battle-container { flex: 1; display: flex; position: relative; overflow: hidden; }
     .canvas-wrapper { flex: 1; min-width: 0; min-height: 0; display: flex; justify-content: center; align-items: center; background: #080706; position: relative; padding: 10px; overflow: hidden; }
     canvas { border: 2px solid var(--border-color); box-shadow: 0 0 30px rgba(0,0,0,0.9); background: #0e0c0a; cursor: pointer; touch-action: none; flex: none; }
@@ -1829,6 +1832,9 @@
       }
 
       resetBattleUiState() {
+        this._battleSeq = (this._battleSeq || 0) + 1; // nová bitva ukončí rozdělaný tah nepřítele z předchozí
+        this._phase = null;
+        this.actingUnit = null;
         this.hover = null;
         this.undoState = null;
         this.enemyTrails = [];
@@ -1910,6 +1916,7 @@
           this.selectedUnit = null; this.updateUnitDetailCard(null); this.render(); return;
         }
         if (helpOpen) return;
+        if (this.turn === 'enemy' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); this.skipEnemyAnimation(); return; }
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.requestEndTurn(); }
         else if (e.key === 'Tab') { e.preventDefault(); this.selectNextReady(); }
         else if (e.key === 'z' || e.key === 'Z' || e.key === 'Backspace') { e.preventDefault(); this.undoMove(); }
@@ -2570,6 +2577,7 @@
 
       /* ===================== OVLÁDÁNÍ MYŠÍ/DOTYKEM ===================== */
       handleCanvasClick(e) {
+        if (this.turn === 'enemy') { this.skipEnemyAnimation(); return; }
         if (this.turn !== 'player') return;
 
         const { col, row } = this.eventToTile(e);
@@ -2655,7 +2663,11 @@
         this.showBanner('Tah nepřítele');
         document.getElementById('battle-turn-info').innerText = "Tah: Nepřítel AI";
         this.render();
-        setTimeout(() => this.runEnemyPhase(), 500);
+        const seq = this._battleSeq;
+        setTimeout(() => {
+          const screen = document.getElementById('battle-screen');
+          if (this._battleSeq === seq && screen && screen.classList.contains('active')) this.runEnemyPhase(); // ústup během půlsekundy nesmí spustit tah nepřítele v cizí bitvě
+        }, 500);
       }
 
       fleeUnit(unit, threats) {
@@ -2673,69 +2685,123 @@
         }
       }
 
+      /* ===================== TAH NEPŘÍTELE ===================== */
+      // Co nepřítel udělá (jen rozhodnutí, bez vedlejších účinků): kind = none | flee | attack | moveAttack | approach
+      planEnemy(enemy) {
+        const players = this.units.filter(u => u.team === 'player' && u.hp > 0 && this.isVisibleTo(u, 'enemy'));
+        if (players.length === 0) return { kind: 'none' };
+        if (enemy.routed) return { kind: 'flee', players };
+
+        const inRangeNow = players.filter(p => Math.abs(p.x - enemy.x) + Math.abs(p.y - enemy.y) <= enemy.range);
+        if (inRangeNow.length > 0) return { kind: 'attack', target: inRangeNow.sort((a, b) => a.hp - b.hp)[0] };
+
+        // Zvaž všechna dosažitelná pole (včetně setrvání na místě) a hledej pozici pro útok, ideálně z boku/zad
+        const reach = this.getReachableTiles(enemy);
+        const options = [{ x: enemy.x, y: enemy.y, cost: 0 }];
+        Object.keys(reach).forEach(key => {
+          const [x, y] = key.split(',').map(Number);
+          options.push({ x, y, cost: reach[key] });
+        });
+
+        let bestOption = null, bestScore = -1, bestTarget = null;
+        options.forEach(opt => {
+          players.forEach(p => {
+            const dist = Math.abs(p.x - opt.x) + Math.abs(p.y - opt.y);
+            if (dist > enemy.range) return;
+            const fakeAttacker = { x: opt.x, y: opt.y };
+            const angle = this.classifyAngle(fakeAttacker, p);
+            let score = angle === 'rear' ? 3 : angle === 'flank' ? 2 : 1;
+            score += (1 - p.hp / p.maxHp); // preferuj slabší cíle
+            if (score > bestScore) { bestScore = score; bestOption = opt; bestTarget = p; }
+          });
+        });
+        if (bestOption && bestTarget) return { kind: 'moveAttack', dest: bestOption, target: bestTarget };
+
+        // Nikoho nedosáhne - přesune se blíž k nejbližšímu hráči
+        const closest = players.sort((a, b) => (Math.abs(a.x - enemy.x) + Math.abs(a.y - enemy.y)) - (Math.abs(b.x - enemy.x) + Math.abs(b.y - enemy.y)))[0];
+        let best = null, bestDist = Math.abs(closest.x - enemy.x) + Math.abs(closest.y - enemy.y);
+        Object.keys(reach).forEach(key => {
+          const [x, y] = key.split(',').map(Number);
+          const d = Math.abs(closest.x - x) + Math.abs(closest.y - y);
+          if (d < bestDist) { bestDist = d; best = { x, y }; }
+        });
+        return { kind: 'approach', dest: best };
+      }
+
+      // Tah nepřítele: jednotky jednají jedna po druhé (přesun, krátká pauza, útok), ať je vidět, co se děje.
+      // Kdo nic nedělá, se přeskočí bez pauzy; klepnutí na plátno nebo Mezerník zbytek odehraje hned.
       runEnemyPhase() {
         const posBefore = new Map(this.units.map(u => [u, { x: u.x, y: u.y }]));
         this.checkAmbushReveals();
-        let enemies = this.units.filter(u => u.team === 'enemy' && !u.hidden);
+        const queue = this.units.filter(u => u.team === 'enemy' && !u.hidden);
+        const scale = Math.max(0.45, Math.min(1, 3600 / (Math.max(1, queue.length) * 380)));
+        const ph = this._phase = { seq: this._battleSeq, skip: false, pending: null, scale, posBefore };
+        if (queue.length >= 3 && !this._skipHintShown && !this.isPortraitPhone()) {
+          this._skipHintShown = true;
+          Game.toast('Tah nepřítele jde přeskočit klepnutím na plátno nebo klávesou Mezerník.', 4500);
+        }
+        let i = 0;
+        const next = () => {
+          if (!this.phaseAlive(ph)) return;
+          if (i >= queue.length) { this.finishEnemyPhase(ph); return; }
+          this.stepEnemy(queue[i++], ph, next);
+        };
+        next();
+      }
 
-        enemies.forEach(enemy => {
-          if (enemy.hp <= 0) return;
-          const players = this.units.filter(u => u.team === 'player' && u.hp > 0 && this.isVisibleTo(u, 'enemy'));
-          if (players.length === 0) return;
+      // Tah nepřítele patří k bitvě, ve které začal: ústup nebo nová bitva uprostřed ho ukončí (a nic dalšího se nevyhodnotí)
+      phaseAlive(ph) {
+        const screen = document.getElementById('battle-screen');
+        return this._phase === ph && this._battleSeq === ph.seq && !!screen && screen.classList.contains('active');
+      }
 
-          if (enemy.routed) { this.fleeUnit(enemy, players); return; }
+      phaseWait(ph, ms, fn) {
+        if (ms <= 0 || ph.skip) { fn(); return; }
+        const run = () => { ph.pending = null; if (this.phaseAlive(ph)) fn(); };
+        ph.pending = { fn: run, timer: setTimeout(run, Math.round(ms * ph.scale)) };
+      }
 
-          const inRangeNow = players.filter(p => Math.abs(p.x - enemy.x) + Math.abs(p.y - enemy.y) <= enemy.range);
-          if (inRangeNow.length > 0) {
-            const target = inRangeNow.sort((a, b) => a.hp - b.hp)[0];
-            this.aiAttack(enemy, target);
-            return;
-          }
+      // Přeskočí čekání: rozdělaná pauza skončí hned a zbytek tahu nepřítele proběhne bez pauz
+      skipEnemyAnimation() {
+        const ph = this._phase;
+        if (!ph || ph.skip) return;
+        ph.skip = true;
+        if (ph.pending) { clearTimeout(ph.pending.timer); const fn = ph.pending.fn; ph.pending = null; fn(); }
+      }
 
-          // Zvaž všechna dosažitelná pole (včetně setrvání na místě) a hledej pozici pro útok, ideálně z boku/zad
-          const reach = this.getReachableTiles(enemy);
-          const options = [{ x: enemy.x, y: enemy.y, cost: 0 }];
-          Object.keys(reach).forEach(key => {
-            const [x, y] = key.split(',').map(Number);
-            options.push({ x, y, cost: reach[key] });
-          });
+      stepEnemy(enemy, ph, done) {
+        if (enemy.hp <= 0 || !this.units.includes(enemy)) { done(); return; }
+        const plan = this.planEnemy(enemy);
+        // po přesunu či útoku se vykreslí (jednotka je při tom zvýrazněná), počká se a teprve potom zvýraznění zmizí a jedná další
+        const finish = (ms) => { this.render(); this.phaseWait(ph, ms, () => { this.actingUnit = null; done(); }); };
+        const hit = (target) => { this.actingUnit = enemy; this.aiAttack(enemy, target); finish(420); };
+        if (plan.kind === 'none') { done(); return; }
+        this.actingUnit = enemy;
+        if (plan.kind === 'flee') {
+          this.fleeUnit(enemy, plan.players);
+          finish(240);
+        } else if (plan.kind === 'attack') {
+          hit(plan.target);
+        } else if (plan.kind === 'moveAttack') {
+          const d = plan.dest;
+          if (d.x !== enemy.x || d.y !== enemy.y) {
+            enemy.facing = this.facingFromMove(d.x - enemy.x, d.y - enemy.y);
+            enemy._charging = enemy.isCavalry && d.cost >= 2;
+            enemy.x = d.x; enemy.y = d.y;
+            this.render();
+            this.phaseWait(ph, 260, () => hit(plan.target));
+          } else hit(plan.target);
+        } else if (plan.dest) { // approach
+          enemy.facing = this.facingFromMove(plan.dest.x - enemy.x, plan.dest.y - enemy.y);
+          enemy.x = plan.dest.x; enemy.y = plan.dest.y;
+          finish(150);
+        } else { this.actingUnit = null; done(); }
+      }
 
-          let bestOption = null, bestScore = -1, bestTarget = null;
-          options.forEach(opt => {
-            players.forEach(p => {
-              const dist = Math.abs(p.x - opt.x) + Math.abs(p.y - opt.y);
-              if (dist > enemy.range) return;
-              const fakeAttacker = { x: opt.x, y: opt.y };
-              const angle = this.classifyAngle(fakeAttacker, p);
-              let score = angle === 'rear' ? 3 : angle === 'flank' ? 2 : 1;
-              score += (1 - p.hp / p.maxHp); // preferuj slabší cíle
-              if (score > bestScore) { bestScore = score; bestOption = opt; bestTarget = p; }
-            });
-          });
-
-          if (bestOption && bestTarget) {
-            if (bestOption.x !== enemy.x || bestOption.y !== enemy.y) {
-              enemy.facing = this.facingFromMove(bestOption.x - enemy.x, bestOption.y - enemy.y);
-              enemy._charging = enemy.isCavalry && bestOption.cost >= 2;
-              enemy.x = bestOption.x; enemy.y = bestOption.y;
-            }
-            this.aiAttack(enemy, bestTarget);
-          } else {
-            // Nikoho nedosáhne - přesune se blíž k nejbližšímu hráči
-            let closest = players.sort((a, b) => (Math.abs(a.x-enemy.x)+Math.abs(a.y-enemy.y)) - (Math.abs(b.x-enemy.x)+Math.abs(b.y-enemy.y)))[0];
-            let best = null, bestDist = Math.abs(closest.x - enemy.x) + Math.abs(closest.y - enemy.y);
-            Object.keys(reach).forEach(key => {
-              const [x, y] = key.split(',').map(Number);
-              const d = Math.abs(closest.x - x) + Math.abs(closest.y - y);
-              if (d < bestDist) { bestDist = d; best = { x, y }; }
-            });
-            if (best) {
-              enemy.facing = this.facingFromMove(best.x - enemy.x, best.y - enemy.y);
-              enemy.x = best.x; enemy.y = best.y;
-            }
-          }
-        });
-
+      finishEnemyPhase(ph) {
+        const posBefore = ph.posBefore;
+        this._phase = null;
+        this.actingUnit = null;
         this.checkAmbushReveals();
         this.applyGlobalAttrition();
         this.tickStatuses();
@@ -3162,8 +3228,8 @@
           const y = this.offsetY + u.y * this.tileSize;
           const tokenCx = x + this.tileSize / 2, tokenCy = y + this.tileSize / 2 - 4;
 
-          if (this.selectedUnit === u) {
-            this.ctx.strokeStyle = '#ffd700';
+          if (this.selectedUnit === u || this.actingUnit === u) {
+            this.ctx.strokeStyle = this.actingUnit === u ? '#ff7043' : '#ffd700';
             this.ctx.lineWidth = 3;
             this.ctx.strokeRect(x + 3, y + 3, this.tileSize - 6, this.tileSize - 6);
             this.ctx.lineWidth = 1;
