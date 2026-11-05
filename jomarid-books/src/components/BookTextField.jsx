@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FileText, Maximize2, Minimize2, Upload } from 'lucide-react';
 import { readTextFile, mergeImported } from '../bookText/importText';
+import { t, formatNumber } from '../i18n';
 
-const nf = new Intl.NumberFormat('cs-CZ');
 const hasFiles = (e) => Array.from(e.dataTransfer?.types || []).includes('Files');
 
 /**
@@ -60,7 +60,7 @@ export default function BookTextField({ id, value, onChange, placeholder, requir
   };
   const apply = (mode) => { onChange(mergeImported(value, pending.text, mode)); setPending(null); };
 
-  const words = useMemo(() => { const t = value.trim(); return t ? t.split(/\s+/).length : 0; }, [value]);
+  const words = useMemo(() => { const trimmed = value.trim(); return trimmed ? trimmed.split(/\s+/).length : 0; }, [value]);
   const minutes = Math.max(1, Math.round(words / 200));
 
   const onDrop = (e) => {
@@ -80,13 +80,13 @@ export default function BookTextField({ id, value, onChange, placeholder, requir
     <div ref={wrap} className={box} style={full ? { backgroundColor: 'var(--bg-card)', color: 'var(--text-body)' } : undefined}
       {...(full ? { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Editor textu knihy' } : {})}>
       <div className="flex items-center justify-between gap-2">
-        <label htmlFor={id} style={labelStyle} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">Text knihy</label>
+        <label htmlFor={id} style={labelStyle} className="text-[0.625rem] font-black uppercase tracking-wider block pl-1 opacity-70">{t('Text knihy')}</label>
         <div className="flex items-center gap-1.5">
           <button type="button" onClick={() => picker.current?.click()} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="px-2.5 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-black uppercase tracking-wider inline-flex items-center gap-1.5">
-            <Upload size={12} /> Načíst ze souboru
+            <Upload size={12} /> {t('Načíst ze souboru')}
           </button>
           <button type="button" ref={toggle} onClick={() => setFull((f) => !f)} aria-pressed={full} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="px-2.5 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-black uppercase tracking-wider inline-flex items-center gap-1.5">
-            {full ? <><Minimize2 size={12} /> Zavřít celou obrazovku</> : <><Maximize2 size={12} /> Celá obrazovka</>}
+            {full ? <><Minimize2 size={12} /> {t('Zavřít celou obrazovku')}</> : <><Maximize2 size={12} /> {t('Celá obrazovka')}</>}
           </button>
         </div>
         <input ref={picker} type="file" accept=".txt,.text,.md,.markdown,text/plain,text/markdown" className="hidden" data-testid="book-text-file"
@@ -107,22 +107,22 @@ export default function BookTextField({ id, value, onChange, placeholder, requir
         />
         {over && (
           <div className="absolute inset-0 rounded-xl flex items-center justify-center pointer-events-none text-xs font-black uppercase tracking-wider" style={{ backgroundColor: 'var(--bg-card)', opacity: 0.92, border: '2px dashed var(--bg-primary)', color: 'var(--text-body)' }}>
-            <FileText size={16} className="mr-2" /> Pusť soubor .txt nebo .md sem
+            <FileText size={16} className="mr-2" /> {t('Pusť soubor .txt nebo .md sem')}
           </div>
         )}
       </div>
 
       {pending && (
-        <div role="alertdialog" aria-label="Vložit soubor" style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="rounded-xl p-3 text-xs font-bold flex flex-wrap items-center gap-2">
-          <span className="flex-1 min-w-[12rem]">Soubor „{pending.name}“ ({nf.format(pending.text.length)} znaků). V poli už text je:</span>
-          <button type="button" onClick={() => apply('replace')} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="px-3 py-1.5 rounded-lg border-none cursor-pointer text-[0.6875rem] font-black uppercase">Nahradit</button>
-          <button type="button" onClick={() => apply('append')} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-body)' }} className="px-3 py-1.5 rounded-lg border-none cursor-pointer text-[0.6875rem] font-black uppercase">Připojit na konec</button>
-          <button type="button" onClick={() => setPending(null)} style={{ backgroundColor: 'transparent', color: 'var(--text-muted)' }} className="px-3 py-1.5 rounded-lg border-none cursor-pointer text-[0.6875rem] font-black uppercase">Zrušit</button>
+        <div role="alertdialog" aria-label={t('Vložit soubor')} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="rounded-xl p-3 text-xs font-bold flex flex-wrap items-center gap-2">
+          <span className="flex-1 min-w-[12rem]">{t('Soubor „{name}“ ({n} znaků). V poli už text je:', { name: pending.name, n: formatNumber(pending.text.length) })}</span>
+          <button type="button" onClick={() => apply('replace')} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="px-3 py-1.5 rounded-lg border-none cursor-pointer text-[0.6875rem] font-black uppercase">{t('Nahradit')}</button>
+          <button type="button" onClick={() => apply('append')} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-body)' }} className="px-3 py-1.5 rounded-lg border-none cursor-pointer text-[0.6875rem] font-black uppercase">{t('Připojit na konec')}</button>
+          <button type="button" onClick={() => setPending(null)} style={{ backgroundColor: 'transparent', color: 'var(--text-muted)' }} className="px-3 py-1.5 rounded-lg border-none cursor-pointer text-[0.6875rem] font-black uppercase">{t('Zrušit')}</button>
         </div>
       )}
       {error && <p role="alert" className="text-xs font-bold m-0 pl-1" style={{ color: '#ef4444' }}>{error}</p>}
       <p data-testid="text-stats" style={labelStyle} className="text-[0.6875rem] m-0 pl-1 opacity-80">
-        {words > 0 ? `${nf.format(words)} slov · ${nf.format(value.length)} znaků · čtení asi ${nf.format(minutes)} min` : 'Napiš text, vlož ho (Ctrl+V), nebo sem přetáhni soubor .txt / .md.'}
+        {words > 0 ? t('{words} slov · {chars} znaků · čtení asi {min} min', { words: formatNumber(words), chars: formatNumber(value.length), min: formatNumber(minutes) }) : t('Napiš text, vlož ho (Ctrl+V), nebo sem přetáhni soubor .txt / .md.')}
       </p>
     </div>
   );

@@ -3,11 +3,11 @@ import { Link } from 'react-router-dom';
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Heart, Layers, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { plural } from '../lib/plural';
 import { buildSlides, progressFromSlide, readMinutes, slideIndexFromScroll } from '../shorts/shortsModel';
 import { buildPreferences, rankFeed, reasonLabel } from '../shorts/shortsRanking';
 import { loadCandidates, loadShortsByIds, loadSignals, reportShort } from '../shorts/shortsApi';
 import { loadBookTaste } from '../shorts/shortsTaste';
+import { t } from '../i18n';
 
 const BATCH = 4;           // kolik textů se načte najednou
 const MIN_REPORT_MS = 600; // kratší průlet kartou se nehlásí
@@ -91,13 +91,13 @@ const ShortCard = ({ index, card, active, onNext }) => {
   };
 
   return (
-    <section data-testid="short-card" data-index={index} aria-label={`ShortB: ${short.title}`} className="snap-start snap-always h-full relative flex flex-col">
+    <section data-testid="short-card" data-index={index} aria-label={t('ShortB: {title}', { title: short.title })} className="snap-start snap-always h-full relative flex flex-col">
       {/* proužky postupu jako u příběhů */}
       <div className="flex gap-1 px-4 pt-3" aria-hidden="true">
         {slides.map((_, i) => <span key={i} className="h-1 flex-1 rounded-full" style={{ backgroundColor: i <= slide ? 'var(--bg-primary)' : 'var(--border-color)' }} />)}
       </div>
 
-      <div ref={carRef} data-carousel onScroll={onScroll} tabIndex={0} aria-label={`Strany shortB ${short.title}`}
+      <div ref={carRef} data-carousel onScroll={onScroll} tabIndex={0} aria-label={t('Strany shortB {title}', { title: short.title })}
         className="flex-1 min-h-0 flex overflow-x-auto snap-x snap-mandatory scrollbar-hide" style={{ overscrollBehaviorX: 'contain' }}>
         {slides.map((s, i) => (
           <div key={i} data-slide={s.kind} className="min-w-full w-full h-full snap-center flex flex-col justify-center px-6 sm:px-12 pb-6">
@@ -107,10 +107,10 @@ const ShortCard = ({ index, card, active, onNext }) => {
                   {reasonLabel(short.reason, short) && <span style={chip} className="inline-block border rounded-full px-3 py-1 text-[0.6875rem] font-black uppercase tracking-wider">{reasonLabel(short.reason, short)}</span>}
                   <h2 className="text-3xl sm:text-4xl font-black leading-tight m-0 break-words">{short.title}</h2>
                   <p style={muted} className="text-sm font-bold m-0">{short.authorName}</p>
-                  {short.seriesName && <p className="text-sm font-black m-0" style={{ color: 'var(--bg-primary)' }}>{short.seriesName} · díl {short.seriesPart}</p>}
+                  {short.seriesName && <p className="text-sm font-black m-0" style={{ color: 'var(--bg-primary)' }}>{t('{name} · díl {n}', { name: short.seriesName, n: short.seriesPart })}</p>}
                   {short.genres.length > 0 && <p style={muted} className="text-xs font-bold m-0">{short.genres.join(' · ')}</p>}
-                  <p style={muted} className="text-xs m-0 opacity-80">{slides.length - 2} {plural(slides.length - 2, 'stránka', 'stránky', 'stránek')} · asi {readMinutes(short.chars)} min čtení</p>
-                  <p style={muted} className="text-xs font-bold m-0 pt-4 flex items-center gap-1">Listuj do strany <ChevronRight size={14} aria-hidden="true" /></p>
+                  <p style={muted} className="text-xs m-0 opacity-80">{t('{pages} · asi {min} min čtení', { pages: t.p(slides.length - 2, '{n} stránka', '{n} stránky', '{n} stránek', { n: slides.length - 2 }), min: readMinutes(short.chars) })}</p>
+                  <p style={muted} className="text-xs font-bold m-0 pt-4 flex items-center gap-1">{t('Listuj do strany')} <ChevronRight size={14} aria-hidden="true" /></p>
                 </div>
               )}
               {s.kind === 'page' && (
@@ -121,11 +121,11 @@ const ShortCard = ({ index, card, active, onNext }) => {
               )}
               {s.kind === 'end' && (
                 <div className="space-y-5 text-center">
-                  <p className="text-2xl font-black m-0">Konec</p>
+                  <p className="text-2xl font-black m-0">{t('Konec')}</p>
                   <p style={muted} className="text-sm m-0">{short.title} · {short.authorName}</p>
                   <button type="button" onClick={toggleLike} aria-pressed={liked} data-testid="short-like-end" style={liked ? { backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' } : chip}
-                    className="border rounded-xl px-5 py-3 text-xs font-black uppercase tracking-wider cursor-pointer inline-flex items-center gap-2"><Heart size={16} fill={liked ? 'currentColor' : 'none'} aria-hidden="true" /> {liked ? 'Líbí se mi' : 'Dát lajk'}</button>
-                  <div><button type="button" onClick={onNext} data-testid="short-next" style={chip} className="border rounded-xl px-5 py-3 text-xs font-black uppercase tracking-wider cursor-pointer inline-flex items-center gap-2">Další shortB <ArrowDown size={14} aria-hidden="true" /></button></div>
+                    className="border rounded-xl px-5 py-3 text-xs font-black uppercase tracking-wider cursor-pointer inline-flex items-center gap-2"><Heart size={16} fill={liked ? 'currentColor' : 'none'} aria-hidden="true" /> {liked ? t('Líbí se mi') : t('Dát lajk')}</button>
+                  <div><button type="button" onClick={onNext} data-testid="short-next" style={chip} className="border rounded-xl px-5 py-3 text-xs font-black uppercase tracking-wider cursor-pointer inline-flex items-center gap-2">{t('Další shortB')} <ArrowDown size={14} aria-hidden="true" /></button></div>
                 </div>
               )}
             </div>
@@ -134,11 +134,11 @@ const ShortCard = ({ index, card, active, onNext }) => {
       </div>
 
       {/* lajk po straně a šipky pro myš (na telefonu se listuje prstem) */}
-      <button type="button" onClick={toggleLike} aria-pressed={liked} aria-label={liked ? 'Zrušit lajk' : 'Dát lajk'} data-testid="short-like" style={chip}
+      <button type="button" onClick={toggleLike} aria-pressed={liked} aria-label={liked ? t('Zrušit lajk') : t('Dát lajk')} data-testid="short-like" style={chip}
         className="absolute right-3 bottom-24 w-11 h-11 rounded-full border flex items-center justify-center cursor-pointer"><Heart size={18} fill={liked ? 'currentColor' : 'none'} style={{ color: liked ? '#ef4444' : 'currentColor' }} aria-hidden="true" /></button>
-      <button type="button" onClick={() => go(-1)} disabled={slide === 0} aria-label="Předchozí strana" style={chip}
+      <button type="button" onClick={() => go(-1)} disabled={slide === 0} aria-label={t('Předchozí strana')} style={chip}
         className="hidden md:flex absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full border items-center justify-center cursor-pointer disabled:opacity-30"><ChevronLeft size={18} aria-hidden="true" /></button>
-      <button type="button" onClick={() => go(1)} disabled={slide === slides.length - 1} aria-label="Další strana" style={chip}
+      <button type="button" onClick={() => go(1)} disabled={slide === slides.length - 1} aria-label={t('Další strana')} style={chip}
         className="hidden md:flex absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full border items-center justify-center cursor-pointer disabled:opacity-30"><ChevronRight size={18} aria-hidden="true" /></button>
     </section>
   );
@@ -248,16 +248,16 @@ export const ShortsPage = () => {
     </div>
   );
 
-  if (status === 'loading') return <div role="status" className="py-24 text-center"><Loader2 size={24} className="animate-spin mx-auto" aria-hidden="true" /><p style={muted} className="text-sm font-bold opacity-70 mt-3">Skládám tvůj feed...</p></div>;
-  if (status === 'unavailable') return message('ShortB zatím nejsou k dispozici', 'Zkus to prosím později.');
-  if (status === 'empty') return message('Zatím tu nejsou žádné shortB', 'Jakmile nakladatelé nějaké zveřejní, objeví se tady.', <Link to="/app" style={chip} className="inline-block border rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-wider no-underline">Do knihovny</Link>);
-  if (status === 'done') return message('Máš přečtené všechny shortB', 'Nové se ukážou, jakmile nějaké přibudou. Mezitím si můžeš přečíst knihu.', <Link to="/app" style={chip} className="inline-block border rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-wider no-underline">Do knihovny</Link>);
+  if (status === 'loading') return <div role="status" className="py-24 text-center"><Loader2 size={24} className="animate-spin mx-auto" aria-hidden="true" /><p style={muted} className="text-sm font-bold opacity-70 mt-3">{t('Skládám tvůj feed...')}</p></div>;
+  if (status === 'unavailable') return message(t('ShortB zatím nejsou k dispozici'), t('Zkus to prosím později.'));
+  if (status === 'empty') return message(t('Zatím tu nejsou žádné shortB'), t('Jakmile nakladatelé nějaké zveřejní, objeví se tady.'), <Link to="/app" style={chip} className="inline-block border rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-wider no-underline">{t('Do knihovny')}</Link>);
+  if (status === 'done') return message(t('Máš přečtené všechny shortB'), t('Nové se ukážou, jakmile nějaké přibudou. Mezitím si můžeš přečíst knihu.'), <Link to="/app" style={chip} className="inline-block border rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-wider no-underline">{t('Do knihovny')}</Link>);
 
   // Feed se vykreslí až s prvními texty: kdyby v posuvném okně nejdřív stál jen závěr nebo načítání, prohlížeč by při dosazení karet zůstal na něm.
   if (cards.length === 0) {
     return hasMore
-      ? <div role="status" className="py-24 text-center"><Loader2 size={24} className="animate-spin mx-auto" aria-hidden="true" /><p style={muted} className="text-sm font-bold opacity-70 mt-3">Načítám shortB...</p></div>
-      : message('ShortB se nepodařilo načíst', 'Zkus to prosím později.', <button type="button" onClick={start} style={chip} className="border rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-wider cursor-pointer">Zkusit znovu</button>);
+      ? <div role="status" className="py-24 text-center"><Loader2 size={24} className="animate-spin mx-auto" aria-hidden="true" /><p style={muted} className="text-sm font-bold opacity-70 mt-3">{t('Načítám shortB...')}</p></div>
+      : message(t('ShortB se nepodařilo načíst'), t('Zkus to prosím později.'), <button type="button" onClick={start} style={chip} className="border rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-wider cursor-pointer">{t('Zkusit znovu')}</button>);
   }
 
   return (
@@ -266,15 +266,15 @@ export const ShortsPage = () => {
         {cards.map((card, i) => <ShortCard key={card.short.id} index={i} card={card} active={i === active} onNext={() => goCard(1)} />)}
         {!hasMore && (
           <section data-testid="shorts-end" className="snap-start snap-always h-full flex items-center justify-center px-6">
-            {message('To je zatím všechno', 'Prošel jsi, co je pro tebe připravené. Nové shortB se skládají podle toho, co čteš.',
-              <button type="button" onClick={start} data-testid="shorts-reload" style={chip} className="border rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-wider cursor-pointer">Načíst znovu</button>)}
+            {message(t('To je zatím všechno'), t('Prošel jsi, co je pro tebe připravené. Nové shortB se skládají podle toho, co čteš.'),
+              <button type="button" onClick={start} data-testid="shorts-reload" style={chip} className="border rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-wider cursor-pointer">{t('Načíst znovu')}</button>)}
           </section>
         )}
         {hasMore && <div className="snap-start h-full flex items-center justify-center" aria-hidden="true"><Loader2 size={20} className="animate-spin opacity-60" /></div>}
       </div>
       <div className="hidden md:flex flex-col gap-2 absolute right-[-3.5rem] top-1/2 -translate-y-1/2">
-        <button type="button" onClick={() => goCard(-1)} disabled={active === 0} aria-label="Předchozí shortB" style={chip} className="w-10 h-10 rounded-full border flex items-center justify-center cursor-pointer disabled:opacity-30"><ArrowUp size={16} aria-hidden="true" /></button>
-        <button type="button" onClick={() => goCard(1)} aria-label="Další shortB" style={chip} className="w-10 h-10 rounded-full border flex items-center justify-center cursor-pointer"><ArrowDown size={16} aria-hidden="true" /></button>
+        <button type="button" onClick={() => goCard(-1)} disabled={active === 0} aria-label={t('Předchozí shortB')} style={chip} className="w-10 h-10 rounded-full border flex items-center justify-center cursor-pointer disabled:opacity-30"><ArrowUp size={16} aria-hidden="true" /></button>
+        <button type="button" onClick={() => goCard(1)} aria-label={t('Další shortB')} style={chip} className="w-10 h-10 rounded-full border flex items-center justify-center cursor-pointer"><ArrowDown size={16} aria-hidden="true" /></button>
       </div>
     </div>
   );

@@ -247,7 +247,7 @@ test('AuthContext: bez internetu zůstane přihlášený podle uložené relace,
 
 test('přihlašovací stránka umí kód, Nastavení ho umí vytvořit a zrušit, odhlášení všude ho zneplatní, pruh „Jsi offline“ je v appce', () => {
   const login = read('pages', 'LoginPage.jsx');
-  assert.match(login, /code: 'Přihlášení kódem'/);
+  assert.match(login, /code: tk\('Přihlášení kódem'\)/);
   assert.match(login, /await loginWithCode\(code\);/);
   assert.match(login, /data-testid="login-code-input"/);
   assert.match(login, /\{mode !== 'forgot' && mode !== 'code' && \(/, 'v režimu kód není pole pro heslo');

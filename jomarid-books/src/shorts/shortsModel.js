@@ -1,6 +1,7 @@
 // shortB (krátké knihy do 6 000 znaků): meze, kontrola vstupu při psaní a dělení textu na stránky karty. Čistá logika bez Reactu a bez sítě,
 // jde testovat v Node (src/tests/shorts.test.mjs). Stejné meze hlídá i db/shorts.sql, test je porovnává.
 import { cleanGenres, GENRE_MAX_LENGTH, GENRES_PER_BOOK } from '../browse/libraryModel.js';
+import { t } from '../i18n/core.js';
 
 export const SHORT_LIMITS = Object.freeze({
   body: 6000,
@@ -34,18 +35,18 @@ export function validateShort(input) {
   const rawPart = input?.seriesPart;
   const part = rawPart === '' || rawPart == null ? null : Number(rawPart);
 
-  if (!title) errors.title = 'Doplň název.';
-  else if (countChars(title) > SHORT_LIMITS.title) errors.title = `Název může mít nejvýš ${SHORT_LIMITS.title} znaků.`;
+  if (!title) errors.title = t('Doplň název.');
+  else if (countChars(title) > SHORT_LIMITS.title) errors.title = t('Název může mít nejvýš {n} znaků.', { n: SHORT_LIMITS.title });
 
   const bodyChars = countChars(body);
-  if (!body.trim()) errors.body = 'Doplň text.';
-  else if (bodyChars > SHORT_LIMITS.body) errors.body = `Text má ${bodyChars} znaků, může jich mít nejvýš ${SHORT_LIMITS.body}.`;
+  if (!body.trim()) errors.body = t('Doplň text.');
+  else if (bodyChars > SHORT_LIMITS.body) errors.body = t('Text má {n} znaků, může jich mít nejvýš {max}.', { n: bodyChars, max: SHORT_LIMITS.body });
 
   let series = null;
   let seriesPart = null;
   if (seriesName) {
-    if (countChars(seriesName) > SHORT_LIMITS.series) errors.series = `Název série může mít nejvýš ${SHORT_LIMITS.series} znaků.`;
-    else if (part === null || !Number.isInteger(part) || part < 1 || part > SHORT_LIMITS.seriesPartMax) errors.series = `U série doplň číslo dílu (1 až ${SHORT_LIMITS.seriesPartMax}).`;
+    if (countChars(seriesName) > SHORT_LIMITS.series) errors.series = t('Název série může mít nejvýš {n} znaků.', { n: SHORT_LIMITS.series });
+    else if (part === null || !Number.isInteger(part) || part < 1 || part > SHORT_LIMITS.seriesPartMax) errors.series = t('U série doplň číslo dílu (1 až {n}).', { n: SHORT_LIMITS.seriesPartMax });
     else { series = seriesName; seriesPart = part; }
   }
 

@@ -66,7 +66,7 @@ export default function PushAdminCard({ client }) {
     <Card>
       <h3 className="text-sm font-black uppercase tracking-wider mb-1 mt-0 flex items-center gap-2"><KeyRound size={15} /> {t('Oznámení do telefonu')}</h3>
       <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-1 mb-3 leading-relaxed">
-        {tx('Aby se oznámení z appky ukázala i v telefonu, potřebuje server pár klíčů. Veřejný se uloží sám, soukromý se ukáže jen jednou: vlož ho do Supabase (Edge Functions → Secrets jako {name}). Celý postup je v souboru {file} v repozitáři.', { name: <code>VAPID_PRIVATE_KEY</code>, file: <code>jomarid-books/db/push/README.md</code> })}
+        {tx(t('Aby se oznámení z appky ukázala i v telefonu, potřebuje server pár klíčů. Veřejný se uloží sám, soukromý se ukáže jen jednou: vlož ho do Supabase (Edge Functions → Secrets jako {name}). Celý postup je v souboru {file} v repozitáři.'), { name: <code>{t('VAPID_PRIVATE_KEY')}</code>, file: <code>{t('jomarid-books/db/push/README.md')}</code> })}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={generate} disabled={busy || saved === null} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className={btn}>
@@ -78,7 +78,7 @@ export default function PushAdminCard({ client }) {
         <div className="mt-4 space-y-2">
           <KeyBox kind="public" label={t('Veřejný klíč (VAPID_PUBLIC_KEY)')} value={savedKey} />
           <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">
-            {tx('Tenhle klíč patří i do Supabase jako {name} (Edge Functions → Secrets), vedle soukromého klíče. Soukromý klíč se po vygenerování znovu zobrazit nedá; nemáš-li ho uložený, vygeneruj klíče znovu (zařízení si pak musí oznámení zapnout znovu).', { name: <code>VAPID_PUBLIC_KEY</code> })}
+            {tx(t('Tenhle klíč patří i do Supabase jako {name} (Edge Functions → Secrets), vedle soukromého klíče. Soukromý klíč se po vygenerování znovu zobrazit nedá; nemáš-li ho uložený, vygeneruj klíče znovu (zařízení si pak musí oznámení zapnout znovu).'), { name: <code>{t('VAPID_PUBLIC_KEY')}</code> })}
           </p>
         </div>
       )}

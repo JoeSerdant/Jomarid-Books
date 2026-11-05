@@ -6,33 +6,35 @@ import { Button, Card } from '../components/ui';
 import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import { USERNAME_RE, USERNAME_MIN, USERNAME_MAX } from '../lib/username';
 import { CodeLoginError } from '../offline/loginCode';
+import { t } from '../i18n';
+import { tk } from '../i18n/mark.js';
 
 const INPUT_STYLE = { backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' };
 const INPUT_CLASS = 'w-full p-3 border rounded-lg text-sm font-bold outline-none transition-colors placeholder:opacity-50';
 
 const NAME_HINTS = {
-  idle: 'Nepovinné. Když ho nevyplníš, vytvoříme ho z e-mailu; změnit ho půjde v Nastavení.',
-  checking: 'Zjišťuju, jestli je volné...',
-  available: 'Jméno je volné.',
-  taken: 'Tohle jméno už někdo používá.',
-  reserved: 'Tohle jméno je rezervované. Zvol jiné.',
-  invalid: `Zatím neplatné: ${USERNAME_MIN}-${USERNAME_MAX} znaků, a-z bez diakritiky, číslice, tečka, podtržítko, pomlčka.`,
-  error: 'Dostupnost teď nejde ověřit - jméno se zkusí použít při vytvoření účtu.',
+  idle: tk('Nepovinné. Když ho nevyplníš, vytvoříme ho z e-mailu; změnit ho půjde v Nastavení.'),
+  checking: tk('Zjišťuju, jestli je volné...'),
+  available: tk('Jméno je volné.'),
+  taken: tk('Tohle jméno už někdo používá.'),
+  reserved: tk('Tohle jméno je rezervované. Zvol jiné.'),
+  invalid: tk('Zatím neplatné: {min}-{max} znaků, a-z bez diakritiky, číslice, tečka, podtržítko, pomlčka.'),
+  error: tk('Dostupnost teď nejde ověřit - jméno se zkusí použít při vytvoření účtu.'),
 };
 
-const ACCOUNT_EXISTS_TEXT = 'Účet s tímto e-mailem už existuje. Přihlas se, nebo si na přihlášení vyber „Zapomenuté heslo“.';
-const NO_MAIL_HINT = 'Nic nepřišlo? Mrkni do spamu a hromadné pošty, e-mail může dorazit i za pár minut.';
+const ACCOUNT_EXISTS_TEXT = tk('Účet s tímto e-mailem už existuje. Přihlas se, nebo si na přihlášení vyber „Zapomenuté heslo“.');
+const NO_MAIL_HINT = tk('Nic nepřišlo? Mrkni do spamu a hromadné pošty, e-mail může dorazit i za pár minut.');
 
-const TITLES = { login: 'Vstup do čítárny', code: 'Přihlášení kódem', signup: 'Vytvořit nový účet', forgot: 'Zapomenuté heslo' };
-const SUBMIT_LABELS = { login: 'Odemknout čítárnu', code: 'Odemknout kódem', signup: 'Zaregistrovat se', forgot: 'Poslat žádost správci' };
+const TITLES = { login: tk('Vstup do čítárny'), code: tk('Přihlášení kódem'), signup: tk('Vytvořit nový účet'), forgot: tk('Zapomenuté heslo') };
+const SUBMIT_LABELS = { login: tk('Odemknout čítárnu'), code: tk('Odemknout kódem'), signup: tk('Zaregistrovat se'), forgot: tk('Poslat žádost správci') };
 
 // Hláška podle toho, CO se doopravdy stalo: nepotvrzený e-mail se uživateli
 // nesmí zobrazit stejně jako překlep v hesle.
 const loginErrorText = (err) => {
   const msg = String(err?.message || '').toLowerCase();
-  if (msg.includes('email not confirmed')) return `E-mail zatím není potvrzený - klikni na odkaz v potvrzovacím e-mailu. ${NO_MAIL_HINT}`;
-  if (err?.status === 429 || msg.includes('rate limit') || msg.includes('too many')) return 'Příliš mnoho pokusů. Zkus to za chvíli.';
-  return 'Neplatný e-mail nebo přístupové heslo.';
+  if (msg.includes('email not confirmed')) return t('E-mail zatím není potvrzený - klikni na odkaz v potvrzovacím e-mailu. {hint}', { hint: t(NO_MAIL_HINT) });
+  if (err?.status === 429 || msg.includes('rate limit') || msg.includes('too many')) return t('Příliš mnoho pokusů. Zkus to za chvíli.');
+  return t('Neplatný e-mail nebo přístupové heslo.');
 };
 
 export const LoginPage = () => {
@@ -78,8 +80,8 @@ export const LoginPage = () => {
     try {
       if (mode === 'signup') {
         const wanted = username.trim();
-        if (wanted && !USERNAME_RE.test(wanted)) { setError(`Uživatelské jméno: ${USERNAME_MIN}-${USERNAME_MAX} znaků, a-z bez diakritiky, číslice, tečka, podtržítko nebo pomlčka. Nebo pole nech prázdné.`); return; }
-        if (wanted && (nameCheck === 'taken' || nameCheck === 'reserved')) { setError('Tohle uživatelské jméno nejde použít. Zvol jiné, nebo pole nech prázdné.'); return; }
+        if (wanted && !USERNAME_RE.test(wanted)) { setError(t('Uživatelské jméno: {min}-{max} znaků, a-z bez diakritiky, číslice, tečka, podtržítko nebo pomlčka. Nebo pole nech prázdné.', { min: USERNAME_MIN, max: USERNAME_MAX })); return; }
+        if (wanted && (nameCheck === 'taken' || nameCheck === 'reserved')) { setError(t('Tohle uživatelské jméno nejde použít. Zvol jiné, nebo pole nech prázdné.')); return; }
         // Vybrané jméno jde v user_metadata; server ho při založení profilu znovu ověří (platné, volné, nerezervované).
         const { data, error: signUpError } = await supabase.auth.signUp(wanted ? { email, password, options: { data: { username: wanted } } } : { email, password });
         if (signUpError) throw signUpError;
@@ -88,12 +90,12 @@ export const LoginPage = () => {
         // ale "prázdného" uživatele bez identit - bez téhle kontroly by appka hlásila
         // úspěšnou registraci, i když se nic nevytvořilo.
         if (Array.isArray(data?.user?.identities) && data.user.identities.length === 0) {
-          setError(ACCOUNT_EXISTS_TEXT);
+          setError(t(ACCOUNT_EXISTS_TEXT));
           return;
         }
         if (!data?.session) {
           switchMode('login');
-          setNotice('Účet je vytvořený. Poslali jsme ti potvrzovací e-mail - klikni na odkaz v něm a pak se přihlas. ' + NO_MAIL_HINT);
+          setNotice(t('Účet je vytvořený. Poslali jsme ti potvrzovací e-mail - klikni na odkaz v něm a pak se přihlas. {hint}', { hint: t(NO_MAIL_HINT) }));
         }
         setPassword('');
       } else if (mode === 'forgot') {
@@ -102,7 +104,7 @@ export const LoginPage = () => {
         // tenhle formulář zjišťovat, kdo je registrovaný.
         const { error: helpError } = await supabase.rpc('request_password_help', { p_email: email, p_username: username, p_note: note.trim() || null });
         if (helpError) throw helpError;
-        setNotice('Žádost je odeslaná správci. Pokud e-mail i uživatelské jméno sedí, správce ti vydá dočasné heslo a předá ti ho mimo aplikaci. Po přihlášení si nastavíš vlastní. Odpověď může chvíli trvat, žádost neposílej víckrát.');
+        setNotice(t('Žádost je odeslaná správci. Pokud e-mail i uživatelské jméno sedí, správce ti vydá dočasné heslo a předá ti ho mimo aplikaci. Po přihlášení si nastavíš vlastní. Odpověď může chvíli trvat, žádost neposílej víckrát.'));
         setUsername('');
         setNote('');
       } else if (mode === 'code') {
@@ -115,13 +117,13 @@ export const LoginPage = () => {
     } catch (err) {
       const msg = String(err?.message || '').toLowerCase();
       if (mode === 'code') {
-        setError(err instanceof CodeLoginError ? err.message : 'Přihlášení kódem se nepovedlo. Zkus to znovu, nebo se přihlas heslem.');
+        setError(err instanceof CodeLoginError ? err.message : t('Přihlášení kódem se nepovedlo. Zkus to znovu, nebo se přihlas heslem.'));
       } else if (mode === 'signup') {
         setError(msg.includes('already registered') || msg.includes('already been registered')
-          ? ACCOUNT_EXISTS_TEXT
+          ? t(ACCOUNT_EXISTS_TEXT)
           : mapAuthError(err));
       } else if (mode === 'forgot') {
-        setError(err?.status === 429 || msg.includes('rate limit') ? 'Příliš mnoho pokusů. Zkus to za chvíli.' : 'Žádost se nepodařilo odeslat. Zkus to znovu.');
+        setError(err?.status === 429 || msg.includes('rate limit') ? t('Příliš mnoho pokusů. Zkus to za chvíli.') : t('Žádost se nepodařilo odeslat. Zkus to znovu.'));
       } else {
         setError(loginErrorText(err));
       }
@@ -133,18 +135,18 @@ export const LoginPage = () => {
   return (
     <div style={{ color: 'var(--text-body)' }} className="max-w-sm mx-auto py-24 px-4 animate-in fade-in duration-300">
       <Card>
-        <h2 style={{ color: 'var(--text-body)' }} className="text-xl font-black text-center uppercase tracking-tight mb-6">{TITLES[mode]}</h2>
+        <h2 style={{ color: 'var(--text-body)' }} className="text-xl font-black text-center uppercase tracking-tight mb-6">{t(TITLES[mode])}</h2>
 
         {mode === 'forgot' && (
-          <p style={{ color: 'var(--text-muted)' }} className="text-xs text-center mb-4 -mt-3 opacity-80">Heslo ti e-mailem neposíláme: žádost jde správci, který ti vydá dočasné heslo. Napiš e-mail a uživatelské jméno k účtu (když jméno nemáš nastavené, je to začátek e-mailu před @).</p>
+          <p style={{ color: 'var(--text-muted)' }} className="text-xs text-center mb-4 -mt-3 opacity-80">{t('Heslo ti e-mailem neposíláme: žádost jde správci, který ti vydá dočasné heslo. Napiš e-mail a uživatelské jméno k účtu (když jméno nemáš nastavené, je to začátek e-mailu před @).')}</p>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {mode === 'code' && (
             <input
               type="text"
-              placeholder="Přihlašovací kód"
-              aria-label="Přihlašovací kód"
+              placeholder={t('Přihlašovací kód')}
+              aria-label={t('Přihlašovací kód')}
               value={code}
               onChange={e => setCode(e.target.value)}
               autoComplete="off"
@@ -158,17 +160,17 @@ export const LoginPage = () => {
               required
             />
           )}
-          {mode !== 'code' && <input type="email" placeholder="E-mailová adresa" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" style={INPUT_STYLE} className={INPUT_CLASS} required />}
+          {mode !== 'code' && <input type="email" placeholder={t('E-mailová adresa')} value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" style={INPUT_STYLE} className={INPUT_CLASS} required />}
           {mode === 'forgot' && (
             <>
-              <input type="text" placeholder="Uživatelské jméno" value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} maxLength={USERNAME_MAX} style={INPUT_STYLE} className={INPUT_CLASS} required />
-              <textarea placeholder="Vzkaz pro správce (nepovinné): jak tě pozná, kde ti může odpovědět..." value={note} onChange={e => setNote(e.target.value)} rows={3} maxLength={500} style={INPUT_STYLE} className={`${INPUT_CLASS} resize-none font-medium`} />
+              <input type="text" placeholder={t('Uživatelské jméno')} value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} maxLength={USERNAME_MAX} style={INPUT_STYLE} className={INPUT_CLASS} required />
+              <textarea placeholder={t('Vzkaz pro správce (nepovinné): jak tě pozná, kde ti může odpovědět...')} value={note} onChange={e => setNote(e.target.value)} rows={3} maxLength={500} style={INPUT_STYLE} className={`${INPUT_CLASS} resize-none font-medium`} />
             </>
           )}
           {mode !== 'forgot' && mode !== 'code' && (
             <input
               type="password"
-              placeholder={mode === 'signup' ? 'Zvol si heslo' : 'Přístupové heslo'}
+              placeholder={mode === 'signup' ? t('Zvol si heslo') : t('Přístupové heslo')}
               value={password}
               onChange={e => setPassword(e.target.value)}
               autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
@@ -179,8 +181,8 @@ export const LoginPage = () => {
           )}
           {mode === 'signup' && (
             <div>
-              <input type="text" placeholder="Uživatelské jméno (nepovinné)" value={username} onChange={e => setUsername(e.target.value)} autoComplete="off" autoCapitalize="none" spellCheck={false} maxLength={USERNAME_MAX} aria-describedby="signup-username-hint" style={INPUT_STYLE} className={INPUT_CLASS} />
-              <p id="signup-username-hint" aria-live="polite" style={{ color: nameCheck === 'available' ? '#10b981' : (nameCheck === 'idle' || nameCheck === 'checking' || nameCheck === 'error') ? 'var(--text-muted)' : '#ef4444' }} className="text-[0.6875rem] font-bold m-0 mt-1.5 px-1 leading-snug">{NAME_HINTS[nameCheck]}</p>
+              <input type="text" placeholder={t('Uživatelské jméno (nepovinné)')} value={username} onChange={e => setUsername(e.target.value)} autoComplete="off" autoCapitalize="none" spellCheck={false} maxLength={USERNAME_MAX} aria-describedby="signup-username-hint" style={INPUT_STYLE} className={INPUT_CLASS} />
+              <p id="signup-username-hint" aria-live="polite" style={{ color: nameCheck === 'available' ? '#10b981' : (nameCheck === 'idle' || nameCheck === 'checking' || nameCheck === 'error') ? 'var(--text-muted)' : '#ef4444' }} className="text-[0.6875rem] font-bold m-0 mt-1.5 px-1 leading-snug">{t(NAME_HINTS[nameCheck], { min: USERNAME_MIN, max: USERNAME_MAX })}</p>
             </div>
           )}
 
@@ -192,27 +194,27 @@ export const LoginPage = () => {
           )}
 
           <Button type="submit" disabled={loading} className="w-full py-3 uppercase tracking-wider">
-            {loading ? 'Zpracovávám...' : SUBMIT_LABELS[mode]}
+            {loading ? t('Zpracovávám...') : t(SUBMIT_LABELS[mode])}
           </Button>
         </form>
 
         <div style={{ borderColor: 'var(--border-color)' }} className="mt-4 pt-4 border-t text-center space-y-2">
           {mode === 'login' && (
             <button type="button" onClick={() => switchMode('code')} data-testid="login-with-code" style={{ color: 'var(--text-body)' }} className="block w-full text-xs font-bold hover:underline bg-transparent border-none cursor-pointer">
-              Přihlásit se kódem místo hesla
+              {t('Přihlásit se kódem místo hesla')}
             </button>
           )}
           {mode === 'code' && (
-            <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] m-0 opacity-80">Kód si vygeneruješ v Nastavení po přihlášení heslem. Na tomhle zařízení pak zůstaneš přihlášený i bez internetu, dokud se sám neodhlásíš.</p>
+            <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] m-0 opacity-80">{t('Kód si vygeneruješ v Nastavení po přihlášení heslem. Na tomhle zařízení pak zůstaneš přihlášený i bez internetu, dokud se sám neodhlásíš.')}</p>
           )}
           {mode === 'login' && (
             <button type="button" onClick={() => switchMode('forgot')} style={{ color: 'var(--text-muted)' }} className="block w-full text-xs font-bold hover:underline bg-transparent border-none cursor-pointer">
-              Zapomenuté heslo?
+              {t('Zapomenuté heslo?')}
             </button>
           )}
           {mode === 'code' && (
             <button type="button" onClick={() => switchMode('login')} style={{ color: 'var(--text-muted)' }} className="block w-full text-xs font-bold hover:underline bg-transparent border-none cursor-pointer">
-              Přihlásit se e-mailem a heslem
+              {t('Přihlásit se e-mailem a heslem')}
             </button>
           )}
           <button
@@ -221,7 +223,7 @@ export const LoginPage = () => {
             style={{ color: 'var(--bg-primary)' }}
             className="block w-full text-xs font-bold hover:underline bg-transparent border-none cursor-pointer tracking-wide uppercase"
           >
-            {mode === 'login' || mode === 'code' ? 'Nemáš účet? Zaregistruj se zde' : mode === 'signup' ? 'Už máš účet? Přihlas se' : 'Zpět na přihlášení'}
+            {mode === 'login' || mode === 'code' ? t('Nemáš účet? Zaregistruj se zde') : mode === 'signup' ? t('Už máš účet? Přihlas se') : t('Zpět na přihlášení')}
           </button>
         </div>
       </Card>
@@ -255,8 +257,8 @@ export const ResetPasswordPage = () => {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setGraceOver(true), 5000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setGraceOver(true), 5000);
+    return () => clearTimeout(timer);
   }, []);
 
   const submit = async (e) => {
@@ -273,7 +275,7 @@ export const ResetPasswordPage = () => {
     if (mustChangePassword) {
       // Dočasné heslo od správce: priznak se zrusi az po skutecne zmene hesla (kontroluje to server).
       const { error: clearError } = await supabase.rpc('clear_must_change_password');
-      if (clearError) { setBusy(false); return setError('Heslo je změněné, ale nepodařilo se dokončit obnovu účtu. Klikni na tlačítko ještě jednou.'); }
+      if (clearError) { setBusy(false); return setError(t('Heslo je změněné, ale nepodařilo se dokončit obnovu účtu. Klikni na tlačítko ještě jednou.')); }
     }
     setBusy(false);
     setDone(true);
@@ -295,8 +297,8 @@ export const ResetPasswordPage = () => {
     return wrap(
       <div className="text-center space-y-3">
         <CheckCircle2 size={32} style={{ color: '#10b981' }} className="mx-auto" />
-        <h2 className="text-lg font-black uppercase tracking-tight m-0">Heslo je nastavené</h2>
-        <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0">Za chvíli tě přesměrujeme do knihovny.</p>
+        <h2 className="text-lg font-black uppercase tracking-tight m-0">{t('Heslo je nastavené')}</h2>
+        <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0">{t('Za chvíli tě přesměrujeme do knihovny.')}</p>
       </div>
     );
   }
@@ -304,15 +306,15 @@ export const ResetPasswordPage = () => {
   if (recoveryMode) {
     return wrap(
       <>
-        <h2 className="text-xl font-black text-center uppercase tracking-tight mb-2">{mustChangePassword ? 'Nastav si vlastní heslo' : 'Nové heslo'}</h2>
-        <p style={{ color: 'var(--text-muted)' }} className="text-xs text-center mb-5 opacity-80">{mustChangePassword ? 'Správce ti vydal dočasné heslo. Než budeš pokračovat, zvol si vlastní (aspoň 8 znaků).' : 'Zvol si nové heslo k účtu (aspoň 8 znaků).'}</p>
+        <h2 className="text-xl font-black text-center uppercase tracking-tight mb-2">{mustChangePassword ? t('Nastav si vlastní heslo') : t('Nové heslo')}</h2>
+        <p style={{ color: 'var(--text-muted)' }} className="text-xs text-center mb-5 opacity-80">{mustChangePassword ? t('Správce ti vydal dočasné heslo. Než budeš pokračovat, zvol si vlastní (aspoň 8 znaků).') : t('Zvol si nové heslo k účtu (aspoň 8 znaků).')}</p>
         <form onSubmit={submit} className="space-y-4">
-          <input type="password" placeholder="Nové heslo" autoComplete="new-password" value={newPw} onChange={e => setNewPw(e.target.value)} style={INPUT_STYLE} className={INPUT_CLASS} required />
-          <input type="password" placeholder="Nové heslo znovu" autoComplete="new-password" value={confPw} onChange={e => setConfPw(e.target.value)} style={INPUT_STYLE} className={INPUT_CLASS} required />
+          <input type="password" placeholder={t('Nové heslo')} autoComplete="new-password" value={newPw} onChange={e => setNewPw(e.target.value)} style={INPUT_STYLE} className={INPUT_CLASS} required />
+          <input type="password" placeholder={t('Nové heslo znovu')} autoComplete="new-password" value={confPw} onChange={e => setConfPw(e.target.value)} style={INPUT_STYLE} className={INPUT_CLASS} required />
           {error && <p role="alert" className="text-red-500 text-xs font-bold flex items-center gap-1 bg-red-500/10 p-2 rounded-md"><AlertTriangle size={12} /> {error}</p>}
-          <Button type="submit" disabled={busy} className="w-full py-3 uppercase tracking-wider">{busy ? 'Ukládám...' : 'Nastavit heslo'}</Button>
+          <Button type="submit" disabled={busy} className="w-full py-3 uppercase tracking-wider">{busy ? t('Ukládám...') : t('Nastavit heslo')}</Button>
         </form>
-        <button type="button" onClick={cancel} style={{ color: 'var(--text-muted)' }} className="block w-full mt-4 text-xs font-bold hover:underline bg-transparent border-none cursor-pointer">{mustChangePassword ? 'Odhlásit se' : 'Zrušit a pokračovat bez změny'}</button>
+        <button type="button" onClick={cancel} style={{ color: 'var(--text-muted)' }} className="block w-full mt-4 text-xs font-bold hover:underline bg-transparent border-none cursor-pointer">{mustChangePassword ? t('Odhlásit se') : t('Zrušit a pokračovat bez změny')}</button>
       </>
     );
   }
@@ -322,7 +324,7 @@ export const ResetPasswordPage = () => {
     return wrap(
       <div className="text-center py-4 space-y-3">
         <Loader2 className="animate-spin mx-auto opacity-50" />
-        <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0">Ověřuji odkaz...</p>
+        <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0">{t('Ověřuji odkaz...')}</p>
       </div>
     );
   }
@@ -330,13 +332,13 @@ export const ResetPasswordPage = () => {
   return wrap(
     <div className="text-center space-y-4">
       <AlertTriangle size={30} className="mx-auto text-amber-500" />
-      <h2 className="text-lg font-black uppercase tracking-tight m-0">Odkaz nefunguje</h2>
+      <h2 className="text-lg font-black uppercase tracking-tight m-0">{t('Odkaz nefunguje')}</h2>
       <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 leading-relaxed">
         {LINK_EXPIRED
-          ? 'Odkaz pro obnovu hesla vypršel nebo už byl použit. Heslo se teď obnovuje přes správce: na přihlášení klikni na „Zapomenuté heslo“.'
-          : 'Tenhle odkaz je neplatný, vypršel, nebo už byl použit. Heslo se teď obnovuje přes správce: na přihlášení klikni na „Zapomenuté heslo“.'}
+          ? t('Odkaz pro obnovu hesla vypršel nebo už byl použit. Heslo se teď obnovuje přes správce: na přihlášení klikni na „Zapomenuté heslo“.')
+          : t('Tenhle odkaz je neplatný, vypršel, nebo už byl použit. Heslo se teď obnovuje přes správce: na přihlášení klikni na „Zapomenuté heslo“.')}
       </p>
-      <Link to="/login" className="inline-block no-underline"><Button type="button" className="uppercase tracking-wider">Zpět na přihlášení</Button></Link>
+      <Link to="/login" className="inline-block no-underline"><Button type="button" className="uppercase tracking-wider">{t('Zpět na přihlášení')}</Button></Link>
     </div>
   );
 };

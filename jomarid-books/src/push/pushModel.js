@@ -56,11 +56,11 @@ export const enableMessage = (status) => ({
 export const PUSH_KINDS = [
   { kind: 'streak_risk', label: tk('Série v ohrožení') },
   { kind: 'streak_milestone', label: tk('Milník série') },
-  { kind: 'praise', label: 'Pochvala' },
+  { kind: 'praise', label: tk('Pochvala') },
   { kind: 'comeback', label: tk('Návrat po pauze') },
   { kind: 'continue_book', label: tk('Rozečtená kniha') },
   { kind: 'goal_progress', label: tk('Měsíční cíl') },
-  { kind: 'coins_to_spend', label: 'Mince na knihu' },
+  { kind: 'coins_to_spend', label: tk('Mince na knihu') },
   { kind: 'gentle_nudge', label: tk('Popostrčení') },
   { kind: 'new_book', label: tk('Nová kniha') },
 ];

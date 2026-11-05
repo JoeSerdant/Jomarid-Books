@@ -3,6 +3,8 @@
 // čtenářů (ten by s rostoucím počtem knih a čtenářů rostl bez omezení). Používá to knihovna i vyhledávací okno.
 
 import { canonicalizeGenres, orderLibrary, toLibraryBook } from './libraryModel.js';
+import { t } from '../i18n/core.js';
+import { tk } from '../i18n/mark.js';
 
 const FETCH_PAGE = 500;
 const MAX_PAGES = 100;
@@ -15,7 +17,7 @@ const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 
 /** Chyba, kterou načítání vrací, když ho volající přerušil (isCancelled); není to selhání, jen se nemá nic zobrazit. */
 export const isCancelledError = (error) => !!error && error.cancelled === true;
-const CANCELLED = { cancelled: true, message: 'Načítání bylo přerušeno.' };
+const CANCELLED = { cancelled: true, message: tk('Načítání bylo přerušeno.') };
 
 /**
  * Přechodná chyba, která má smysl zkusit znovu: výpadek sítě (stav 0), přetížení nebo chyba serveru (5xx), příliš
@@ -66,7 +68,7 @@ export const fetchAllByKey = async (buildQuery, {
     // Klíč, který chybí ve výběru nebo se nepohnul (databáze podmínku "za klíčem" ignoruje), by načetl stále tutéž
     // část dokola; to je chyba dotazu, ne něco, co má smysl zkoušet znovu.
     if (last == null || last === after) {
-      return { data: null, error: { message: `Stránkování podle sloupce ${key} se zasekla.`, code: 'KEYSET_STUCK' } };
+      return { data: null, error: { message: t('Stránkování podle sloupce {key} se zasekla.', { key }), code: 'KEYSET_STUCK' } };
     }
     after = last;
   }
