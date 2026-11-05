@@ -12,18 +12,19 @@
 const LAYER_TEMPLATE = `(function () {
   var CFG = __CONFIG__;
   var identity = function (s) { return s; };
+  window.jomaridLang = CFG && CFG.lang === 'en' ? 'en' : 'cs';
   if (!CFG || CFG.lang !== 'en') { window.jomaridT = identity; return; }
   var DICT = CFG.dict || {};
   var PH = /\\{(\\d+)\\}/g;
   var exact = Object.create(null), pats = [];
-  function norm(s) { return String(s).replace(/\\s+/g, ' ').replace(/^ | $/g, ''); }
+  function norm(s) { return String(s).replace(/[\\s\\u200b\\ufeff]+/g, ' ').replace(/^ | $/g, ''); }
   function esc(s) { return s.replace(/[.*+?^$()|[\\]\\\\{}]/g, '\\\\$&'); }
   Object.keys(DICT).forEach(function (cs) {
     var en = DICT[cs]; var key = norm(cs);
     if (!/\\{\\d+\\}/.test(key)) { exact[key] = en; return; }
     var parts = key.split(/\\{\\d+\\}/); var idx = [];
     key.replace(PH, function (m, i) { idx.push(Number(i)); return m; });
-    var src = '^' + parts.map(function (p) { return esc(p).replace(/ /g, '\\\\s+'); }).join('([\\\\s\\\\S]+?)') + '$';
+    var src = '^' + parts.map(function (p) { return esc(p).replace(/ /g, '\\\\s+'); }).join('([\\\\s\\\\S]*?)') + '$';
     pats.push({ re: new RegExp(src), idx: idx, en: en, lit: key.replace(PH, '').length });
   });
   pats.sort(function (a, b) { return b.lit - a.lit; });
@@ -51,7 +52,7 @@ const LAYER_TEMPLATE = `(function () {
     if (c !== undefined) return c;
     var core = norm(text); var out = lookup(core, 0);
     if (out === null) { if (CFG.collect) (window.__jomaridMiss = window.__jomaridMiss || {})[core] = 1; out = text; }
-    else out = /^\\s*/.exec(text)[0] + out + /\\s*$/.exec(text)[0];
+    else out = /^[\\s\\u200b\\ufeff]*/.exec(text)[0] + out + /[\\s\\u200b\\ufeff]*$/.exec(text)[0];
     if (cacheCount > 4000) { cache = Object.create(null); cacheCount = 0; }
     cache[text] = out; cacheCount++;
     return out;
