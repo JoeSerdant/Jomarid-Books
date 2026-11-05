@@ -209,13 +209,45 @@ export const scanSource = (code, file = '') => {
     const ex = tkExportsOf(target);
     for (const sp of n.specifiers) if (sp.type === 'ImportSpecifier' && ex.exported.has(sp.imported.name || sp.imported.value)) { importedTk.add(sp.local.name); if (ex.flat.has(sp.imported.name || sp.imported.value)) flatNames.add(sp.local.name); }
   }
+  // Odvozené proměnné: parametr zpětného volání při procházení tk tabulky (STATUS_FILTERS.map((f) => ...)): f.label je text bez překladu,
+  // pokud se vypíše přímo. Sleduje se prostý řetěz X.map/filter/slice/sort(...).
+  const TEXTY = ['label', 'title', 'text', 'hint', 'description', 'desc', 'short', 'heading', 'caption', 'message', 'equipped', 'name'];
+  const ITER = new Set(['map', 'filter', 'forEach', 'find', 'findIndex', 'some', 'every', 'flatMap']);
+  const PASS = new Set(['filter', 'slice', 'sort', 'concat', 'reverse', 'flat']);
+  const isTkSource = (n) => {
+    if (!n) return false;
+    if (n.type === 'Identifier') return tkConstants.has(n.name) || importedTk.has(n.name);
+    if (n.type === 'CallExpression' && n.callee.type === 'MemberExpression' && !n.callee.computed) return PASS.has(n.callee.property.name) && isTkSource(n.callee.object);
+    if ((n.type === 'MemberExpression' || n.type === 'OptionalMemberExpression') && !n.computed) return isTkSource(n.object);
+    return false;
+  };
+  const derivedBindings = new Map(); // Binding -> { flat }
+  traverse(ast, {
+    CallExpression(path) {
+      const c = path.node.callee;
+      if (c.type !== 'MemberExpression' || c.computed || !ITER.has(c.property.name) || !isTkSource(c.object)) return;
+      const fn = path.get('arguments.0');
+      if (!fn.node || !fn.isFunction()) return;
+      const param = fn.node.params[0];
+      if (!param) return;
+      if (param.type === 'Identifier') { const b = fn.scope.getBinding(param.name); if (b) derivedBindings.set(b, { flat: false }); }
+      else if (param.type === 'ObjectPattern') {
+        for (const pr of param.properties) {
+          if (pr.type !== 'ObjectProperty' || pr.computed || pr.value.type !== 'Identifier') continue;
+          if (TEXTY.includes(pr.key.name || pr.key.value)) { const b = fn.scope.getBinding(pr.value.name); if (b) derivedBindings.set(b, { flat: true }); }
+        }
+      }
+    },
+  });
   const unwrappedUses = [];
   traverse(ast, {
     Identifier(path) {
       const name = path.node.name;
-      if (!(tkConstants.has(name) || importedTk.has(name)) || !path.isReferencedIdentifier()) return;
+      if (!path.isReferencedIdentifier()) return;
       const b = path.scope.getBinding(name);
-      if (!b || !b.scope.path.isProgram()) return;
+      const derived = b ? derivedBindings.get(b) : undefined;
+      const fromConstant = (tkConstants.has(name) || importedTk.has(name)) && b && b.scope.path.isProgram();
+      if (!fromConstant && !derived) return;
       // použití uvnitř funkce (vykreslení, obsluha události), ne při načtení modulu
       if (!path.getFunctionParent()) return;
       // Vypsání: konstanta (nebo její položka) přímo ve výrazu v JSX, nebo uložená jako text/label/title/message. Odvozené použití
@@ -225,10 +257,12 @@ export const scanSource = (code, file = '') => {
         top = top.parentPath;
         if ((top.isMemberExpression() || top.isOptionalMemberExpression()) && !top.node.computed) lastProp = top.node.property.name; else if (top.isMemberExpression()) lastProp = null;
       }
-      if (lastProp && !flatNames.has(name) && !['label', 'title', 'text', 'hint', 'description', 'desc', 'short', 'heading', 'caption', 'message', 'equipped', 'name'].includes(lastProp)) return; // položka, která není text (route, key, id...); v ploché tabulce textů je text každá
+      if (lastProp && !(derived ? derived.flat : flatNames.has(name)) && !TEXTY.includes(lastProp)) return; // položka, která není text (route, key, id...); v ploché tabulce textů je text každá
       const sinkParent = top.parent;
       const isOptionsAttr = sinkParent.type === 'JSXExpressionContainer' && top.parentPath.parent.type === 'JSXAttribute' && top.parentPath.parent.name.name === 'options'; // texty přeloží přijímající komponenta
-      const isSink = !isOptionsAttr && (sinkParent.type === 'JSXExpressionContainer'
+      const attrOfSink = sinkParent.type === 'JSXExpressionContainer' && top.parentPath.parent.type === 'JSXAttribute' ? top.parentPath.parent : null;
+      const isNonTextAttr = attrOfSink && !(attrOfSink.name.type === 'JSXIdentifier' && TEXT_ATTRS.has(attrOfSink.name.name)); // key, value, to, className...: nic, co člověk čte
+      const isSink = !isOptionsAttr && !isNonTextAttr && (sinkParent.type === 'JSXExpressionContainer'
         || (sinkParent.type === 'ObjectProperty' && sinkParent.value === top.node && !sinkParent.computed && ['text', 'label', 'title', 'message', 'description', 'hint'].includes(sinkParent.key.name || sinkParent.key.value))
         || sinkParent.type === 'TemplateLiteral');
       if (!isSink) return;

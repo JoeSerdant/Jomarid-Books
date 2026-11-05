@@ -4,6 +4,7 @@
 // a jaké knihy čte (žánry a autoři přečtených, olajkovaných a rozečtených knih; série zatím mají jen shortB). Výstup: pořadí s důvodem,
 // proč je shortB zrovna tady. Rozhoduje jednoduché skórování, žádná umělá inteligence: součet vah níž, trocha náhody a pravidla pro rozmanitost.
 import { foldText } from '../browse/browseModel.js';
+import { t } from '../i18n/core.js';
 
 // Váhy jsou na jednom místě, ať se dají ladit. Skóre = součet příspěvků.
 export const WEIGHTS = Object.freeze({
@@ -197,13 +198,13 @@ export function rankFeed(candidates, prefs, { now = Date.now(), seed = 1 } = {})
 /** Krátký český popisek důvodu pro kartu ve feedu (prázdný, když není co říct). */
 export const reasonLabel = (reason, c) => {
   switch (reason) {
-    case 'series': return c?.seriesName ? `Další díl: ${c.seriesName}` : 'Další díl série';
-    case 'resume': return 'Rozečtené';
-    case 'taste': return 'Podle toho, co čteš';
-    case 'author': return 'Od autora, kterého čteš';
-    case 'explore': return 'Něco nového';
-    case 'fresh': return 'Čerstvé';
-    case 'popular': return 'Oblíbené';
+    case 'series': return c?.seriesName ? t('Další díl: {name}', { name: c.seriesName }) : t('Další díl série');
+    case 'resume': return t('Rozečtené');
+    case 'taste': return t('Podle toho, co čteš');
+    case 'author': return t('Od autora, kterého čteš');
+    case 'explore': return t('Něco nového');
+    case 'fresh': return t('Čerstvé');
+    case 'popular': return t('Oblíbené');
     default: return '';
   }
 };

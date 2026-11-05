@@ -8,6 +8,8 @@ import { canonicalizeGenres, cleanGenres } from '../browse/libraryModel';
 import { SEARCH_PREFS_KEY } from '../settings/settingsSync';
 import { SETTINGS_APPLIED, notifySettingsChanged } from '../settings/settingsEvents';
 import { ChevronRight, Loader2, Search, X, SlidersHorizontal, Star, Heart, RotateCcw, History, Library, Globe } from 'lucide-react';
+import { t, formatNumber } from '../i18n';
+import { tk } from '../i18n/mark.js';
 
 const RECENT_KEY = RECENT_SEARCH_KEY;
 const PAGE_SIZE = 20;
@@ -30,11 +32,11 @@ export const DEFAULT_SEARCH_PREFS = {
   likedOnly: false,
 };
 
-const FIELD_OPTIONS = [['title', 'Název'], ['author', 'Autor'], ['genres', 'Žánry'], ['description', 'Popis']];
+const FIELD_OPTIONS = [['title', tk('Název')], ['author', 'Autor'], ['genres', tk('Žánry')], ['description', 'Popis']];
 const SORT_OPTIONS = [
-  ['smart', 'Nejrelevantnější'], ['recent', 'Naposledy čtené'], ['title_asc', 'Název A-Z'], ['title_desc', 'Název Z-A'], ['author_asc', 'Autor A-Z'],
-  ['newest', 'Nejnovější'], ['oldest', 'Nejstarší'], ['price_asc', 'Cena: od nejlevnější'], ['price_desc', 'Cena: od nejdražší'],
-  ['rating_desc', 'Nejlépe hodnocené'], ['ratings_count_desc', 'Nejvíc hodnocení'], ['likes_desc', 'Nejoblíbenější'],
+  ['smart', tk('Nejrelevantnější')], ['recent', tk('Naposledy čtené')], ['title_asc', tk('Název A-Z')], ['title_desc', tk('Název Z-A')], ['author_asc', 'Autor A-Z'],
+  ['newest', tk('Nejnovější')], ['oldest', tk('Nejstarší')], ['price_asc', tk('Cena: od nejlevnější')], ['price_desc', tk('Cena: od nejdražší')],
+  ['rating_desc', tk('Nejlépe hodnocené')], ['ratings_count_desc', tk('Nejvíc hodnocení')], ['likes_desc', tk('Nejoblíbenější')],
 ];
 const DATE_SORTS = ['newest', 'oldest'];
 
@@ -245,7 +247,7 @@ export const SearchModal = ({ isOpen, onClose }) => {
     }).catch(err => {
       if (cancelled) return;
       console.error('Chyba při vyhledávání:', err);
-      setError('Katalog se nepodařilo načíst. Zkus to prosím znovu.');
+      setError(t('Katalog se nepodařilo načíst. Zkus to prosím znovu.'));
       setLoading(false);
     });
     return () => { cancelled = true; };
@@ -319,7 +321,7 @@ export const SearchModal = ({ isOpen, onClose }) => {
     try { localStorage.setItem(RECENT_KEY, JSON.stringify(next)); } catch { /* nevadí */ }
   };
   const targetOf = (it) => (it.owned ? { to: `/read/${it.id}` } : { to: '/app', state: { openBookId: it.id } });
-  const openItem = (it) => { rememberQuery(); const t = targetOf(it); navigate(t.to, t.state ? { state: t.state } : undefined); onClose(); };
+  const openItem = (it) => { rememberQuery(); const target = targetOf(it); navigate(target.to, target.state ? { state: target.state } : undefined); onClose(); };
   const onInputKeyDown = (e) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, Math.max(visible.length - 1, 0))); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, 0)); }
@@ -334,35 +336,35 @@ export const SearchModal = ({ isOpen, onClose }) => {
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex justify-center items-start p-2 sm:p-4 pt-14 sm:pt-20" onClick={onClose}>
       <div
-        role="dialog" aria-modal="true" aria-label="Vyhledávání knih"
+        role="dialog" aria-modal="true" aria-label={t('Vyhledávání knih')}
         style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)', maxHeight: 'calc(100dvh - 4.5rem)' }}
         className="border rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="shrink-0 p-3 sm:p-5 pb-2 sm:pb-3 space-y-2.5">
           <div className="flex items-center justify-between gap-3">
-            <div role="tablist" aria-label="Kde hledat" className="flex gap-1.5 min-w-0">
-              <Chip active={prefs.scope === 'mine'} onClick={() => setScope('mine')} role="tab" aria-selected={prefs.scope === 'mine'}><Library size={11} className="inline -mt-0.5 mr-1" />Moje knihy ({mineCount})</Chip>
-              <Chip active={prefs.scope === 'catalog'} onClick={() => setScope('catalog')} role="tab" aria-selected={prefs.scope === 'catalog'}><Globe size={11} className="inline -mt-0.5 mr-1" />Celý katalog ({items.length})</Chip>
+            <div role="tablist" aria-label={t('Kde hledat')} className="flex gap-1.5 min-w-0">
+              <Chip active={prefs.scope === 'mine'} onClick={() => setScope('mine')} role="tab" aria-selected={prefs.scope === 'mine'}><Library size={11} className="inline -mt-0.5 mr-1" />{t('Moje knihy ({n})', { n: mineCount })}</Chip>
+              <Chip active={prefs.scope === 'catalog'} onClick={() => setScope('catalog')} role="tab" aria-selected={prefs.scope === 'catalog'}><Globe size={11} className="inline -mt-0.5 mr-1" />{t('Celý katalog ({n})', { n: items.length })}</Chip>
             </div>
-            <button type="button" onClick={onClose} aria-label="Zavřít hledání" className="shrink-0 opacity-50 hover:opacity-100 cursor-pointer text-current bg-transparent border-none p-1"><X size={20} /></button>
+            <button type="button" onClick={onClose} aria-label={t('Zavřít hledání')} className="shrink-0 opacity-50 hover:opacity-100 cursor-pointer text-current bg-transparent border-none p-1"><X size={20} /></button>
           </div>
 
           <div className="relative flex items-center">
             <Search className="absolute left-3.5 opacity-40" size={18} />
             <input
-              type="text" autoFocus aria-label="Hledaný text" autoComplete="off"
-              placeholder="Název, autor, žánr..."
+              type="text" autoFocus aria-label={t('Hledaný text')} autoComplete="off"
+              placeholder={t('Název, autor, žánr...')}
               value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onInputKeyDown}
               style={fieldStyle} className="w-full pl-10 pr-9 py-2.5 border rounded-xl outline-none font-bold text-sm"
             />
-            {query && <button type="button" onClick={() => setQuery('')} aria-label="Vymazat hledání" className="absolute right-2.5 bg-transparent border-none cursor-pointer text-current opacity-50 hover:opacity-100 p-1"><X size={15} /></button>}
+            {query && <button type="button" onClick={() => setQuery('')} aria-label={t('Vymazat hledání')} className="absolute right-2.5 bg-transparent border-none cursor-pointer text-current opacity-50 hover:opacity-100 p-1"><X size={15} /></button>}
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider mr-0.5">Hledat v:</span>
+            <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider mr-0.5">{t('Hledat v:')}</span>
             {FIELD_OPTIONS.map(([v, label]) => (
-              <Chip key={v} active={prefs.fields.includes(v)} onClick={() => { const next = toggleIn(prefs.fields, v); if (next.length) patch({ fields: next }); }} title={prefs.fields.length === 1 && prefs.fields[0] === v ? 'Aspoň jedno pole musí zůstat zapnuté' : undefined}>{label}</Chip>
+              <Chip key={v} active={prefs.fields.includes(v)} onClick={() => { const next = toggleIn(prefs.fields, v); if (next.length) patch({ fields: next }); }} title={prefs.fields.length === 1 && prefs.fields[0] === v ? t('Aspoň jedno pole musí zůstat zapnuté') : undefined}>{label}</Chip>
             ))}
           </div>
 
@@ -370,15 +372,15 @@ export const SearchModal = ({ isOpen, onClose }) => {
             <button type="button" onClick={() => setShowFilters(s => !s)} aria-expanded={showFilters}
               style={activeFilterCount ? { backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', borderColor: 'var(--bg-primary)' } : fieldStyle}
               className="shrink-0 px-3 py-2 border rounded-lg text-xs font-black uppercase tracking-wide cursor-pointer inline-flex items-center gap-1.5">
-              <SlidersHorizontal size={13} /> Filtry{activeFilterCount ? ` (${activeFilterCount})` : ''}
+              <SlidersHorizontal size={13} /> {activeFilterCount ? t('Filtry ({n})', { n: activeFilterCount }) : t('Filtry')}
             </button>
             <div className="flex-1 min-w-0">
-              <Select label="Řazení" value={prefs.sort} onChange={(e) => patch({ sort: e.target.value })}>
+              <Select label={t('Řazení')} value={prefs.sort} onChange={(e) => patch({ sort: e.target.value })}>
                 {sortOptions.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </Select>
             </div>
             {activeFilterCount > 0 && (
-              <button type="button" onClick={resetFilters} aria-label="Zrušit všechny filtry" title="Zrušit všechny filtry" style={fieldStyle} className="shrink-0 p-2 border rounded-lg cursor-pointer inline-flex"><RotateCcw size={14} /></button>
+              <button type="button" onClick={resetFilters} aria-label={t('Zrušit všechny filtry')} title={t('Zrušit všechny filtry')} style={fieldStyle} className="shrink-0 p-2 border rounded-lg cursor-pointer inline-flex"><RotateCcw size={14} /></button>
             )}
           </div>
         </div>
@@ -387,64 +389,64 @@ export const SearchModal = ({ isOpen, onClose }) => {
           {showFilters && (
             <div style={{ borderColor: 'var(--border-color)' }} className="border rounded-xl p-3 mb-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3" data-testid="filters">
               <div className="sm:col-span-2">
-                <Group label={`Žánry${prefs.genres.length > 1 ? (prefs.genreMode === 'all' ? ' - musí mít všechny vybrané' : ' - stačí kterýkoliv vybraný') : ''}`}>
-                  {genreOptions.length === 0 ? <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 opacity-70">Knihy zatím nemají žádné žánry.</p> : (
+                <Group label={prefs.genres.length > 1 ? (prefs.genreMode === 'all' ? t('Žánry - musí mít všechny vybrané') : t('Žánry - stačí kterýkoliv vybraný')) : t('Žánry')}>
+                  {genreOptions.length === 0 ? <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0 opacity-70">{t('Knihy zatím nemají žádné žánry.')}</p> : (
                     <div className="flex flex-wrap gap-1.5">
                       {genreOptions.map(g => <Chip key={g} active={prefs.genres.includes(g)} onClick={() => patch({ genres: toggleIn(prefs.genres, g) })}>{g}</Chip>)}
                     </div>
                   )}
                   {prefs.genres.length > 1 && (
                     <div className="mt-2 flex gap-1.5">
-                      <Chip active={prefs.genreMode === 'any'} onClick={() => patch({ genreMode: 'any' })}>Aspoň jeden</Chip>
-                      <Chip active={prefs.genreMode === 'all'} onClick={() => patch({ genreMode: 'all' })}>Všechny</Chip>
+                      <Chip active={prefs.genreMode === 'any'} onClick={() => patch({ genreMode: 'any' })}>{t('Aspoň jeden')}</Chip>
+                      <Chip active={prefs.genreMode === 'all'} onClick={() => patch({ genreMode: 'all' })}>{t('Všechny')}</Chip>
                     </div>
                   )}
                 </Group>
               </div>
-              <Group label="Stav čtení">
-                <Select label="Stav čtení" value={prefs.progress} onChange={(e) => patch({ progress: e.target.value })}>
-                  <option value="all">Všechny</option><option value="unread">Nepřečtené</option><option value="reading">Rozečtené</option><option value="read">Přečtené</option>
+              <Group label={t('Stav čtení')}>
+                <Select label={t('Stav čtení')} value={prefs.progress} onChange={(e) => patch({ progress: e.target.value })}>
+                  <option value="all">{t('Všechny')}</option><option value="unread">{t('Nepřečtené')}</option><option value="reading">{t('Rozečtené')}</option><option value="read">{t('Přečtené')}</option>
                 </Select>
-                <div className="mt-2"><Check checked={prefs.likedOnly} onChange={(e) => patch({ likedOnly: e.target.checked })}>Jen oblíbené (s mým srdíčkem)</Check></div>
+                <div className="mt-2"><Check checked={prefs.likedOnly} onChange={(e) => patch({ likedOnly: e.target.checked })}>{t('Jen oblíbené (s mým srdíčkem)')}</Check></div>
               </Group>
-              <Group label="Vlastnictví">
-                <Select label="Vlastnictví" value={prefs.ownership} onChange={(e) => patch({ ownership: e.target.value })}>
-                  <option value="all">Všechny</option><option value="owned">Mám odemčené</option>
-                  {prefs.scope === 'catalog' && <option value="notOwned">Nemám (ke koupi)</option>}
-                  <option value="published">Vydané mnou</option>
+              <Group label={t('Vlastnictví')}>
+                <Select label={t('Vlastnictví')} value={prefs.ownership} onChange={(e) => patch({ ownership: e.target.value })}>
+                  <option value="all">{t('Všechny')}</option><option value="owned">{t('Mám odemčené')}</option>
+                  {prefs.scope === 'catalog' && <option value="notOwned">{t('Nemám (ke koupi)')}</option>}
+                  <option value="published">{t('Vydané mnou')}</option>
                 </Select>
               </Group>
-              <Group label="Cena">
+              <Group label={t('Cena')}>
                 <div className="flex gap-1.5 flex-wrap">
-                  {[['all', 'Jakákoliv'], ['free', 'Zdarma'], ['paid', 'Placené']].map(([v, l]) => <Chip key={v} active={prefs.priceMode === v} onClick={() => patch({ priceMode: v })}>{l}</Chip>)}
+                  {[['all', t('Jakákoliv')], ['free', t('Zdarma')], ['paid', t('Placené')]].map(([v, l]) => <Chip key={v} active={prefs.priceMode === v} onClick={() => patch({ priceMode: v })}>{l}</Chip>)}
                 </div>
                 {maxPriceInScope > 0 && (
                   <div className="mt-2">
-                    <label className="text-xs font-bold block mb-1">Nejvýš: {prefs.maxPrice == null || prefs.maxPrice >= maxPriceInScope ? 'bez limitu' : `${prefs.maxPrice} mincí`}</label>
-                    <input type="range" aria-label="Maximální cena" min={0} max={maxPriceInScope} step={maxPriceInScope > 1000 ? 25 : 5}
+                    <label className="text-xs font-bold block mb-1">{t('Nejvýš: {value}', { value: prefs.maxPrice == null || prefs.maxPrice >= maxPriceInScope ? t('bez limitu') : t('{n} mincí', { n: prefs.maxPrice }) })}</label>
+                    <input type="range" aria-label={t('Maximální cena')} min={0} max={maxPriceInScope} step={maxPriceInScope > 1000 ? 25 : 5}
                       value={prefs.maxPrice == null ? maxPriceInScope : Math.min(prefs.maxPrice, maxPriceInScope)}
                       onChange={(e) => { const v = parseInt(e.target.value, 10); patch({ maxPrice: v >= maxPriceInScope ? null : v }); }}
                       className="w-full cursor-pointer" style={{ accentColor: 'var(--bg-primary)' }} />
                   </div>
                 )}
-                <div className="mt-2"><Check checked={prefs.affordable} onChange={(e) => patch({ affordable: e.target.checked })}>Jen dostupné pro mě (mám {coins.toLocaleString('cs-CZ')} mincí)</Check></div>
+                <div className="mt-2"><Check checked={prefs.affordable} onChange={(e) => patch({ affordable: e.target.checked })}>{t('Jen dostupné pro mě (mám {n} mincí)', { n: formatNumber(coins) })}</Check></div>
               </Group>
-              <Group label="Hodnocení">
-                <Select label="Minimální hodnocení" value={String(prefs.minRating)} onChange={(e) => patch({ minRating: parseFloat(e.target.value) })}>
-                  <option value="0">Jakékoliv</option><option value="3">3 a víc</option><option value="4">4 a víc</option><option value="4.5">4,5 a víc</option>
+              <Group label={t('Hodnocení')}>
+                <Select label={t('Minimální hodnocení')} value={String(prefs.minRating)} onChange={(e) => patch({ minRating: parseFloat(e.target.value) })}>
+                  <option value="0">{t('Jakékoliv')}</option><option value="3">{t('3 a víc')}</option><option value="4">{t('4 a víc')}</option><option value="4.5">{t('4,5 a víc')}</option>
                 </Select>
-                <div className="mt-2"><Check checked={prefs.ratedOnly} onChange={(e) => patch({ ratedOnly: e.target.checked })}>Jen knihy s hodnocením</Check></div>
+                <div className="mt-2"><Check checked={prefs.ratedOnly} onChange={(e) => patch({ ratedOnly: e.target.checked })}>{t('Jen knihy s hodnocením')}</Check></div>
               </Group>
-              <Group label="Autor">
-                <Select label="Autor" value={prefs.author} onChange={(e) => patch({ author: e.target.value })}>
-                  <option value="all">Všichni autoři</option>
+              <Group label={t('Autor')}>
+                <Select label={t('Autor')} value={prefs.author} onChange={(e) => patch({ author: e.target.value })}>
+                  <option value="all">{t('Všichni autoři')}</option>
                   {authorOptions.map(a => <option key={a} value={a}>{a}</option>)}
                 </Select>
               </Group>
               {hasCreatedAt && (
-                <Group label="Přidáno do katalogu">
-                  <Select label="Přidáno do katalogu" value={String(prefs.addedWithin)} onChange={(e) => patch({ addedWithin: parseInt(e.target.value, 10) })}>
-                    <option value="0">Kdykoliv</option><option value="7">Za posledních 7 dní</option><option value="30">Za posledních 30 dní</option><option value="90">Za posledních 90 dní</option><option value="365">Za poslední rok</option>
+                <Group label={t('Přidáno do katalogu')}>
+                  <Select label={t('Přidáno do katalogu')} value={String(prefs.addedWithin)} onChange={(e) => patch({ addedWithin: parseInt(e.target.value, 10) })}>
+                    <option value="0">{t('Kdykoliv')}</option><option value="7">{t('Za posledních 7 dní')}</option><option value="30">{t('Za posledních 30 dní')}</option><option value="90">{t('Za posledních 90 dní')}</option><option value="365">{t('Za poslední rok')}</option>
                   </Select>
                 </Group>
               )}
@@ -452,7 +454,7 @@ export const SearchModal = ({ isOpen, onClose }) => {
           )}
 
           {loading ? (
-            <div className="text-center py-6 text-xs font-bold opacity-70 flex items-center justify-center gap-2"><Loader2 className="animate-spin" size={14} /> Načítání katalogu...</div>
+            <div className="text-center py-6 text-xs font-bold opacity-70 flex items-center justify-center gap-2"><Loader2 className="animate-spin" size={14} /> {t('Načítání katalogu...')}</div>
           ) : error ? (
             <p role="alert" className="text-center py-6 text-sm font-bold text-red-500 m-0">{error}</p>
           ) : (
@@ -461,23 +463,23 @@ export const SearchModal = ({ isOpen, onClose }) => {
                 <div className="mb-3 flex items-center gap-1.5 flex-wrap" data-testid="recent">
                   <History size={12} className="opacity-50" />
                   {recent.map(r => <Chip key={r} active={false} onClick={() => setQuery(r)}>{r}</Chip>)}
-                  <button type="button" onClick={() => { setRecent([]); try { localStorage.removeItem(RECENT_KEY); } catch { /* nevadí */ } }} style={{ color: 'var(--text-muted)' }} className="bg-transparent border-none cursor-pointer text-[0.625rem] font-bold underline">smazat</button>
+                  <button type="button" onClick={() => { setRecent([]); try { localStorage.removeItem(RECENT_KEY); } catch { /* nevadí */ } }} style={{ color: 'var(--text-muted)' }} className="bg-transparent border-none cursor-pointer text-[0.625rem] font-bold underline">{t('smazat')}</button>
                 </div>
               )}
-              <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] font-bold m-0 mb-1.5" aria-live="polite">{results.length === 1 ? '1 výsledek' : results.length >= 2 && results.length <= 4 ? `${results.length} výsledky` : `${results.length} výsledků`}</p>
+              <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] font-bold m-0 mb-1.5" aria-live="polite">{t.p(results.length, '{n} výsledek', '{n} výsledky', '{n} výsledků', { n: formatNumber(results.length) })}</p>
               {results.length === 0 ? (
                 <div className="text-center py-6">
-                  <p className="text-sm font-medium opacity-70 m-0">{prefs.scope === 'mine' && mineCount === 0 && !query && !activeFilterCount ? 'Zatím nemáš žádné knihy - zkus Celý katalog.' : 'Nic neodpovídá zadání.'}</p>
-                  {activeFilterCount > 0 && <button type="button" onClick={resetFilters} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="mt-3 px-4 py-2 rounded-lg border-none cursor-pointer text-xs font-black uppercase">Zrušit filtry</button>}
-                  {prefs.scope === 'mine' && query && <button type="button" onClick={() => setScope('catalog')} style={fieldStyle} className="mt-3 ml-2 px-4 py-2 border rounded-lg cursor-pointer text-xs font-black uppercase">Hledat v celém katalogu</button>}
+                  <p className="text-sm font-medium opacity-70 m-0">{prefs.scope === 'mine' && mineCount === 0 && !query && !activeFilterCount ? t('Zatím nemáš žádné knihy - zkus Celý katalog.') : t('Nic neodpovídá zadání.')}</p>
+                  {activeFilterCount > 0 && <button type="button" onClick={resetFilters} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="mt-3 px-4 py-2 rounded-lg border-none cursor-pointer text-xs font-black uppercase">{t('Zrušit filtry')}</button>}
+                  {prefs.scope === 'mine' && query && <button type="button" onClick={() => setScope('catalog')} style={fieldStyle} className="mt-3 ml-2 px-4 py-2 border rounded-lg cursor-pointer text-xs font-black uppercase">{t('Hledat v celém katalogu')}</button>}
                 </div>
               ) : (
-                <div role="listbox" aria-label="Výsledky" className="space-y-0.5">
+                <div role="listbox" aria-label={t('Výsledky')} className="space-y-0.5">
                   {visible.map((it, idx) => {
-                    const t = targetOf(it);
+                    const target = targetOf(it);
                     const active = idx === activeIdx;
                     return (
-                      <Link key={it.id} to={t.to} state={t.state} role="option" aria-selected={active} onClick={() => { rememberQuery(); onClose(); }} onMouseEnter={() => setActiveIdx(idx)}
+                      <Link key={it.id} to={target.to} state={target.state} role="option" aria-selected={active} onClick={() => { rememberQuery(); onClose(); }} onMouseEnter={() => setActiveIdx(idx)}
                         style={active ? { backgroundColor: 'var(--bg-secondary)' } : undefined}
                         className="p-2.5 flex justify-between items-center gap-3 rounded-xl no-underline text-current">
                         <div className="min-w-0 flex-1">
@@ -485,13 +487,13 @@ export const SearchModal = ({ isOpen, onClose }) => {
                           <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] uppercase font-semibold mt-0.5 m-0 break-words"><Highlight text={it.authorName} tokens={tokens} /></p>
                           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1.5 text-[0.6875rem] font-bold">
                             {it.genres.slice(0, 3).map(g => <span key={g} style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-badge)' }} className="px-1.5 py-0.5 rounded-full text-[0.625rem]">{g}</span>)}
-                            {it.ratingsCount > 0 && <span className="inline-flex items-center gap-0.5"><Star size={11} className="text-amber-500 fill-amber-500" /> {it.rating.toFixed(1).replace('.', ',')} <span style={{ color: 'var(--text-muted)' }} className="font-medium">({it.ratingsCount})</span></span>}
+                            {it.ratingsCount > 0 && <span className="inline-flex items-center gap-0.5"><Star size={11} className="text-amber-500 fill-amber-500" /> {formatNumber(it.rating, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} <span style={{ color: 'var(--text-muted)' }} className="font-medium">({it.ratingsCount})</span></span>}
                             {it.likes > 0 && <span className="inline-flex items-center gap-0.5" style={{ color: it.liked ? '#ef4444' : 'var(--text-muted)' }}><Heart size={11} className={it.liked ? 'fill-current' : ''} /> {it.likes}</span>}
-                            {it.isOwn ? <span className="text-emerald-500">Tvoje kniha</span>
-                              : it.read ? <span className="text-emerald-500">✓ Přečteno</span>
-                              : it.inProgress ? <span className="text-amber-500">Rozečteno {it.progress} %</span>
-                              : it.owned ? (prefs.scope === 'catalog' ? <span style={{ color: 'var(--text-muted)' }}>Odemčeno</span> : null)
-                              : <span style={{ color: it.price <= coins ? '#d97706' : 'var(--text-muted)' }}>{it.price === 0 ? 'Zdarma' : `${it.price.toLocaleString('cs-CZ')} mincí`}{it.price > coins ? ' (nemáš dost)' : ''}</span>}
+                            {it.isOwn ? <span className="text-emerald-500">{t('Tvoje kniha')}</span>
+                              : it.read ? <span className="text-emerald-500">{t('✓ Přečteno')}</span>
+                              : it.inProgress ? <span className="text-amber-500">{t('Rozečteno {n} %', { n: it.progress })}</span>
+                              : it.owned ? (prefs.scope === 'catalog' ? <span style={{ color: 'var(--text-muted)' }}>{t('Odemčeno')}</span> : null)
+                              : <span style={{ color: it.price <= coins ? '#d97706' : 'var(--text-muted)' }}>{it.price === 0 ? t('Zdarma') : t('{n} mincí', { n: formatNumber(it.price) })}{it.price > coins ? t(' (nemáš dost)') : ''}</span>}
                           </div>
                         </div>
                         <ChevronRight size={16} className="shrink-0 opacity-50 text-emerald-600" />
@@ -501,9 +503,9 @@ export const SearchModal = ({ isOpen, onClose }) => {
                 </div>
               )}
               {results.length > visible.length && (
-                <button type="button" onClick={() => setLimit(l => l + PAGE_SIZE)} style={fieldStyle} className="mt-3 w-full py-2.5 border rounded-lg cursor-pointer text-xs font-black uppercase">Zobrazit dalších {Math.min(PAGE_SIZE, results.length - visible.length)}</button>
+                <button type="button" onClick={() => setLimit(l => l + PAGE_SIZE)} style={fieldStyle} className="mt-3 w-full py-2.5 border rounded-lg cursor-pointer text-xs font-black uppercase">{t('Zobrazit dalších {n}', { n: Math.min(PAGE_SIZE, results.length - visible.length) })}</button>
               )}
-              <p style={{ color: 'var(--text-muted)' }} className="hidden sm:block text-[0.625rem] text-center opacity-50 mt-3 m-0">↑ ↓ výběr · Enter otevřít · Esc zavřít</p>
+              <p style={{ color: 'var(--text-muted)' }} className="hidden sm:block text-[0.625rem] text-center opacity-50 mt-3 m-0">{t('↑ ↓ výběr · Enter otevřít · Esc zavřít')}</p>
             </>
           )}
         </div>

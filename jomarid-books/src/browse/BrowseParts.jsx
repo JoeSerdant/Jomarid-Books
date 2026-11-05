@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { ArrowUp, LayoutGrid, List } from 'lucide-react';
 import { coverGradient, coverInitials } from './browseModel.js';
+import { t, formatNumber } from '../i18n';
 
 // Společné součásti procházení dlouhých seznamů: přepínač zobrazení, "Zobrazit další", tlačítko nahoru a obálka.
 
 /** Přepínač způsobu zobrazení: mřížka obálek / seznam řádků. */
 export const ViewToggle = ({ value, onChange }) => (
-  <div role="group" aria-label="Způsob zobrazení" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="flex border rounded-xl p-0.5 shrink-0">
-    {[['grid', LayoutGrid, 'Mřížka'], ['list', List, 'Seznam']].map(([key, Icon, label]) => {
+  <div role="group" aria-label={t('Způsob zobrazení')} style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="flex border rounded-xl p-0.5 shrink-0">
+    {[['grid', LayoutGrid, t('Mřížka')], ['list', List, t('Seznam')]].map(([key, Icon, label]) => {
       const active = value === key;
       return (
         <button
@@ -28,7 +29,7 @@ export const ViewToggle = ({ value, onChange }) => (
   </div>
 );
 
-const num = (n) => Number(n).toLocaleString('cs-CZ');
+const num = (n) => formatNumber(n);
 
 /**
  * Pod seznamem: neviditelný hlídač, který při přiblížení k oknu přidá další část, údaj "Zobrazeno X z Y" a tlačítko
@@ -48,11 +49,11 @@ export const LoadMore = ({ paged, className = '', onMore }) => {
     <div className={`flex flex-col items-center gap-3 ${className}`}>
       {paged.hasMore && <div ref={paged.sentinelRef} aria-hidden="true" className="h-px w-full" />}
       <p role="status" data-testid="paged-count" style={{ color: 'var(--text-muted)' }} className="text-xs font-bold m-0 tabular-nums">
-        Zobrazeno {num(paged.count)} z {num(paged.total)}
+        {t('Zobrazeno {count} z {total}', { count: num(paged.count), total: num(paged.total) })}
       </p>
       {paged.autoStopped && (
         <p data-testid="paged-hint" style={{ color: 'var(--text-muted)' }} className="text-xs m-0 text-center max-w-sm">
-          Dál se seznam sám nenačítá. Výběr zúžíš hledáním nebo filtrem, nebo zobraz další.
+          {t('Dál se seznam sám nenačítá. Výběr zúžíš hledáním nebo filtrem, nebo zobraz další.')}
         </p>
       )}
       {paged.hasMore && (
@@ -63,7 +64,7 @@ export const LoadMore = ({ paged, className = '', onMore }) => {
           style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
           className="px-6 py-3 border rounded-xl font-black text-[0.6875rem] uppercase tracking-wider cursor-pointer hover:brightness-95 active:scale-95 transition-all"
         >
-          Zobrazit další ({num(paged.nextChunk)})
+          {t('Zobrazit další ({n})', { n: num(paged.nextChunk) })}
         </button>
       )}
     </div>
@@ -100,8 +101,8 @@ export const BackToTop = ({ threshold = 900, focusRef }) => {
       type="button"
       data-testid="back-to-top"
       onClick={goTop}
-      aria-label="Zpět nahoru"
-      title="Zpět nahoru"
+      aria-label={t('Zpět nahoru')}
+      title={t('Zpět nahoru')}
       style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', borderColor: 'var(--border-color)' }}
       className="fixed bottom-20 right-4 z-30 w-12 h-12 rounded-full border shadow-lg cursor-pointer flex items-center justify-center hover:brightness-110 active:scale-95 transition-all"
     >

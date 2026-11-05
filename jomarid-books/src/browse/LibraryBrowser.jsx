@@ -2,7 +2,7 @@ import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMem
 import { Link } from 'react-router-dom';
 import { ArrowDownAZ, BookOpen, Check, Coins, Heart, Library, Lock, Search, Star, X } from 'lucide-react';
 import { useTour } from '../tour/TourProvider';
-import { PAGE_SIZE, czCount, restoredVisible } from './browseModel.js';
+import { PAGE_SIZE, restoredVisible } from './browseModel.js';
 import {
   SORT_OPTIONS, STATUS_FILTERS, bookAction, bookStateText, filterBooks, fmtRating, genreCounts, isInProgress, sanitizeRestoredState,
   sortBooks, splitGenres, statusCounts,
@@ -10,6 +10,7 @@ import {
 import { readLibraryPrefs, readLibraryState, writeLibraryState, writeViewMode } from './browseStore.js';
 import { usePagedList } from './usePagedList.js';
 import { BackToTop, BookCover, LoadMore, ViewToggle } from './BrowseParts.jsx';
+import { t } from '../i18n';
 
 // Procházení knihovny: přepínač Všechny / Moje / Rozečtené / Dočtené, hledání, řazení, žánry, mřížka (na telefonu
 // dva sloupce) nebo seznam, postupné načítání a zapamatování, kde čtenář skončil. Data, nákup a lajky řeší UserLibrary.
@@ -31,7 +32,7 @@ const LikeButton = ({ book, onLike, className = '' }) => (
     type="button"
     onClick={() => onLike(book)}
     aria-pressed={book.isLiked}
-    aria-label={`Líbí se mi: ${book.title} (${book.likesCount})`}
+    aria-label={t('Líbí se mi: {title} ({n})', { title: book.title, n: book.likesCount })}
     style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }}
     className={`border px-2.5 h-8 rounded-lg text-[0.6875rem] font-black flex items-center gap-1 cursor-pointer ${className}`}
   >
@@ -45,19 +46,19 @@ const LikeButton = ({ book, onLike, className = '' }) => (
 const StateBadge = ({ book, mini }) => {
   if (!book.hasAccess) {
     return (
-      <span title="Zatím nevlastníš" className={`absolute bg-black/50 text-white rounded-full flex items-center justify-center ${mini ? 'bottom-1 left-1 w-5 h-5' : 'bottom-2 left-2 w-6 h-6'}`}>
+      <span title={t('Zatím nevlastníš')} className={`absolute bg-black/50 text-white rounded-full flex items-center justify-center ${mini ? 'bottom-1 left-1 w-5 h-5' : 'bottom-2 left-2 w-6 h-6'}`}>
         <Lock size={mini ? 10 : 12} />
       </span>
     );
   }
   if (book.isRead) {
     return mini ? (
-      <span title="Dočteno" className="absolute bottom-1 left-1 w-5 h-5 rounded-full bg-black/50 text-emerald-300 flex items-center justify-center">
+      <span title={t('Dočteno')} className="absolute bottom-1 left-1 w-5 h-5 rounded-full bg-black/50 text-emerald-300 flex items-center justify-center">
         <Check size={11} />
       </span>
     ) : (
       <span className="absolute bottom-2 left-2 h-6 px-2 rounded-full bg-black/50 text-white text-[0.625rem] font-black uppercase flex items-center gap-1">
-        <Check size={12} className="text-emerald-300" /> Dočteno
+        <Check size={12} className="text-emerald-300" /> {t('Dočteno')}
       </span>
     );
   }
@@ -256,14 +257,14 @@ export const LibraryBrowser = ({ books, coins, userId, onOpenDetail, onToggleLik
     listRef.current?.children[before]?.querySelector('button.line-clamp-2')?.focus({ preventScroll: false });
   });
   const total = books.length;
-  const summary = filtered.length === total ? czCount(total, 'kniha', 'knihy', 'knih') : `${czCount(filtered.length, 'kniha', 'knihy', 'knih')} z ${total}`;
+  const summary = filtered.length === total ? t.p(total, '{n} kniha', '{n} knihy', '{n} knih', { n: total }) : t('{shown} z {total}', { shown: t.p(filtered.length, '{n} kniha', '{n} knihy', '{n} knih', { n: filtered.length }), total });
   const Item = view === 'grid' ? BookCard : BookRow;
 
   return (
     <>
-      <section ref={rootRef} tabIndex={-1} aria-label="Procházení knihovny" className="space-y-3 focus:outline-none">
+      <section ref={rootRef} tabIndex={-1} aria-label={t('Procházení knihovny')} className="space-y-3 focus:outline-none">
         <div className="flex flex-col lg:flex-row lg:items-center gap-3">
-          <div role="group" aria-label="Které knihy zobrazit" className="flex gap-2 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 lg:shrink-0 lg:overflow-visible">
+          <div role="group" aria-label={t('Které knihy zobrazit')} className="flex gap-2 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 lg:shrink-0 lg:overflow-visible">
             {STATUS_FILTERS.map((f) => {
               const active = status === f.key;
               return (
@@ -276,7 +277,7 @@ export const LibraryBrowser = ({ books, coins, userId, onOpenDetail, onToggleLik
                   style={{ backgroundColor: active ? 'var(--text-body)' : 'var(--bg-secondary)', color: active ? 'var(--bg-body)' : 'var(--text-body)', borderColor: 'var(--border-color)' }}
                   className="shrink-0 px-3.5 py-2.5 border rounded-xl font-black text-[0.6875rem] uppercase tracking-wide cursor-pointer transition-all flex items-center gap-2"
                 >
-                  {f.label} <span className="tabular-nums font-bold">{counts[f.key]}</span>
+                  {t(f.label)} <span className="tabular-nums font-bold">{counts[f.key]}</span>
                 </button>
               );
             })}
@@ -294,15 +295,15 @@ export const LibraryBrowser = ({ books, coins, userId, onOpenDetail, onToggleLik
                 // Enter schová klávesnici na telefonu, ať jsou vidět výsledky (výběr se mění už při psaní). S myší a
                 // klávesnicí pole zůstane zaostřené, jinak by fokus spadl na <body>.
                 onKeyDown={(e) => { if (e.key === 'Enter' && window.matchMedia?.('(pointer: coarse)').matches) e.currentTarget.blur(); }}
-                placeholder="Hledat podle názvu nebo autora..."
-                aria-label="Hledat v knihovně"
+                placeholder={t('Hledat podle názvu nebo autora...')}
+                aria-label={t('Hledat v knihovně')}
                 autoComplete="off"
                 enterKeyHint="search"
                 style={{ color: 'var(--text-body)' }}
                 className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm font-medium placeholder:opacity-100 placeholder:text-[color:var(--text-muted)]"
               />
               {query && (
-                <button type="button" aria-label="Smazat hledání" onClick={clearSearch} className="bg-transparent border-none cursor-pointer p-1.5 -mr-1.5 opacity-60 hover:opacity-100" style={{ color: 'var(--text-body)' }}>
+                <button type="button" aria-label={t('Smazat hledání')} onClick={clearSearch} className="bg-transparent border-none cursor-pointer p-1.5 -mr-1.5 opacity-60 hover:opacity-100" style={{ color: 'var(--text-body)' }}>
                   <X size={14} />
                 </button>
               )}
@@ -312,8 +313,8 @@ export const LibraryBrowser = ({ books, coins, userId, onOpenDetail, onToggleLik
         </div>
 
         {genreChips.length > 0 && (
-          <div role="group" aria-label="Žánr" className="flex gap-2 overflow-x-auto sm:flex-wrap scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
-            <Chip active={genre === 'all'} onClick={() => setGenre('all')}>Všechny žánry</Chip>
+          <div role="group" aria-label={t('Žánr')} className="flex gap-2 overflow-x-auto sm:flex-wrap scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+            <Chip active={genre === 'all'} onClick={() => setGenre('all')}>{t('Všechny žánry')}</Chip>
             {genreChips.map((g) => (
               <Chip key={g.genre} active={genre === g.genre} onClick={() => setGenre(g.genre)}>
                 {g.genre} <span className="tabular-nums font-bold">{g.count}</span>
@@ -323,12 +324,12 @@ export const LibraryBrowser = ({ books, coins, userId, onOpenDetail, onToggleLik
               <select
                 value={moreActive ? genre : ''}
                 onChange={(e) => setGenre(e.target.value || 'all')}
-                aria-label={`Další žánry (${moreGenres.length})`}
+                aria-label={t('Další žánry ({n})', { n: moreGenres.length })}
                 data-testid="more-genres"
                 style={{ backgroundColor: moreActive ? 'var(--text-body)' : 'var(--bg-secondary)', color: moreActive ? 'var(--bg-body)' : 'var(--text-muted)' }}
                 className="shrink-0 px-3 py-2 rounded-full font-black text-[0.625rem] uppercase border-none cursor-pointer max-w-[11rem]"
               >
-                <option value="">Další žánry ({moreGenres.length})</option>
+                <option value="">{t('Další žánry ({n})', { n: moreGenres.length })}</option>
                 {moreGenres.map((g) => <option key={g.genre} value={g.genre}>{g.genre} ({g.count})</option>)}
               </select>
             )}
@@ -340,7 +341,7 @@ export const LibraryBrowser = ({ books, coins, userId, onOpenDetail, onToggleLik
           <div className="flex items-center gap-1 min-w-0">
             {hasFilters && (
               <button type="button" data-testid="reset-filters" onClick={resetFilters} style={{ color: 'var(--text-body)' }} className="bg-transparent border-none cursor-pointer text-[0.6875rem] font-black uppercase tracking-wide underline underline-offset-2 hover:opacity-70 p-2 shrink-0">
-                Zrušit filtry
+                {t('Zrušit filtry')}
               </button>
             )}
             <label className={`flex items-center gap-1.5 min-w-0 cursor-pointer rounded-lg px-1 ${focusRing}`}>
@@ -348,12 +349,12 @@ export const LibraryBrowser = ({ books, coins, userId, onOpenDetail, onToggleLik
               <select
                 value={sort}
                 onChange={(e) => setSort(e.target.value)}
-                aria-label="Řazení"
+                aria-label={t('Řazení')}
                 style={{ color: 'var(--text-body)', backgroundColor: 'transparent' }}
                 className="border-none outline-none text-xs font-bold cursor-pointer py-2 min-w-0"
               >
                 {SORT_OPTIONS.map((opt) => (
-                  <option key={opt.key} value={opt.key} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-body)' }}>{opt.label}</option>
+                  <option key={opt.key} value={opt.key} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-body)' }}>{t(opt.label)}</option>
                 ))}
               </select>
             </label>
@@ -364,11 +365,11 @@ export const LibraryBrowser = ({ books, coins, userId, onOpenDetail, onToggleLik
           <div style={card} className="border rounded-2xl py-16 px-4 flex flex-col items-center gap-3 text-center">
             <Library size={32} style={{ color: 'var(--text-muted)' }} className="opacity-30" />
             <p style={{ color: 'var(--text-muted)' }} className="text-sm font-bold m-0 break-words max-w-full">
-              {total === 0 ? 'V katalogu zatím nejsou žádné knihy.' : query.trim() ? `Nic neodpovídá hledání "${query.trim()}".` : 'V tomhle výběru zatím nic není.'}
+              {total === 0 ? t('V katalogu zatím nejsou žádné knihy.') : query.trim() ? t('Nic neodpovídá hledání "{query}".', { query: query.trim() }) : t('V tomhle výběru zatím nic není.')}
             </p>
             {hasFilters && (
               <button type="button" onClick={resetFilters} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="px-5 py-2.5 rounded-xl border-none font-black text-[0.6875rem] uppercase tracking-wider cursor-pointer">
-                Zrušit filtry
+                {t('Zrušit filtry')}
               </button>
             )}
           </div>

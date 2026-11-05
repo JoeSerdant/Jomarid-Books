@@ -25,7 +25,7 @@ const GAMES = [
 ];
 
 // Veřejný seznam statistik (ten se ukazuje ve Statistikách a Odznacích). Skryté statistiky (SECRET_STATS v defs) tu nejsou, viz níž.
-export const GAME_CATALOG = GAMES.map(({ id, title, icon, headline, defs }) => ({ id, title, icon, headline, stats: defs.STATS }));
+export const GAME_CATALOG = GAMES.map(({ id, title, icon, headline, defs }) => ({ id, title, icon, headline, stats: defs.STATS })); // i18n-ok: název se překládá při vykreslení
 
 // Odznaky za hry dávají jen XP (ne mince). XP se bere z tabulky obtížnosti (defs/helpers.js): ve stejné statistice platí, že čím těžší odznak, tím víc XP.
 // XP z her se do úrovně přičítá, ale odznaky za úroveň (a s nimi mince) se z něj nevyhodnocují.

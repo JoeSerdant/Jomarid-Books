@@ -3,31 +3,32 @@
 import { foldText } from '../browse/browseModel.js';
 import { FRIENDLY } from '../lib/friendlyError.js';
 import { t } from '../i18n/core.js';
+import { tk } from '../i18n/mark.js';
 
 export const AI_PROMPT_MAX = 2000;
 export const AI_LENGTHS = Object.freeze([
-  { key: 'short', label: 'Kratší (asi 2 000 znaků)', chars: 2000 },
-  { key: 'medium', label: 'Střední (asi 4 000 znaků)', chars: 4000 },
-  { key: 'long', label: 'Delší (asi 5 500 znaků)', chars: 5500 },
+  { key: 'short', label: tk('Kratší (asi 2 000 znaků)'), chars: 2000 },
+  { key: 'medium', label: tk('Střední (asi 4 000 znaků)'), chars: 4000 },
+  { key: 'long', label: tk('Delší (asi 5 500 znaků)'), chars: 5500 },
 ]);
 const PREVIOUS_MAX = 6000;
 
 const ERROR_TEXT = {
-  not_authenticated: 'Vypršelo ti přihlášení. Přihlas se prosím znovu.',
-  forbidden: 'ShortB smí psát jen nakladatel nebo správce.',
-  invalid_input: 'Zadání se nepodařilo odeslat. Zkontroluj ho.',
-  quota: 'Pomalu, pomalu! AI má teď plno nebo je vyčerpaný dnešní limit. Zkus to za chvíli.',
-  blocked: 'S tímhle zadáním AI nepomůže. Zkus ho napsat jinak.',
-  upstream: 'Promiň! AI teď zažívá závratě. Počkej chvilku a zkus to znovu.',
-  timeout: 'AI přemýšlí nějak dlouho. Zkus to za chvilku znovu.',
+  not_authenticated: tk('Vypršelo ti přihlášení. Přihlas se prosím znovu.'),
+  forbidden: tk('ShortB smí psát jen nakladatel nebo správce.'),
+  invalid_input: tk('Zadání se nepodařilo odeslat. Zkontroluj ho.'),
+  quota: tk('Pomalu, pomalu! AI má teď plno nebo je vyčerpaný dnešní limit. Zkus to za chvíli.'),
+  blocked: tk('S tímhle zadáním AI nepomůže. Zkus ho napsat jinak.'),
+  upstream: tk('Promiň! AI teď zažívá závratě. Počkej chvilku a zkus to znovu.'),
+  timeout: tk('AI přemýšlí nějak dlouho. Zkus to za chvilku znovu.'),
   empty: 'AI se zasekla a nic nenapsala. Zkus to znovu.',
 };
 // Technické příčiny (špatný název funkce, Verify JWT...) jsou v „Technických podrobnostech“, uživatel dostane lidskou větu.
-const UNAVAILABLE = 'AI teď není dostupná. Zkus to později.';
-const NOT_FOUND = 'Funkce shortb-ai nebyla nalezena. V Supabase (Edge Functions) musí mít přesně tenhle název.';
-const RELAY = 'Funkce shortb-ai se nespustila: buď nemá správný název, nebo spadla hned při startu. Podrobnosti jsou v Supabase: Edge Functions → shortb-ai → Logs.';
-const FETCH = 'Nepodařilo se spojit s funkcí shortb-ai (síť, nebo funkce není nasazená). Zkontroluj v Supabase Edge Functions → shortb-ai → Logs.';
-const REJECTED_JWT = 'Funkce shortb-ai odmítla přihlášení. V jejím nastavení vypni „Verify JWT“ (funkce si přihlášení a roli ověřuje sama).';
+const UNAVAILABLE = tk('AI teď není dostupná. Zkus to později.');
+const NOT_FOUND = tk('Funkce shortb-ai nebyla nalezena. V Supabase (Edge Functions) musí mít přesně tenhle název.');
+const RELAY = tk('Funkce shortb-ai se nespustila: buď nemá správný název, nebo spadla hned při startu. Podrobnosti jsou v Supabase: Edge Functions → shortb-ai → Logs.');
+const FETCH = tk('Nepodařilo se spojit s funkcí shortb-ai (síť, nebo funkce není nasazená). Zkontroluj v Supabase Edge Functions → shortb-ai → Logs.');
+const REJECTED_JWT = tk('Funkce shortb-ai odmítla přihlášení. V jejím nastavení vypni „Verify JWT“ (funkce si přihlášení a roli ověřuje sama).');
 
 /** Nejvyšší díl série mezi shortB (stejný název série bez ohledu na velikost písmen a diakritiku), bez shortB, který se právě upravuje. */
 export function latestPart(items, seriesName, exceptId = null) {
@@ -47,13 +48,13 @@ export function latestPart(items, seriesName, exceptId = null) {
  */
 export function buildAiRequest({ mode = 'new', prompt = '', length = 'medium', previous = null } = {}) {
   const text = String(prompt ?? '').trim();
-  if (text.length > AI_PROMPT_MAX) return { error: `Zadání může mít nejvýš ${AI_PROMPT_MAX} znaků.` };
+  if (text.length > AI_PROMPT_MAX) return { error: t('Zadání může mít nejvýš {n} znaků.', { n: AI_PROMPT_MAX }) };
   const len = AI_LENGTHS.some((l) => l.key === length) ? length : 'medium';
   if (mode === 'next') {
-    if (!previous || !String(previous.body || '').trim()) return { error: 'Pro další díl potřebuju předchozí díl série.' };
+    if (!previous || !String(previous.body || '').trim()) return { error: t('Pro další díl potřebuju předchozí díl série.') };
     return { request: { mode: 'next', prompt: text, length: len, previous: { title: String(previous.title || '').slice(0, 120), body: String(previous.body).slice(0, PREVIOUS_MAX), seriesName: String(previous.seriesName || '').slice(0, 80), seriesPart: Math.max(1, Math.floor(Number(previous.seriesPart)) || 1) } } };
   }
-  if (!text) return { error: 'Napiš, o čem má shortB být.' };
+  if (!text) return { error: t('Napiš, o čem má shortB být.') };
   return { request: { mode: 'new', prompt: text, length: len, previous: null } };
 }
 

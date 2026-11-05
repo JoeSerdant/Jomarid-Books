@@ -1,4 +1,8 @@
 {
+  "browse/LibraryBrowser.jsx": [
+    "f.label",
+    "opt.label"
+  ],
   "components/BadgesSection.jsx": [
     "badge.description",
     "badge.title"
@@ -46,6 +50,9 @@
     "item.description",
     "item.label",
     "k.label"
+  ],
+  "components/ShortsStudio.jsx": [
+    "l.label"
   ],
   "emailChange.js": [
     "table[code]"
@@ -121,13 +128,22 @@
     "src.label",
     "tile.name"
   ],
+  "pages/LoginPage.jsx": [
+    "ACCOUNT_EXISTS_TEXT",
+    "NAME_HINTS[nameCheck]",
+    "NO_MAIL_HINT",
+    "SUBMIT_LABELS[mode]",
+    "TITLES[mode]"
+  ],
   "pages/UserStats.jsx": [
     "FROZEN_LABEL",
     "featuredBadgeDef.title",
     "stats.levelName"
   ],
   "push/PushAdminCard.jsx": [
-    "label"
+    "label",
+    "t('Aby se oznámení z appky ukázala i v telefonu, potřebuje server pár klíčů. Veřejný se uloží sám, soukromý se ukáže jen jednou: vlož ho do Supabase (Edge Functions → Secrets jako {name}). Celý postup je v souboru {file} v repozitáři.')",
+    "t('Tenhle klíč patří i do Supabase jako {name} (Edge Functions → Secrets), vedle soukromého klíče. Soukromý klíč se po vygenerování znovu zobrazit nedá; nemáš-li ho uložený, vygeneruj klíče znovu (zařízení si pak musí oznámení zapnout znovu).')"
   ],
   "push/PushSettings.jsx": [
     "TEST_PUSH_HELP"

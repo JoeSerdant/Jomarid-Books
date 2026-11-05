@@ -15,16 +15,18 @@ import {
   BookMarked, Loader2, Star, X, Settings2, List, Minimize2, Maximize2,
   Play, Pause, Clock, ChevronRight, ChevronLeft, Highlighter, Trash2,
 } from 'lucide-react';
+import { t } from '../i18n';
+import { tk } from '../i18n/mark.js';
 
 // ============================================================================
 // Pomocné konstanty a funkce: barvy zvýraznění, kapitoly, zvýraznění v textu.
 // ============================================================================
 
 const HIGHLIGHT_COLORS = {
-  amber:   { label: 'Žlutá',   bg: 'rgba(245, 158, 11, 0.35)' },
-  green:   { label: 'Zelená',  bg: 'rgba(16, 185, 129, 0.35)' },
-  blue:    { label: 'Modrá',   bg: 'rgba(59, 130, 246, 0.35)' },
-  pink:    { label: 'Růžová',  bg: 'rgba(236, 72, 153, 0.35)' },
+  amber:   { label: tk('Žlutá'),   bg: 'rgba(245, 158, 11, 0.35)' },
+  green:   { label: tk('Zelená'),  bg: 'rgba(16, 185, 129, 0.35)' },
+  blue:    { label: tk('Modrá'),   bg: 'rgba(59, 130, 246, 0.35)' },
+  pink:    { label: tk('Růžová'),  bg: 'rgba(236, 72, 153, 0.35)' },
 };
 
 const CHAPTER_LINE_REGEX = /^(kapitola|část|díl|prolog|epilog)(\s+[ivxlcdm]+|\s+\d+)?\s*[:.\-–]?\s*(.{0,50})?$/i;
@@ -397,7 +399,7 @@ export const ReaderPage = () => {
         const hasAccess = isAuthor || bookData.is_auto_assigned || userBookData?.status === 'active';
 
         if (!hasAccess) {
-          alert('K tomuto dílu nemáš aktivní licenci.');
+          alert(t('K tomuto dílu nemáš aktivní licenci.'));
           navigate('/app');
           return;
         }
@@ -671,14 +673,14 @@ export const ReaderPage = () => {
   const handleAddBookmark = useCallback(async () => {
     if (!user) return;
     const progress = currentScrollPercent();
-    const label = prompt('Název záložky:', `Záložka na ${Math.round(progress)} %`);
+    const label = prompt(t('Název záložky:'), t('Záložka na {n} %', { n: Math.round(progress) }));
     if (label === null) return;
     try {
-      const data = await backendRef.current.addBookmark(label.trim() || 'Záložka', progress);
+      const data = await backendRef.current.addBookmark(label.trim() || t('Záložka'), progress);
       setBookmarks(prev => [data, ...prev]);
     } catch (err) {
       console.error('Záložka:', err);
-      alert(friendlyError(err, 'Záložku se nepodařilo uložit. Zkus to znovu.'));
+      alert(friendlyError(err, t('Záložku se nepodařilo uložit. Zkus to znovu.')));
     }
   }, [user, currentScrollPercent]);
 
@@ -756,7 +758,7 @@ export const ReaderPage = () => {
       window.getSelection()?.removeAllRanges();
     } catch (err) {
       console.error('Zvýraznění:', err);
-      alert(friendlyError(err, 'Zvýraznění se nepodařilo uložit. Zkus to znovu.'));
+      alert(friendlyError(err, t('Zvýraznění se nepodařilo uložit. Zkus to znovu.')));
     }
   };
 
@@ -769,7 +771,7 @@ export const ReaderPage = () => {
       setActiveHighlight(null);
     } catch (err) {
       console.error('Poznámka:', err);
-      alert(friendlyError(err, 'Poznámku se nepodařilo uložit. Zkus to znovu.'));
+      alert(friendlyError(err, t('Poznámku se nepodařilo uložit. Zkus to znovu.')));
     }
   };
 
@@ -911,17 +913,17 @@ export const ReaderPage = () => {
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh]">
       <Loader2 className="animate-spin text-[var(--bg-primary)] mb-2" size={32} />
-      <p className="text-xs font-black uppercase tracking-wider opacity-60">Načítám stránky knihy...</p>
+      <p className="text-xs font-black uppercase tracking-wider opacity-60">{t('Načítám stránky knihy...')}</p>
     </div>
   );
 
   if (!book) return (
     <div className="text-center py-12" data-testid="reader-missing">
-      <p className="font-bold uppercase text-sm">{missingReason === 'not_downloaded' ? 'Tuhle knihu nemáš stažená pro čtení bez internetu.' : missingReason === 'expired' ? 'Platnost staženého čtení vypršela.' : missingReason === 'corrupt' ? 'Staženou knihu se nepodařilo otevřít.' : 'Kniha nebyla nalezena.'}</p>
-      {missingReason === 'not_downloaded' && <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-2 max-w-sm mx-auto">Knihu si stáhneš v knihovně v jejím detailu, když jsi online.</p>}
-      {missingReason === 'expired' && <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-2 max-w-sm mx-auto">Připoj se k internetu a otevři knihu: licence se ověří a čtení offline se obnoví.</p>}
-      {missingReason === 'corrupt' && <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-2 max-w-sm mx-auto">Smaž ji v Nastavení (Aplikace → Offline) a stáhni znovu, až budeš online.</p>}
-      <Link to="/app" className="text-xs uppercase font-black text-[var(--bg-primary)] mt-4 block">Návrat do knihovny</Link>
+      <p className="font-bold uppercase text-sm">{missingReason === 'not_downloaded' ? t('Tuhle knihu nemáš stažená pro čtení bez internetu.') : missingReason === 'expired' ? t('Platnost staženého čtení vypršela.') : missingReason === 'corrupt' ? t('Staženou knihu se nepodařilo otevřít.') : t('Kniha nebyla nalezena.')}</p>
+      {missingReason === 'not_downloaded' && <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-2 max-w-sm mx-auto">{t('Knihu si stáhneš v knihovně v jejím detailu, když jsi online.')}</p>}
+      {missingReason === 'expired' && <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-2 max-w-sm mx-auto">{t('Připoj se k internetu a otevři knihu: licence se ověří a čtení offline se obnoví.')}</p>}
+      {missingReason === 'corrupt' && <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-2 max-w-sm mx-auto">{t('Smaž ji v Nastavení (Aplikace → Offline) a stáhni znovu, až budeš online.')}</p>}
+      <Link to="/app" className="text-xs uppercase font-black text-[var(--bg-primary)] mt-4 block">{t('Návrat do knihovny')}</Link>
     </div>
   );
 
@@ -950,7 +952,7 @@ export const ReaderPage = () => {
       {focusMode && (
         <button
           onClick={() => setFocusMode(false)}
-          title="Opustit fokus režim (Esc)"
+          title={t('Opustit fokus režim (Esc)')}
           style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
           className="fixed top-4 right-4 z-40 w-9 h-9 rounded-xl border cursor-pointer flex items-center justify-center shadow-md backdrop-blur-sm"
         >
@@ -962,14 +964,14 @@ export const ReaderPage = () => {
         <div className="shrink-0 px-3 sm:px-4 pt-2 sm:pt-4 pb-1 sm:pb-2 max-w-[100vw]">
           <div className="border-b pb-2 sm:pb-4 text-center max-w-2xl mx-auto" style={{ borderColor: 'var(--border-color)' }}>
             <Link to="/app" className="text-[0.625rem] font-black uppercase tracking-wider no-underline opacity-50 hover:opacity-100 transition-all hidden sm:inline-flex items-center gap-1 mb-3" style={{ color: readingText }}>
-              ← Zpět do knihovny
+              {t('← Zpět do knihovny')}
             </Link>
             <h1 style={{ color: readingText }} className="text-base sm:text-3xl font-black uppercase tracking-tight m-0 truncate">{book.title}</h1>
-            <p className="hidden sm:block text-xs uppercase font-bold mt-1 opacity-60 m-0" style={{ color: 'var(--text-muted)' }}>Autor: {book.author_display || book.author}</p>
+            <p className="hidden sm:block text-xs uppercase font-bold mt-1 opacity-60 m-0" style={{ color: 'var(--text-muted)' }}>{t('Autor: {name}', { name: book.author_display || book.author })}</p>
             {prefs.showMeta && (
               <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] mt-1 sm:mt-2 opacity-70 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-                <span className="flex items-center gap-1"><Clock size={11} /> zbývá ~{remainingMinutes} min</span>
-                <span>Strana {currentPage} / {totalLabel}</span>
+                <span className="flex items-center gap-1"><Clock size={11} /> {t('zbývá ~{n} min', { n: remainingMinutes })}</span>
+                <span>{t('Strana {page} / {total}', { page: currentPage, total: totalLabel })}</span>
               </p>
             )}
           </div>
@@ -980,7 +982,7 @@ export const ReaderPage = () => {
               style={{ borderColor: 'var(--border-color)', backgroundColor: showSettings ? 'var(--bg-primary)' : 'var(--bg-card)', color: showSettings ? 'var(--text-primary)' : 'var(--text-body)' }}
               className="border rounded-xl px-3 py-1.5 text-[0.625rem] font-black uppercase cursor-pointer flex items-center gap-1.5"
             >
-              <Settings2 size={12} /><span className="hidden sm:inline"> Vzhled</span><span className="sr-only sm:hidden">Vzhled</span>
+              <Settings2 size={12} /><span className="hidden sm:inline"> {t('Vzhled')}</span><span className="sr-only sm:hidden">{t('Vzhled')}</span>
             </button>
 
             {chapters.length > 0 && (
@@ -989,7 +991,7 @@ export const ReaderPage = () => {
                 style={{ borderColor: 'var(--border-color)', backgroundColor: showToc ? 'var(--bg-primary)' : 'var(--bg-card)', color: showToc ? 'var(--text-primary)' : 'var(--text-body)' }}
                 className="border rounded-xl px-3 py-1.5 text-[0.625rem] font-black uppercase cursor-pointer flex items-center gap-1.5"
               >
-                <List size={12} /><span className="hidden sm:inline"> Obsah</span><span className="sr-only sm:hidden">Obsah</span>
+                <List size={12} /><span className="hidden sm:inline"> {t('Obsah')}</span><span className="sr-only sm:hidden">{t('Obsah')}</span>
               </button>
             )}
 
@@ -997,42 +999,42 @@ export const ReaderPage = () => {
               onClick={() => setAutoAdvance(v => !v)}
               style={{ borderColor: 'var(--border-color)', backgroundColor: autoAdvance ? 'var(--bg-primary)' : 'var(--bg-card)', color: autoAdvance ? 'var(--text-primary)' : 'var(--text-body)' }}
               className="border rounded-xl px-3 py-1.5 text-[0.625rem] font-black uppercase cursor-pointer flex items-center gap-1.5"
-              title="Automatické listování"
+              title={t('Automatické listování')}
             >
-              {autoAdvance ? <Pause size={12} /> : <Play size={12} />}<span className="hidden sm:inline"> Auto</span><span className="sr-only sm:hidden">Auto</span>
+              {autoAdvance ? <Pause size={12} /> : <Play size={12} />}<span className="hidden sm:inline"> {t('Auto')}</span><span className="sr-only sm:hidden">{t('Auto')}</span>
             </button>
 
             <button
               onClick={() => setFocusMode(true)}
               style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)', color: 'var(--text-body)' }}
               className="border rounded-xl px-3 py-1.5 text-[0.625rem] font-black uppercase cursor-pointer flex items-center gap-1.5"
-              title="Fokus režim (F)"
+              title={t('Fokus režim (F)')}
             >
-              <Maximize2 size={12} /><span className="hidden sm:inline"> Fokus</span><span className="sr-only sm:hidden">Fokus</span>
+              <Maximize2 size={12} /><span className="hidden sm:inline"> {t('Fokus')}</span><span className="sr-only sm:hidden">{t('Fokus')}</span>
             </button>
 
             <button
               onClick={handleAddBookmark}
               style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)', color: 'var(--text-body)' }}
               className="border rounded-xl px-3 py-1.5 text-[0.625rem] font-black uppercase cursor-pointer flex items-center gap-1.5"
-              title="Uložit místo (B)"
+              title={t('Uložit místo (B)')}
             >
-              <BookMarked size={12} /><span className="hidden sm:inline"> Místo</span><span className="sr-only sm:hidden">Místo</span>
+              <BookMarked size={12} /><span className="hidden sm:inline"> {t('Místo')}</span><span className="sr-only sm:hidden">{t('Místo')}</span>
             </button>
             <button
               onClick={() => setShowBookmarks(v => !v)}
               style={{ borderColor: 'var(--border-color)', backgroundColor: showBookmarks ? 'var(--bg-primary)' : 'var(--bg-card)', color: showBookmarks ? 'var(--text-primary)' : 'var(--text-body)' }}
               className="border rounded-xl px-3 py-1.5 text-[0.625rem] font-black uppercase cursor-pointer flex items-center gap-1.5"
             >
-              Záložky {bookmarks.length > 0 && `(${bookmarks.length})`}
+              {bookmarks.length > 0 ? t('Záložky ({n})', { n: bookmarks.length }) : t('Záložky')}
             </button>
 
             {showSettings && (
               <div style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }} className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-80 max-w-[92vw] border rounded-xl shadow-lg z-20 p-4 space-y-4">
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider">Velikost písma</span>
-                    <span style={{ color: 'var(--text-body)' }} className="text-[0.625rem] font-bold">{fontSize}px</span>
+                    <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider">{t('Velikost písma')}</span>
+                    <span style={{ color: 'var(--text-body)' }} className="text-[0.625rem] font-bold">{t('{n}px', { n: fontSize })}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <button onClick={() => setFontSize(f => Math.max(FONT_SIZE_RANGE.min, f - 1))} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="w-8 h-8 shrink-0 rounded-lg border-none cursor-pointer font-black text-xs">A-</button>
@@ -1042,7 +1044,7 @@ export const ReaderPage = () => {
                 </div>
 
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-2">Písmo</span>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-2">{t('Písmo')}</span>
                   <div className="flex gap-1.5">
                     {Object.entries(FONT_FAMILIES).map(([key, val]) => (
                       <button key={key} onClick={() => setFontFamilyKey(key)} style={{ backgroundColor: fontFamilyKey === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: fontFamilyKey === key ? 'var(--text-primary)' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-bold">
@@ -1053,7 +1055,7 @@ export const ReaderPage = () => {
                 </div>
 
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-2">Řádkování</span>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-2">{t('Řádkování')}</span>
                   <div className="flex gap-1.5">
                     {Object.entries(LINE_HEIGHTS).map(([key, val]) => (
                       <button key={key} onClick={() => setLineHeightKey(key)} style={{ backgroundColor: lineHeightKey === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: lineHeightKey === key ? 'var(--text-primary)' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-bold">
@@ -1064,7 +1066,7 @@ export const ReaderPage = () => {
                 </div>
 
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-2">Šířka stránky</span>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-2">{t('Šířka stránky')}</span>
                   <div className="flex gap-1.5">
                     {Object.entries(TEXT_WIDTHS).map(([key, val]) => (
                       <button key={key} onClick={() => setTextWidthKey(key)} style={{ backgroundColor: textWidthKey === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: textWidthKey === key ? 'var(--text-primary)' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-bold">
@@ -1074,7 +1076,7 @@ export const ReaderPage = () => {
                   </div>
                 </div>
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-2">Zarovnání textu</span>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-2">{t('Zarovnání textu')}</span>
                   <div className="flex gap-1.5">
                     {Object.entries(ALIGNMENTS).map(([key, val]) => (
                       <button key={key} onClick={() => setPref('align', key)} style={{ backgroundColor: prefs.align === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: prefs.align === key ? 'var(--text-primary)' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-bold">
@@ -1085,7 +1087,7 @@ export const ReaderPage = () => {
                 </div>
 
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-2">Zalamování stránek</span>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-2">{t('Zalamování stránek')}</span>
                   <div className="flex gap-1.5">
                     {Object.entries(PAGE_BREAKS).map(([key, val]) => (
                       <button key={key} onClick={() => setPref('pageBreak', key)} style={{ backgroundColor: prefs.pageBreak === key ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: prefs.pageBreak === key ? 'var(--text-primary)' : 'var(--text-body)' }} className="flex-1 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-bold">
@@ -1096,14 +1098,14 @@ export const ReaderPage = () => {
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider">Papírový režim</span>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider">{t('Papírový režim')}</span>
                   <button onClick={() => setPaperMode(v => !v)} style={{ backgroundColor: paperMode ? '#8b6f3e' : 'var(--bg-secondary)', color: paperMode ? 'white' : 'var(--text-body)' }} className="px-3 py-1.5 rounded-lg border-none cursor-pointer text-[0.625rem] font-bold">
-                    {paperMode ? 'Zapnuto' : 'Vypnuto'}
+                    {paperMode ? t('Zapnuto') : t('Vypnuto')}
                   </button>
                 </div>
 
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-2">Rychlost auto-listování (s/stránku)</span>
+                  <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-2">{t('Rychlost auto-listování (s/stránku)')}</span>
                   <input type="range" min={AUTO_ADVANCE_RANGE.min} max={AUTO_ADVANCE_RANGE.max} value={autoAdvanceSeconds} onChange={e => setAutoAdvanceSeconds(Number(e.target.value))} className="w-full" style={{ accentColor: 'var(--bg-primary)' }} />
                 </div>
               </div>
@@ -1128,12 +1130,12 @@ export const ReaderPage = () => {
             {showBookmarks && (
               <div style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }} className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 max-w-[92vw] border rounded-xl shadow-lg z-20 p-2 max-h-64 overflow-y-auto">
                 {bookmarks.length === 0 ? (
-                  <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] text-center py-3 opacity-60">Zatím žádné záložky.</p>
+                  <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] text-center py-3 opacity-60">{t('Zatím žádné záložky.')}</p>
                 ) : bookmarks.map(bm => (
                   <div key={bm.id} className="flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-[var(--bg-secondary)]">
                     <button onClick={() => jumpToBookmark(bm)} className="flex-1 text-left bg-transparent border-none cursor-pointer p-0 min-w-0" style={{ color: 'var(--text-body)' }}>
                       <span className="text-xs font-bold block truncate">{bm.label}</span>
-                      <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] opacity-60">{Math.round(bm.scroll_position)} % knihy</span>
+                      <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] opacity-60">{t('{n} % knihy', { n: Math.round(bm.scroll_position) })}</span>
                     </button>
                     <button onClick={() => deleteBookmark(bm.id)} className="bg-transparent border-none cursor-pointer p-1 text-red-400 opacity-60 hover:opacity-100 shrink-0">
                       <X size={12} />
@@ -1186,7 +1188,7 @@ export const ReaderPage = () => {
             }}
           >
             {paginating ? (
-              <span style={{ opacity: 0.4 }}>Připravuji stránky<span ref={progressTextRef}>...</span></span>
+              <span style={{ opacity: 0.4 }}>{t('Připravuji stránky')}<span ref={progressTextRef}>...</span></span>
             ) : contentSegments.length > 0 ? contentSegments.map(seg => (
               seg.type === 'highlight' ? (
                 <mark
@@ -1199,7 +1201,7 @@ export const ReaderPage = () => {
               ) : (
                 <span key={seg.key}>{seg.text}</span>
               )
-            )) : "Tato kniha zatím nemá nahraný žádný textový obsah."}
+            )) : t('Tato kniha zatím nemá nahraný žádný textový obsah.')}
           </div>
 
           {/* Skrytá kopie pro měření zalomení stránek - stejná šířka/písmo/
@@ -1269,7 +1271,7 @@ export const ReaderPage = () => {
             <div onClick={e => e.stopPropagation()} style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl shadow-xl w-full sm:w-96 max-w-full p-5 space-y-3">
               <div className="flex items-center gap-2">
                 <Highlighter size={15} style={{ color: 'var(--bg-primary)' }} />
-                <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider">Zvýrazněná pasáž</span>
+                <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider">{t('Zvýrazněná pasáž')}</span>
               </div>
               <p style={{ color: 'var(--text-body)', backgroundColor: HIGHLIGHT_COLORS[activeHighlight.color]?.bg }} className="text-sm p-2 rounded-lg italic max-h-32 overflow-y-auto">
                 „{book.content.slice(activeHighlight.start_offset, activeHighlight.end_offset)}"
@@ -1277,17 +1279,17 @@ export const ReaderPage = () => {
               <textarea
                 value={noteDraft}
                 onChange={e => setNoteDraft(e.target.value.slice(0, 500))}
-                placeholder="Osobní poznámka k téhle pasáži (jen pro tebe)..."
+                placeholder={t('Osobní poznámka k téhle pasáži (jen pro tebe)...')}
                 rows={3}
                 style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
                 className="w-full p-2.5 border rounded-lg text-xs font-medium outline-none resize-none"
               />
               <div className="flex items-center gap-2">
                 <button onClick={() => deleteHighlight(activeHighlight.id)} className="px-3 py-2 rounded-lg border-none cursor-pointer text-[0.625rem] font-black uppercase flex items-center gap-1.5 text-red-500" style={{ backgroundColor: 'rgba(239,68,68,0.1)' }}>
-                  <Trash2 size={12} /> Smazat
+                  <Trash2 size={12} /> {t('Smazat')}
                 </button>
-                <button onClick={() => setActiveHighlight(null)} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="flex-1 py-2 rounded-lg border-none cursor-pointer text-[0.625rem] font-black uppercase">Zrušit</button>
-                <button onClick={saveNote} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="flex-1 py-2 rounded-lg border-none cursor-pointer text-[0.625rem] font-black uppercase">Uložit</button>
+                <button onClick={() => setActiveHighlight(null)} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)' }} className="flex-1 py-2 rounded-lg border-none cursor-pointer text-[0.625rem] font-black uppercase">{t('Zrušit')}</button>
+                <button onClick={saveNote} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="flex-1 py-2 rounded-lg border-none cursor-pointer text-[0.625rem] font-black uppercase">{t('Uložit')}</button>
               </div>
             </div>
           </div>
@@ -1323,7 +1325,7 @@ export const ReaderPage = () => {
       {!focusMode && (
         <div className={`shrink-0 px-4 pb-3 max-w-2xl mx-auto w-full ${isLastPage ? '' : 'hidden sm:block'}`}>
           <div style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }} className="border rounded-xl p-3 flex items-center justify-center gap-3 flex-wrap">
-            <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider opacity-70">Ohodnotit knihu:</span>
+            <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider opacity-70">{t('Ohodnotit knihu:')}</span>
             <div className="flex gap-1">
               {[1, 2, 3, 4, 5].map(n => (
                 <button key={n} onClick={() => handleRate(n)} disabled={savingRating} className="bg-transparent border-none cursor-pointer p-0.5 disabled:cursor-not-allowed">
@@ -1336,7 +1338,7 @@ export const ReaderPage = () => {
             )}
           </div>
           <p style={{ color: 'var(--text-muted)' }} className="hidden sm:block text-center text-[0.625rem] opacity-40 mt-2">
-            Ťukni do krajů pro listování · vyber text pro zvýraznění · mezerník/šipky · B záložka · F fokus
+            {t('Ťukni do krajů pro listování · vyber text pro zvýraznění · mezerník/šipky · B záložka · F fokus')}
           </p>
         </div>
       )}

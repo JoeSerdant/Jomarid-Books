@@ -9,13 +9,12 @@ import { BookCover, LoadMore } from '../browse/BrowseParts';
 import { usePagedList } from '../browse/usePagedList';
 import { isCancelledError, loadLibrary } from '../browse/libraryData';
 import { isInProgress } from '../browse/libraryModel';
-import { czCount } from '../browse/browseModel';
-import { plural } from '../lib/plural';
 import { useOnline } from '../offline/useOnline';
 import { OfflineLibrary } from '../offline/OfflineLibrary';
 import {
   BookOpen, Coins, Heart, Library, Loader2, LogOut, Sparkles, Star, ArrowLeft, Feather,
 } from 'lucide-react';
+import { t, formatNumber } from '../i18n';
 
 export const UserLibrary = () => {
   const { user, logout } = useAuth();
@@ -137,9 +136,9 @@ export const UserLibrary = () => {
         } catch (refreshErr) {
           console.error('Nepodařilo se ověřit aktuální zůstatek:', refreshErr);
         }
-        alert(`Nemáš dost Jomarid Coinů. Tahle kniha stojí ${book.priceCoins}, ty máš ${realBalance}.`);
+        alert(t('Nemáš dost Jomarid Coinů. Tahle kniha stojí {price}, ty máš {balance}.', { price: book.priceCoins, balance: realBalance }));
       } else if (msg.includes('already_owned')) {
-        alert('Tuhle knihu už vlastníš.');
+        alert(t('Tuhle knihu už vlastníš.'));
         // Opraví se jen tahle kniha (včetně rozečteného místa), nic se nenačítá znovu: načtení celé knihovny na pozadí
         // by mohlo přepsat lajk nebo nákup, který čtenář mezitím stihl udělat.
         try {
@@ -158,7 +157,7 @@ export const UserLibrary = () => {
         }
       } else {
         console.error('Nákup knihy:', err);
-        alert(friendlyError(err, 'Nákup se nezdařil. Zkus to znovu.'));
+        alert(friendlyError(err, t('Nákup se nezdařil. Zkus to znovu.')));
       }
     } finally {
       setSubmittingId(null);
@@ -199,17 +198,17 @@ export const UserLibrary = () => {
   if (loading) return (
     <div role="status" className="flex flex-col items-center justify-center min-h-[60vh]">
       <Loader2 className="animate-spin mb-4" size={40} style={{ color: 'var(--bg-primary)' }} />
-      <p className="text-sm font-black uppercase tracking-wider">Otevírám tvoji knihovnu...</p>
-      {loadedCount > 0 && <p style={{ color: 'var(--text-muted)' }} className="text-xs font-bold mt-2 m-0 tabular-nums">Načteno {loadedCount.toLocaleString('cs-CZ')} {plural(loadedCount, 'kniha', 'knihy', 'knih')}</p>}
+      <p className="text-sm font-black uppercase tracking-wider">{t('Otevírám tvoji knihovnu...')}</p>
+      {loadedCount > 0 && <p style={{ color: 'var(--text-muted)' }} className="text-xs font-bold mt-2 m-0 tabular-nums">{t.p(loadedCount, 'Načtena {n} kniha', 'Načteny {n} knihy', 'Načteno {n} knih', { n: formatNumber(loadedCount) })}</p>}
     </div>
   );
 
   if (loadError) return (
     <div role="alert" className="max-w-md mx-auto px-4 py-20 flex flex-col items-center gap-4 text-center">
       <Library size={36} style={{ color: 'var(--text-muted)' }} className="opacity-40" />
-      <p className="text-sm font-black uppercase tracking-wider m-0">Knihovnu se nepodařilo načíst</p>
-      <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0">Zkontroluj připojení k internetu a zkus to znovu. Tvoje knihy a mince jsou v pořádku, jen se teď nepodařilo je zobrazit.</p>
-      <button type="button" onClick={loadLibraryData} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="px-6 py-3 rounded-xl border-none font-black text-xs uppercase tracking-wider cursor-pointer">Zkusit znovu</button>
+      <p className="text-sm font-black uppercase tracking-wider m-0">{t('Knihovnu se nepodařilo načíst')}</p>
+      <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0">{t('Zkontroluj připojení k internetu a zkus to znovu. Tvoje knihy a mince jsou v pořádku, jen se teď nepodařilo je zobrazit.')}</p>
+      <button type="button" onClick={loadLibraryData} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="px-6 py-3 rounded-xl border-none font-black text-xs uppercase tracking-wider cursor-pointer">{t('Zkusit znovu')}</button>
     </div>
   );
 
@@ -220,12 +219,12 @@ export const UserLibrary = () => {
         <div className="flex justify-between items-end gap-3 border-b pb-2 sm:pb-6" style={{ borderColor: 'var(--border-color)' }}>
           <div className="min-w-0">
             <span className="bg-amber-500/10 text-amber-500 text-[0.625rem] font-black uppercase px-2.5 py-1 rounded-full border border-amber-500/20 hidden sm:inline-flex items-center gap-1 mb-2">
-              <Sparkles size={10} /> Knihovna
+              <Sparkles size={10} /> {t('Knihovna')}
             </span>
-            <h2 className="text-2xl sm:text-4xl font-black uppercase tracking-tight m-0">Tvoje Knihovna</h2>
+            <h2 className="text-2xl sm:text-4xl font-black uppercase tracking-tight m-0">{t('Tvoje Knihovna')}</h2>
           </div>
           <button onClick={logout} style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }} className="hidden sm:flex items-center gap-2 px-4 py-2.5 border rounded-xl font-bold uppercase text-xs cursor-pointer hover:bg-red-500/10 hover:text-red-500 transition-all">
-            <LogOut size={14} /> Odhlásit se
+            <LogOut size={14} /> {t('Odhlásit se')}
           </button>
         </div>
 
@@ -234,17 +233,17 @@ export const UserLibrary = () => {
           <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-2.5 sm:p-4 flex items-center gap-3 sm:gap-5">
             <BookCover title={continueBook.title} seed={continueBook.id} className="w-10 h-14 sm:w-16 sm:h-20 rounded-lg sm:rounded-xl shrink-0" textClass="text-base sm:text-2xl" />
             <div className="flex-1 min-w-0">
-              <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wide hidden sm:block">Pokračovat ve čtení</span>
+              <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wide hidden sm:block">{t('Pokračovat ve čtení')}</span>
               <h3 className="font-black text-sm sm:text-base uppercase tracking-tight truncate m-0">{continueBook.title}</h3>
               <div className="flex items-center gap-2 mt-1.5 sm:mt-2 sm:max-w-sm">
                 <div style={{ backgroundColor: 'var(--bg-secondary)' }} className="flex-1 h-1.5 rounded-full overflow-hidden">
                   <div style={{ backgroundColor: 'var(--bg-primary)', width: `${Math.round(continueBook.scrollPosition)}%` }} className="h-full rounded-full" />
                 </div>
-                <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] shrink-0 tabular-nums">{Math.round(continueBook.scrollPosition)} %<span className="hidden sm:inline"> přečteno</span></span>
+                <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] shrink-0 tabular-nums">{Math.round(continueBook.scrollPosition)} %<span className="hidden sm:inline"> {t('přečteno')}</span></span>
               </div>
             </div>
-            <Link to={`/read/${continueBook.id}`} aria-label={`Pokračovat ve čtení: ${continueBook.title}`} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="no-underline shrink-0 px-3 sm:px-6 py-2.5 sm:py-3 rounded-xl font-black text-[0.6875rem] sm:text-xs uppercase tracking-wider hover:brightness-105 transition-all flex items-center justify-center gap-1.5 sm:gap-2">
-              <BookOpen size={14} /> <span className="max-[359px]:hidden">Pokračovat</span>
+            <Link to={`/read/${continueBook.id}`} aria-label={t('Pokračovat ve čtení: {title}', { title: continueBook.title })} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="no-underline shrink-0 px-3 sm:px-6 py-2.5 sm:py-3 rounded-xl font-black text-[0.6875rem] sm:text-xs uppercase tracking-wider hover:brightness-105 transition-all flex items-center justify-center gap-1.5 sm:gap-2">
+              <BookOpen size={14} /> <span className="max-[359px]:hidden">{t('Pokračovat')}</span>
             </Link>
           </div>
         )}
@@ -256,10 +255,10 @@ export const UserLibrary = () => {
           </div>
           <div className="min-w-0">
             <h4 className="font-black text-sm uppercase m-0 flex items-center gap-2">
-              {coins.toLocaleString()} Jomarid Coins
+              {t('{n} Jomarid Coins', { n: formatNumber(coins) })}
             </h4>
             <p style={{ color: 'var(--text-muted)' }} className="text-xs m-0">
-              {dailyBonus ? `+${dailyBonus} mincí za dnešní přihlášení! 🎉` : 'Kup si přístup ke knihám za mince, nebo si je vydělej odznáčky.'}
+              {dailyBonus ? t('+{n} mincí za dnešní přihlášení! 🎉', { n: dailyBonus }) : t('Kup si přístup ke knihám za mince, nebo si je vydělej odznáčky.')}
             </p>
           </div>
         </div>
@@ -315,35 +314,35 @@ export const AuthorPage = () => {
   return (
     <div style={{ color: 'var(--text-body)' }} className="max-w-3xl mx-auto px-3 sm:px-4 py-6 sm:py-10">
       <div className="flex items-center gap-3 mb-5">
-        <button type="button" onClick={goBack} aria-label="Zpět" title="Zpět" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="w-10 h-10 shrink-0 border rounded-xl cursor-pointer flex items-center justify-center hover:brightness-95 active:scale-95 transition-all">
+        <button type="button" onClick={goBack} aria-label={t('Zpět')} title={t('Zpět')} style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="w-10 h-10 shrink-0 border rounded-xl cursor-pointer flex items-center justify-center hover:brightness-95 active:scale-95 transition-all">
           <ArrowLeft size={18} />
         </button>
-        <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight m-0 break-words min-w-0">{state.status === 'ok' ? a.name : 'Autor'}</h1>
+        <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight m-0 break-words min-w-0">{state.status === 'ok' ? a.name : t('Autor')}</h1>
       </div>
 
-      {state.status === 'loading' && <div className="flex items-center gap-2 text-xs font-bold py-10 justify-center" style={{ color: 'var(--text-muted)' }}><Loader2 size={16} className="animate-spin" /> Načítám...</div>}
-      {state.status === 'notfound' && <p style={{ color: 'var(--text-muted)' }} className="text-sm text-center py-10 m-0">Tenhle autor tu není. Možná už nepublikuje, nebo je odkaz špatný.</p>}
-      {state.status === 'missing' && <p style={{ color: 'var(--text-muted)' }} className="text-sm text-center py-10 m-0">Stránky autorů teď nejsou k dispozici.</p>}
-      {state.status === 'error' && <p role="alert" className="text-sm text-center py-10 m-0 text-red-500 font-bold">Autora se nepodařilo načíst. Zkus to za chvíli.</p>}
+      {state.status === 'loading' && <div className="flex items-center gap-2 text-xs font-bold py-10 justify-center" style={{ color: 'var(--text-muted)' }}><Loader2 size={16} className="animate-spin" /> {t('Načítám...')}</div>}
+      {state.status === 'notfound' && <p style={{ color: 'var(--text-muted)' }} className="text-sm text-center py-10 m-0">{t('Tenhle autor tu není. Možná už nepublikuje, nebo je odkaz špatný.')}</p>}
+      {state.status === 'missing' && <p style={{ color: 'var(--text-muted)' }} className="text-sm text-center py-10 m-0">{t('Stránky autorů teď nejsou k dispozici.')}</p>}
+      {state.status === 'error' && <p role="alert" className="text-sm text-center py-10 m-0 text-red-500 font-bold">{t('Autora se nepodařilo načíst. Zkus to za chvíli.')}</p>}
 
       {state.status === 'ok' && (
         <>
           <section style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl shadow-sm p-4 sm:p-5 mb-5 flex flex-wrap items-center gap-x-6 gap-y-3">
             <span style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--bg-primary)' }} className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"><Feather size={22} /></span>
             <div className="min-w-0 flex-1">
-              <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] font-black uppercase tracking-wider m-0">{a.pen_name ? 'Autor · krycí jméno' : 'Autor'}</p>
+              <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] font-black uppercase tracking-wider m-0">{a.pen_name ? t('Autor · krycí jméno') : t('Autor')}</p>
               <p className="text-sm font-bold m-0 mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-                <span data-testid="author-books-count">{czCount(a.books_count, 'kniha', 'knihy', 'knih')}</span>
+                <span data-testid="author-books-count">{t.p(a.books_count, '{n} kniha', '{n} knihy', '{n} knih', { n: a.books_count })}</span>
                 {a.ratings_count > 0
-                  ? <span data-testid="author-rating" className="inline-flex items-center gap-1"><Star size={13} className="fill-current text-amber-500" /> {Number(a.avg_rating).toFixed(1)} <span style={{ color: 'var(--text-muted)' }} className="font-semibold">({czCount(a.ratings_count, 'hodnocení', 'hodnocení', 'hodnocení')})</span></span>
-                  : <span style={{ color: 'var(--text-muted)' }} className="font-semibold">zatím bez hodnocení</span>}
+                  ? <span data-testid="author-rating" className="inline-flex items-center gap-1"><Star size={13} className="fill-current text-amber-500" /> {Number(a.avg_rating).toFixed(1)} <span style={{ color: 'var(--text-muted)' }} className="font-semibold">({t.p(a.ratings_count, '{n} hodnocení', '{n} hodnocení', '{n} hodnocení', { n: a.ratings_count })})</span></span>
+                  : <span style={{ color: 'var(--text-muted)' }} className="font-semibold">{t('zatím bez hodnocení')}</span>}
               </p>
             </div>
-            {a.is_self && <Link to="/publisher" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="px-4 py-2 rounded-xl text-[0.6875rem] font-black uppercase tracking-wider no-underline">Spravovat moje knihy</Link>}
+            {a.is_self && <Link to="/publisher" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="px-4 py-2 rounded-xl text-[0.6875rem] font-black uppercase tracking-wider no-underline">{t('Spravovat moje knihy')}</Link>}
           </section>
 
           {a.books.length === 0 ? (
-            <p style={{ color: 'var(--text-muted)' }} className="text-sm text-center py-8 m-0">Autor zatím nemá žádné zveřejněné knihy.</p>
+            <p style={{ color: 'var(--text-muted)' }} className="text-sm text-center py-8 m-0">{t('Autor zatím nemá žádné zveřejněné knihy.')}</p>
           ) : (
             <>
               <ul className="list-none p-0 m-0 space-y-3">
@@ -356,9 +355,9 @@ export const AuthorPage = () => {
                         {b.description && <span style={{ color: 'var(--text-muted)' }} className="block text-xs mt-2 leading-relaxed line-clamp-2 break-words">{b.description}</span>}
                       </span>
                       <span className="flex sm:flex-col items-center sm:items-end gap-x-4 gap-y-1 text-xs font-bold shrink-0">
-                        <span className="inline-flex items-center gap-1" title="Hodnocení"><Star size={12} className="fill-current text-amber-500" /> {b.ratings_count > 0 ? Number(b.avg_rating).toFixed(1) : '-'}</span>
-                        <span className="inline-flex items-center gap-1" title="Líbí se"><Heart size={12} className="fill-current text-red-400" /> {b.likes}</span>
-                        <span className="inline-flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>{b.is_auto_assigned || b.price_coins === 0 ? 'Zdarma' : <><Coins size={12} className="text-amber-500" /> {b.price_coins}</>}</span>
+                        <span className="inline-flex items-center gap-1" title={t('Hodnocení')}><Star size={12} className="fill-current text-amber-500" /> {b.ratings_count > 0 ? Number(b.avg_rating).toFixed(1) : '-'}</span>
+                        <span className="inline-flex items-center gap-1" title={t('Líbí se')}><Heart size={12} className="fill-current text-red-400" /> {b.likes}</span>
+                        <span className="inline-flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>{b.is_auto_assigned || b.price_coins === 0 ? t('Zdarma') : <><Coins size={12} className="text-amber-500" /> {b.price_coins}</>}</span>
                       </span>
                     </button>
                   </li>

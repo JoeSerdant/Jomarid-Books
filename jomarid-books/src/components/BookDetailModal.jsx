@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { BookOpen, Coins, Flag, Heart, Loader2, MessageCircle, Star, X } from 'lucide-react';
 import { fmtRating } from '../browse/libraryModel';
 import { OfflineDownloadButton } from '../offline/OfflineDownloadButton';
+import { t, tx } from '../i18n';
 
 // Prvky, mezi kterými se v okně přechází klávesou Tab.
 const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -35,7 +36,7 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
   useEffect(() => {
     const prev = prevAccess.current;
     if (prev.id !== book?.id) setAnnouncement('');
-    else if (!prev.has && hasAccess) setAnnouncement('Kniha je odemčená, můžeš ji číst.');
+    else if (!prev.has && hasAccess) setAnnouncement(t('Kniha je odemčená, můžeš ji číst.'));
     prevAccess.current = { id: book?.id, has: hasAccess };
   }, [book?.id, hasAccess]);
 
@@ -107,7 +108,7 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
   const handlePostComment = async () => {
     const trimmed = newComment.trim();
     if (!trimmed) return;
-    if (trimmed.length > 100) { setCommentError('Nejvýš 100 znaků.'); return; }
+    if (trimmed.length > 100) { setCommentError(t('Nejvýš 100 znaků.')); return; }
     setPostingComment(true);
     setCommentError('');
     try {
@@ -119,9 +120,9 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
       if (error) throw error;
       setComments(prev => [data, ...prev]);
       setNewComment('');
-      setAnnouncement('Komentář byl přidán.');
+      setAnnouncement(t('Komentář byl přidán.'));
     } catch (err) {
-      setCommentError(err.message.includes('duplicate') ? 'Na tuhle knihu už komentář máš.' : 'Nepodařilo se uložit.');
+      setCommentError(err.message.includes('duplicate') ? t('Na tuhle knihu už komentář máš.') : t('Nepodařilo se uložit.'));
     } finally {
       setPostingComment(false);
     }
@@ -131,7 +132,7 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
     try {
       await supabase.from('book_comments').delete().eq('id', commentId);
       setComments(prev => prev.filter(c => c.id !== commentId));
-      setAnnouncement('Komentář byl smazán.');
+      setAnnouncement(t('Komentář byl smazán.'));
     } catch (err) {
       console.error('Nepodařilo se smazat komentář:', err);
     }
@@ -145,17 +146,17 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
     if (error) {
       const m = String(error.message || '');
       setReportError(
-        m.includes('too_many_reports') ? 'Moc nahlášení za krátkou dobu. Zkus to později.'
-        : m.includes('comment_not_found') ? 'Komentář už neexistuje.'
-        : m.includes('cannot_report_own') ? 'Vlastní komentář nahlásit nejde.'
-        : (error.code === 'PGRST202' || /could not find the function/i.test(m)) ? 'Nahlašování zatím není zapnuté.'
-        : 'Nahlášení se nepovedlo. Zkus to znovu.'
+        m.includes('too_many_reports') ? t('Moc nahlášení za krátkou dobu. Zkus to později.')
+        : m.includes('comment_not_found') ? t('Komentář už neexistuje.')
+        : m.includes('cannot_report_own') ? t('Vlastní komentář nahlásit nejde.')
+        : (error.code === 'PGRST202' || /could not find the function/i.test(m)) ? t('Nahlašování zatím není zapnuté.')
+        : t('Nahlášení se nepovedlo. Zkus to znovu.')
       );
       return;
     }
     setReported(prev => ({ ...prev, [commentId]: true }));
     setReportingId(null);
-    setAnnouncement('Komentář byl nahlášen správci.');
+    setAnnouncement(t('Komentář byl nahlášen správci.'));
   };
 
   return (
@@ -170,13 +171,13 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
         className="border rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-6 relative outline-none"
         onClick={(e) => e.stopPropagation()}
       >
-        <button onClick={onClose} aria-label="Zavřít" title="Zavřít" className="absolute right-4 top-4 cursor-pointer text-current bg-transparent border-none p-1">
+        <button onClick={onClose} aria-label={t('Zavřít')} title={t('Zavřít')} className="absolute right-4 top-4 cursor-pointer text-current bg-transparent border-none p-1">
           <X size={20} />
         </button>
         <p role="status" className="sr-only">{announcement}</p>
 
         <h2 id={titleId} className="text-xl font-black uppercase tracking-tight m-0 pr-8">{book.title}</h2>
-        <p style={{ color: 'var(--text-muted)' }} className="text-xs font-bold mt-1">Autor: {book.authorId ? <Link to={`/autor/${book.authorId}`} style={{ color: 'inherit' }} className="font-black underline underline-offset-2">{book.author}</Link> : book.author}</p>
+        <p style={{ color: 'var(--text-muted)' }} className="text-xs font-bold mt-1">{tx('Autor: {name}', { name: book.authorId ? <Link to={`/autor/${book.authorId}`} style={{ color: 'inherit' }} className="font-black underline underline-offset-2">{book.author}</Link> : book.author })}</p>
 
         <div className="flex flex-wrap items-center gap-2 mt-3">
           {book.avgRating > 0 && (
@@ -193,13 +194,13 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
         </div>
 
         <p style={{ color: 'var(--text-body)' }} className="text-sm leading-relaxed mt-4 opacity-90">
-          {book.description || 'Autor k téhle knize zatím nepřidal popis.'}
+          {book.description || t('Autor k téhle knize zatím nepřidal popis.')}
         </p>
 
         <div className="mt-5">
           {book.hasAccess ? (
             <Link to={`/read/${book.id}`} style={{ backgroundColor: 'var(--text-body)', color: 'var(--bg-body)' }} className="w-full py-3 rounded-xl font-black text-xs uppercase tracking-wider cursor-pointer flex items-center justify-center gap-1.5 no-underline">
-              <BookOpen size={14} /> {book.isRead ? 'Číst znovu' : 'Číst'}
+              <BookOpen size={14} /> {book.isRead ? t('Číst znovu') : t('Číst')}
             </Link>
           ) : (
             <button
@@ -211,9 +212,9 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
               {buying ? (
                 <Loader2 size={14} className="animate-spin" />
               ) : coins < book.priceCoins ? (
-                <>Chybí {book.priceCoins - coins} <Coins size={13} /></>
+                <>{t('Chybí {n}', { n: book.priceCoins - coins })} <Coins size={13} /></>
               ) : (
-                <>Koupit za {book.priceCoins} <Coins size={13} /></>
+                <>{t('Koupit za {n}', { n: book.priceCoins })} <Coins size={13} /></>
               )}
             </button>
           )}
@@ -222,7 +223,7 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
 
         <div style={{ borderColor: 'var(--border-color)' }} className="border-t mt-6 pt-5">
           <h3 style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] font-black uppercase tracking-wider mb-3 flex items-center gap-1.5">
-            <MessageCircle size={13} /> Komentáře {comments.length > 0 && `(${comments.length})`}
+            <MessageCircle size={13} /> {comments.length > 0 ? t('Komentáře ({n})', { n: comments.length }) : t('Komentáře')}
           </h3>
 
           {!myComment && (
@@ -233,7 +234,7 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
                   maxLength={100}
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
-                  placeholder="Krátký komentář (max 100 znaků)..."
+                  placeholder={t('Krátký komentář (max 100 znaků)...')}
                   style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
                   className="flex-1 p-2.5 border rounded-lg text-xs font-medium outline-none"
                 />
@@ -243,7 +244,7 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
                   style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
                   className="px-3 py-2.5 rounded-lg text-[0.625rem] font-black uppercase cursor-pointer border-none disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                 >
-                  {postingComment ? <Loader2 size={12} className="animate-spin" /> : 'Přidat'}
+                  {postingComment ? <Loader2 size={12} className="animate-spin" /> : t('Přidat')}
                 </button>
               </div>
               <div className="flex items-center justify-between">
@@ -254,9 +255,9 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
           )}
 
           {loadingComments ? (
-            <p style={{ color: 'var(--text-muted)' }} className="text-xs text-center py-3">Načítám...</p>
+            <p style={{ color: 'var(--text-muted)' }} className="text-xs text-center py-3">{t('Načítám...')}</p>
           ) : comments.length === 0 ? (
-            <p style={{ color: 'var(--text-muted)' }} className="text-xs text-center py-3">Zatím žádné komentáře. Buď první!</p>
+            <p style={{ color: 'var(--text-muted)' }} className="text-xs text-center py-3">{t('Zatím žádné komentáře. Buď první!')}</p>
           ) : (
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {comments.map(c => (
@@ -267,27 +268,27 @@ export const BookDetailModal = ({ book, onClose, onBuy, buying, coins }) => {
                       <span style={{ color: 'var(--text-body)' }} className="text-xs break-words">{c.content}</span>
                     </div>
                     {c.user_id === user?.id ? (
-                      <button onClick={() => handleDeleteComment(c.id)} aria-label="Smazat svůj komentář" className="bg-transparent border-none cursor-pointer p-0.5 text-red-500 hover:opacity-70 shrink-0">
+                      <button onClick={() => handleDeleteComment(c.id)} aria-label={t('Smazat svůj komentář')} className="bg-transparent border-none cursor-pointer p-0.5 text-red-500 hover:opacity-70 shrink-0">
                         <X size={12} />
                       </button>
                     ) : reported[c.id] ? (
-                      <span style={{ color: 'var(--text-muted)' }} className="text-[0.5625rem] font-bold uppercase shrink-0">Nahlášeno</span>
+                      <span style={{ color: 'var(--text-muted)' }} className="text-[0.5625rem] font-bold uppercase shrink-0">{t('Nahlášeno')}</span>
                     ) : user && (
-                      <button onClick={() => { setReportingId(prev => (prev === c.id ? null : c.id)); setReportError(''); }} aria-label="Nahlásit komentář" aria-expanded={reportingId === c.id} title="Nahlásit komentář" style={{ color: 'var(--text-muted)' }} className="bg-transparent border-none cursor-pointer p-1 hover:opacity-70 shrink-0">
+                      <button onClick={() => { setReportingId(prev => (prev === c.id ? null : c.id)); setReportError(''); }} aria-label={t('Nahlásit komentář')} aria-expanded={reportingId === c.id} title={t('Nahlásit komentář')} style={{ color: 'var(--text-muted)' }} className="bg-transparent border-none cursor-pointer p-1 hover:opacity-70 shrink-0">
                         <Flag size={12} />
                       </button>
                     )}
                   </div>
                   {reportingId === c.id && (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <select aria-label="Důvod nahlášení" value={reportReason} onChange={(e) => setReportReason(e.target.value)} disabled={reportBusy} style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="border rounded-lg px-2 py-1 text-[0.6875rem] font-bold outline-none">
-                        <option value="spam">Spam</option>
-                        <option value="abuse">Urážky</option>
-                        <option value="inappropriate">Nevhodný obsah</option>
-                        <option value="other">Jiný důvod</option>
+                      <select aria-label={t('Důvod nahlášení')} value={reportReason} onChange={(e) => setReportReason(e.target.value)} disabled={reportBusy} style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }} className="border rounded-lg px-2 py-1 text-[0.6875rem] font-bold outline-none">
+                        <option value="spam">{t('Spam')}</option>
+                        <option value="abuse">{t('Urážky')}</option>
+                        <option value="inappropriate">{t('Nevhodný obsah')}</option>
+                        <option value="other">{t('Jiný důvod')}</option>
                       </select>
-                      <button onClick={() => handleReport(c.id)} disabled={reportBusy} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="border-none rounded-lg px-3 py-1 text-[0.625rem] font-black uppercase cursor-pointer disabled:opacity-50">{reportBusy ? 'Odesílám...' : 'Odeslat'}</button>
-                      <button onClick={() => { setReportingId(null); setReportError(''); }} disabled={reportBusy} style={{ color: 'var(--text-muted)' }} className="bg-transparent border-none text-[0.625rem] font-bold underline cursor-pointer p-0">Zrušit</button>
+                      <button onClick={() => handleReport(c.id)} disabled={reportBusy} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="border-none rounded-lg px-3 py-1 text-[0.625rem] font-black uppercase cursor-pointer disabled:opacity-50">{reportBusy ? t('Odesílám...') : t('Odeslat')}</button>
+                      <button onClick={() => { setReportingId(null); setReportError(''); }} disabled={reportBusy} style={{ color: 'var(--text-muted)' }} className="bg-transparent border-none text-[0.625rem] font-bold underline cursor-pointer p-0">{t('Zrušit')}</button>
                       {reportError && <span role="alert" className="text-red-500 text-[0.625rem] basis-full">{reportError}</span>}
                     </div>
                   )}

@@ -3,6 +3,7 @@
 import { cleanGenres } from '../browse/libraryModel.js';
 import { classifyError, FRIENDLY } from '../lib/friendlyError.js';
 import { t } from '../i18n/core.js';
+import { tk } from '../i18n/mark.js';
 
 const int = (v, d = 0) => { const n = Math.floor(Number(v)); return Number.isFinite(n) ? n : d; };
 const str = (v) => (typeof v === 'string' ? v : '');
@@ -12,7 +13,7 @@ const strOrNull = (v) => (typeof v === 'string' && v.trim() ? v : null);
 const base = (row) => ({
   id: str(row?.id),
   authorId: str(row?.author_id),
-  authorName: str(row?.author_name) || 'Neznámý',
+  authorName: str(row?.author_name) || t('Neznámý'),
   title: str(row?.title),
   genres: cleanGenres(Array.isArray(row?.genres) ? row.genres : []),
   seriesName: strOrNull(row?.series_name),
@@ -67,7 +68,7 @@ export async function loadCandidates(client, limit = 150) {
     if (error) throw error;
     return { items: rows(data).map(normalizeCandidate).filter((c) => c.id), unavailable: false };
   } catch (err) {
-    warn('Nabídku shortB se nepodařilo načíst', err);
+    warn(t('Nabídku shortB se nepodařilo načíst'), err);
     return { items: [], unavailable: true };
   }
 }
@@ -82,7 +83,7 @@ export async function loadShortsByIds(client, ids) {
       if (error) throw error;
       for (const row of rows(data)) { const s = normalizeShort(row); if (s.id) out.set(s.id, s); }
     } catch (err) {
-      warn('Text shortB se nepodařilo načíst', err);
+      warn(t('Text shortB se nepodařilo načíst'), err);
     }
   }
   return out;
@@ -95,7 +96,7 @@ export async function loadSignals(client) {
     if (error) throw error;
     return rows(data).map(normalizeSignal).filter((s) => s.shortId);
   } catch (err) {
-    warn('Signály ze shortB se nepodařilo načíst', err);
+    warn(t('Signály ze shortB se nepodařilo načíst'), err);
     return [];
   }
 }
@@ -117,7 +118,7 @@ export async function reportShort(client, { shortId, pagesSeen, pagesTotal, dwel
     if (error) throw error;
     return { ok: data?.ok === true, finished: data?.finished === true, liked: data?.liked === true, newlyFinished: data?.newly_finished === true };
   } catch (err) {
-    warn('Čtení shortB se nepodařilo nahlásit', err);
+    warn(t('Čtení shortB se nepodařilo nahlásit'), err);
     return { ok: false, finished: false, liked: false, newlyFinished: false };
   }
 }
@@ -125,13 +126,13 @@ export async function reportShort(client, { shortId, pagesSeen, pagesTotal, dwel
 // ---- nakladatel ----
 
 const ERROR_TEXT = {
-  not_authenticated: 'Nejsi přihlášený.',
-  forbidden: 'ShortB smí psát jen nakladatel nebo správce.',
-  invalid_title: 'Doplň název (nejvýš 120 znaků).',
-  invalid_body: 'Doplň text.',
-  body_too_long: 'Text je delší než 6 000 znaků.',
-  invalid_series: 'U série doplň číslo dílu a nepřeháněj délku názvu (nejvýš 80 znaků).',
-  not_found: 'Tenhle shortB už neexistuje, nebo na něj nemáš oprávnění.',
+  not_authenticated: tk('Nejsi přihlášený.'),
+  forbidden: tk('ShortB smí psát jen nakladatel nebo správce.'),
+  invalid_title: tk('Doplň název (nejvýš 120 znaků).'),
+  invalid_body: tk('Doplň text.'),
+  body_too_long: tk('Text je delší než 6 000 znaků.'),
+  invalid_series: tk('U série doplň číslo dílu a nepřeháněj délku názvu (nejvýš 80 znaků).'),
+  not_found: tk('Tenhle shortB už neexistuje, nebo na něj nemáš oprávnění.'),
 };
 
 /** Česká věta k chybě ze serveru (neznámá chyba dostane obecnou větu, aby se uživateli nezobrazil kód). */
@@ -139,10 +140,10 @@ export const shortErrorMessage = (err) => {
   const msg = String(err?.message || err || '');
   const code = Object.keys(ERROR_TEXT).find((k) => msg.includes(k));
   if (code) return ERROR_TEXT[code];
-  if (/function .* does not exist|could not find the function|schema cache/i.test(msg)) return 'ShortB zatím nejsou v databázi nastavené.';
+  if (/function .* does not exist|could not find the function|schema cache/i.test(msg)) return t('ShortB zatím nejsou v databázi nastavené.');
   const kind = classifyError(err);
   if (FRIENDLY[kind]) return t(FRIENDLY[kind]);
-  return 'ShortB se nepodařilo uložit. Zkus to znovu.';
+  return t('ShortB se nepodařilo uložit. Zkus to znovu.');
 };
 
 /** Uloží nový (bez id) nebo upravený shortB. Vrací { id } nebo { error: česká věta }. Data už mají projít validateShort. */
@@ -191,7 +192,7 @@ export async function loadMyShorts(client, all = false) {
     if (error) throw error;
     return { items: rows(data).map(normalizeShort).filter((s) => s.id), unavailable: false };
   } catch (err) {
-    warn('Tvoje shortB se nepodařilo načíst', err);
+    warn(t('Tvoje shortB se nepodařilo načíst'), err);
     return { items: [], unavailable: true };
   }
 }
