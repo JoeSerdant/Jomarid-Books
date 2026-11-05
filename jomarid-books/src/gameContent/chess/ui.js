@@ -387,18 +387,22 @@
           pieceStyle = { "--dx": (animFor.from.c - c) * sign * 100 + "%", "--dy": (animFor.from.r - r) * sign * 100 + "%" };
         }
         const sqProps = { key: r + "-" + c, className: cls.join(" "), "data-sq": r + "," + c };
+        let label = null;
         if (keyboard) {
+          // jméno pole je skrytý text uvnitř (ne aria-label): viditelné znaky (figura, souřadnice) jsou pro čtečku skryté, takže se jméno s viditelným textem nerozchází
           const tMove = targets.find((m) => m.to.r === r && m.to.c === c);
-          const label = Speech.squareLabel(r, c, piece, { selected: isSelected, target: !!tMove, capture: !!tMove && (!!tMove.captured || tMove.flag === "ep"), check: isCheck });
-          sqProps.role = "gridcell"; sqProps["aria-label"] = label; sqProps["aria-selected"] = isSelected;
+          label = Speech.squareLabel(r, c, piece, { selected: isSelected, target: !!tMove, capture: !!tMove && (!!tMove.captured || tMove.flag === "ep"), check: isCheck });
+          sqProps.role = "gridcell"; sqProps["aria-selected"] = isSelected;
           sqProps["data-vsq"] = dr + "," + dc; sqProps.tabIndex = cur.vr === dr && cur.vc === dc ? 0 : -1;
         }
+        const hid = keyboard ? "true" : undefined;
         cells.push(div(sqProps,
-          dc === 0 && span({ className: "coord-label coord-rank" }, 8 - r),
-          dr === 7 && span({ className: "coord-label coord-file" }, String.fromCharCode(97 + c)),
-          piece && span({ key: animFor ? "a" + anim.key : "p", className: "piece t-" + piece.color + piece.type + " " + (piece.color === "w" ? "white" : "black") + (animFor ? " slide" : "") + (lifted ? " lifted" : ""), style: pieceStyle }, PIECE_GLYPHS[piece.color][piece.type]),
-          targetMove && !isCapture && span({ className: "move-marker" }),
-          isCapture && span({ className: "capture-marker" })));
+          label && span({ className: "sr-only" }, label),
+          dc === 0 && span({ className: "coord-label coord-rank", "aria-hidden": hid }, 8 - r),
+          dr === 7 && span({ className: "coord-label coord-file", "aria-hidden": hid }, String.fromCharCode(97 + c)),
+          piece && span({ key: animFor ? "a" + anim.key : "p", className: "piece t-" + piece.color + piece.type + " " + (piece.color === "w" ? "white" : "black") + (animFor ? " slide" : "") + (lifted ? " lifted" : ""), style: pieceStyle, "aria-hidden": hid }, PIECE_GLYPHS[piece.color][piece.type]),
+          targetMove && !isCapture && span({ className: "move-marker", "aria-hidden": hid }),
+          isCapture && span({ className: "capture-marker", "aria-hidden": hid })));
       }
       rows.push(div({ key: "row" + dr, className: "board-row", role: keyboard ? "row" : undefined }, cells));
     }
@@ -821,7 +825,7 @@
         menuTab === "puzzles" && h(PuzzlesTab, { save, onOpen: onOpenPuzzle }),
 
         menuTab === "rating" && div({ className: "dash-body single" }, div({ className: "dash-main" },
-          div({ className: "section-head" }, "Tvůj rating"),
+          div({ className: "section-head", role: "heading", "aria-level": 1 }, "Tvůj rating"),
           div({ className: "panel-card" },
             div({ className: "rating-big" }, span({ className: "num" }, save.rating), span({ className: "ttl" }, League.ratingTitle(save.rating))),
             save.ratedGames < League.PROVISIONAL_GAMES && div({ className: "rc-note" }, "Rating se ještě kalibruje (", save.ratedGames, "/", League.PROVISIONAL_GAMES, " hodnocených zápasů) a hýbe se rychleji."),
@@ -834,7 +838,7 @@
           h(LadderCard, { save }))),
 
         menuTab === "settings" && div({ className: "dash-body single" }, div({ className: "dash-main" },
-          div({ className: "section-head" }, "Nastavení"),
+          div({ className: "section-head", role: "heading", "aria-level": 1 }, "Nastavení"),
           div({ className: "panel-card settings-card" },
             div({ className: "settings-row" }, span(null, "Zvukové efekty"), h(Toggle, { on: save.sound, label: "Zvukové efekty", onChange: (v) => onUpdate({ sound: v }) })),
             div({ className: "settings-row" }, span(null, "Zvýrazňovat možné tahy", small(null, "Tečky na polích, kam může vybraná figura.")), h(Toggle, { on: save.highlights, label: "Zvýrazňovat možné tahy", onChange: (v) => onUpdate({ highlights: v }) })),
@@ -1047,6 +1051,7 @@
     const topAnim = liveView ? anim : null;
 
     return div({ className: "screen" },
+      h("h1", { className: "sr-only" }, "Partie proti soupeři " + bot.name),
       promotion && h(PromotionModal, { color: session.playerColor, onChoose: choosePromotion, onCancel: () => { setPromotion(null); } }),
       modal === "resign" && h(ConfirmModal, { title: "Vzdát tuto hru?", text: session.moves.length > 1 ? "Zápas se počítá jako prohra." : "Zápas se počítá jako prohra.", confirmLabel: "Vzdát", danger: true, onConfirm: () => { setModal(null); session.resign(); }, onCancel: () => setModal(null) }),
       modal === "draw" && h(ConfirmModal, { title: "Nabídnout remízu?", text: bot.name + " se rozhodne podle pozice na šachovnici.", confirmLabel: "Nabídnout", onConfirm: doDraw, onCancel: () => setModal(null) }),
@@ -1070,7 +1075,7 @@
             div({ className: "board-controls" },
               button({ className: "btn btn-ghost btn-sm", onClick: () => { if (session.undo()) { clearSelection(); setAnim(null); } }, disabled: !session.canUndo || !liveView, "aria-label": "Vrátit tah" }, "↩", span({ className: "lbl" }, " Vrátit")),
               button({ className: "btn btn-ghost btn-sm", onClick: doHint, disabled: !myTurn || !!busy, "aria-label": "Nápověda" }, busy === "hint" ? "…" : "💡", span({ className: "lbl" }, " Nápověda")),
-              button({ className: "btn btn-ghost btn-sm", onClick: () => setModal("draw"), disabled: !myTurn || !!busy || session.moves.length < 2, "aria-label": "Nabídnout remízu" }, busy === "draw" ? "…" : "🤝", span({ className: "lbl" }, " Remíza")),
+              button({ className: "btn btn-ghost btn-sm", onClick: () => setModal("draw"), disabled: !myTurn || !!busy || session.moves.length < 2, "aria-label": "Remíza: nabídnout soupeři" }, busy === "draw" ? "…" : "🤝", span({ className: "lbl" }, " Remíza")),
               button({ className: "btn btn-ghost btn-sm btn-icon", onClick: () => setFlipped((f) => !f), "aria-label": "Otočit desku" }, "⇅"),
               button({ className: "btn btn-danger btn-sm", onClick: () => setModal("resign"), disabled: session.over, "aria-label": "Vzdát" }, "🏳", span({ className: "lbl" }, " Vzdát")))),
           div({ className: "side-panel" },
@@ -1107,7 +1112,7 @@
     return div({ className: "end-screen" },
       info.result === "win" && canvasRef && h("canvas", { ref: canvasRef, className: "confetti-canvas" }),
       div({ className: "end-emoji" }, cfg.emoji),
-      div({ className: "end-title" }, cfg.title),
+      div({ className: "end-title", role: "heading", "aria-level": 1 }, cfg.title),
       div({ className: "end-sub" }, cfg.sub, reason ? " (" + reason + ")" : ""),
       div({ className: "xp-card" },
         div({ className: "xp-card-title" }, "Rating"),
@@ -1184,6 +1189,7 @@
     const flipped = color === "b";
     const bot = review.botKey ? botByKey(review.botKey) : null;
     return div({ className: "screen" },
+      h("h1", { className: "sr-only" }, "Rozbor partie"),
       div({ className: "topbar" },
         button({ className: "icon-btn", onClick: onBack, "aria-label": "Zpět" }, "←"),
         div({ className: "turn-banner" }, span({ className: "dot" }), span(null, "Rozbor", bot ? ": " + bot.name : " partie")),
@@ -1241,7 +1247,7 @@
     const next = Puzzles.nextUnsolved(isSolved, null);
     const nextGroup = next ? Puzzles.groups().find((g) => g.n === next.n) : null;
     return div({ className: "dash-body single" }, div({ className: "dash-main" },
-      div({ className: "section-head" }, "Šachové úlohy", total > 0 && small(null, done, " z ", total)),
+      div({ className: "section-head", role: "heading", "aria-level": 1 }, "Šachové úlohy", total > 0 && small(null, done, " z ", total)),
       total === 0
         ? div({ className: "panel-card" }, div({ className: "rc-note" }, "Úlohy se právě připravují."))
         : div({ className: "panel-card pz-intro" },
@@ -1253,7 +1259,7 @@
       Puzzles.groups().map((g) => {
         const solvedHere = g.list.filter((pz) => isSolved(pz.id)).length;
         return div({ key: g.n, className: "pz-group" },
-          div({ className: "pz-group-head" }, h("h3", null, g.label), small(null, solvedHere, " / ", g.list.length)),
+          div({ className: "pz-group-head" }, h("h2", null, g.label), small(null, solvedHere, " / ", g.list.length)),
           div({ className: "pz-grid" }, g.list.map((pz, k) => {
             const ok = isSolved(pz.id);
             return button({ key: pz.id, className: "pz-tile" + (ok ? " done" : ""), onClick: () => onOpen(pz.id), "aria-label": g.label + ", úloha " + (k + 1) + (ok ? ", vyřešená" : "") }, ok ? "✓" : k + 1);
@@ -1410,6 +1416,7 @@
     const reveal = Puzzles.reveal(puzzle);
 
     return div({ className: "screen puzzle-screen" },
+      h("h1", { className: "sr-only" }, "Šachová úloha: " + mateLabel.toLowerCase()),
       promotion && h(PromotionModal, { color: attacker, onChoose: choosePromotion, onCancel: () => setPromotion(null) }),
       div({ className: "topbar" },
         button({ className: "icon-btn", onClick: onExit, "aria-label": "Zpět na seznam úloh" }, "←"),
@@ -1425,7 +1432,7 @@
             }),
             div({ className: "pz-status " + (note ? note.kind : "info"), role: "status", "aria-live": "polite" }, status),
             div({ className: "board-controls" },
-              button({ className: "btn btn-ghost btn-sm", onClick: showHint, disabled: !playing || hintLevel >= 2, "aria-label": "Nápověda" }, "💡", span({ className: "lbl" }, hintLevel === 0 ? " Nápověda" : " Ukázat tah")),
+              button({ className: "btn btn-ghost btn-sm", onClick: showHint, disabled: !playing || hintLevel >= 2, "aria-label": hintLevel === 0 ? "Nápověda" : "Ukázat tah" }, "💡", span({ className: "lbl" }, hintLevel === 0 ? " Nápověda" : " Ukázat tah")),
               button({ className: "btn btn-ghost btn-sm", onClick: showSolution, disabled: phase === "reply" || phase === "wrong" || finished, "aria-label": "Ukázat řešení" }, "👁", span({ className: "lbl" }, " Řešení")),
               button({ className: "btn btn-ghost btn-sm", onClick: onRetry, "aria-label": "Začít úlohu znovu" }, "🔁", span({ className: "lbl" }, " Znovu")),
               button({ className: "btn btn-ghost btn-sm btn-icon", onClick: () => setFlipped((f) => !f), "aria-label": "Otočit desku" }, "⇅"))),
@@ -1434,7 +1441,7 @@
               div({ className: "panel-title" }, "Zadání · úloha " + number + " z " + count),
               div({ className: "pz-side" }, span({ className: "pz-side-dot " + attacker }), sideName, " je na tahu"),
               div({ className: "pz-goal" }, "Najdi ", b(null, mateLabel.toLowerCase()), "."),
-              div({ className: "pz-steps", "aria-label": "Postup" }, Array.from({ length: puzzle.n }, (_, k) => span({ key: k, className: "pz-step" + (k < stepsDone ? " done" : "") }))),
+              div({ className: "pz-steps", role: "img", "aria-label": "Postup: " + stepsDone + " z " + puzzle.n + (puzzle.n === 1 ? " tahu" : " tahů") }, Array.from({ length: puzzle.n }, (_, k) => span({ key: k, className: "pz-step" + (k < stepsDone ? " done" : "") }))),
               div({ className: "rc-note" }, "Chyby: ", mistakes, " · nápovědy: ", hints),
               solvedBefore && !finished && div({ className: "rc-note" }, "✓ Tuhle úlohu už máš vyřešenou.")),
             finished && div({ className: "panel-card pz-result" },
@@ -1689,7 +1696,7 @@
     } else if (view === "review" && reviewData) {
       content = h(ReviewScreen, { review: reviewData, analysisState: analysis, onBack: () => { if (reviewData.from === "end" && endInfo) setView("end"); else toMenu(); } });
     }
-    return div({ className: "app-shell" },
+    return div({ className: "app-shell", role: "main" },
       div({ className: "sr-only", role: "status", "aria-live": "polite", "aria-atomic": "true" }, announcement.text + (announcement.n % 2 ? "\u200B" : "")),
       content,
       h(CheatField, { open: cheatOpen, withNav: view === "menu", onOpen: () => setCheatOpen(true) }),

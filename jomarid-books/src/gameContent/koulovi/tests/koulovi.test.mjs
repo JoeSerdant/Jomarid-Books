@@ -831,3 +831,111 @@ test('rozehraná hra: platná se obnoví, a ta se špatným tvarem (režim, poč
   }
   assert.match(game, /if\(S\.run&&!okRun\(S\.run\)\)S\.run=null;\s*g=\{balls:\[\]/, 'kontrola proběhne dřív, než se poprvé vykreslí menu');
 });
+
+/* ---------------------------------------------------------------- klávesnice (počítač) */
+// Klávesy se posílají obsluze na dokumentu, stejně jako je dostane prohlížeč (cheat kód tam poslouchá taky, takže projdou oběma).
+const press = (env, type, key, extra = {}) => (env.docListeners[type] || []).forEach((fn) => fn(Object.assign({ key, code: '', repeat: false, target: { tagName: 'BODY' }, preventDefault() { this.prevented = true; } }, extra)));
+
+test('klávesnice: šipky míří (jen dokud jsou drženy), mezerník, Enter a ↓ pustí kouli a rychlé opakování klávesy nehází', () => {
+  const env = makeEnv();
+  const { run } = env;
+  run("start('classic')");
+  assert.equal(run('g.aimX'), 270);
+  press(env, 'keydown', 'ArrowRight');
+  run('last = 0; loop(100)');   // jeden snímek s dt = 0,05 s
+  const right = run('g.aimX');
+  assert.ok(right > 270 && right <= 270 + 25, 'doprava: ' + right);
+  press(env, 'keyup', 'ArrowRight');
+  run('loop(200)');
+  assert.equal(run('g.aimX'), right, 'po puštění šipky se míření nehýbe');
+  press(env, 'keydown', 'ArrowLeft');
+  for (let t = 300; t < 3000; t += 50) run(`loop(${t})`);
+  assert.equal(run('g.aimX'), 70, 'míření se zastaví na okraji misky (AL)');
+  press(env, 'keyup', 'ArrowLeft');
+  // pustí kouli na míření
+  assert.equal(run('g.balls.length'), 0);
+  const ev = {};
+  press(env, 'keydown', ' ', ev);
+  assert.equal(run('g.balls.length'), 1, 'mezerník');
+  assert.ok(Math.abs(run('g.balls[0].x') - 70) < 80, 'koule padá na míření');
+  // hned potom je chvíli pauza mezi hody, další stisk nic nehodí; opakování držené klávesy nehází vůbec
+  press(env, 'keydown', 'Enter');
+  assert.equal(run('g.balls.length'), 1, 'pauza mezi hody');
+  run('g.cool = 0');
+  press(env, 'keydown', 'Enter', { repeat: true });
+  assert.equal(run('g.balls.length'), 1, 'držená klávesa nehází');
+  press(env, 'keydown', 'ArrowDown');
+  assert.equal(run('g.balls.length'), 2, 'šipka dolů');
+});
+
+test('klávesnice: první stisk jen zavře návod, další jen okno s novou koulí; v textovém poli a mimo hru klávesy nic nedělají', () => {
+  const env = makeEnv({ tut: false });
+  const { run, store } = env;
+  run("start('classic')");
+  press(env, 'keydown', ' ');
+  assert.equal(run('S.tut'), 1, 'návod je zavřený');
+  assert.equal(run('g.balls.length'), 0, 'první stisk nehází');
+  assert.equal(JSON.parse(store['koulovi-kamosi-v1']).tut, 1, 'uloženo, že už se neukáže');
+  run('g.disc = { t: 3, l: 150 }');
+  press(env, 'keydown', ' ');
+  assert.equal(run('g.disc'), null, 'okno s novou koulí zavřeno');
+  assert.equal(run('g.balls.length'), 0);
+  press(env, 'keydown', ' ');
+  assert.equal(run('g.balls.length'), 1, 'teď už hází');
+  // písmeno v textovém poli (tajný kód) hru neovlivní
+  run('g.cool = 0');
+  press(env, 'keydown', ' ', { target: { tagName: 'INPUT' } });
+  assert.equal(run('g.balls.length'), 1);
+  // Ctrl+mezerník a podobné zkratky prohlížeče se nechávají být
+  press(env, 'keydown', ' ', { ctrlKey: true });
+  assert.equal(run('g.balls.length'), 1);
+  // mimo hru (menu) nic
+  run("toMenu()");
+  press(env, 'keydown', ' ');
+  assert.equal(run('st'), 'menu');
+});
+
+test('klávesnice: 1 až 4 jsou vylepšení (Zpět, Zatřást, Rozbít, Zásah) a C je Cash Out, vždy jen když je co použít', () => {
+  const env = makeEnv();
+  const { run } = env;
+  run("start('classic')");
+  run('S.inv = { undo: 1, shake: 1, pop: 1, hit: 1 }');
+  // bez předchozího hodu není co vracet
+  press(env, 'keydown', '1');
+  assert.equal(run('S.inv.undo'), 1, 'Zpět bez hodu nic neudělá');
+  run('g.aimX = 270; g.cool = 0; drop();');
+  assert.equal(run('g.balls.length'), 1);
+  press(env, 'keydown', '1');
+  assert.equal(run('g.balls.length'), 0, 'Zpět vrátil hod');
+  assert.equal(run('S.inv.undo'), 0, 'a spotřeboval kus');
+  run('g.cool = 0; drop();');
+  press(env, 'keydown', '2');
+  assert.equal(run('S.inv.shake'), 0, 'Zatřást');
+  press(env, 'keydown', '4');
+  assert.equal(run('g.tgt'), true, 'Zásah čeká na klepnutí na kouli');
+  assert.equal(run('S.inv.hit'), 1, 'kus se spotřebuje až zásahem');
+  press(env, 'keydown', '3');
+  assert.equal(run('S.inv.pop'), 0, 'Rozbít');
+  // Cash Out: první stisk jen připraví (potvrzení), druhý v krátké době ho provede
+  run('g.tgt = false; g.balls.length || (g.cool = 0, drop());');
+  press(env, 'keydown', 'c');
+  assert.equal(run("st"), 'play', 'první stisk jen připraví');
+  press(env, 'keydown', 'C');
+  assert.equal(run("st"), 'over', 'druhý stisk vyplatí');
+  assert.equal(run('g.cashed'), 1);
+});
+
+test('klávesnice: stisky se v prohlížeči nezpracují dvakrát (preventDefault) a návod ukáže řádek pro počítač jen u myši', () => {
+  const env = makeEnv();
+  env.run("start('classic')");
+  const ev = { key: ' ', code: '', repeat: false, target: { tagName: 'BODY' }, preventDefault() { this.prevented = true; } };
+  (env.docListeners.keydown || []).forEach((fn) => fn(ev));
+  assert.equal(ev.prevented, true, 'mezerník nesmí posouvat stránku');
+  const other = { key: 'x', code: 'KeyX', repeat: false, target: { tagName: 'BODY' }, preventDefault() { this.prevented = true; } };
+  (env.docListeners.keydown || []).forEach((fn) => fn(other));
+  assert.notEqual(other.prevented, true, 'cizí klávesy se nechávají být (cheat kód je potřebuje)');
+  assert.match(game, /const pc=!!\(window\.matchMedia&&matchMedia\('\(pointer: fine\)'\)\.matches\)/);
+  assert.match(game, /if\(pc\)txt\('Na počítači: ← → a mezerník'/);
+  assert.match(game, /document\.addEventListener\('keyup',e=>\{if\(e\.key==='ArrowLeft'\)kb\.l=0;if\(e\.key==='ArrowRight'\)kb\.r=0\}\)/);
+  assert.match(game, /addEventListener\('blur',\(\)=>\{kb\.l=kb\.r=0\}\)/, 'po přepnutí okna šipka nezůstane "stisknutá"');
+});
