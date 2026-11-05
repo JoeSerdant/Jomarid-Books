@@ -288,3 +288,12 @@ test('uložený postup: vadné seznamy, rekordy a čítače se při čtení opra
   assert.deepEqual(mixed.stats, { saves: 5, scen: { a: 1, c: 1 }, turns_total: 1e308 }, 'čítače jen jako nezáporná čísla, scen a docts jako mapy');
   assert.match(game, /return cleanProgress\(JSON\.parse\(saved\)\);/, 'loadProgress používá čištění');
 });
+
+test('čeština: počet dní odhalené džungle se skloňuje (1 den, 2 až 4 dny, jinak dní) a skrytý vstup má název', () => {
+  const src = game.match(/    function czPlural\(n, one, few, many\) \{[\s\S]*?\n    \}\n/)[0];
+  const f = vm.runInNewContext(`(${src.trim().replace(/^function czPlural/, 'function')})`, { Math });
+  const cases = { 0: 'dní', 1: 'den', 2: 'dny', 3: 'dny', 4: 'dny', 5: 'dní', 11: 'dní', 12: 'dní', 14: 'dní', 21: 'dní', 22: 'dny', 101: 'dní', 102: 'dny' };
+  for (const [n, word] of Object.entries(cases)) assert.equal(f(Number(n), 'den', 'dny', 'dní'), word, `${n}`);
+  assert.match(game, /DŽUNGLE ODHALENA \(\$\{state\.viet_revealed\} \$\{czPlural\(state\.viet_revealed, 'den', 'dny', 'dní'\)\}\)/);
+  assert.match(html, /<input type="text" id="cheat-input"[^>]*value="v4\.2" aria-label="Tajný kód"/, 'pole dole na stránce má stejný název jako v ostatních hrách (čtečky obrazovky jinak hlásí nepopsané pole)');
+});

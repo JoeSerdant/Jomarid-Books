@@ -500,7 +500,7 @@
 <button id="sound-toggle" onclick="toggleSound()" title="Zapnout/vypnout zvuk">🔊</button>
 
 <input type="text" id="cheat-input" maxlength="20" autocomplete="off" spellcheck="false"
-    value="v4.2"
+    value="v4.2" aria-label="Tajný kód"
     onfocus="if(this.value==='v4.2') this.value='';"
     onblur="if(this.value==='') this.value='v4.2';"
     oninput="checkCheatCode(this.value)">
@@ -1199,6 +1199,14 @@
             }
         }
         return Object.assign({}, p, { unlockedScenarios: list(p.unlockedScenarios, ['default']), unlockedDoctrines: list(p.unlockedDoctrines, ['blitz', 'fortress']), highScores, stats });
+    }
+
+    // České množné číslo: 1 den, 2 až 4 dny (i 22 až 24), jinak dní (i 11 až 14, 21 a 101)
+    function czPlural(n, one, few, many) {
+        n = Math.abs(Math.round(n));
+        if (n === 1) return one;
+        const d = n % 10, t = n % 100;
+        return d >= 2 && d <= 4 && !(t >= 12 && t <= 14) ? few : many;
     }
 
     function loadProgress() {
@@ -1901,7 +1909,7 @@
         else if (state.scenario === 'ww2_pacific') { t.innerText = `OSTROVNÍ KAMPAŇ (Sektor ${state.sector})`; t.className = "t-blue"; d.innerText = "Ustupování nemožné."; m.style.borderColor = "var(--tech)"; } 
         else if (state.scenario === 'winter_war') { t.innerText = "ZAMRZLÉ PEKLO"; t.className = "t-white"; d.innerText = "Masivní tlak nepřátelské přesily."; } 
         else if (state.scenario === 'vietnam') {
-            if (state.viet_revealed > 0) { t.innerText = `DŽUNGLE ODHALENA (${state.viet_revealed} dny)`; t.className = "t-orange"; d.innerText = "Nepřítel lokalizován."; }
+            if (state.viet_revealed > 0) { t.innerText = `DŽUNGLE ODHALENA (${state.viet_revealed} ${czPlural(state.viet_revealed, 'den', 'dny', 'dní')})`; t.className = "t-orange"; d.innerText = "Nepřítel lokalizován."; }
             else { t.innerText = "NEVIDITELNÁ FRONTA"; t.className = "t-red"; d.innerText = "Frontové linie jsou kompletně skryté v džungli."; }
         } 
         else if (state.scenario === 'modern_ew') {

@@ -457,6 +457,7 @@
   button:focus-visible, select:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
 
   .hidden{ display:none !important; }
+  .sr-only{ position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
 
   /* ---------- EndCraze (apocalyptic endgame) ---------- */
   .endcraze-panel{ border-color:var(--danger); }
@@ -743,11 +744,12 @@
           <circle class="ring-track" cx="100" cy="100" r="92"></circle>
           <circle class="ring-progress" id="comboRing" cx="100" cy="100" r="92"></circle>
         </svg>
-        <button type="button" class="btn-townhall" id="townhallBtn" aria-label="Klikni na radnici pro zisk">
+        <button type="button" class="btn-townhall" id="townhallBtn" aria-describedby="townhallHint">
           <span class="btn-townhall-icon">🏛️</span>
           <span class="btn-townhall-value" id="clickValueDisplay">+$4</span>
           <span class="btn-townhall-cta">Klikni!</span>
         </button>
+        <span class="sr-only" id="townhallHint">Radnice: každé kliknutí přidá peníze do rozpočtu.</span>
       </div>
 
       <div class="combo-wrap">
@@ -903,18 +905,18 @@
 <div class="helicopter hidden" id="helicopter">🚁</div>
 <div class="toast-container" id="toastContainer" role="status" aria-live="polite"></div>
 
-<div class="modal hidden" id="prestigeModal" role="dialog" aria-modal="true">
+<div class="modal hidden" id="prestigeModal" role="dialog" aria-modal="true" aria-labelledby="prestigeModalTitle">
   <div class="modal-box">
-    <h2>Zvol nové téma města</h2>
+    <h2 id="prestigeModalTitle">Zvol nové téma města</h2>
     <p>Generální přestavba je dokončena. Vyber si vizuální styl, ve kterém bude tvé město pokračovat.</p>
     <div class="theme-grid" id="themeGrid"></div>
     <button type="button" class="modal-close" id="themeModalClose">Ponechat současné téma</button>
   </div>
 </div>
 
-<div class="modal hidden" id="factionModal" role="dialog" aria-modal="true">
+<div class="modal hidden" id="factionModal" role="dialog" aria-modal="true" aria-labelledby="factionModalTitle">
   <div class="modal-box">
-    <h2>Volba finální frakce</h2>
+    <h2 id="factionModalTitle">Volba finální frakce</h2>
     <p>Hodiny apokalypsy dosáhly 50 %. Zvol definitivní osud města — tato volba je nevratná.</p>
     <div class="theme-grid">
       <div class="theme-option" id="chooseCultist">
@@ -931,26 +933,26 @@
   </div>
 </div>
 
-<div class="modal hidden" id="mutatorModal" role="dialog" aria-modal="true">
+<div class="modal hidden" id="mutatorModal" role="dialog" aria-modal="true" aria-labelledby="mutatorModalTitle">
   <div class="modal-box">
-    <h2>Mutátor Nového světa</h2>
+    <h2 id="mutatorModalTitle">Mutátor Nového světa</h2>
     <p>Dimenzionální skok tě přenesl do nové reality. Zvol pravidla, kterými se bude tento svět řídit.</p>
     <div class="theme-grid" id="mutatorGrid"></div>
   </div>
 </div>
 
-<div class="modal hidden" id="statsModal" role="dialog" aria-modal="true">
+<div class="modal hidden" id="statsModal" role="dialog" aria-modal="true" aria-labelledby="statsModalTitle">
   <div class="modal-box">
-    <h2>📊 Statistiky a achievementy</h2>
+    <h2 id="statsModalTitle">📊 Statistiky a achievementy</h2>
     <div id="statsModalBody"></div>
     <button type="button" class="modal-close" id="statsModalClose">Zavřít</button>
   </div>
 </div>
 
-<div class="modal hidden" id="helpModal" role="dialog" aria-modal="true">
+<div class="modal hidden" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpModalTitle">
   <div class="modal-box help-box">
-    <h2>❓ Jak hrát City Clicker</h2>
-    <div class="help-body">
+    <h2 id="helpModalTitle">❓ Jak hrát City Clicker</h2>
+    <div class="help-body" tabindex="0">
       <h3>🏛️ Základy</h3>
       <p>Klikej na radnici vlevo — každé kliknutí přidá peníze do rozpočtu. V Obchodě vpravo stavíš zóny (Obytná, Komerční, Průmyslová, Tech/Eco, Park), které generují pasivní příjem podle populace a spokojenosti. Průmysl vydělává nejvíc, ale snižuje spokojenost — vyvažuj ho Parky a Tech/Eco zónami.</p>
 
@@ -986,17 +988,17 @@
   </div>
 </div>
 
-<div class="modal hidden" id="offlineModal" role="dialog" aria-modal="true">
+<div class="modal hidden" id="offlineModal" role="dialog" aria-modal="true" aria-labelledby="offlineModalTitle">
   <div class="modal-box">
-    <h2>👋 Vítej zpět!</h2>
+    <h2 id="offlineModalTitle">👋 Vítej zpět!</h2>
     <div id="offlineModalBody"></div>
     <button type="button" class="modal-close" id="offlineModalClose">Pokračovat</button>
   </div>
 </div>
 
-<div class="modal hidden" id="cheatModal" role="dialog" aria-modal="true">
+<div class="modal hidden" id="cheatModal" role="dialog" aria-modal="true" aria-labelledby="cheatModalTitle">
   <div class="modal-box cheat-box">
-    <h2>🕹️ Tajné cheat menu</h2>
+    <h2 id="cheatModalTitle">🕹️ Tajné cheat menu</h2>
     <p>Na testování a rychlé prozkoumání pozdní hry. Změny jsou skutečné: počítají se do postupu, rekordů i odznaků.</p>
     <div class="cheat-grid">
       <button type="button" class="btn-mega" id="cheatAddMoney">💰 +1 mld. $</button>
