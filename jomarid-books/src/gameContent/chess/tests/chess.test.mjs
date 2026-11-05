@@ -313,7 +313,7 @@ describe('Elo, XP a uložený postup', () => {
     for (const re of [/Dnešní výzvy/, /Tvoje liga/, /Odznaky/, /\bXP\b/, /save\.streak/, /QuestsCard|LeagueCard|BadgesCard/]) assert.doesNotMatch(ui, re, String(re));
     const tabs = ui.match(/const navItems = (\[.*\]);/);
     assert.ok(tabs);
-    assert.deepEqual(Array.from(vm.runInNewContext(tabs[1]), (t) => t[0]), ['play', 'rating', 'settings']);
+    assert.deepEqual(Array.from(vm.runInNewContext(tabs[1]), (t) => t[0]), ['play', 'puzzles', 'rating', 'settings']);
   });
   test('boti: rostoucí rating, hlášky ke všem událostem, lidské tempo', () => {
     const ratings = plain(B.BOTS.map((b) => b.rating));

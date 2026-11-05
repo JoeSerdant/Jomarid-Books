@@ -9,6 +9,7 @@
 //   search.js   - rychlý engine pro boty a rozbor (běží i jako Web Worker, proto je celý v jednom souboru)
 //   book.js     - kniha zahájení a české názvy zahájení
 //   league.js   - Elo rating, soupeři, uložený postup
+//   puzzles.js  - šachové úlohy (data vygenerovaná z partií botů a ověřená testy) a posuzování tahů
 //   bots.js     - soupeři: síla, osobnost, hlášky, tempo, vzdávání, remízy
 //   session.js  - řadič jedné partie (hodiny, tah bota, nápověda, uložení)
 //   ui.js       - React rozhraní
@@ -26,6 +27,7 @@ import rules from './chess/rules.js?raw';
 import search from './chess/search.js?raw';
 import book from './chess/book.js?raw';
 import league from './chess/league.js?raw';
+import puzzles from './chess/puzzles.js?raw';
 import bots from './chess/bots.js?raw';
 import session from './chess/session.js?raw';
 import ui from './chess/ui.js?raw';
@@ -35,6 +37,7 @@ const SCRIPTS = [
   ['search', search], // id "src-search": z jeho textu si UI vyrobí Web Worker
   ['book', book],
   ['league', league],
+  ['puzzles', puzzles],
   ['bots', bots],
   ['session', session],
   ['ui', ui],
