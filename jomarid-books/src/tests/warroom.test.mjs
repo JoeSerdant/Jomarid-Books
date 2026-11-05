@@ -69,7 +69,7 @@ function makeEnv() {
     Sound: { buy() {} }, el: () => ({ style: { display: 'none' }, innerText: '' }), showUnlockNotification: (t) => toasts.push(t), updateUI() {}, checkWinLoss() {},
     state: {},
   });
-  vm.runInContext(`${fnSrc('cleanProgress')}\n${fnSrc('loadProgress')}\n${fnSrc('reportRecords')}\n${fnSrc('saveProgress')}\n${fnSrc('warTrack')}\nconst CHEAT_STATS = ${cheatLit};\n${fnSrc('cheatAction')}`, ctx);
+  vm.runInContext(`${fnSrc('cleanProgress')}\n${fnSrc('loadProgress')}\n${fnSrc('statValues')}\n${fnSrc('reportRecords')}\n${fnSrc('saveProgress')}\n${fnSrc('warTrack')}\nconst CHEAT_STATS = ${cheatLit};\n${fnSrc('cheatAction')}`, ctx);
   return { ctx, records, storage, scenarios, doctrines, run: (code) => vm.runInContext(code, ctx) };
 }
 
@@ -259,6 +259,7 @@ test('omezený pohyb: radar, otřes, pulzování a částice se při nastavení 
     /button:hover:not\(:disabled\)::before \{ animation: none; \}/,
     /\.float-text \{ animation: floatFadeCalm 1\.2s linear forwards; \}/,
     /\.particle \{ display: none; \}/,
+    /#stats-menu \{ animation: none; \}/,
   ]) assert.match(block, rule);
   assert.doesNotMatch(css.match(/@keyframes floatFadeCalm [^\n]*/)[0], /transform/, 'klidná varianta se nehýbe');
   // hlídač: každé nekonečné pulzování nebo otáčení v CSS musí být v bloku vypnuté (jinak by přibylo něco, co omezený pohyb obejde)
@@ -312,4 +313,89 @@ test('okno: viewport pro telefon a panel se na užším okně posune pod tlačí
     assert.ok(top(id) > 0 && height(id) > 0, id);
     assert.ok(top(id) + height(id) <= margin, id + ' by zasahovalo do panelu: ' + top(id) + ' + ' + height(id) + ' > ' + margin);
   }
+});
+
+/* ---------------------------------------------------------------- okno Statistiky */
+test('statistiky: statValues skládá hodnoty z postupu (odvozené i uložené) a reportRecords hlásí tytéž', () => {
+  const e = makeEnv();
+  const prog = { highScores: { a: 12, b: 3, c: 5 }, unlockedScenarios: ['default', 'korea', 'vietnam'], unlockedDoctrines: ['blitz', 'fortress'], stats: { scen: { x: 1, y: 1 }, docts: { blitz: 1 }, attacks: 7, best_day: 31 } };
+  e.ctx.__prog = prog;
+  const v = JSON.parse(e.run('JSON.stringify(statValues(__prog))'));
+  assert.equal(v.best_sector, 12);
+  assert.equal(v.scenarios_cleared, 3);
+  assert.equal(v.scenarios_deep, 2, 'sektor 12 a 5 jsou "do 5. sektoru"');
+  assert.equal(v.scenarios_unlocked, 3);
+  assert.equal(v.scenarios_started, 2);
+  assert.equal(v.doctrines_unlocked, 2);
+  assert.equal(v.doctrines_used, 1);
+  assert.equal(v.attacks, 7);
+  assert.equal(v.best_day, 31);
+  assert.equal(v.crits, undefined, 'co se nikdy nezapsalo, není definované (okno ukáže 0)');
+  // prázdný postup: nuly
+  const z = JSON.parse(e.run('JSON.stringify(statValues({}))'));
+  assert.equal(z.best_sector, 0);
+  assert.equal(z.scenarios_unlocked, 0);
+  // reportRecords hlásí právě tytéž klíče
+  e.run('reportRecords(__prog)');
+  assert.equal(e.records.get('best_sector'), 12);
+  assert.equal(e.records.get('attacks'), 7);
+  assert.equal(e.records.get('doctrines_used'), 1);
+});
+
+test('statistiky: okno ukazuje přesně statistiky z katalogu se stejnými názvy a v pořadí skupin', async () => {
+  const { GAME_CATALOG } = await import('../gameRecords/catalog.js');
+  const cat = GAME_CATALOG.find((g) => g.id === 'warroom').stats;
+  const groups = plain(vm.runInNewContext(game.match(/const STAT_GROUPS = (\[[\s\S]*?\n    \]);/)[1]));
+  const rows = groups.flatMap(([, list]) => list.map(([key, label]) => ({ key, label })));
+  assert.deepEqual(rows.map((r) => r.key).sort(), cat.map((c) => c.key).sort(), 'každá statistika z katalogu je v okně právě jednou');
+  for (const r of rows) assert.equal(r.label, cat.find((c) => c.key === r.key).label, 'název ' + r.key);
+  assert.equal(new Set(rows.map((r) => r.key)).size, rows.length);
+});
+
+test('statistiky: okno se vykreslí z postupu (české formátování čísel, poměr u scénářů a doktrín, nuly u neuložených)', () => {
+  const e = makeEnv();
+  const made = [];
+  const mk = (tag) => { const n = { tag, className: '', textContent: '', children: [], appendChild(c) { n.children.push(c); } }; made.push(n); return n; };
+  const body = mk('div');
+  e.ctx.document = { createElement: mk };
+  e.ctx.el = (id) => (id === 'stats-body' ? body : { style: { display: 'none' }, innerText: '' });
+  e.storage.setItem('warroom_frontlines_save_v1', JSON.stringify({ unlockedScenarios: ['default', 'korea'], unlockedDoctrines: ['blitz', 'fortress', 'intel'], highScores: { default: 12, korea: 4 }, stats: { sectors_cleared: 1234567, attacks: 9, scen: { default: 1 }, docts: { blitz: 1, fortress: 1 } } }));
+  e.run(`${game.match(/const STAT_GROUPS = \[[\s\S]*?\n    \];/)[0]}\n${fnSrc('renderStatsBody')}\nrenderStatsBody();`);
+  const lis = made.filter((n) => n.tag === 'li');
+  assert.equal(lis.length, 29, 'všech 29 statistik');
+  const val = (label) => lis.find((li) => li.children[0].textContent === label).children[1].textContent;
+  const nbsp = (t) => t.replace(/\s/g, ' ');
+  assert.equal(nbsp(val('Dobyté sektory celkem')), '1 234 567', 'tisíce po česku');
+  assert.equal(val('Nejdál v kampani (sektor)'), '12');
+  assert.equal(val('Provedené ofenzívy'), '9');
+  assert.equal(val('Prohraná tažení'), '0', 'neuloženo = 0');
+  assert.equal(val('Odemčené scénáře'), '2 / ' + e.scenarios.length);
+  assert.equal(val('Vyzkoušené scénáře'), '1 / ' + e.scenarios.length);
+  assert.equal(val('Odemčené doktríny'), '3 / ' + e.doctrines.length);
+  assert.equal(val('Vyzkoušené doktríny'), '2 / ' + e.doctrines.length);
+  assert.equal(made.filter((n) => n.tag === 'h3').length, 4, 'čtyři skupiny');
+  // opakované otevření nedělá duplicity (tělo se vždy nejdřív vyprázdní)
+  assert.equal(body.textContent, '');
+});
+
+test('statistiky: tlačítko na výběru scénáře, okno je dialog, vrací fokus a zavírá se Escape, klepnutím mimo i tlačítkem', () => {
+  assert.match(html, /<button class="btn-spec" id="btn-stats"[^>]*onclick="openStatsMenu\(\)">📊 STATISTIKY<\/button>/);
+  assert.match(html, /<div id="stats-menu" role="dialog" aria-modal="true" aria-labelledby="stats-title" onclick="if \(event\.target === this\) closeStatsMenu\(\)">/);
+  assert.match(html, /<h2 id="stats-title">/);
+  assert.match(html, /<button id="stats-close" class="btn-main stats-close" onclick="closeStatsMenu\(\)">ZAVŘÍT<\/button>/);
+  const open = fnSrc('openStatsMenu'), close = fnSrc('closeStatsMenu');
+  assert.match(open, /statsOpener = document\.activeElement;/);
+  assert.match(open, /panel\.scrollTop = 0;\s*\n\s*panel\.focus\(\{ preventScroll: true \}\);/, 'fokus jde na okno a seznam začíná nahoře');
+  assert.match(html, /<div class="stats-panel" id="stats-panel" tabindex="-1">/);
+  assert.match(game, /else if \(e\.key === 'Tab'\) \{ e\.preventDefault\(\); el\('stats-close'\)\.focus\(\); \}/, 'Tab zůstane v okně');
+  assert.match(close, /statsOpener\.focus\(\)/, 'a po zavření zpátky');
+  assert.match(game, /if \(el\('stats-menu'\)\.style\.display !== 'flex'\) return;\s*\n\s*if \(e\.key === 'Escape'\) closeStatsMenu\(\);/, 'Escape zavře jen otevřené okno');
+  // okno je nad herními vrstvami a roluje se, když se nevejde
+  assert.match(css, /#stats-menu \{[^}]*z-index: 3000;/);
+  assert.match(css, /\.stats-panel \{[^}]*max-height: 90vh; overflow-y: auto;/);
+  // kontrast textu v okně: popisky světle šedé a hodnoty bílé na tmavém pozadí
+  const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return 0.2126 * lin(n >> 16) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255); };
+  const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  for (const fg of ['#cbd5e1', '#9ca3af', '#93c5fd', '#ffffff']) assert.ok(contrast(fg, '#0a101c') >= 4.5, fg);
 });

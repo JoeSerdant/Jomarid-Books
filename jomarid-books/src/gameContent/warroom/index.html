@@ -254,6 +254,29 @@
         }
         .cheat-close:hover { background: rgba(239,68,68,0.3); }
 
+        /* ===== STATISTIKY ===== */
+        #stats-menu {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.88); z-index: 3000; justify-content: center; align-items: center;
+            backdrop-filter: blur(6px); animation: statsFade 0.2s ease-out;
+        }
+        /* jen průhlednost (bez zvětšování jako fadeInUI), ať se celé překryté okno hned po otevření chová jako celá obrazovka */
+        @keyframes statsFade { from { opacity: 0; } to { opacity: 1; } }
+        .stats-panel {
+            background: rgba(10,16,28,0.98); border: 2px solid var(--accent); border-radius: 12px;
+            padding: 24px 26px; width: 92%; max-width: 560px; max-height: 90vh; overflow-y: auto;
+            box-shadow: 0 0 40px rgba(16,185,129,0.25);
+        }
+        .stats-panel h2 { color: var(--accent); letter-spacing: 2px; margin: 0 0 4px; text-align: center; }
+        .stats-sub { color: #9ca3af; font-size: 0.85rem; margin: 0 0 6px; text-align: center; }
+        .stats-panel h3 { color: #93c5fd; letter-spacing: 2px; font-size: 0.85rem; margin: 18px 0 6px; border-bottom: 1px dashed var(--border); padding-bottom: 4px; }
+        .stats-list { margin: 0; padding: 0; list-style: none; }
+        .stats-list li { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; font-size: 0.9rem; border-bottom: 1px solid rgba(30,41,59,0.6); }
+        .stats-list li span { color: #cbd5e1; }
+        .stats-list li b { color: #fff; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+        .stats-close { margin-top: 18px; width: 100%; padding: 12px; }
+        @media (max-width: 550px) { .stats-panel { padding: 18px 16px; } .stats-list li { font-size: 0.82rem; } }
+
         /* ===== TUTORIÁL ===== */
         #tutorial-help-btn {
             position: fixed; top: 16px; left: 70px; z-index: 1500; width: 46px; height: 46px;
@@ -430,6 +453,7 @@
         @media (prefers-reduced-motion: reduce) {
             body::before { animation: none; }
             .shake, .crisis, .wizard-screen.active { animation: none !important; }
+            #stats-menu { animation: none; }
             #gauge::after, .target-zone { animation: none; }
             button:hover:not(:disabled)::before { animation: none; }
             .float-text { animation: floatFadeCalm 1.2s linear forwards; }
@@ -553,6 +577,15 @@
     </div>
 </div>
 
+<div id="stats-menu" role="dialog" aria-modal="true" aria-labelledby="stats-title" onclick="if (event.target === this) closeStatsMenu()">
+    <div class="stats-panel" id="stats-panel" tabindex="-1">
+        <h2 id="stats-title">📊 TVOJE STATISTIKY</h2>
+        <p class="stats-sub">Za celou dobu hraní. Z těchto čísel se počítají odznaky.</p>
+        <div id="stats-body"></div>
+        <button id="stats-close" class="btn-main stats-close" onclick="closeStatsMenu()">ZAVŘÍT</button>
+    </div>
+</div>
+
 <div id="screen-scenario" class="wizard-screen active glass-panel">
     <h1 class="t-white" style="letter-spacing:5px; margin-top:0; font-size: 2.2rem; text-shadow: 0 0 8px var(--tech);">WARROOM: FRONTLINES</h1>
     <p style="color: #8a99ad; margin-bottom: 25px;">Zvol dějiště konfliktu. Pro odemčení dalšího scénáře musíš v předchozím dosáhnout <b>Sektoru 10</b>.</p>
@@ -567,7 +600,8 @@
         <!-- Generováno dynamicky pomocí JS -->
     </div>
 
-    <div style="margin-top: 35px; border-top: 1px dashed var(--border); padding-top: 20px;">
+    <div style="margin-top: 35px; border-top: 1px dashed var(--border); padding-top: 20px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
+        <button class="btn-spec" id="btn-stats" style="font-size: 0.8rem; padding: 8px 16px;" onclick="openStatsMenu()">📊 STATISTIKY</button>
         <button class="btn-warn" style="font-size: 0.8rem; padding: 8px 16px;" onclick="resetSave()">VYMAZAT VŠECHNY POZICE (RESET)</button>
     </div>
 </div>
@@ -825,6 +859,65 @@
         Sound.click();
         el('cheat-menu').style.display = 'none';
     }
+
+    // Statistiky za celou dobu hraní (jen čtení): tytéž hodnoty, které hra hlásí appce pro odznaky (statValues), v pořadí a s názvy z katalogu statistik.
+    const STAT_GROUPS = [
+        ['KAMPAŇ', [['best_sector', 'Nejdál v kampani (sektor)'], ['sectors_cleared', 'Dobyté sektory celkem'], ['defeats', 'Prohraná tažení'], ['best_day', 'Nejvíc dní v jednom tažení'], ['turns_total', 'Odehrané dny války celkem']]],
+        ['SCÉNÁŘE A DOKTRÍNY', [['scenarios_unlocked', 'Odemčené scénáře'], ['scenarios_started', 'Vyzkoušené scénáře'], ['scenarios_cleared', 'Scénáře s dobytým sektorem'], ['scenarios_deep', 'Scénáře dotažené do 5. sektoru'], ['doctrines_unlocked', 'Odemčené doktríny'], ['doctrines_used', 'Vyzkoušené doktríny']]],
+        ['BOJ', [['attacks', 'Provedené ofenzívy'], ['bullseyes', 'Zásahy přesně do středu'], ['crits', 'Perfektní údery'], ['misses', 'Selhané ofenzívy'], ['saves', 'Zásoby zachráněné rozvědkou'], ['logistics_runs', 'Zabezpečení zázemí'], ['artillery_used', 'Dělostřelecké baráže'], ['airdrops_used', 'Letecké shozy zásob'], ['skills_used', 'Použité schopnosti scénářů'], ['last_stands', 'Poslední linie udržená vírou']]],
+        ['VÝZKUM A REKORDY', [['upgrades_bought', 'Koupené výzkumy'], ['max_upgrade_level', 'Nejvyšší úroveň výzkumu'], ['exclusive_techs', 'Získané unikátní technologie'], ['supply_peak', 'Nejvíc zásob naráz'], ['cp_peak', 'Nejvíc velitelských bodů naráz'], ['zombie_peak', 'Nejvyšší mutace zombie'], ['ww2_streak', 'Nejdelší série zásahů v blesku'], ['trench_peak', 'Nejvíc nahromaděné zteče']]]
+    ];
+
+    function renderStatsBody() {
+        const body = el('stats-body');
+        const v = statValues(loadProgress());
+        const total = { scenarios_unlocked: SCENARIOS.length, scenarios_started: SCENARIOS.length, doctrines_unlocked: DOCTRINES.length, doctrines_used: DOCTRINES.length };
+        body.textContent = '';
+        STAT_GROUPS.forEach(([title, rows]) => {
+            const h = document.createElement('h3');
+            h.textContent = title;
+            body.appendChild(h);
+            const ul = document.createElement('ul');
+            ul.className = 'stats-list';
+            rows.forEach(([key, label]) => {
+                const n = Number(v[key]) || 0;
+                const li = document.createElement('li');
+                const a = document.createElement('span');
+                a.textContent = label;
+                const b = document.createElement('b');
+                b.textContent = n.toLocaleString('cs-CZ') + (total[key] ? ' / ' + total[key] : '');
+                li.appendChild(a);
+                li.appendChild(b);
+                ul.appendChild(li);
+            });
+            body.appendChild(ul);
+        });
+    }
+
+    let statsOpener = null;
+    function openStatsMenu() {
+        Sound.unlock();
+        Sound.click();
+        statsOpener = document.activeElement;
+        renderStatsBody();
+        el('stats-menu').style.display = 'flex';
+        // fokus na okno samotné (čtečka přečte nadpis a seznam začíná nahoře), ne na tlačítko Zavřít dole, které by seznam odroloval na konec
+        const panel = el('stats-panel');
+        panel.scrollTop = 0;
+        panel.focus({ preventScroll: true });
+    }
+    function closeStatsMenu() {
+        Sound.click();
+        el('stats-menu').style.display = 'none';
+        if (statsOpener && statsOpener.focus) { try { statsOpener.focus(); } catch (e) { /* ignore */ } }
+        statsOpener = null;
+    }
+    // Escape okno zavře; Tab v něm zůstane (je tam jediné ovládání, tlačítko Zavřít), ať fokus neuteče na obrazovku pod oknem.
+    document.addEventListener('keydown', (e) => {
+        if (el('stats-menu').style.display !== 'flex') return;
+        if (e.key === 'Escape') closeStatsMenu();
+        else if (e.key === 'Tab') { e.preventDefault(); el('stats-close').focus(); }
+    });
 
     // Všechny statistiky na prahy odznaků (tlačítko Všechny odznaky), jen na zkoušení.
     const CHEAT_STATS = {best_sector:40,scenarios_unlocked:24,scenarios_cleared:16,scenarios_deep:10,scenarios_started:24,doctrines_unlocked:12,doctrines_used:8,sectors_cleared:200,defeats:30,best_day:150,turns_total:5000,attacks:3000,bullseyes:500,crits:500,misses:100,saves:5,logistics_runs:250,artillery_used:100,airdrops_used:100,skills_used:100,upgrades_bought:100,max_upgrade_level:10,exclusive_techs:25,supply_peak:150,cp_peak:5000,last_stands:5,zombie_peak:8,ww2_streak:8,trench_peak:500};
@@ -1238,18 +1331,26 @@
         'airdrops_used', 'skills_used', 'upgrades_bought', 'max_upgrade_level', 'exclusive_techs', 'supply_peak', 'cp_peak', 'last_stands', 'zombie_peak', 'ww2_streak', 'trench_peak'];
 
     // Rekordy se hlásí appce (jomaridRecord v mostu); posílá se jen zvýšení, takže volání při každém uložení nic nestojí.
-    function reportRecords(prog) {
-        if (typeof jomaridRecord !== 'function' || !prog) return;
+    // Všechny statistiky z postupu (část je v prog.stats, část se odvozuje z odemčených scénářů, doktrín a nejlepších sektorů). Slouží pro hlášení appce i pro okno Statistiky.
+    function statValues(prog) {
         const scores = Object.keys(prog.highScores || {}).map(k => Number(prog.highScores[k]) || 0);
         const st = prog.stats || {};
-        jomaridRecord('best_sector', Math.max(0, ...scores));
-        jomaridRecord('scenarios_unlocked', (prog.unlockedScenarios || []).length);
-        jomaridRecord('scenarios_cleared', scores.length);
-        jomaridRecord('scenarios_deep', scores.filter(v => v >= 5).length);
-        jomaridRecord('scenarios_started', Object.keys(st.scen || {}).length);
-        jomaridRecord('doctrines_unlocked', (prog.unlockedDoctrines || []).length);
-        jomaridRecord('doctrines_used', Object.keys(st.docts || {}).length);
-        TRACKED_STATS.forEach(k => jomaridRecord(k, st[k]));
+        const out = {
+            best_sector: Math.max(0, ...scores),
+            scenarios_unlocked: (prog.unlockedScenarios || []).length,
+            scenarios_cleared: scores.length,
+            scenarios_deep: scores.filter(v => v >= 5).length,
+            scenarios_started: Object.keys(st.scen || {}).length,
+            doctrines_unlocked: (prog.unlockedDoctrines || []).length,
+            doctrines_used: Object.keys(st.docts || {}).length
+        };
+        TRACKED_STATS.forEach(k => { out[k] = st[k]; });
+        return out;
+    }
+    function reportRecords(prog) {
+        if (typeof jomaridRecord !== 'function' || !prog) return;
+        const v = statValues(prog);
+        Object.keys(v).forEach(k => jomaridRecord(k, v[k]));
     }
 
     // Přičte čítače (inc), zvedne nejvyšší hodnoty (max) a zapíše vyzkoušený scénář nebo doktrínu (seen: { scen | docts: id }).
