@@ -432,3 +432,137 @@ test('přístupnost: každé dialogové okno má název, tlačítko radnice se j
   assert.match(css, /\.sr-only\{ position:absolute; width:1px; height:1px;/);
   assert.match(html, /<div class="help-body" tabindex="0">/);
 });
+
+// Klávesy: Mezerník klikne na radnici a podržení klikání opakuje; skript se spouští v atrapě dokumentu s ručními hodinami.
+function makeKeys({ modal = false } = {}) {
+  const listeners = { keydown: [], keyup: [] }, winListeners = {};
+  const timers = new Map(); let now = 0, seq = 0;
+  const clock = {
+    setTimeout: (fn, ms) => { const id = ++seq; timers.set(id, { fn, at: now + ms, every: 0 }); return id; },
+    setInterval: (fn, ms) => { const id = ++seq; timers.set(id, { fn, at: now + ms, every: ms }); return id; },
+    clearTimeout: (id) => { timers.delete(id); }, clearInterval: (id) => { timers.delete(id); },
+  };
+  const advance = (ms) => {
+    const end = now + ms;
+    for (;;) {
+      let next = null;
+      for (const [id, t] of timers) if (t.at <= end && (!next || t.at < next.t.at)) next = { id, t };
+      if (!next) break;
+      now = next.t.at;
+      if (next.t.every) next.t.at += next.t.every; else timers.delete(next.id);
+      next.t.fn();
+    }
+    now = end;
+  };
+  const env = { clicks: [], bought: [], amounts: [], modal };
+  const document = {
+    addEventListener: (t, fn) => listeners[t].push(fn),
+    querySelector: (sel) => (sel === '.modal:not(.hidden)' && env.modal ? {} : null),
+  };
+  const window = { addEventListener: (t, fn) => { (winListeners[t] = winListeners[t] || []).push(fn); } };
+  const start = gameJs.indexOf('  var keyHoldTimeout'), end = gameJs.indexOf('  function bindEvents');
+  assert.ok(start > 0 && end > start, 'blok kláves se našel');
+  const state = { endgame: { active: false }, buyAmount: 1 };
+  const ctx = run(`${gameJs.slice(start, end)}\ninitHotkeys();`, {
+    ...clock, document, window, state, buildingOrder: ['a', 'b', 'c', 'd', 'e'], BUY_AMOUNTS: [1, 10, 100, 'max'],
+    normalizeBuyAmount: (v) => v, setBuyAmount: (v) => env.amounts.push(v), buyBuilding: (k) => env.bought.push(k),
+    onTownHallClick: (evt) => env.clicks.push(evt),
+  });
+  const target = (kind, id = '') => ({ tagName: kind.toUpperCase(), id, closest: () => (kind === 'button' || kind === 'a' ? {} : null) });
+  const body = target('body'), button = target('button', 'buyBtn'), hall = target('button', 'townhallBtn');
+  const key = (code, o = {}) => ({ code, repeat: false, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false, target: body, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, ...o });
+  const press = (code, o) => { const e = key(code, o); listeners.keydown.forEach((f) => f(e)); return e; };
+  const release = (code, o) => { const e = key(code, o); listeners.keyup.forEach((f) => f(e)); return e; };
+  const blur = () => (winListeners.blur || []).forEach((f) => f());
+  return { env, ctx, advance, press, release, blur, body, button, hall, target, listeners, winListeners, pending: () => timers.size };
+}
+
+test('klávesy: mezerník klikne na radnici hned a podržení klikání opakuje po 130 ms, puštění ho ukončí', () => {
+  const k = makeKeys();
+  const down = k.press('Space');
+  assert.equal(down.defaultPrevented, true, 'stránka se nerolby');
+  assert.deepEqual(k.env.clicks, [null], 'jedno kliknutí hned, bez souřadnic myši');
+  k.advance(340); assert.equal(k.env.clicks.length, 1, 'do 350 ms se nic neopakuje (rozlišení ťuku od podržení)');
+  k.advance(10 + 130 - 1); assert.equal(k.env.clicks.length, 1);
+  k.advance(1); assert.equal(k.env.clicks.length, 2, 'první opakování ve 480 ms');
+  k.advance(130 * 3); assert.equal(k.env.clicks.length, 5, 'další po 130 ms');
+  const up = k.release('Space');
+  assert.equal(up.defaultPrevented, true, 'nativní klik po puštění se zruší, jinak by radnice klikla znovu');
+  const n = k.env.clicks.length; k.advance(5000);
+  assert.equal(k.env.clicks.length, n, 'po puštění se nekliká');
+  assert.equal(k.pending(), 0, 'žádný časovač nezůstane');
+});
+
+test('klávesy: opakované stisky systému (držení) stránku nerolují a nepřidávají kliky ani časovače; krátký ťuk dá jedno kliknutí', () => {
+  const k = makeKeys();
+  k.press('Space');
+  const reps = [1, 2, 3, 4].map(() => k.press('Space', { repeat: true }));
+  assert.ok(reps.every((e) => e.defaultPrevented), 'i opakovaný stisk zruší posun stránky');
+  assert.equal(k.env.clicks.length, 1);
+  assert.equal(k.pending(), 1, 'jen jeden časovač');
+  k.advance(480); assert.equal(k.env.clicks.length, 2, 'rozvrh se opakováním nerozhodil');
+  k.release('Space');
+  const t = makeKeys(); t.press('Space'); t.advance(200); t.release('Space'); t.advance(2000);
+  assert.equal(t.env.clicks.length, 1, 'ťuk = jedno kliknutí');
+});
+
+test('klávesy: ztracené puštění (nový stisk bez keyup) rozvrh nezdvojí, ztráta zaměření a okno klikání zastaví', () => {
+  const k = makeKeys();
+  k.press('Space'); k.advance(400); k.press('Space');           // keyup se nikdy nedoručil
+  assert.equal(k.pending(), 1, 'starý časovač se zrušil');
+  const before = k.env.clicks.length; k.advance(350 + 130 * 4);
+  assert.equal(k.env.clicks.length - before, 4, 'jedno kliknutí za 130 ms, ne dvě');
+  k.blur();
+  const n = k.env.clicks.length; k.advance(3000);
+  assert.equal(k.env.clicks.length, n, 'po ztrátě zaměření (jiné okno nebo karta) se přestane klikat');
+  assert.equal(k.pending(), 0);
+  // okno, které se otevře během držení, klikání zastaví při nejbližším tiku
+  const m = makeKeys(); m.press('Space'); m.advance(480 + 130);
+  const c = m.env.clicks.length; m.env.modal = true; m.advance(130);
+  assert.equal(m.env.clicks.length, c, 'v okně se nekliká');
+  assert.equal(m.pending(), 0);
+});
+
+test('klávesy: mezerník nechává být pole, výběry, otevřená okna, tlačítka a odkazy (kromě radnice) i kombinace s Ctrl, Alt, Meta a Shift', () => {
+  const k = makeKeys();
+  for (const [name, tg] of [['pole', k.target('input')], ['výběr', k.target('select')], ['text', k.target('textarea')], ['tlačítko', k.button], ['odkaz', k.target('a', 'x')]]) {
+    const e = k.press('Space', { target: tg });
+    assert.equal(e.defaultPrevented, false, name + ': mezerník zůstává prvku');
+  }
+  for (const mod of ['ctrlKey', 'altKey', 'metaKey', 'shiftKey']) assert.equal(k.press('Space', { [mod]: true }).defaultPrevented, false, mod);
+  assert.equal(k.env.clicks.length, 0);
+  assert.equal(k.pending(), 0);
+  // keyup bez držení se nikdy neruší, jinak by tlačítku zmizel nativní stisk
+  assert.equal(k.release('Space', { target: k.button }).defaultPrevented, false);
+  // otevřené okno
+  const w = makeKeys({ modal: true });
+  assert.equal(w.press('Space').defaultPrevented, false); assert.equal(w.env.clicks.length, 0);
+  // radnice sama: bere se na keydown a držení funguje i s ní zaměřenou
+  const h = makeKeys(); const e = h.press('Space', { target: h.hall });
+  assert.equal(e.defaultPrevented, true); assert.equal(h.env.clicks.length, 1);
+  assert.equal(h.release('Space', { target: h.hall }).defaultPrevented, true, 'a nativní klik po puštění se zruší');
+});
+
+test('klávesy: číslice a B fungují jako dřív, zóny se při držení klávesy nekupují opakovaně a mezerník se hlásí jen jednou na keydown a keyup', () => {
+  const k = makeKeys();
+  k.press('Digit1'); k.press('Numpad3'); k.press('Digit5');
+  assert.deepEqual(k.env.bought, ['a', 'c', 'e']);
+  k.press('Digit2', { repeat: true }); assert.deepEqual(k.env.bought, ['a', 'c', 'e'], 'opakovaný stisk nekupuje');
+  k.press('Digit6'); k.press('Digit0'); assert.equal(k.env.bought.length, 3);
+  k.press('KeyB'); assert.deepEqual(k.env.amounts, [10]);
+  k.press('KeyB', { repeat: true }); assert.equal(k.env.amounts.length, 1);
+  k.press('Digit1', { ctrlKey: true }); k.press('Digit1', { target: k.target('input') }); assert.equal(k.env.bought.length, 3);
+  assert.equal(k.listeners.keydown.length, 1); assert.equal(k.listeners.keyup.length, 1);
+  assert.equal(k.winListeners.blur.length, 1);
+});
+
+test('klávesy: zdroj používá bezpečný výběr prvků, klik bez souřadnic a nápověda mezerník zmiňuje', () => {
+  const src = gameJs.slice(gameJs.indexOf('  var keyHoldTimeout'), gameJs.indexOf('  function bindEvents'));
+  assert.match(src, /closest\('button, a, summary, \[role="button"\]'\)/);
+  assert.match(src, /onTownHallClick\(null\)/);
+  assert.match(src, /window\.addEventListener\('blur', stopKeyHold\)/);
+  // klik bez události musí dopadnout (radnice i endgame): plovoucí text a částice berou null jako střed
+  for (const fn of ['spawnFloatingText', 'spawnClickParticles']) assert.match(fnSrc(fn), /evt && evt\.clientX !== undefined/, fn);
+  const help = html.slice(html.indexOf('<div class="modal hidden" id="helpModal"'), html.indexOf('id="offlineModal"'));
+  assert.match(help, /mezerník/);
+});

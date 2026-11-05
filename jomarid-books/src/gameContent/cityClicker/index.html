@@ -960,7 +960,7 @@
       <p>Nad seznamem zón přepínáš, kolik kusů koupit najednou (×1, ×10, ×100, nebo Max podle rozpočtu). U každé zóny vidíš, kolik přidá a za jak dlouho se zaplatí; hvězdička ⭐ značí nejvýhodnější. Na počítači koupíš zóny klávesami 1 až 5 a množství přepneš klávesou B. Další cíl a odhad času najdeš v Přehledu a poslední události v Deníku města.</p>
 
       <h3>🔥 Combo Meter a Horečka výplat</h3>
-      <p>Rychlé opakované klikání plní Combo Meter kolem tlačítka radnice. Při 100 % se spustí Horečka výplat — 15 vteřin s 50× vyšším ziskem z kliknutí. Meter mezitím pomalu klesá, takže je potřeba klikat v rytmu.</p>
+      <p>Rychlé opakované klikání plní Combo Meter kolem tlačítka radnice. Při 100 % se spustí Horečka výplat — 15 vteřin s 50× vyšším ziskem z kliknutí. Meter mezitím pomalu klesá, takže je potřeba klikat v rytmu. Radnici můžeš podržet (myší nebo prstem) a klikání se opakuje samo; na počítači stejně funguje mezerník.</p>
 
       <h3>📜 Vyhlášky a 🏗️ Megaprojekty</h3>
       <p>Vyhlášky jsou trvalé jednorázové úpravy s klady i zápory (např. vyšší příjem za nižší spokojenost). Megaprojekty (Fúzní reaktor, Vesmírný výtah) jsou drahé vícefázové stavby, které po dokončení natrvalo zdvojnásobí pasivní příjem.</p>
@@ -3482,13 +3482,50 @@
     renderShop();
   }
 
+  // Mezerník = klik na radnici, jeho podržení = plynulé opakované klikání (stejně jako podržení tlačítka myší).
+  var keyHoldTimeout = null;
+  var keyHoldInterval = null;
+  var keyHolding = false;
+
+  function stopKeyHold(){
+    clearTimeout(keyHoldTimeout);
+    clearInterval(keyHoldInterval);
+    keyHoldTimeout = null;
+    keyHoldInterval = null;
+    keyHolding = false;
+  }
+
+  function startKeyHold(){
+    stopKeyHold();
+    keyHolding = true;
+    onTownHallClick(null);
+    keyHoldTimeout = setTimeout(function(){
+      keyHoldInterval = setInterval(function(){
+        // Okno, které se otevře během držení, klikání zastaví (klávesa se může pustit už uvnitř něj).
+        if(document.querySelector('.modal:not(.hidden)')){ stopKeyHold(); return; }
+        onTownHallClick(null);
+      }, 130);
+    }, 350);
+  }
+
   function initHotkeys(){
     document.addEventListener('keydown', function(ev){
-      if(ev.repeat || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+      if(ev.ctrlKey || ev.metaKey || ev.altKey) return;
       var tag = ev.target && ev.target.tagName;
       if(tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
       var open = document.querySelector('.modal:not(.hidden)');
       if(open) return;
+      if(ev.code === 'Space' && !ev.shiftKey){
+        // Tlačítka a odkazy si mezerník obsluhují sama a tam ho nechávám být. Výjimka je radnice: nativní stisk by ji klikl až po
+        // puštění klávesy a podržení by nešlo. preventDefault i u opakovaných stisků, jinak by mezerník posouval stránku.
+        var tg = ev.target;
+        var own = tg && tg.id === 'townhallBtn';
+        if(!own && tg && tg.closest && tg.closest('button, a, summary, [role="button"]')) return;
+        ev.preventDefault();
+        if(!ev.repeat) startKeyHold();
+        return;
+      }
+      if(ev.repeat) return;
       var m = /^(?:Digit|Numpad)([1-5])$/.exec(ev.code || '');
       if(m){
         var key = buildingOrder[Number(m[1]) - 1];
@@ -3500,6 +3537,12 @@
         setBuyAmount(BUY_AMOUNTS[(idx + 1) % BUY_AMOUNTS.length]);
       }
     });
+    // Puštění mezerníku klikání ukončí; preventDefault zabrání tomu, aby se radnice po puštění klikla ještě jednou nativně.
+    document.addEventListener('keyup', function(ev){
+      if(ev.code === 'Space' && keyHolding){ ev.preventDefault(); stopKeyHold(); }
+    });
+    // Kdyby se klávesa pustila mimo hru (jiné okno nebo karta), keyup nepřijde a hra by klikala sama dál.
+    window.addEventListener('blur', stopKeyHold);
   }
 
   function bindEvents(){
