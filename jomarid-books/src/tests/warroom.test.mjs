@@ -297,3 +297,19 @@ test('čeština: počet dní odhalené džungle se skloňuje (1 den, 2 až 4 dny
   assert.match(game, /DŽUNGLE ODHALENA \(\$\{state\.viet_revealed\} \$\{czPlural\(state\.viet_revealed, 'den', 'dny', 'dní'\)\}\)/);
   assert.match(html, /<input type="text" id="cheat-input"[^>]*value="v4\.2" aria-label="Tajný kód"/, 'pole dole na stránce má stejný název jako v ostatních hrách (čtečky obrazovky jinak hlásí nepopsané pole)');
 });
+
+test('okno: viewport pro telefon a panel se na užším okně posune pod tlačítka zvuku a nápovědy', () => {
+  assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1/);
+  const m = css.match(/@media \(max-width: 1300px\) \{\s*#game-screen, \.wizard-screen \{([^}]*)\}/);
+  assert.ok(m, 'chybí pravidlo pro užší okno');
+  const margin = Number((m[1].match(/margin-top:\s*(\d+)px/) || [])[1]);
+  assert.match(m[1], /max-height:\s*calc\(100vh - \d+px\)/);
+  // tlačítka (nejnižší umístění top + výška) musí skončit nad horním okrajem panelu
+  // platné umístění je pravidlo "#id { top: Npx; left: Npx; }" (pozdější přebíjí první, které má top 16 px), výška je z původní definice
+  const top = (id) => Number((css.match(new RegExp('^\\s*#' + id + ' \\{ top: (\\d+)px; left: \\d+px; \\}', 'm')) || [])[1]);
+  const height = (id) => Number((css.match(new RegExp('#' + id + ' \\{[^}]*?height:\\s*(\\d+)px')) || [])[1]);
+  for (const id of ['sound-toggle', 'tutorial-help-btn']) {
+    assert.ok(top(id) > 0 && height(id) > 0, id);
+    assert.ok(top(id) + height(id) <= margin, id + ' by zasahovalo do panelu: ' + top(id) + ' + ' + height(id) + ' > ' + margin);
+  }
+});

@@ -2,6 +2,7 @@
 <html lang="cs">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>WARROOM: FRONTLINES</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
@@ -417,6 +418,11 @@
         #sound-toggle { top: 8px; left: 148px; }
         #tutorial-help-btn { top: 8px; left: 202px; }
         @media (max-width: 550px) { #sound-toggle { top: 6px; left: 148px; } #tutorial-help-btn { top: 6px; left: 196px; } }
+
+        /* Tlačítka zvuk a nápověda leží nad levým horním rohem hry. Na užším okně (notebook, tablet, telefon) by překryla název hry, proto se panel posune pod ně. */
+        @media (max-width: 1300px) {
+            #game-screen, .wizard-screen { margin-top: 56px; max-height: calc(100vh - 76px); }
+        }
 
         /* Systém hlásí „omezit pohyb“: bez otřesů, kroužícího radaru, pulzování a vylétávajících částic; čísla nad polem se jen zprůhlední.
            Blok je záměrně na konci stylů, aby přebil pozdější pravidla se stejnou přesností. */
