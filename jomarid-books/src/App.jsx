@@ -18,6 +18,7 @@ import { HelpBot } from './components/HelpBot';
 import { HomePage } from './pages/HomePage';
 import { LoginPage, ResetPasswordPage } from './pages/LoginPage';
 import { UserLibrary, AuthorPage } from './pages/UserLibrary';
+import { t, useLang } from './i18n';
 
 // Těžší stránky, které většina čtenářů nikdy neotevře (administrace, nakladatelský panel, hry, statistiky, čtečka),
 // se stahují až při prvním otevření. Úvodní načtení je tak výrazně menší.
@@ -52,14 +53,14 @@ export class PageErrorBoundary extends Component {
     if (!this.state.failed) return this.props.children;
     return (
       <div role="alert" style={{ color: 'var(--text-body)' }} className="max-w-sm mx-auto py-24 px-4 text-center">
-        <p className="text-sm font-bold m-0 mb-4">Tuhle stránku se nepodařilo načíst. Zkontroluj připojení a zkus to znovu.</p>
-        <button type="button" onClick={() => window.location.reload()} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="px-5 py-2.5 rounded-xl border-none cursor-pointer text-xs font-black uppercase tracking-wider">Načíst znovu</button>
+        <p className="text-sm font-bold m-0 mb-4">{t('Tuhle stránku se nepodařilo načíst. Zkontroluj připojení a zkus to znovu.')}</p>
+        <button type="button" onClick={() => window.location.reload()} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="px-5 py-2.5 rounded-xl border-none cursor-pointer text-xs font-black uppercase tracking-wider">{t('Načíst znovu')}</button>
       </div>
     );
   }
 }
 export const PageLoading = () => (
-  <div role="status" style={{ color: 'var(--text-muted)' }} className="flex items-center justify-center min-h-[50vh] text-xs font-bold">Načítám...</div>
+  <div role="status" style={{ color: 'var(--text-muted)' }} className="flex items-center justify-center min-h-[50vh] text-xs font-bold">{t('Načítám...')}</div>
 );
 
 // Po kliknutí na odkaz "obnova hesla" musí uživatel skončit na stránce pro nové heslo,
@@ -77,6 +78,7 @@ const readStored = (key) => { try { return localStorage.getItem(key); } catch { 
 const writeStored = (key, value) => { try { localStorage.setItem(key, value); } catch { /* nevadí, motiv platí aspoň do zavření stránky */ } };
 
 export default function App() {
+  const { lang } = useLang(); // při přepnutí jazyka se obsah appky vykreslí znovu (key={lang}), ať se nic nezapamatuje v původním jazyce
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [currentTheme, setCurrentTheme] = useState(() => readStored(THEME_KEY) || 'saas');
   const [customColors, setCustomColors] = useState(loadCustomColors); // jen pro motiv „Vlastní“
@@ -122,10 +124,10 @@ export default function App() {
         changeLively: (on) => { saveLively(on); setLively(loadLively()); },
         // V Živém režimu se nový motiv „rozlije“ kruhem z místa kliknutí (jinak se přepne hned).
         changeAccent: (a) => withViewTransition(() => { saveAccent(a); setAccent(loadAccent()); }, { enabled: lively, flush: flushSync }),
-        changeTheme: (t) => withViewTransition(() => {
+        changeTheme: (themeKey) => withViewTransition(() => {
           // První přepnutí na „Vlastní“ začne od barev, které uživatel právě vidí, ne od výchozí tyrkysové.
-          if (usesCustomColors(t)) setCustomColors(seedCustomColors(currentTheme));
-          setCurrentTheme(t); writeStored(THEME_KEY, t); notifySettingsChanged();
+          if (usesCustomColors(themeKey)) setCustomColors(seedCustomColors(currentTheme));
+          setCurrentTheme(themeKey); writeStored(THEME_KEY, themeKey); notifySettingsChanged();
         }, { enabled: lively, flush: flushSync }),
         // Úprava barev nechá motiv, ve kterém je uživatel („Vlastní“ nebo „Experimentální vlastní“), jinak přepne na „Vlastní“.
         changeCustomColors: (c) => { const keep = currentTheme === EXPERIMENTAL_THEME_KEY ? EXPERIMENTAL_THEME_KEY : CUSTOM_THEME_KEY; saveCustomColors(c); setCustomColors(loadCustomColors()); setCurrentTheme(keep); writeStored(THEME_KEY, keep); notifySettingsChanged(); },
@@ -133,7 +135,7 @@ export default function App() {
         <SettingsSyncRunner />
         <Router>
           <TourProvider blocked={isSearchOpen}>
-          <div style={{ background: 'var(--bg-body)', color: 'var(--text-body)' }} className={`min-h-screen flex flex-col font-sans antialiased transition-all duration-200 ${lively ? 'isolate' : ''}`}>
+          <div key={lang} style={{ background: 'var(--bg-body)', color: 'var(--text-body)' }} className={`min-h-screen flex flex-col font-sans antialiased transition-all duration-200 ${lively ? 'isolate' : ''}`}>
             <LivelyScenery enabled={lively} />
             <LivelyMotion enabled={lively} />
             <RecoveryRedirect />

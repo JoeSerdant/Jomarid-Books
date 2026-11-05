@@ -18,6 +18,7 @@ import { DEFAULT_BOOK_PRICE } from '../constants/economy';
 import { USERNAME_MIN, USERNAME_MAX } from '../lib/username';
 import { EMAIL_MAX, EMAIL_REQUEST_KIND, ADMIN_EMAIL_ERRORS, isValidEmail, normalizeEmail, sameEmail } from '../emailChange';
 import { BOOK_BADGES } from '../constants/badges';
+import { t } from '../i18n';
 import { DEFAULT_MONTHLY_GOAL } from '../constants/leveling';
 import { Award, Coins, Database, Feather, Filter, Heart, Layout, Plus, RefreshCw, Search, Shield, ShieldAlert, Sparkles, Terminal, Trash, UserCheck, Users, XCircle, LayoutDashboard, UserCog, Loader2, CheckCircle2, X, ChevronLeft, ChevronRight, Ban, KeyRound, Trash2, ShieldCheck, Bell, Copy, Flag, Eye, EyeOff, Download, Mail } from 'lucide-react';
 
@@ -423,7 +424,7 @@ const AccountDetail = ({ userId, currentUserId, onClose, onChanged, onEmailChang
               <div>
                 <p className="text-base font-black m-0 break-all">{account.email}</p>
                 <div className="flex flex-wrap gap-1.5 mt-2">
-                  <Pill tone="accent">{profile ? ROLE_LABELS[profile.role] || profile.role : 'Bez profilu'}</Pill>
+                  <Pill tone="accent">{profile ? t(ROLE_LABELS[profile.role] || profile.role) : 'Bez profilu'}</Pill>
                   {isBanned && <Pill tone="danger">Zablokován</Pill>}
                   {!account.email_confirmed_at && <Pill tone="warn">E-mail nepotvrzen</Pill>}
                   {isSelf && <Pill tone="ok">Tohle jsi ty</Pill>}
@@ -470,7 +471,7 @@ const AccountDetail = ({ userId, currentUserId, onClose, onChanged, onEmailChang
                     <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider block mb-1">Role</span>
                     <select aria-label="Role" value={roleDraft} onChange={(e) => setRoleDraft(e.target.value)} disabled={isSelf || !profile || busy} style={selectStyle} className={`${selectClass} w-full disabled:opacity-50`}>
                       {!profile && <option value="">-</option>}
-                      {Object.entries(ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                      {Object.entries(ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}
                     </select>
                   </label>
                   <SmallButton tone="primary" busy={busy} disabled={isSelf || !profile || roleDraft === profile?.role} onClick={() => run(() => supabase.rpc('admin_set_role', { p_user_id: userId, p_role: roleDraft }), 'Role změněna.')}>
@@ -908,7 +909,7 @@ export const NotificationsTab = ({ onCountChange, currentUserId, onOpenAccount, 
 
             {u ? (
               <dl className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1 text-xs m-0">
-                <dt style={{ color: 'var(--text-muted)' }} className="font-bold">Účet</dt><dd className="m-0 font-semibold break-all">{u.username || '-'} <span style={{ color: 'var(--text-muted)' }}>({ROLE_LABELS[u.role] || u.role})</span></dd>
+                <dt style={{ color: 'var(--text-muted)' }} className="font-bold">Účet</dt><dd className="m-0 font-semibold break-all">{u.username || '-'} <span style={{ color: 'var(--text-muted)' }}>({t(ROLE_LABELS[u.role] || u.role)})</span></dd>
                 <dt style={{ color: 'var(--text-muted)' }} className="font-bold">E-mail</dt><dd className="m-0 font-semibold break-all">{u.email}</dd>
                 <dt style={{ color: 'var(--text-muted)' }} className="font-bold">Založen</dt><dd className="m-0 font-semibold">{formatDate(u.created_at)}</dd>
                 <dt style={{ color: 'var(--text-muted)' }} className="font-bold">Poslední přihlášení</dt><dd className="m-0 font-semibold">{u.last_sign_in_at ? relativeTime(u.last_sign_in_at) : 'nikdy'}</dd>
@@ -1251,7 +1252,7 @@ export const AccountsTab = ({ currentUserId, preset, onChanged, onPresetEmailCha
                     <span className="block text-sm font-bold break-all">{r.email}</span>
                     {r.username && <span data-testid="account-username" style={{ color: 'var(--text-muted)' }} className="block text-xs font-semibold break-all">@{r.username}</span>}
                     <span className="flex flex-wrap gap-1 mt-1">
-                      <Pill tone="accent">{r.has_profile ? ROLE_LABELS[r.role] || r.role : 'Bez profilu'}</Pill>
+                      <Pill tone="accent">{r.has_profile ? t(ROLE_LABELS[r.role] || r.role) : 'Bez profilu'}</Pill>
                       {r.is_banned && <Pill tone="danger">Zablokován</Pill>}
                       {!r.email_confirmed && <Pill tone="warn">Nepotvrzen</Pill>}
                     </span>
@@ -2007,7 +2008,7 @@ export const AdminDashboard = () => {
                   >
                     <option value="">-- Vyber správný účet --</option>
                     {profiles.map(p => (
-                      <option key={p.id} value={p.id}>{p.email} ({ROLE_LABELS[p.role] || p.role})</option>
+                      <option key={p.id} value={p.id}>{p.email} ({t(ROLE_LABELS[p.role] || p.role)})</option>
                     ))}
                   </select>
                   <button
@@ -2451,7 +2452,7 @@ export const AdminDashboard = () => {
                             style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }} 
                             className={`text-[0.5625rem] px-2.5 py-0.5 rounded-full uppercase border border-solid font-black shadow-sm tracking-wider`}
                           >
-                            {ROLE_LABELS[p.role || ROLE_READER] || p.role}
+                            {t(ROLE_LABELS[p.role || ROLE_READER] || p.role)}
                           </span>
                         </td>
                         <td className="p-3 text-right flex justify-end items-center gap-2">

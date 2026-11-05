@@ -1,4 +1,5 @@
 import { notifySettingsChanged } from './settings/settingsEvents.js';
+import { tk } from './i18n/mark.js';
 
 export const THEMES = {
  saas: {
@@ -65,12 +66,12 @@ export const applyThemeStyle = (key, root = document.documentElement) => {
 };
 export const CUSTOM_DEFAULT = { bg: '#1e293b', accent: '#14b8a6' };
 export const CUSTOM_PRESETS = [
-  { label: 'Půlnoc', bg: '#0b1020', accent: '#60a5fa' },
-  { label: 'Fialová', bg: '#1a1033', accent: '#a855f7' },
-  { label: 'Růžová', bg: '#fff1f2', accent: '#e11d48' },
-  { label: 'Papír', bg: '#f5efe0', accent: '#b45309' },
-  { label: 'Oceán', bg: '#06222b', accent: '#22d3ee' },
-  { label: 'Grafit', bg: '#18181b', accent: '#f59e0b' },
+  { label: tk('Půlnoc'), bg: '#0b1020', accent: '#60a5fa' },
+  { label: tk('Fialová'), bg: '#1a1033', accent: '#a855f7' },
+  { label: tk('Růžová'), bg: '#fff1f2', accent: '#e11d48' },
+  { label: tk('Papír'), bg: '#f5efe0', accent: '#b45309' },
+  { label: tk('Oceán'), bg: '#06222b', accent: '#22d3ee' },
+  { label: tk('Grafit'), bg: '#18181b', accent: '#f59e0b' },
 ];
 
 export const normalizeHex = (v) => {
@@ -198,7 +199,7 @@ Object.assign(THEMES, {
   contrast: { ...deriveTheme('#000000', '#ffd60a'), '--text-body': '#ffffff', '--border-color': '#ffffff', '--text-muted': '#e6e6e6', '--bg-card': '#0a0a0a', '--bg-secondary': '#171717' },
 });
 export const THEME_KEY = 'jomarid-books-theme';
-export const THEME_LABELS = { saas: 'Světlý', dark: 'Tmavý', emerald: 'Dřevo a zeleň', sepia: 'Sépiový', ocean: 'Oceán', contrast: 'Vysoký kontrast', [CUSTOM_THEME_KEY]: 'Vlastní', [EXPERIMENTAL_THEME_KEY]: 'Experimentální vlastní' };
+export const THEME_LABELS = { saas: tk('Světlý'), dark: tk('Tmavý'), emerald: tk('Dřevo a zeleň'), sepia: tk('Sépiový'), ocean: tk('Oceán'), contrast: tk('Vysoký kontrast'), [CUSTOM_THEME_KEY]: tk('Vlastní'), [EXPERIMENTAL_THEME_KEY]: tk('Experimentální vlastní') };
 export const DARK_THEMES = ['dark', 'emerald', 'ocean', 'contrast'];
 
 // --- Akcentní barva hotových motivů ---
@@ -207,13 +208,13 @@ export const DARK_THEMES = ['dark', 'emerald', 'ocean', 'contrast'];
 export const ACCENT_KEY = 'jomarid-accent';
 const own = (obj, key) => typeof key === 'string' && Object.prototype.hasOwnProperty.call(obj, key); // ne zděděné (__proto__, toString)
 export const ACCENTS = {
-  default: { label: 'Podle motivu', color: null },
-  blue: { label: 'Modrá', color: '#2563eb' },
-  teal: { label: 'Tyrkysová', color: '#0d9488' },
-  green: { label: 'Zelená', color: '#16a34a' },
-  amber: { label: 'Jantarová', color: '#d97706' },
-  rose: { label: 'Růžová', color: '#e11d48' },
-  violet: { label: 'Fialová', color: '#7c3aed' },
+  default: { label: tk('Podle motivu'), color: null },
+  blue: { label: tk('Modrá'), color: '#2563eb' },
+  teal: { label: tk('Tyrkysová'), color: '#0d9488' },
+  green: { label: tk('Zelená'), color: '#16a34a' },
+  amber: { label: tk('Jantarová'), color: '#d97706' },
+  rose: { label: tk('Růžová'), color: '#e11d48' },
+  violet: { label: tk('Fialová'), color: '#7c3aed' },
 };
 export const withAccent = (vars, key) => {
   const base = own(ACCENTS, key) ? ACCENTS[key].color : null;
@@ -231,8 +232,8 @@ export const saveAccent = (key) => { try { localStorage.setItem(ACCENT_KEY, own(
 // (padding, margin, gap) přes proměnnou --d, kterou čte konfigurace Tailwindu (vite.config.js).
 export const UI_SCALE_KEY = 'jomarid-ui-scale';
 export const UI_DENSITY_KEY = 'jomarid-ui-density';
-export const UI_SCALES = { s: { label: 'Menší', value: 0.9 }, m: { label: 'Standardní', value: 1 }, l: { label: 'Větší', value: 1.125 }, xl: { label: 'Největší', value: 1.25 } };
-export const UI_DENSITIES = { compact: { label: 'Kompaktní', value: 0.8 }, normal: { label: 'Standardní', value: 1 }, comfy: { label: 'Pohodlné', value: 1.2 } };
+export const UI_SCALES = { s: { label: tk('Menší'), value: 0.9 }, m: { label: tk('Standardní'), value: 1 }, l: { label: tk('Větší'), value: 1.125 }, xl: { label: tk('Největší'), value: 1.25 } };
+export const UI_DENSITIES = { compact: { label: tk('Kompaktní'), value: 0.8 }, normal: { label: tk('Standardní'), value: 1 }, comfy: { label: tk('Pohodlné'), value: 1.2 } };
 const loadChoice = (storageKey, options, fallback) => { try { const v = localStorage.getItem(storageKey); return own(options, v) ? v : fallback; } catch { return fallback; } };
 export const loadUiScale = () => loadChoice(UI_SCALE_KEY, UI_SCALES, 'm');
 export const loadUiDensity = () => loadChoice(UI_DENSITY_KEY, UI_DENSITIES, 'normal');
@@ -254,31 +255,31 @@ export const isDarkTheme = (key, vars) => (usesCustomColors(key) ? isDarkColor(v
 // Sdílené volby čtečky - používá je ReaderPage i Nastavení, aby se seznamy
 // voleb a klíče v localStorage nikdy nerozjely (stejný princip jako leveling.js).
 export const FONT_FAMILIES = {
-  serif:    { label: 'Serifové',    className: 'font-serif' },
-  sans:     { label: 'Bezpatkové',  className: 'font-sans' },
-  readable: { label: 'Čitelné',     className: 'font-sans tracking-wide' },
+  serif:    { label: tk('Serifové'),    className: 'font-serif' },
+  sans:     { label: tk('Bezpatkové'),  className: 'font-sans' },
+  readable: { label: tk('Čitelné'),     className: 'font-sans tracking-wide' },
 };
 export const LINE_HEIGHTS = {
-  compact: { label: 'Kompaktní', value: 1.5 },
-  normal:  { label: 'Normální',  value: 1.8 },
-  airy:    { label: 'Vzdušné',   value: 2.2 },
+  compact: { label: tk('Kompaktní'), value: 1.5 },
+  normal:  { label: tk('Normální'),  value: 1.8 },
+  airy:    { label: tk('Vzdušné'),   value: 2.2 },
 };
 export const TEXT_WIDTHS = {
-  narrow: { label: 'Úzký',    ratio: 0.62 },
-  medium: { label: 'Střední', ratio: 0.72 },
-  wide:   { label: 'Široký',  ratio: 0.82 },
+  narrow: { label: tk('Úzký'),    ratio: 0.62 },
+  medium: { label: tk('Střední'), ratio: 0.72 },
+  wide:   { label: tk('Široký'),  ratio: 0.82 },
 };
 
-export const ALIGNMENTS = { left: { label: 'Vlevo' }, justify: { label: 'Do bloku' } };
-export const LETTER_SPACINGS = { normal: { label: 'Běžné', value: '0' }, wide: { label: 'Širší', value: '0.02em' }, wider: { label: 'Nejširší', value: '0.04em' } };
-export const PAGE_MARGINS = { narrow: { label: 'Úzké', x: 14, y: 20 }, normal: { label: 'Střední', x: 24, y: 28 }, wide: { label: 'Široké', x: 38, y: 36 } };
+export const ALIGNMENTS = { left: { label: tk('Vlevo') }, justify: { label: tk('Do bloku') } };
+export const LETTER_SPACINGS = { normal: { label: tk('Běžné'), value: '0' }, wide: { label: tk('Širší'), value: '0.02em' }, wider: { label: tk('Nejširší'), value: '0.04em' } };
+export const PAGE_MARGINS = { narrow: { label: tk('Úzké'), x: 14, y: 20 }, normal: { label: tk('Střední'), x: 24, y: 28 }, wide: { label: tk('Široké'), x: 38, y: 36 } };
 export const PAGE_BREAKS = {
-  word: { label: 'Přesně', hint: 'Stránka je plná až dolů, věta se může rozdělit.' },
-  sentence: { label: 'Po větách', hint: 'Stránka skončí koncem věty, pokud je blízko (dole může zůstat malá mezera).' },
-  paragraph: { label: 'Po odstavcích', hint: 'Stránka se snaží skončit koncem odstavce, jinak věty.' },
+  word: { label: tk('Přesně'), hint: tk('Stránka je plná až dolů, věta se může rozdělit.') },
+  sentence: { label: tk('Po větách'), hint: tk('Stránka skončí koncem věty, pokud je blízko (dole může zůstat malá mezera).') },
+  paragraph: { label: tk('Po odstavcích'), hint: tk('Stránka se snaží skončit koncem odstavce, jinak věty.') },
 };
-export const PAGE_ANIMATIONS = { none: { label: 'Žádná' }, fade: { label: 'Prolnutí' }, slide: { label: 'Posun' } };
-export const MOTION_OPTIONS = { system: { label: 'Podle zařízení' }, reduce: { label: 'Omezit' }, full: { label: 'Plné' } };
+export const PAGE_ANIMATIONS = { none: { label: tk('Žádná') }, fade: { label: tk('Prolnutí') }, slide: { label: tk('Posun') } };
+export const MOTION_OPTIONS = { system: { label: tk('Podle zařízení') }, reduce: { label: tk('Omezit') }, full: { label: tk('Plné') } };
 export const FONT_SIZE_RANGE = { min: 14, max: 28 };
 export const AUTO_ADVANCE_RANGE = { min: 8, max: 60 };
 export const WPM_RANGE = { min: 120, max: 400 };

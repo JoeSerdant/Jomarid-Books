@@ -2,22 +2,24 @@
 // zapamatovaný stav procházení. Jde testovat v Node (src/tests/browse.test.mjs).
 
 import { foldText, matchesTokens, queryTokens } from './browseModel.js';
+import { tk } from '../i18n/mark.js';
+import { t, isEnglish } from '../i18n/core.js';
 
 export const SORT_OPTIONS = [
-  { key: 'smart', label: 'Doporučeno' },
-  { key: 'newest', label: 'Nejnovější' },
-  { key: 'alpha', label: 'Abecedně' },
-  { key: 'rating', label: 'Nejlépe hodnocené' },
-  { key: 'likes', label: 'Nejoblíbenější' },
-  { key: 'price_low', label: 'Nejlevnější' },
-  { key: 'price_high', label: 'Nejdražší' },
+  { key: 'smart', label: tk('Doporučeno') },
+  { key: 'newest', label: tk('Nejnovější') },
+  { key: 'alpha', label: tk('Abecedně') },
+  { key: 'rating', label: tk('Nejlépe hodnocené') },
+  { key: 'likes', label: tk('Nejoblíbenější') },
+  { key: 'price_low', label: tk('Nejlevnější') },
+  { key: 'price_high', label: tk('Nejdražší') },
 ];
 
 export const STATUS_FILTERS = [
-  { key: 'all', label: 'Všechny' },
-  { key: 'owned', label: 'Moje knihy' },
-  { key: 'reading', label: 'Rozečtené' },
-  { key: 'finished', label: 'Dočtené' },
+  { key: 'all', label: tk('Všechny') },
+  { key: 'owned', label: tk('Moje knihy') },
+  { key: 'reading', label: tk('Rozečtené') },
+  { key: 'finished', label: tk('Dočtené') },
 ];
 
 // Žánry píšou nakladatelé jako volný text, takže se před použitím čistí: jen řetězce, bez okrajových a dvojitých mezer,
@@ -46,8 +48,8 @@ export const cleanGenres = (raw) => {
 // Rozečtená kniha: vlastněná, ne dočtená, ale už otevřená. Stejné pravidlo používá i "Pokračovat ve čtení".
 export const isInProgress = (b) => b.hasAccess && !b.isRead && b.scrollPosition > 0;
 
-/** Hodnocení s desetinnou čárkou, jak se píše česky ("4,9"); stejně jako ve vyhledávacím okně. */
-export const fmtRating = (n) => Number(n).toFixed(1).replace('.', ',');
+/** Hodnocení s desetinnou čárkou, jak se píše česky ("4,9", anglicky "4.9"); stejně jako ve vyhledávacím okně. */
+export const fmtRating = (n) => (isEnglish() ? Number(n).toFixed(1) : Number(n).toFixed(1).replace('.', ','));
 
 /**
  * Stav knihy slovy pro čtečky obrazovky (obálka je jen obrázek a tlačítko s názvem by jinak o hodnocení, zámku nebo
@@ -55,10 +57,10 @@ export const fmtRating = (n) => Number(n).toFixed(1).replace('.', ',');
  */
 export const bookStateText = (book) => {
   const parts = [];
-  if (book.avgRating > 0) parts.push(`Hodnocení ${fmtRating(book.avgRating)} z 5`);
-  if (!book.hasAccess) parts.push('zatím nevlastníš');
-  else if (book.isRead) parts.push('dočteno');
-  else if (isInProgress(book)) parts.push(`rozečteno ${Math.min(100, Math.max(0, Math.round(book.scrollPosition)))} %`);
+  if (book.avgRating > 0) parts.push(t('Hodnocení {rating} z 5', { rating: fmtRating(book.avgRating) }));
+  if (!book.hasAccess) parts.push(t('zatím nevlastníš'));
+  else if (book.isRead) parts.push(t('dočteno'));
+  else if (isInProgress(book)) parts.push(t('rozečteno {pct} %', { pct: Math.min(100, Math.max(0, Math.round(book.scrollPosition))) }));
   const text = parts.join(', ');
   return text ? text[0].toUpperCase() + text.slice(1) : '';
 };
@@ -69,13 +71,13 @@ export const bookStateText = (book) => {
  */
 export const bookAction = (book, coins) => {
   if (book.hasAccess) {
-    if (book.isRead) return { kind: 'read', label: 'Číst znovu', short: 'Znovu' };
-    if (isInProgress(book)) return { kind: 'read', label: 'Pokračovat', short: 'Pokračovat' };
-    return { kind: 'read', label: 'Číst', short: 'Číst' };
+    if (book.isRead) return { kind: 'read', label: t('Číst znovu'), short: t('Znovu') };
+    if (isInProgress(book)) return { kind: 'read', label: t('Pokračovat'), short: t('Pokračovat') };
+    return { kind: 'read', label: t('Číst'), short: t('Číst') };
   }
   const missing = book.priceCoins - coins;
-  if (missing > 0) return { kind: 'buy', affordable: false, label: `Chybí ${missing}`, short: `Chybí ${missing}` };
-  return { kind: 'buy', affordable: true, label: `Koupit za ${book.priceCoins}`, short: `Koupit ${book.priceCoins}` };
+  if (missing > 0) return { kind: 'buy', affordable: false, label: t('Chybí {n}', { n: missing }), short: t('Chybí {n}', { n: missing }) };
+  return { kind: 'buy', affordable: true, label: t('Koupit za {n}', { n: book.priceCoins }), short: t('Koupit {n}', { n: book.priceCoins }) };
 };
 
 /**

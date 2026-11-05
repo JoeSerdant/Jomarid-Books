@@ -24,7 +24,7 @@ test('v menu je odkaz Odznaky mezi Statistikami a Hrami a prohlídka ho zná', (
   const at = (needle) => nav.indexOf(needle);
   assert.ok(at('to="/stats"') < at('to="/badges"') && at('to="/badges"') < at('to="/games"'), 'pořadí odkazů');
   assert.match(nav, /to="\/badges" \n\s*data-tour="nav-badges"/);
-  assert.match(nav, />Odznaky</);
+  assert.match(nav, />\{t\('Odznaky'\)\}</);
   assert.match(read('pages', 'HomePage.jsx'), /navigate\('\/badges'\)[^\n]*\n\s*<Trophy size=\{18\} \/> Odznaky/, 'tlačítko Odznaky na úvodní stránce vede na novou stránku');
 });
 

@@ -4,6 +4,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { ROLE_READER, ROLE_PUBLISHER, ROLE_ADMIN, ROLE_LABELS } from '../constants/roles';
 import { Award, BarChart3, Coins, Compass, Gamepad2, Layers, Library, LogOut, Search, Settings, Shield } from 'lucide-react';
+import { t, formatNumber } from '../i18n';
+import { LanguageSwitch } from '../i18n/LanguageSwitch';
 
 export const Navbar = ({ onOpenSearch }) => {
   const { user, logout, role, username: accountName } = useAuth();
@@ -13,7 +15,7 @@ export const Navbar = ({ onOpenSearch }) => {
   const [unread, setUnread] = useState(0); // neprectena oznameni uzivatele (tecka u ozubeneho kola)
   const [coins, setCoins] = useState(0);
 
-  const username = accountName || (user?.email ? user.email.split('@')[0] : 'Čtenář');
+  const username = accountName || (user?.email ? user.email.split('@')[0] : t('Čtenář'));
 
   // Nepřečtená oznámení (od správce / autorů): počet u ozubeného kola, kde je záložka Oznámení.
   useEffect(() => {
@@ -107,20 +109,20 @@ export const Navbar = ({ onOpenSearch }) => {
     if (role === ROLE_ADMIN) {
       return (
         <span className="text-[0.5625rem] font-black uppercase text-amber-500 tracking-wider flex items-center justify-end gap-1">
-          <Shield size={10} /> {ROLE_LABELS[ROLE_ADMIN]}
+          <Shield size={10} /> {t(ROLE_LABELS[ROLE_ADMIN])}
         </span>
       );
     }
     if (role === ROLE_PUBLISHER) {
       return (
         <span className="text-[0.5625rem] font-black uppercase text-emerald-500 tracking-wider flex items-center justify-end gap-1">
-          <Compass size={10} /> {ROLE_LABELS[ROLE_PUBLISHER]}
+          <Compass size={10} /> {t(ROLE_LABELS[ROLE_PUBLISHER])}
         </span>
       );
     }
     return (
       <span style={{ color: 'var(--text-muted)' }} className="text-[0.5625rem] font-bold uppercase opacity-60">
-        {ROLE_LABELS[ROLE_READER]}
+        {t(ROLE_LABELS[ROLE_READER])}
       </span>
     );
   };
@@ -147,6 +149,7 @@ export const Navbar = ({ onOpenSearch }) => {
               J
             </div>
             <span 
+              translate="no"
               style={{ color: 'var(--text-body)' }} 
               className="font-black uppercase tracking-wider text-xs hidden sm:block"
             >
@@ -164,7 +167,7 @@ export const Navbar = ({ onOpenSearch }) => {
                 className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-2 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-normal sm:tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all"
               >
                 <Library size={14} className="opacity-70" />
-                <span className="text-[0.5625rem] leading-none sm:sr-only xl:not-sr-only xl:text-xs xl:leading-normal">Knihovna</span>
+                <span className="text-[0.5625rem] leading-none sm:sr-only xl:not-sr-only xl:text-xs xl:leading-normal">{t('Knihovna')}</span>
               </Link>
               
               <Link 
@@ -174,7 +177,7 @@ export const Navbar = ({ onOpenSearch }) => {
                 className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-2 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-normal sm:tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all"
               >
                 <Layers size={14} className="opacity-70" />
-                <span className="text-[0.5625rem] leading-none sm:sr-only xl:not-sr-only xl:text-xs xl:leading-normal">shortB</span>
+                <span className="text-[0.5625rem] leading-none sm:sr-only xl:not-sr-only xl:text-xs xl:leading-normal" translate="no">shortB</span>
               </Link>
 
               <Link 
@@ -184,7 +187,7 @@ export const Navbar = ({ onOpenSearch }) => {
                 className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-2 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-normal sm:tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all"
               >
                 <BarChart3 size={14} className="opacity-70" />
-                <span className="text-[0.5625rem] leading-none sm:sr-only xl:not-sr-only xl:text-xs xl:leading-normal">Statistiky</span>
+                <span className="text-[0.5625rem] leading-none sm:sr-only xl:not-sr-only xl:text-xs xl:leading-normal">{t('Statistiky')}</span>
               </Link>
 
               <Link 
@@ -194,7 +197,7 @@ export const Navbar = ({ onOpenSearch }) => {
                 className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-2 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-normal sm:tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all"
               >
                 <Award size={14} className="opacity-70" />
-                <span className="text-[0.5625rem] leading-none sm:sr-only xl:not-sr-only xl:text-xs xl:leading-normal">Odznaky</span>
+                <span className="text-[0.5625rem] leading-none sm:sr-only xl:not-sr-only xl:text-xs xl:leading-normal">{t('Odznaky')}</span>
               </Link>
 
               <Link 
@@ -204,7 +207,7 @@ export const Navbar = ({ onOpenSearch }) => {
                 className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-2 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-normal sm:tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all text-purple-600 dark:text-purple-400"
               >
                 <Gamepad2 size={14} className="opacity-80 animate-pulse" />
-                <span className="text-[0.5625rem] leading-none sm:sr-only xl:not-sr-only xl:text-xs xl:leading-normal">Hry</span>
+                <span className="text-[0.5625rem] leading-none sm:sr-only xl:not-sr-only xl:text-xs xl:leading-normal">{t('Hry')}</span>
               </Link>
 
               {role === ROLE_PUBLISHER && (
@@ -215,7 +218,7 @@ export const Navbar = ({ onOpenSearch }) => {
                   className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-2 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-normal sm:tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all text-emerald-600 dark:text-emerald-400"
                 >
                   <Compass size={14} className="opacity-80" />
-                  <span className="text-[0.5625rem] leading-none sm:sr-only xl:not-sr-only xl:text-xs xl:leading-normal">Studio</span>
+                  <span className="text-[0.5625rem] leading-none sm:sr-only xl:not-sr-only xl:text-xs xl:leading-normal">{t('Studio')}</span>
                 </Link>
               )}
 
@@ -223,7 +226,7 @@ export const Navbar = ({ onOpenSearch }) => {
                 <Link 
                   to="/admin" 
                   data-tour="nav-admin"
-                  title={pending > 0 ? `Admin - ${pending} otevřených upozornění` : 'Admin'}
+                  title={pending > 0 ? t.p(pending, 'Admin - {n} otevřené upozornění', 'Admin - {n} otevřená upozornění', 'Admin - {n} otevřených upozornění', { n: pending }) : t('Admin')}
                   style={{ color: 'var(--text-body)' }}
                   className="flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-black uppercase tracking-wider no-underline hover:bg-black/5 dark:hover:bg-white/5 transition-all text-amber-600 dark:text-amber-400"
                 >
@@ -231,7 +234,7 @@ export const Navbar = ({ onOpenSearch }) => {
                     <Shield size={14} className="opacity-80" />
                     {pending > 0 && <span data-testid="admin-badge" className="absolute -top-1.5 -right-2.5 min-w-[14px] h-[14px] px-1 rounded-full bg-red-500 text-white text-[0.5625rem] font-black leading-[14px] text-center">{pending > 9 ? '9+' : pending}</span>}
                   </span>
-                  <span className="text-[0.5625rem] leading-none sm:sr-only xl:not-sr-only xl:text-xs xl:leading-normal">Admin</span>
+                  <span className="text-[0.5625rem] leading-none sm:sr-only xl:not-sr-only xl:text-xs xl:leading-normal">{t('Admin')}</span>
                 </Link>
               )}
             </div>
@@ -240,6 +243,7 @@ export const Navbar = ({ onOpenSearch }) => {
 
         {/* PRAVÁ STRANA */}
         <div className="col-start-2 sm:col-start-3 row-start-1 justify-self-end h-14 sm:h-16 flex items-center gap-1.5 sm:gap-2">
+          <LanguageSwitch />
           {user && (
             <div 
               style={{ 
@@ -248,11 +252,11 @@ export const Navbar = ({ onOpenSearch }) => {
                 color: 'var(--text-badge)' 
               }}
               className="shrink-0 flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl border text-xs font-black shadow-sm"
-              title="Tvoje Jomarid Coins"
+              title={t('Tvoje Jomarid Coins')}
               data-tour="nav-coins"
             >
               <Coins size={14} className="text-amber-500 fill-amber-500/20" />
-              <span>{coins.toLocaleString()}</span>
+              <span>{formatNumber(coins)}</span>
             </div>
           )}
 
@@ -262,7 +266,7 @@ export const Navbar = ({ onOpenSearch }) => {
               data-tour="nav-search"
               style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
               className="p-2 border rounded-xl cursor-pointer hover:brightness-95 active:scale-95 transition-all flex items-center justify-center"
-              title="Hledat knihy"
+              title={t('Hledat knihy')}
             >
               <Search size={16} />
             </button>
@@ -274,8 +278,8 @@ export const Navbar = ({ onOpenSearch }) => {
             aria-current={onSettingsPage ? 'page' : undefined}
             style={{ backgroundColor: onSettingsPage ? 'var(--bg-primary)' : 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: onSettingsPage ? 'var(--text-primary)' : 'var(--text-body)' }}
             className="p-2 border rounded-xl cursor-pointer hover:brightness-95 active:scale-95 transition-all flex items-center justify-center no-underline"
-            title={unread > 0 ? `Nastavení - nepřečtených oznámení: ${unread}` : 'Nastavení'}
-            aria-label={unread > 0 ? `Nastavení, nepřečtených oznámení: ${unread}` : 'Nastavení'}
+            title={unread > 0 ? t('Nastavení - nepřečtených oznámení: {n}', { n: unread }) : t('Nastavení')}
+            aria-label={unread > 0 ? t('Nastavení, nepřečtených oznámení: {n}', { n: unread }) : t('Nastavení')}
           >
             <span className="relative inline-flex">
               <Settings size={16} />
@@ -294,14 +298,14 @@ export const Navbar = ({ onOpenSearch }) => {
               
               <button
                 onClick={logout}
-                title="Odhlásit se"
+                title={t('Odhlásit se')}
                 style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' }}
                 className="p-2 border rounded-xl cursor-pointer hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20 active:scale-95 transition-all flex items-center justify-center sm:gap-2 sm:px-3 sm:py-2"
               >
                 <LogOut size={14} />
                 {/* Pod 640 px je vidět jen ikona, takže název čtou čtečky ze skrytého textu; od 640 px je název viditelné "Ven". */}
-                <span className="sr-only sm:hidden">Odhlásit se</span>
-                <span className="text-[0.625rem] font-black uppercase tracking-wider hidden sm:inline">Ven</span>
+                <span className="sr-only sm:hidden">{t('Odhlásit se')}</span>
+                <span className="text-[0.625rem] font-black uppercase tracking-wider hidden sm:inline">{t('Ven')}</span>
               </button>
             </div>
           ) : (
@@ -310,7 +314,7 @@ export const Navbar = ({ onOpenSearch }) => {
                 style={{ backgroundColor: 'var(--text-body)', color: 'var(--bg-body)' }}
                 className="px-4 py-2 border-none rounded-xl font-black text-xs uppercase tracking-wider cursor-pointer active:scale-95 hover:opacity-90 transition-all shadow-sm"
               >
-                Přihlásit se
+                {t('Přihlásit se')}
               </button>
             </Link>
           )}
