@@ -25,12 +25,12 @@ test('v menu je odkaz Odznaky mezi Statistikami a Hrami a prohlídka ho zná', (
   assert.ok(at('to="/stats"') < at('to="/badges"') && at('to="/badges"') < at('to="/games"'), 'pořadí odkazů');
   assert.match(nav, /to="\/badges" \n\s*data-tour="nav-badges"/);
   assert.match(nav, />\{t\('Odznaky'\)\}</);
-  assert.match(read('pages', 'HomePage.jsx'), /navigate\('\/badges'\)[^\n]*\n\s*<Trophy size=\{18\} \/> Odznaky/, 'tlačítko Odznaky na úvodní stránce vede na novou stránku');
+  assert.match(read('pages', 'HomePage.jsx'), /navigate\('\/badges'\)[^\n]*\n\s*<Trophy size=\{18\} \/> \{t\('Odznaky'\)\}/, 'tlačítko Odznaky na úvodní stránce vede na novou stránku');
 });
 
 test('stránka má záložky Odznaky knih, Odznaky her a Tituly a vzhled her; obchůdek jen když je v databázi', () => {
   const page = read('pages', 'Badges.jsx');
-  assert.deepEqual([...page.matchAll(/\{ id: '(\w+)', label: '([^']+)', icon:/g)].map((m) => [m[1], m[2]]),
+  assert.deepEqual([...page.matchAll(/\{ id: '(\w+)', label: tk\('([^']+)'\), icon:/g)].map((m) => [m[1], m[2]]),
     [['books', 'Odznaky knih'], ['games', 'Odznaky her'], ['shop', 'Tituly a vzhled her']]);
   assert.match(page, /export const tabPath = \(id\) => \(id === BADGE_TABS\[0\]\.id \? '\/badges' : `\/badges\/\$\{id\}`\);/);
   assert.match(page, /const tabs = cosmetics \? BADGE_TABS : BADGE_TABS\.filter\(\(t\) => t\.id !== 'shop'\);/);
@@ -46,7 +46,7 @@ test('Statistiky už odznaky ani obchůdek nenesou, jen odkaz na stránku Odznak
   const stats = read('pages', 'UserStats.jsx');
   assert.doesNotMatch(stats, /BadgesSection|GamesProgress|<Shop/);
   assert.match(stats, /<Link\s+to="\/badges"\s+data-testid="badges-link"/);
-  assert.match(stats, /Odznaky knih: \{stats\.unlockedBadges\.length\} z \{BOOK_BADGES\.length\}\. Odznaky her: \{countGameBadges\(stats\.gameProgress\?\.unlocked\)\.unlocked\} z \{countGameBadges\(stats\.gameProgress\?\.unlocked\)\.total\}\./);
+  assert.match(stats, /t\('Odznaky knih: \{a\} z \{b\}\. Odznaky her: \{c\} z \{d\}\.', \{ a: stats\.unlockedBadges\.length, b: BOOK_BADGES\.length, c: countGameBadges\(stats\.gameProgress\?\.unlocked\)\.unlocked, d: countGameBadges\(stats\.gameProgress\?\.unlocked\)\.total \}\)/);
   assert.match(stats, /loadMyStats\(supabase, user\)/);
   assert.match(stats, /loadLeaderboards\(supabase, user, mine\.stats\)/);
 });
@@ -378,7 +378,7 @@ test('UserStats: zmrzlý řádek ukazuje sněhovou vločku a hodnotu (ne nulu), 
   const src = fs.readFileSync(new URL('../pages/UserStats.jsx', import.meta.url), 'utf8');
   assert.match(src, /boardRowStyle\(row, activeTab\)/);
   assert.match(src, /data-testid="lb-frozen"/);
-  assert.match(src, /<CountUp value=\{row\[activeTab\]\} format=\{\(n\) => n\.toLocaleString\(\)\}/, 'hodnota se ukazuje vždy (v Živém režimu se dotočí)');
+  assert.match(src, /<CountUp value=\{row\[activeTab\]\} format=\{\(n\) => formatNumber\(n\)\}/, 'hodnota se ukazuje vždy (v Živém režimu se dotočí)');
   assert.match(src, /data-testid="lb-frozen-legend"/);
   assert.match(src, /activeTab === 'streak' && leaderboards\.streak\?\.some\(r => isFrozenRow\(r, 'streak'\)\)/);
 });

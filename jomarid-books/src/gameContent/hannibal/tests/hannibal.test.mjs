@@ -51,14 +51,14 @@ test('Jomarid Coins: hra jen žádá (vítězství v kampani 10, v minihře 5, p
   const rewards = [...html.matchAll(/rewardCoins\('(\w+)', (\d+)\)/g)];
   assert.ok(rewards.reduce((sum, m) => sum + Number(m[2]), 0) <= 20, 'jedna událost dává málo, denní strop 100 hlídá server');
   const labels = read(path.join(SRC, 'gameBar', 'rewardLabels.js'));
-  for (const reason of new Set(rewards.map((m) => m[1]))) assert.match(labels, new RegExp(`\\b${reason}: '`), `${reason} má v liště český název`);
+  for (const reason of new Set(rewards.map((m) => m[1]))) assert.match(labels, new RegExp(`\\b${reason}: tk\\('`), `${reason} má v liště český název`);
 });
 
 test('Hry: složka Strategie obsahuje Warroom a Hannibala, ostatní hry zůstávají mimo ni', () => {
   const games = [...gamesPage.matchAll(/\n  \{\n    id: '(\w+)',[\s\S]*?\n  \},/g)].map((m) => [m[1], (m[0].match(/folder: '(\w+)'/) || [])[1]]);
   assert.deepEqual(games.filter(([, f]) => f === 'strategy').map(([id]) => id), ['warroom', 'hannibal']);
   assert.deepEqual(games.filter(([, f]) => !f).map(([id]) => id).sort(), ['chess', 'cityclicker', 'koulovikamosi', 'polygonarena', 'rocket']);
-  assert.match(gamesPage, /\{ key: 'strategy', title: 'Strategie',/);
+  assert.match(gamesPage, /\{ key: 'strategy', title: tk\('Strategie'\),/);
   // složka se otevírá v adrese, ať se po návratu ze hry ukáže otevřená, a hra vede zpět do své složky
   assert.match(gamesPage, /useSearchParams/);
   assert.match(gamesPage, /params\.get\('slozka'\)/);

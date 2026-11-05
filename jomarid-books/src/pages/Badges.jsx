@@ -8,12 +8,14 @@ import { GamesProgress } from '../components/GamesProgress';
 import { Shop } from '../components/Shop';
 import { EMPTY_PROGRESS } from '../gameRecords/api';
 import { EMPTY_STATS, loadMyStats } from '../stats/loadStats';
+import { t, tx } from '../i18n';
+import { tk } from '../i18n/mark.js';
 
 // Záložky stránky. Obchůdek (tituly a vzhled her) se ukáže jen tehdy, když je v databázi; jinak záložka chybí.
 export const BADGE_TABS = [
-  { id: 'books', label: 'Odznaky knih', icon: Award },
-  { id: 'games', label: 'Odznaky her', icon: Gamepad2 },
-  { id: 'shop', label: 'Tituly a vzhled her', icon: Store },
+  { id: 'books', label: tk('Odznaky knih'), icon: Award },
+  { id: 'games', label: tk('Odznaky her'), icon: Gamepad2 },
+  { id: 'shop', label: tk('Tituly a vzhled her'), icon: Store },
 ];
 export const tabPath = (id) => (id === BADGE_TABS[0].id ? '/badges' : `/badges/${id}`);
 
@@ -51,7 +53,7 @@ export const BadgesPage = () => {
     return (
       <div role="status" className="max-w-4xl mx-auto px-4 py-20 text-center">
         <div style={{ borderTopColor: 'transparent', borderLeftColor: 'var(--bg-primary)' }} className="w-10 h-10 border-4 rounded-full animate-spin mx-auto mb-4"></div>
-        <p style={{ color: 'var(--text-muted)' }} className="text-sm font-bold opacity-60 animate-pulse">Načítám odznaky...</p>
+        <p style={{ color: 'var(--text-muted)' }} className="text-sm font-bold opacity-60 animate-pulse">{t('Načítám odznaky...')}</p>
       </div>
     );
   }
@@ -59,8 +61,8 @@ export const BadgesPage = () => {
   if (failed) {
     return (
       <div role="alert" style={{ color: 'var(--text-body)' }} className="max-w-sm mx-auto py-24 px-4 text-center">
-        <p className="text-sm font-bold m-0 mb-4">Odznaky se nepodařilo načíst. Zkontroluj připojení a zkus to znovu.</p>
-        <button type="button" onClick={() => window.location.reload()} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="px-5 py-2.5 rounded-xl border-none cursor-pointer text-xs font-black uppercase tracking-wider">Načíst znovu</button>
+        <p className="text-sm font-bold m-0 mb-4">{t('Odznaky se nepodařilo načíst. Zkontroluj připojení a zkus to znovu.')}</p>
+        <button type="button" onClick={() => window.location.reload()} style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="px-5 py-2.5 rounded-xl border-none cursor-pointer text-xs font-black uppercase tracking-wider">{t('Načíst znovu')}</button>
       </div>
     );
   }
@@ -72,28 +74,28 @@ export const BadgesPage = () => {
     <div style={{ color: 'var(--text-body)' }} className="max-w-4xl mx-auto px-4 py-12 animate-in fade-in duration-300" data-testid="badges-page">
       <div className="mb-6">
         <h1 className="text-xl font-black m-0 flex items-center gap-2">
-          <Award size={22} style={{ color: 'var(--bg-primary)' }} aria-hidden="true" /> Odznaky a vzhled
+          <Award size={22} style={{ color: 'var(--bg-primary)' }} aria-hidden="true" /> {t('Odznaky a vzhled')}
         </h1>
         <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-1 m-0 opacity-80">
-          Odznaky za čtení i za hry{cosmetics ? ', tituly u tvého jména a vzhledy her' : ''}. Máš <span data-testid="badges-coins">{stats.jomaridCoins}</span> <Coins size={11} className="inline text-amber-500 -mt-0.5" aria-hidden="true" /> Jomarid Coins.
+          {tx(cosmetics ? 'Odznaky za čtení i za hry, tituly u tvého jména a vzhledy her. Máš {coins} {icon} Jomarid Coins.' : 'Odznaky za čtení i za hry. Máš {coins} {icon} Jomarid Coins.', { coins: <span data-testid="badges-coins">{stats.jomaridCoins}</span>, icon: <Coins size={11} className="inline text-amber-500 -mt-0.5" aria-hidden="true" /> })}
         </p>
       </div>
 
-      <nav aria-label="Sekce odznaků" className="flex flex-wrap gap-2 mb-6">
-        {tabs.map((t) => {
-          const on = t.id === active;
-          const Icon = t.icon;
+      <nav aria-label={t('Sekce odznaků')} className="flex flex-wrap gap-2 mb-6">
+        {tabs.map((tb) => {
+          const on = tb.id === active;
+          const Icon = tb.icon;
           return (
             <Link
-              key={t.id}
-              to={tabPath(t.id)}
+              key={tb.id}
+              to={tabPath(tb.id)}
               replace
               aria-current={on ? 'page' : undefined}
-              data-testid={`badges-tab-${t.id}`}
+              data-testid={`badges-tab-${tb.id}`}
               style={{ backgroundColor: on ? 'var(--bg-primary)' : 'var(--bg-card)', color: on ? 'var(--text-primary)' : 'var(--text-body)', borderColor: 'var(--border-color)' }}
               className="px-3.5 py-2 rounded-xl border text-[0.6875rem] font-black uppercase tracking-wider no-underline inline-flex items-center gap-1.5"
             >
-              <Icon size={14} aria-hidden="true" /> {t.label}
+              <Icon size={14} aria-hidden="true" /> {t(tb.label)}
             </Link>
           );
         })}

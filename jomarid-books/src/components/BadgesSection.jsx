@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { BOOK_BADGES } from '../constants/badges';
 import { Award, Coins, Search, Star, ArrowUpDown } from 'lucide-react';
+import { t } from '../i18n';
 
 export const BadgesSection = ({ stats }) => {
   const { user } = useAuth();
@@ -34,12 +35,12 @@ export const BadgesSection = ({ stats }) => {
     (text || '').normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
   const categoriesList = [
-    { id: 'all', label: 'Vše' },
-    { id: 'books', label: '📚 Knihy' },
-    { id: 'streak', label: '🔥 Streak' },
-    { id: 'levels', label: '🏆 Úrovně' },
-    { id: 'monthly', label: '📅 Výzvy' },
-    { id: 'special', label: '⭐ Speciální' }
+    { id: 'all', label: t('Vše') },
+    { id: 'books', label: t('📚 Knihy') },
+    { id: 'streak', label: t('🔥 Streak') },
+    { id: 'levels', label: t('🏆 Úrovně') },
+    { id: 'monthly', label: t('📅 Výzvy') },
+    { id: 'special', label: t('⭐ Speciální') }
   ];
 
   // Výpočet odemčených odznaků
@@ -58,8 +59,8 @@ export const BadgesSection = ({ stats }) => {
       
       // 2. Vyhledávání s autocorrectem / diakritikou
       if (query) {
-        const titleNorm = normalizeText(badge.title);
-        const descNorm = normalizeText(badge.description);
+        const titleNorm = normalizeText(t(badge.title));
+        const descNorm = normalizeText(t(badge.description));
         return titleNorm.includes(query) || descNorm.includes(query);
       }
       return true;
@@ -94,10 +95,10 @@ export const BadgesSection = ({ stats }) => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
           <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider text-left flex items-center gap-1.5 m-0">
-            <Award size={16} style={{ color: 'var(--bg-primary)' }} /> Sběratelské Odznáčky Knihovny ({BOOK_BADGES.length})
+            <Award size={16} style={{ color: 'var(--bg-primary)' }} /> {t('Sběratelské Odznáčky Knihovny ({n})', { n: BOOK_BADGES.length })}
           </h3>
           <p style={{ color: 'var(--text-muted)' }} className="text-xs mt-1 m-0 opacity-70">
-            Odemčeno {totalUnlockedCount} ze {BOOK_BADGES.length} odznaků ({progressPercent}%)
+            {t('Odemčeno {n} ze {total} odznaků ({pct}%)', { n: totalUnlockedCount, total: BOOK_BADGES.length, pct: progressPercent })}
           </p>
         </div>
 
@@ -115,7 +116,7 @@ export const BadgesSection = ({ stats }) => {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" />
           <input
             type="text"
-            placeholder="Hledat odznak..."
+            placeholder={t('Hledat odznak...')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
@@ -137,11 +138,11 @@ export const BadgesSection = ({ stats }) => {
             style={{ backgroundColor: 'var(--bg-badge)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
             className="w-full md:w-auto px-3 py-2 text-xs font-bold rounded-xl border outline-none cursor-pointer"
           >
-            <option value="recent">Nedávno odemčené 🕒</option>
-            <option value="unlocked">Odemčené nejdřív 🔓</option>
-            <option value="locked">Zamčené nejdřív 🔒</option>
-            <option value="rewards">Nejvyšší odměny 💰</option>
-            <option value="default">Výchozí pořadí 📜</option>
+            <option value="recent">{t('Nedávno odemčené 🕒')}</option>
+            <option value="unlocked">{t('Odemčené nejdřív 🔓')}</option>
+            <option value="locked">{t('Zamčené nejdřív 🔒')}</option>
+            <option value="rewards">{t('Nejvyšší odměny 💰')}</option>
+            <option value="default">{t('Výchozí pořadí 📜')}</option>
           </select>
         </div>
       </div>
@@ -169,7 +170,7 @@ export const BadgesSection = ({ stats }) => {
       {/* GRID ODZNAKŮ */}
       {filteredBadges.length === 0 ? (
         <div className="py-12 text-center opacity-60">
-          <p className="text-sm font-bold m-0">Žádné odznaky neodpovídají tvému vyhledávání.</p>
+          <p className="text-sm font-bold m-0">{t('Žádné odznaky neodpovídají tvému vyhledávání.')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[600px] overflow-y-auto pr-1">
@@ -201,7 +202,7 @@ export const BadgesSection = ({ stats }) => {
                 <div className="text-left flex flex-col flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span style={{ color: isUnlocked ? 'var(--text-badge)' : 'var(--text-muted)' }} className="font-black text-xs tracking-wide uppercase truncate">
-                      {badge.title}
+                      {t(badge.title)}
                     </span>
                     {isUnlocked && (
                       <span className="text-[0.5625rem] bg-amber-500/20 text-amber-500 px-1 py-0.5 rounded font-bold flex items-center gap-0.5">
@@ -210,7 +211,7 @@ export const BadgesSection = ({ stats }) => {
                     )}
                   </div>
                   <span style={{ color: 'var(--text-body)' }} className="text-[0.6875rem] opacity-75 mt-0.5 leading-tight line-clamp-2">
-                    {badge.description}
+                    {t(badge.description)}
                   </span>
                 </div>
 
@@ -218,7 +219,7 @@ export const BadgesSection = ({ stats }) => {
                   <button
                     onClick={() => handleSetFeatured(badge.id)}
                     disabled={savingFeatured}
-                    title={isFeatured ? 'Přestat vystavovat na žebříčku' : 'Vystavit na žebříčku'}
+                    title={isFeatured ? t('Přestat vystavovat na žebříčku') : t('Vystavit na žebříčku')}
                     style={{ color: isFeatured ? '#f59e0b' : 'var(--text-muted)' }}
                     className="shrink-0 bg-transparent border-none cursor-pointer p-1 opacity-80 hover:opacity-100"
                   >

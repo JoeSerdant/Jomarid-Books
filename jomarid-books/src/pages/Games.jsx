@@ -3,7 +3,6 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, supabaseUrl, supabaseKey } from '../lib/supabase';
 import { friendlyError } from '../lib/friendlyError';
-import { plural } from '../lib/plural';
 import { Coins, Loader2, Rocket, Swords, Building2, Target, Crown, Smile, Lock, Castle, Folder, FolderOpen } from 'lucide-react';
 import { GameBar } from '../components/GameBar';
 import { useReaderSnapshot } from '../gameBar/useReaderSnapshot';
@@ -20,58 +19,60 @@ import { withStorageShim } from '../gameSave/shim';
 import { saveGameStateKeepalive } from '../gameSave/api';
 import { readLegacyStorage, clearLegacyStorage } from '../gameSave/legacy';
 import { SAVE_MESSAGES, SAVE_LOAD_ERROR, SAVE_NO_LOCAL_COPY, SAVE_PLAY_FRESH } from '../gameSave/messages';
+import { t } from '../i18n';
+import { tk } from '../i18n/mark.js';
 
 // Každá hra je velký kus textu (stovky kB, šachy i s Reactem). Stahuje se až při spuštění (dynamický import), ne spolu
 // se stránkou Her - jinak by si hráč už při otevření seznamu stáhl všechny hry najednou.
 const GAMES = [
   {
     id: 'rocket',
-    title: 'Jomarid Rocket Game',
-    tagline: 'Vesmírná arkádová střílečka s vlastními vylepšeními a postupem.',
+    title: tk('Jomarid Rocket Game'),
+    tagline: tk('Vesmírná arkádová střílečka s vlastními vylepšeními a postupem.'),
     icon: Rocket,
     load: () => import('../gameContent/rocketGame').then(m => m.ROCKET_GAME_HTML),
   },
   {
     id: 'warroom',
-    title: 'Warroom: Frontlines',
-    tagline: 'Velitelská taktická hra - řiď frontu, jednotky a zdroje ve velitelském stanu.',
+    title: tk('Warroom: Frontlines'),
+    tagline: tk('Velitelská taktická hra - řiď frontu, jednotky a zdroje ve velitelském stanu.'),
     icon: Swords,
     folder: 'strategy',
     load: () => import('../gameContent/warroom').then(m => m.WARROOM_HTML),
   },
   {
     id: 'hannibal',
-    title: 'Hannibal: Barca',
-    tagline: 'Taktická kampaň druhé punské války - vedeš Hannibala od Sagunta až k Zamě, v bitvách na čtvercové síti, minihrách i nekonečném tažení.',
+    title: tk('Hannibal: Barca'),
+    tagline: tk('Taktická kampaň druhé punské války - vedeš Hannibala od Sagunta až k Zamě, v bitvách na čtvercové síti, minihrách i nekonečném tažení.'),
     icon: Castle,
     folder: 'strategy',
     load: () => import('../gameContent/hannibalGame').then(m => m.HANNIBAL_HTML),
   },
   {
     id: 'cityclicker',
-    title: 'City Clicker',
-    tagline: 'Vybuduj si vlastní město klikáním - se čtyřmi zcela odlišnými vizuálními styly na výběr.',
+    title: tk('City Clicker'),
+    tagline: tk('Vybuduj si vlastní město klikáním - se čtyřmi zcela odlišnými vizuálními styly na výběr.'),
     icon: Building2,
     load: () => import('../gameContent/cityClicker').then(m => m.CITY_CLICKER_HTML),
   },
   {
     id: 'polygonarena',
-    title: 'Polygon aréna',
-    tagline: 'Rozstřílej tvary, poskládej si stavbu z více než 500 tanků a přežij mezi chytrými boty - osm režimů od vln nepřátel po zužující se bouři a obtížnost až do Pekla.',
+    title: tk('Polygon aréna'),
+    tagline: tk('Rozstřílej tvary, poskládej si stavbu z více než 500 tanků a přežij mezi chytrými boty - osm režimů od vln nepřátel po zužující se bouři a obtížnost až do Pekla.'),
     icon: Target,
     load: () => import('../gameContent/polygonArena').then(m => m.POLYGON_ARENA_HTML),
   },
   {
     id: 'chess',
-    title: 'Chess League',
-    tagline: 'Šachy proti pěti botům s vlastní osobností - skutečný Elo rating, hodiny, nápověda, rozbor partie a šachové úlohy na hledání matu.',
+    title: tk('Chess League'),
+    tagline: tk('Šachy proti pěti botům s vlastní osobností - skutečný Elo rating, hodiny, nápověda, rozbor partie a šachové úlohy na hledání matu.'),
     icon: Crown,
     load: () => import('../gameContent/chess').then(m => m.CHESS_HTML),
   },
   {
     id: 'koulovikamosi',
-    title: 'Kouloví Kámoši',
-    tagline: 'Pouštěj do misky měkké koule, spojuj stejné a vypěstuj tu největší - pět režimů od klasiky po chaos, obchod s vylepšeními a vlastní rekordy.',
+    title: tk('Kouloví Kámoši'),
+    tagline: tk('Pouštěj do misky měkké koule, spojuj stejné a vypěstuj tu největší - pět režimů od klasiky po chaos, obchod s vylepšeními a vlastní rekordy.'),
     icon: Smile,
     load: () => import('../gameContent/koulovi').then(m => m.KOULOVI_HTML),
   },
@@ -93,7 +94,7 @@ export async function preloadGames(onProgress = () => {}) {
 
 // Složky v seznamu her: hra s `folder: 'klíč'` se v seznamu neukazuje sama, ale uvnitř složky (karta složky otevře seznam her pod mřížkou).
 const FOLDERS = [
-  { key: 'strategy', title: 'Strategie', tagline: 'Taktické hry: veď armády, frontu a zdroje.' },
+  { key: 'strategy', title: tk('Strategie'), tagline: tk('Taktické hry: veď armády, frontu a zdroje.') },
 ];
 
 // Kolik milisekund musí být hra otevřená, než se hráči vůbec odemkne
@@ -158,11 +159,11 @@ export const GameLauncher = ({ game }) => {
   // Postup hry žije na serveru (db/game-saves.sql). Hra si pořád "ukládá do localStorage", ale ten jí appka nahradí pamětí (gameSave/shim.js)
   // a změny posílá sem; o chybách ukládání se hráč dozví v liště nad hrou.
   const handleSaveStatus = useCallback(({ state, recovered, reason }) => {
-    if (state === 'failing') { setSaveStatus('failing'); showFlash({ text: SAVE_MESSAGES.failing, warn: true }, 4000); }
-    else if (state === 'offline') { setSaveStatus('offline'); showFlash({ text: SAVE_MESSAGES.offline, warn: true }, 4000); }
-    else if (state === 'ok' && recovered) { setSaveStatus(null); showFlash({ text: SAVE_MESSAGES.recovered, warn: true }); }
-    else if (state === 'conflict') { setSaveStatus('conflict'); showFlash({ text: reason === 'server_won' ? SAVE_MESSAGES.server_won : SAVE_MESSAGES.conflict, warn: true }, 9000); }
-    else if (state === 'rejected') { setSaveStatus('rejected'); showFlash({ text: SAVE_MESSAGES.rejected, warn: true }, 6000); }
+    if (state === 'failing') { setSaveStatus('failing'); showFlash({ text: t(SAVE_MESSAGES.failing), warn: true }, 4000); }
+    else if (state === 'offline') { setSaveStatus('offline'); showFlash({ text: t(SAVE_MESSAGES.offline), warn: true }, 4000); }
+    else if (state === 'ok' && recovered) { setSaveStatus(null); showFlash({ text: t(SAVE_MESSAGES.recovered), warn: true }); }
+    else if (state === 'conflict') { setSaveStatus('conflict'); showFlash({ text: t(reason === 'server_won' ? SAVE_MESSAGES.server_won : SAVE_MESSAGES.conflict), warn: true }, 9000); }
+    else if (state === 'rejected') { setSaveStatus('rejected'); showFlash({ text: t(SAVE_MESSAGES.rejected), warn: true }, 6000); }
   }, [showFlash]);
 
   const getSync = useCallback(() => {
@@ -345,7 +346,7 @@ export const GameLauncher = ({ game }) => {
         // Bez spojení (nebo při výpadku) se rekord uloží do fronty a odešle po připojení; server dál rozhoduje o odznacích.
         if (navigator.onLine === false) { queueRecord(outbox, user.id, rec).catch(() => {}); return; }
         reportGameRecord(supabase, rec.game, rec.stat, rec.value, { onTransient: (r) => { queueRecord(outbox, user.id, r).catch(() => {}); } }).then((res) => {
-          if (res?.unlocked?.length) showFlash({ text: `+${res.xp} XP`, label: `Odznak: ${res.unlocked.map((b) => b.title).join(', ')}` });
+          if (res?.unlocked?.length) showFlash({ text: `+${res.xp} XP`, label: t('Odznak: {names}', { names: res.unlocked.map((b) => t(b.title)).join(', ') }) });
         });
       } else if (event.data?.type === 'coin' && user) {
         const amount = Math.floor(Number(event.data.amount));
@@ -355,13 +356,13 @@ export const GameLauncher = ({ game }) => {
           .then(({ queued, data, error }) => {
             if (queued) {
               // Bez spojení žádost čeká ve frontě; o skutečné částce a stropu rozhodne server po připojení.
-              if (!queuedShownRef.current) { queuedShownRef.current = true; showFlash({ text: 'Offline', label: 'Odměny se připíšou po připojení', warn: true }); }
+              if (!queuedShownRef.current) { queuedShownRef.current = true; showFlash({ text: t('Offline'), label: t('Odměny se připíšou po připojení'), warn: true }); }
               return;
             }
             if (error) { console.error('Chyba při udílení herní odměny:', error.message); return; }
             if (data?.granted) { setCoins(data.balance ?? 0); setCoinsLoaded(true); } // zůstatek z odpovědi serveru platí i tehdy, když se úvodní načtení nepovedlo
             if (data?.granted > 0) showFlash({ text: `+${data.granted}`, label: rewardLabel(reason) });
-            else if (data?.capped && !limitShownRef.current) { limitShownRef.current = true; showFlash({ text: REWARD_LIMIT_NOTE, warn: true }); }
+            else if (data?.capped && !limitShownRef.current) { limitShownRef.current = true; showFlash({ text: t(REWARD_LIMIT_NOTE), warn: true }); }
           })
           .catch((err) => console.error('Chyba při udílení herní odměny:', err.message));
       }
@@ -387,7 +388,7 @@ export const GameLauncher = ({ game }) => {
       }
     } catch (err) {
       console.error('Odměna za hraní:', err);
-      alert(friendlyError(err, 'Odměnu se nepodařilo vyzvednout. Zkus to znovu.'));
+      alert(friendlyError(err, t('Odměnu se nepodařilo vyzvednout. Zkus to znovu.')));
     } finally {
       setClaiming(false);
     }
@@ -405,10 +406,10 @@ export const GameLauncher = ({ game }) => {
     return (
       // Výřez displeje (--sat nahoře, --sar vpravo) se přičítá k velikosti pruhu, ne odebírá z místa pro tlačítko.
       <div style={{ position: 'fixed', inset: 0, zIndex: 999, backgroundColor: '#000', '--sat': 'env(safe-area-inset-top,0px)', '--sar': 'env(safe-area-inset-right,0px)' }} className="flex flex-col [@media(orientation:landscape)_and_(max-height:500px)]:flex-row-reverse">
-        <GameBar title={game.title} onClose={handleCloseGame} coins={coins} coinsLoaded={coinsLoaded} level={reader?.level} levelName={reader?.levelName} flash={flash} saveStatus={saveStatus} />
+        <GameBar title={t(game.title)} onClose={handleCloseGame} coins={coins} coinsLoaded={coinsLoaded} level={reader?.level} levelName={reader?.levelName} flash={flash} saveStatus={saveStatus} />
         <iframe
           ref={iframeRef}
-          title={game.title}
+          title={t(game.title)}
           srcDoc={gameDoc}
           allow="clipboard-write"
           // Hra se po načtení zaměří, ať klávesy a ovladač fungují hned, bez kliknutí do ní (bez toho by klávesy dostala stránka kolem).
@@ -425,7 +426,7 @@ export const GameLauncher = ({ game }) => {
   return (
     <div className="max-w-4xl mx-auto px-4 py-16 text-center animate-in fade-in duration-300">
       <Link to={game.folder ? `/games?slozka=${game.folder}` : '/games'} className="text-[0.625rem] font-black uppercase tracking-wider no-underline opacity-50 hover:opacity-100 transition-all inline-flex items-center gap-1 mb-6" style={{ color: 'var(--text-body)' }}>
-        ← {game.folder ? `Složka ${FOLDERS.find(f => f.key === game.folder)?.title || 'her'}` : 'Všechny hry'}
+        ← {game.folder ? t('Složka {name}', { name: t(FOLDERS.find(f => f.key === game.folder)?.title || 'her') }) : t('Všechny hry')}
       </Link>
       <div 
         style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} 
@@ -437,10 +438,10 @@ export const GameLauncher = ({ game }) => {
         
         <div>
           <h1 className="text-3xl font-black uppercase tracking-tight mb-2" style={{ color: 'var(--text-body)' }}>
-            {game.title}
+            {t(game.title)}
           </h1>
           <p style={{ color: 'var(--text-muted)' }} className="text-sm max-w-md mx-auto">
-            {game.tagline} Otevře se rovnou tady na celou obrazovku.
+            {t(game.tagline)} {t('Otevře se rovnou tady na celou obrazovku.')}
           </p>
         </div>
 
@@ -453,12 +454,12 @@ export const GameLauncher = ({ game }) => {
           style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
           className="px-8 py-3.5 rounded-xl font-black uppercase tracking-wider text-sm border-none cursor-pointer shadow-lg hover:opacity-90 transition-all flex items-center gap-2 aria-disabled:cursor-wait aria-disabled:opacity-70"
         >
-          {loadingGame ? <><Loader2 size={16} className="animate-spin" /> Načítám hru...</> : <><GameIcon size={16} /> Spustit hru</>}
+          {loadingGame ? <><Loader2 size={16} className="animate-spin" /> {t('Načítám hru...')}</> : <><GameIcon size={16} /> {t('Spustit hru')}</>}
         </button>
         {saveLoadError && (
           <div role="alert" data-testid="save-load-error" className="-mt-3 flex flex-col items-center gap-2">
             <p style={{ color: 'var(--text-body)', borderColor: '#ef4444' }} className="text-xs m-0 border-l-2 pl-2 text-left max-w-sm">
-              {saveLoadError === 'nocopy' ? SAVE_NO_LOCAL_COPY : SAVE_LOAD_ERROR}
+              {saveLoadError === 'nocopy' ? t(SAVE_NO_LOCAL_COPY) : t(SAVE_LOAD_ERROR)}
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               {saveLoadError === 'nocopy' && (
@@ -468,7 +469,7 @@ export const GameLauncher = ({ game }) => {
                   style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
                   className="px-4 py-2 rounded-lg text-[0.6875rem] font-black uppercase tracking-wider cursor-pointer border-none"
                 >
-                  {SAVE_PLAY_FRESH}
+                  {t(SAVE_PLAY_FRESH)}
                 </button>
               )}
               <button
@@ -476,7 +477,7 @@ export const GameLauncher = ({ game }) => {
                 style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
                 className="px-4 py-2 rounded-lg text-[0.6875rem] font-black uppercase tracking-wider cursor-pointer border"
               >
-                Zkusit znovu
+                {t('Zkusit znovu')}
               </button>
             </div>
           </div>
@@ -486,21 +487,21 @@ export const GameLauncher = ({ game }) => {
           // verze aplikace, kdy staré soubory už neexistují). Spolehlivě pomůže až obnovení stránky.
           <div role="alert" className="-mt-3 flex flex-col items-center gap-2">
             <p style={{ color: 'var(--text-body)', borderColor: '#ef4444' }} className="text-xs m-0 border-l-2 pl-2 text-left max-w-sm">
-              Hru se nepodařilo načíst. Zkontroluj připojení a zkus to znovu - když to nepomůže, obnov stránku.
+              {t('Hru se nepodařilo načíst. Zkontroluj připojení a zkus to znovu - když to nepomůže, obnov stránku.')}
             </p>
             <button
               onClick={() => window.location.reload()}
               style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
               className="px-4 py-2 rounded-lg text-[0.6875rem] font-black uppercase tracking-wider cursor-pointer border"
             >
-              Obnovit stránku
+              {t('Obnovit stránku')}
             </button>
           </div>
         )}
 
         <div style={{ borderColor: 'var(--border-color)' }} className="w-full border-t pt-6 flex flex-col items-center gap-3">
           <p style={{ color: 'var(--text-muted)' }} className="text-xs max-w-sm mx-auto opacity-80">
-            Postup ve hře (vylepšení, nastavení, rozehraná partie), rekordy i herní odznaky se ukládají k tvému účtu, takže je máš na všech zařízeních stejné (rekordy a odznaky najdeš na stránce Odznaky, záložka Odznaky her). Za to, že si dnes zahraješ, dostaneš i pár skutečných Jomarid Coinů - jednou denně.
+            {t('Postup ve hře (vylepšení, nastavení, rozehraná partie), rekordy i herní odznaky se ukládají k tvému účtu, takže je máš na všech zařízeních stejné (rekordy a odznaky najdeš na stránce Odznaky, záložka Odznaky her). Za to, že si dnes zahraješ, dostaneš i pár skutečných Jomarid Coinů - jednou denně.')}
           </p>
           <button
             onClick={handleClaimBonus}
@@ -516,22 +517,22 @@ export const GameLauncher = ({ game }) => {
             ) : claiming ? (
               <Loader2 size={14} className="animate-spin" />
             ) : claimedToday ? (
-              <>Dnešní odměna vyzvednuta {claimedAmount ? `(+${claimedAmount})` : ''} <Coins size={12} /></>
+              <>{t('Dnešní odměna vyzvednuta')} {claimedAmount ? `(+${claimedAmount})` : ''} <Coins size={12} /></>
             ) : !online ? (
-              <>Odměna za hraní jde jen online <Lock size={12} /></>
+              <>{t('Odměna za hraní jde jen online')} <Lock size={12} /></>
             ) : !hasPlayedEnough ? (
-              <>Nejdřív si zahraj <Lock size={12} /></>
+              <>{t('Nejdřív si zahraj')} <Lock size={12} /></>
             ) : (
-              <>Vyzvednout dnešní odměnu za hraní <Coins size={12} /></>
+              <>{t('Vyzvednout dnešní odměnu za hraní')} <Coins size={12} /></>
             )}
           </button>
           {!claimedToday && !checkingStatus && !hasPlayedEnough && (
             <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] opacity-60">
-              Odměna se odemkne po chvilce hraní - zkus to po zavření hry znovu.
+              {t('Odměna se odemkne po chvilce hraní - zkus to po zavření hry znovu.')}
             </span>
           )}
           <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] opacity-60 flex items-center gap-1">
-            <Coins size={11} /> Aktuální zůstatek: {coins} Jomarid Coins
+            <Coins size={11} /> {t('Aktuální zůstatek: {n} Jomarid Coins', { n: coins })}
           </span>
         </div>
       </div>
@@ -553,8 +554,8 @@ const GameCard = ({ game }) => {
       <div className="w-12 h-12 sm:w-16 sm:h-16 bg-purple-500/10 text-purple-500 rounded-full flex items-center justify-center">
         <GameIcon className="w-6 h-6 sm:w-[30px] sm:h-[30px]" />
       </div>
-      <h3 className="font-black uppercase text-xs sm:text-sm tracking-tight m-0" style={{ color: 'var(--text-body)' }}>{game.title}</h3>
-      <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] sm:text-xs m-0 line-clamp-3 sm:line-clamp-none">{game.tagline}</p>
+      <h3 className="font-black uppercase text-xs sm:text-sm tracking-tight m-0" style={{ color: 'var(--text-body)' }}>{t(game.title)}</h3>
+      <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] sm:text-xs m-0 line-clamp-3 sm:line-clamp-none">{t(game.tagline)}</p>
     </Link>
   );
 };
@@ -570,8 +571,8 @@ export const GamesHub = () => {
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 sm:py-16 animate-in fade-in duration-300">
       <div className="text-center mb-6 sm:mb-10">
-        <h1 className="text-3xl font-black uppercase tracking-tight mb-2" style={{ color: 'var(--text-body)' }}>Mini-hry 🎮</h1>
-        <p style={{ color: 'var(--text-muted)' }} className="text-sm">Krátká odbočka od čtení - a pár Jomarid Coinů navrch za to, že si dnes zahraješ.</p>
+        <h1 className="text-3xl font-black uppercase tracking-tight mb-2" style={{ color: 'var(--text-body)' }}>{t('Mini-hry 🎮')}</h1>
+        <p style={{ color: 'var(--text-muted)' }} className="text-sm">{t('Krátká odbočka od čtení - a pár Jomarid Coinů navrch za to, že si dnes zahraješ.')}</p>
       </div>
       {/* Na telefonu dva sloupce s kompaktními kartami (pět her pod sebou zabíralo přes 1000 px). */}
       <div className="grid grid-cols-2 gap-3 sm:gap-6">
@@ -595,20 +596,20 @@ export const GamesHub = () => {
               <div className="w-12 h-12 sm:w-16 sm:h-16 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center">
                 <FolderIcon className="w-6 h-6 sm:w-[30px] sm:h-[30px]" />
               </div>
-              <h3 className="font-black uppercase text-xs sm:text-sm tracking-tight m-0" style={{ color: 'var(--text-body)' }}>{folder.title}</h3>
-              <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] sm:text-xs m-0">{folder.tagline}</p>
+              <h3 className="font-black uppercase text-xs sm:text-sm tracking-tight m-0" style={{ color: 'var(--text-body)' }}>{t(folder.title)}</h3>
+              <p style={{ color: 'var(--text-muted)' }} className="text-[0.6875rem] sm:text-xs m-0">{t(folder.tagline)}</p>
               <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider flex items-center gap-1.5">
                 {inside.map(g => { const I = g.icon; return <I key={g.id} size={12} aria-hidden="true" />; })}
-                {inside.length} {plural(inside.length, 'hra', 'hry', 'her')}
+                {inside.length} {t.p(inside.length, 'hra', 'hry', 'her')}
               </span>
             </button>
           );
         })}
       </div>
       {openFolder && (
-        <div id={`folder-${openFolder.key}`} data-testid={`folder-games-${openFolder.key}`} role="region" aria-label={`Složka ${openFolder.title}`} className="mt-6 sm:mt-10">
+        <div id={`folder-${openFolder.key}`} data-testid={`folder-games-${openFolder.key}`} role="region" aria-label={t('Složka {name}', { name: t(openFolder.title) })} className="mt-6 sm:mt-10">
           <h2 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider text-center mb-3 sm:mb-4 flex items-center justify-center gap-1.5">
-            <FolderOpen size={14} aria-hidden="true" /> {openFolder.title}
+            <FolderOpen size={14} aria-hidden="true" /> {t(openFolder.title)}
           </h2>
           <div className="grid grid-cols-2 gap-3 sm:gap-6">
             {openGames.map(game => <GameCard key={game.id} game={game} />)}
@@ -625,8 +626,8 @@ export const GamePage = () => {
   if (!game) {
     return (
       <div className="max-w-md mx-auto px-4 py-24 text-center">
-        <p style={{ color: 'var(--text-muted)' }} className="text-sm mb-4">Tahle hra neexistuje.</p>
-        <Link to="/games" style={{ color: 'var(--text-badge)' }} className="text-xs font-black uppercase">← Zpět na hry</Link>
+        <p style={{ color: 'var(--text-muted)' }} className="text-sm mb-4">{t('Tahle hra neexistuje.')}</p>
+        <Link to="/games" style={{ color: 'var(--text-badge)' }} className="text-xs font-black uppercase">{t('← Zpět na hry')}</Link>
       </div>
     );
   }

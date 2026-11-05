@@ -37,7 +37,7 @@ test('id her v katalogu jsou stejná jako v Games.jsx a v mostech her', () => {
   const games = read('pages', 'Games.jsx');
   const hub = [...games.matchAll(/^\s+id: '(\w+)',$/gm)].map((m) => m[1]);
   assert.deepEqual([...hub].sort(), GAME_CATALOG.map((g) => g.id).sort());
-  assert.deepEqual(GAME_CATALOG.map((g) => g.title).sort(), [...games.matchAll(/^\s+title: '([^']+)',$/gm)].map((m) => m[1]).sort(), 'názvy her sedí s hubem');
+  assert.deepEqual(GAME_CATALOG.map((g) => g.title).sort(), [...games.matchAll(/^\s+title: tk\('([^']+)'\),$/gm)].map((m) => m[1]).sort(), 'názvy her sedí s hubem');
 });
 
 test('XP herních odznaků: ve stejné statistice těžší odznak vždy dává víc, každý dává aspoň 20 XP, hry samy dovedou čtenáře zhruba na úroveň 16', () => {
@@ -332,7 +332,7 @@ test('Games.jsx předává hlášení rekordů serveru, nový odznak potvrdí v 
   assert.match(g, /event\.data\?\.type === 'record' && user/);
   assert.match(g, /normalizeRecord\(game\.id, event\.data\.stat, event\.data\.value\)/);
   assert.match(g, /reportGameRecord\(supabase, rec\.game, rec\.stat, rec\.value, \{ onTransient: /);
-  assert.match(g, /showFlash\(\{ text: `\+\$\{res\.xp\} XP`, label: `Odznak: /);
+  assert.match(g, /showFlash\(\{ text: `\+\$\{res\.xp\} XP`, label: t\('Odznak: \{names\}'/);
   assert.match(g, /rekordy i herní odznaky se ukládají k tvému účtu, takže je máš na všech zařízeních stejné \(rekordy a odznaky najdeš na stránce Odznaky, záložka Odznaky her\)/);
   assert.doesNotMatch(g, /Skóre a vylepšení ve hře jsou jen pro zábavu/);
 });
@@ -343,7 +343,7 @@ test('záložka Odznaky her: shrnutí, karta každé hry s rekordy, odznaky a ž
   assert.match(c, /GAME_CATALOG\.map\(\(game\) =>/);
   assert.match(c, /loadGameLeaderboard\(supabase, game\.id, game\.headline, 5\)/);
   assert.match(c, /aria-expanded=\{open\}/);
-  assert.match(c, /\[\['all', 'Vše'\], \['open', 'Chybí'\], \['done', 'Mám'\]\]/, 'filtr dlouhého seznamu odznaků (Vše / Chybí / Mám)');
+  assert.match(c, /\[\['all', t\('Vše'\)\], \['open', t\('Chybí'\)\], \['done', t\('Mám'\)\]\]/, 'filtr dlouhého seznamu odznaků (Vše / Chybí / Mám)');
   assert.match(c, /const shown = badges\.filter\(\(b\) => filter === 'all' \|\| \(filter === 'done'\) === unlocked\.has\(b\.id\)\);/);
   assert.match(c, /Nejlepší hráči: /);
 });

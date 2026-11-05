@@ -17,7 +17,7 @@ const WS = /[ \t\r\n]+/g;
 const DATA_PROPS = new Set(['title', 'label', 'description', 'desc', 'name', 'hint', 'text', 'message', 'caption', 'subtitle', 'heading', 'equipped', 'tagline', 'summary']);
 const quote = (s) => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n')}'`;
 
-export const transform = (code, rel, { strings = false, data = false } = {}) => {
+export const transform = (code, rel, { strings = false, data = false, wrap = {} } = {}) => {
   const plugins = /\.tsx?$/.test(rel) ? ['jsx', 'typescript'] : ['jsx'];
   const ast = parse(code, { sourceType: 'module', plugins });
   const edits = []; const report = []; let usesT = false; let usesTk = false;
@@ -33,6 +33,14 @@ export const transform = (code, rel, { strings = false, data = false } = {}) => 
   traverse(ast, {
     CallExpression(path) {
       const n = path.node;
+      // pomocné funkce katalogů (stat(klíč, popisek, max), badge(id, ..., název, popis)): zadané pozice argumentů jsou texty -> tk(...)
+      if (n.callee.type === 'Identifier' && wrap[n.callee.name]) {
+        for (const i of wrap[n.callee.name]) {
+          const a = n.arguments[i];
+          if (a && a.type === 'StringLiteral' && LETTERS.test(a.value)) { handled.add(a); edits.push({ start: a.start, end: a.end, text: `tk(${quote(a.value)})` }); usesTk = true; }
+        }
+        return;
+      }
       if (n.callee.type !== 'Identifier' || n.callee.name !== 'plural' || n.arguments.length < 4) return;
       const forms = n.arguments.slice(1, 4);
       const first = code.slice(n.arguments[0].start, n.arguments[0].end);
@@ -137,7 +145,9 @@ export const transform = (code, rel, { strings = false, data = false } = {}) => 
 
 if (process.argv[1] && process.argv[1].endsWith('codemod.mjs')) {
   const args = process.argv.slice(2);
-  const opts = { strings: args.includes('--strings'), data: args.includes('--data') };
+  const wrap = {};
+  for (const a of args.filter((x) => x.startsWith('--wrap='))) for (const part of a.slice(7).split(',')) { const [name, ...pos] = part.split(':'); wrap[name] = pos.map(Number); }
+  const opts = { strings: args.includes('--strings'), data: args.includes('--data'), wrap };
   const dry = args.includes('--dry');
   for (const rel of args.filter((a) => !a.startsWith('--'))) {
     const file = path.join(SRC_DIR, rel);

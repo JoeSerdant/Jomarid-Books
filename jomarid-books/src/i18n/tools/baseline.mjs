@@ -7,6 +7,10 @@ import { fileURLToPath } from 'node:url';
 import { listSourceFiles, rawTexts, scanFile } from './scan.mjs';
 
 export const BASELINE_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'baseline.json');
+// Volání t(výraz), kde výraz není pevný text (t(hra.nazev), t(TABULKA[klic])). Skener u nich nevidí, co se překládá, takže každý takový
+// výraz je tady jednou zapsaný a test hlídá, že přibylo jen to, co si člověk prohlédl: výraz musí vracet text označený tk(...) nebo
+// text, který už je přeložený jinde.
+export const DYNAMIC_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'dynamic.json');
 
 export const currentBaseline = () => {
   const out = {};
@@ -16,6 +20,16 @@ export const currentBaseline = () => {
   }
   return out;
 };
+
+export const currentDynamic = () => {
+  const out = {};
+  for (const rel of listSourceFiles()) {
+    const args = [...new Set(scanFile(rel).dynamic.map((d) => d.arg))].sort();
+    if (args.length) out[rel] = args;
+  }
+  return out;
+};
+export const readDynamic = () => JSON.parse(fs.readFileSync(DYNAMIC_FILE, 'utf8'));
 
 export const readBaseline = () => JSON.parse(fs.readFileSync(BASELINE_FILE, 'utf8'));
 
@@ -29,5 +43,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const cur = currentBaseline();
   fs.writeFileSync(BASELINE_FILE, formatBaseline(cur));
   const total = Object.values(cur).reduce((a, l) => a + l.length, 0);
+  const dyn = currentDynamic();
+  fs.writeFileSync(DYNAMIC_FILE, formatBaseline(dyn));
+  console.log(`Dynamické překlady t(výraz): ${Object.keys(dyn).length} souborů, ${Object.values(dyn).reduce((a, l) => a + l.length, 0)} výrazů.`);
   console.log(`Základní seznam zapsán: ${Object.keys(cur).length} souborů, ${total} nepřeložených textů.`);
 }

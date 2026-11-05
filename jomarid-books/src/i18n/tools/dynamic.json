@@ -1,0 +1,153 @@
+{
+  "components/BadgesSection.jsx": [
+    "badge.description",
+    "badge.title"
+  ],
+  "components/GameBar.jsx": [
+    "SAVE_CHIPS[saveStatus]",
+    "levelName"
+  ],
+  "components/GamesProgress.jsx": [
+    "b.description",
+    "b.title",
+    "game.title",
+    "headStat.label",
+    "s.label",
+    "stat.label"
+  ],
+  "components/HelpBot.jsx": [
+    "WELCOME",
+    "q"
+  ],
+  "components/Navbar.jsx": [
+    "ROLE_LABELS[ROLE_ADMIN]",
+    "ROLE_LABELS[ROLE_PUBLISHER]",
+    "ROLE_LABELS[ROLE_READER]"
+  ],
+  "components/SettingsModal.jsx": [
+    "DELETE_ERRORS[code]",
+    "PAGE_BREAKS[prefs.pageBreak].hint",
+    "ROLE_LABELS[role] || 'Čtenář'",
+    "SAMPLE_TEXT",
+    "SYNC_TEXT[status] || SYNC_TEXT.off",
+    "USERNAME_ERRORS[code]",
+    "USERNAME_HINTS[check]",
+    "a.label",
+    "active.label",
+    "label",
+    "n.linkLabel || 'Opravit'",
+    "o.label",
+    "opt.label",
+    "p.label"
+  ],
+  "components/Shop.jsx": [
+    "current.hint",
+    "item.description",
+    "item.label",
+    "k.label"
+  ],
+  "emailChange.js": [
+    "table[code]"
+  ],
+  "gameBar/rewardLabels.js": [
+    "DEFAULT_REWARD_LABEL",
+    "LABELS[reason]"
+  ],
+  "helpbot/helpBotApi.js": [
+    "ERROR_TEXT.empty",
+    "ERROR_TEXT.upstream",
+    "ERROR_TEXT[code] || message || ERROR_TEXT.upstream",
+    "FETCH",
+    "FRIENDLY.network",
+    "NOT_FOUND",
+    "REJECTED_JWT",
+    "RELAY",
+    "UNAVAILABLE"
+  ],
+  "lib/friendlyError.js": [
+    "FRIENDLY[kind]"
+  ],
+  "offline/OfflineGamesSection.jsx": [
+    "GAME_NAMES[s.gameId] || s.gameId"
+  ],
+  "offline/loginCode.js": [
+    "message || CODE_ERRORS[code] || CODE_ERRORS.upstream"
+  ],
+  "pages/AdminDashboard.jsx": [
+    "ADMIN_EMAIL_ERRORS.invalid_email",
+    "ADMIN_EMAIL_ERRORS.same_email",
+    "ROLE_LABELS[p.role || ROLE_READER] || p.role",
+    "ROLE_LABELS[p.role] || p.role",
+    "ROLE_LABELS[profile.role] || profile.role",
+    "ROLE_LABELS[r.role] || r.role",
+    "ROLE_LABELS[u.role] || u.role",
+    "label"
+  ],
+  "pages/Badges.jsx": [
+    "tb.label"
+  ],
+  "pages/Games.jsx": [
+    "FOLDERS.find(f => f.key === game.folder)?.title || 'her'",
+    "REWARD_LIMIT_NOTE",
+    "SAVE_LOAD_ERROR",
+    "SAVE_MESSAGES.failing",
+    "SAVE_MESSAGES.offline",
+    "SAVE_MESSAGES.recovered",
+    "SAVE_MESSAGES.rejected",
+    "SAVE_NO_LOCAL_COPY",
+    "SAVE_PLAY_FRESH",
+    "b.title",
+    "folder.tagline",
+    "folder.title",
+    "game.tagline",
+    "game.title",
+    "openFolder.title",
+    "reason === 'server_won' ? SAVE_MESSAGES.server_won : SAVE_MESSAGES.conflict"
+  ],
+  "pages/HomePage.jsx": [
+    "activeBadgeData.category",
+    "activeBadgeData.description",
+    "activeBadgeData.title",
+    "activeGameData.detail",
+    "activeGameData.tagline",
+    "activeGameData.title",
+    "game.title",
+    "hero.headline",
+    "item.description",
+    "item.title",
+    "src.label",
+    "tile.name"
+  ],
+  "pages/UserStats.jsx": [
+    "FROZEN_LABEL",
+    "stats.levelName"
+  ],
+  "push/PushAdminCard.jsx": [
+    "label"
+  ],
+  "push/PushSettings.jsx": [
+    "TEST_PUSH_HELP"
+  ],
+  "shop/catalog.js": [
+    "SHOP_ERRORS[reason] || SHOP_FALLBACK_ERROR",
+    "badge.title",
+    "g.title",
+    "game.title",
+    "item.label"
+  ],
+  "shorts/shortsAi.js": [
+    "FRIENDLY.network"
+  ],
+  "shorts/shortsApi.js": [
+    "FRIENDLY[kind]"
+  ],
+  "tour/TourEditor.jsx": [
+    "ANCHORS[k].label",
+    "SET_LABELS[k]",
+    "SET_LABELS[setKey]"
+  ],
+  "tour/TourOverlay.jsx": [
+    "step.text",
+    "step.title"
+  ]
+}

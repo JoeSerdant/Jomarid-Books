@@ -10,17 +10,18 @@ import * as polygonArena from './defs/polygonArena.js';
 import * as chess from './defs/chess.js';
 import * as koulovi from './defs/koulovi.js';
 import * as hannibal from './defs/hannibal.js';
+import { tk } from '../i18n/mark.js';
 
 // id her jsou stejná jako v Games.jsx a v mostu pro odměny; headline je statistika, podle které se řadí žebříček hry.
 // Statistiky a odznaky každé hry jsou ve vlastním souboru ve složce defs (a každá hra je hlásí přes jomaridRecord).
 const GAMES = [
-  { id: 'rocket', title: 'Jomarid Rocket Game', icon: Rocket, headline: 'score_normal', defs: rocket },
-  { id: 'warroom', title: 'Warroom: Frontlines', icon: Swords, headline: 'best_sector', defs: warroom },
-  { id: 'cityclicker', title: 'City Clicker', icon: Building2, headline: 'prestige_count', defs: cityClicker },
-  { id: 'polygonarena', title: 'Polygon aréna', icon: Target, headline: 'best_level', defs: polygonArena },
-  { id: 'chess', title: 'Chess League', icon: Crown, headline: 'rating_peak', defs: chess },
-  { id: 'koulovikamosi', title: 'Kouloví Kámoši', icon: Smile, headline: 'score_classic', defs: koulovi },
-  { id: 'hannibal', title: 'Hannibal: Barca', icon: Castle, headline: 'endless_wave', defs: hannibal },
+  { id: 'rocket', title: tk('Jomarid Rocket Game'), icon: Rocket, headline: 'score_normal', defs: rocket },
+  { id: 'warroom', title: tk('Warroom: Frontlines'), icon: Swords, headline: 'best_sector', defs: warroom },
+  { id: 'cityclicker', title: tk('City Clicker'), icon: Building2, headline: 'prestige_count', defs: cityClicker },
+  { id: 'polygonarena', title: tk('Polygon aréna'), icon: Target, headline: 'best_level', defs: polygonArena },
+  { id: 'chess', title: tk('Chess League'), icon: Crown, headline: 'rating_peak', defs: chess },
+  { id: 'koulovikamosi', title: tk('Kouloví Kámoši'), icon: Smile, headline: 'score_classic', defs: koulovi },
+  { id: 'hannibal', title: tk('Hannibal: Barca'), icon: Castle, headline: 'endless_wave', defs: hannibal },
 ];
 
 // Veřejný seznam statistik (ten se ukazuje ve Statistikách a Odznacích). Skryté statistiky (SECRET_STATS v defs) tu nejsou, viz níž.

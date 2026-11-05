@@ -6,6 +6,8 @@ import { loadGameProgress, loadGameXpTotals } from '../gameRecords/api.js';
 import { calculateLevelAndProgress, getLevelVisuals, computeTotalXp, DEFAULT_MONTHLY_GOAL } from '../constants/leveling.js';
 import { sumBadgeXp } from '../constants/badgeXp.js';
 import { loadEquippedTitles, loadMyCosmetics } from '../shop/api.js';
+import { monthName, weekdayName } from '../i18n/core.js';
+import { tk } from '../i18n/mark.js';
 
 // Prázdný stav, dokud se statistiky nenačtou (nebo když načtení selže).
 export const EMPTY_STATS = {
@@ -18,7 +20,7 @@ export const EMPTY_STATS = {
   xp: 0,
   totalXp: 0,
   level: 1,
-  levelName: "Začínající čtenář 🌱",
+  levelName: tk('Začínající čtenář 🌱'),
   levelBadgeClass: "",
   levelBoxClass: "",
   xpNeededForNext: 100,
@@ -51,8 +53,7 @@ export async function loadMyStats(client, user) {
   const currentMonth = now.getMonth();
   const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const daysRemainingInMonth = lastDayOfMonth - now.getDate();
-  const monthNames = ["Leden", "Únor", "Březen", "Duben", "Květen", "Červen", "Červenec", "Srpen", "Září", "Říjen", "Listopad", "Prosinec"];
-  const currentMonthName = monthNames[currentMonth];
+  const currentMonthName = monthName(currentMonth);
 
   // Paralelní stažení profilu, knih, denní aktivity a vyřešení streaku
   // (resolve_streak() sám dožene libovolné množství uplynulých dní od
@@ -84,7 +85,6 @@ export async function loadMyStats(client, user) {
 
   // Trend čtení za posledních 6 měsíců - počítáno z dat, co už appka stejně
   // stahuje (user_books), žádný extra dotaz.
-  const monthNamesShort = ["Led", "Úno", "Bře", "Dub", "Kvě", "Čvn", "Čvc", "Srp", "Zář", "Říj", "Lis", "Pro"];
   const readingTrend = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date(currentYear, currentMonth - i, 1);
@@ -93,7 +93,7 @@ export async function loadMyStats(client, user) {
       const ubd = new Date(ub.first_completed_at);
       return ubd.getFullYear() === d.getFullYear() && ubd.getMonth() === d.getMonth();
     }).length;
-    readingTrend.push({ label: monthNamesShort[d.getMonth()], count });
+    readingTrend.push({ label: monthName(d.getMonth(), 'short'), count });
   }
 
   // 2. MĚSÍČNÍ CÍL A ZAMYKÁNÍ ZMĚNY
@@ -126,7 +126,6 @@ export async function loadMyStats(client, user) {
   let streak = resolvedStreak + (readToday ? 1 : 0);
 
   // Týdenní aktivita - čte přímo z už vyřešeného stavu, žádná nová simulace.
-  const czechDays = ["Ne", "Po", "Út", "St", "Čt", "Pá", "So"];
   const weeklyActivityGenerated = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date();
@@ -134,7 +133,7 @@ export async function loadMyStats(client, user) {
     const dateStr = d.toLocaleDateString('sv');
     const isFrozen = !activeDates.includes(dateStr) && displayFrozenDates.includes(dateStr);
     weeklyActivityGenerated.push({
-      dayLabel: czechDays[d.getDay()],
+      dayLabel: weekdayName(d.getDay()),
       isActive: activeDates.includes(dateStr) || isFrozen,
       isFrozen,
       isToday: i === 0
