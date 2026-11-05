@@ -411,6 +411,8 @@ export const GameLauncher = ({ game }) => {
           title={game.title}
           srcDoc={gameDoc}
           allow="clipboard-write"
+          // Hra se po načtení zaměří, ať klávesy a ovladač fungují hned, bez kliknutí do ní (bez toho by klávesy dostala stránka kolem).
+          onLoad={(e) => { try { e.currentTarget.contentWindow?.focus(); } catch { /* okno hry se zaměřit nedá: klávesy začnou platit po kliknutí do hry */ } }}
           style={{ border: 'none', display: 'block', ...(gameFx ? { filter: gameFx } : {}) }}
           className="flex-1 min-h-0 min-w-0 w-full"
         />

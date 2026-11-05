@@ -564,6 +564,19 @@ test('zprávy z hry se přijímají jen z iframu této hry (stejná kontrola jak
   assert.match(handler, /event\.source !== iframeRef\.current\.contentWindow\) return;/);
 });
 
+test('iframe hry se po načtení zaměří, takže klávesy a ovladač fungují hned a zaměření nikdy nic neshodí', () => {
+  const g = read('pages', 'Games.jsx');
+  const tag = g.slice(g.indexOf('<iframe'), g.indexOf('/>', g.indexOf('<iframe')));
+  const m = /onLoad=\{(\(e\) => \{.*\})\}/.exec(tag);
+  assert.ok(m, 'iframe má onLoad');
+  const handler = new Function(`return ${m[1]};`)();
+  let focused = 0;
+  handler({ currentTarget: { contentWindow: { focus: () => { focused += 1; } } } });
+  assert.equal(focused, 1, 'okno hry se zaměří');
+  handler({ currentTarget: { contentWindow: null } });                                               // okno ještě není
+  handler({ currentTarget: { contentWindow: { focus: () => { throw new Error('nepovoleno'); } } } }); // prohlížeč zaměření nepustí
+});
+
 test('lišta nad hrou ukáže štítek, když se postup neukládá, a hlášky jsou česky bez kódů', () => {
   const bar = read('components', 'GameBar.jsx');
   assert.match(bar, /saveStatus && SAVE_CHIPS\[saveStatus\]/);
