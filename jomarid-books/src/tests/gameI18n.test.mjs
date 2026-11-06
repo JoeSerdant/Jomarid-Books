@@ -17,7 +17,7 @@ const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (...p) => fs.readFileSync(path.join(SRC, ...p), 'utf8');
 
 // Hry, jejichž slovník je hotový (úplnost se u nich hlídá); ostatní se doplňují po jedné.
-const DONE = ['koulovikamosi', 'chess', 'cityclicker', 'hannibal'];
+const DONE = ['koulovikamosi', 'chess', 'cityclicker', 'hannibal', 'warroom'];
 
 // Spustí vrstvu v izolovaném kontextu s minimálním oknem a vrátí window.
 const runLayer = (lang, dict, extra = {}, intl = Intl) => {
@@ -72,6 +72,16 @@ test('vrstva: ikona před známým textem, tečka na konci a více vět v jednom
   assert.equal(T('Zdupání: Neznámé'), 'Zdupání: Neznámé');
   assert.equal(T('⚠ Neznámé'), '⚠ Neznámé');
   assert.equal(T('— 5'), '— 5');
+});
+
+test('vrstva: vzor, jehož části se všechny přeloží, má přednost před vzorem s neznámou částí', () => {
+  const T = runLayer('en', {
+    'AKCE: {0} {1} (+{2} VB)': 'ACTION: {0} {1} (+{2} CP)', 'AKCE: {0} (+{1} VB)': 'ACTION: {0} (+{1} CP)',
+    'Útok selhal.': 'The attack failed.', 'Úder': 'Strike',
+  }).win.jomaridT;
+  assert.equal(T('AKCE: Úder 5 (+2 VB)'), 'ACTION: Strike 5 (+2 CP)');
+  assert.equal(T('AKCE: Útok selhal. (+2 VB)'), 'ACTION: The attack failed. (+2 CP)', 'celá věta se nerozdělí na dvě části jen kvůli mezeře');
+  assert.equal(T('AKCE: Neznámé věci (+2 VB)'), 'ACTION: Neznámé věci (+2 CP)', 'když nic nesedí úplně, použije se částečná shoda');
 });
 
 test('vrstva: znaky regulárních výrazů v klíči nevadí a slovník s </script> nerozbije dokument', () => {

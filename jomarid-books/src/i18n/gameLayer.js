@@ -38,15 +38,19 @@ const LAYER_TEMPLATE = `(function () {
     var end = ENDING.exec(core);
     if (end && exact[end[1]] !== undefined) return exact[end[1]] + end[2];
     if (depth > 4) return null;
+    var partial = null;
     for (var p = 0; p < pats.length; p++) {
       var m = pats[p].re.exec(core);
       if (!m) continue;
-      var args = [];
+      var args = [], whole = true;
       for (var i = 0; i < pats[p].idx.length; i++) {
         var g = m[i + 1]; var tr = LETTER.test(g) ? lookup(norm(g), depth + 1) : null;
+        if (tr === null && LETTER.test(g)) whole = false;
         args[pats[p].idx[i]] = tr === null ? g : tr;
       }
-      return pats[p].en.replace(PH, function (x, n) { return args[n] !== undefined ? args[n] : x; });
+      var text = pats[p].en.replace(PH, function (x, n) { return args[n] !== undefined ? args[n] : x; });
+      if (whole) return text;
+      if (partial === null) partial = text; // a pattern whose parts are not all known is used only when nothing better is found
     }
     // An icon or symbol in front of a known text ("<icon> Text") keeps the icon and translates the text.
     var pm = PREFIX.exec(core);
@@ -74,7 +78,7 @@ const LAYER_TEMPLATE = `(function () {
       for (var j = 0; j < items.length; j++) { var one = lookup(items[j], depth + 1); if (one === null) return null; listed.push(one); }
       return listed.join(', ');
     }
-    return null;
+    return partial;
   }
   function T(text) {
     if (typeof text !== 'string' || text.length === 0 || !LETTER.test(text)) return text;
