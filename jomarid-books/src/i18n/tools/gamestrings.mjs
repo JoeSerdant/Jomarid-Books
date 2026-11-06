@@ -191,7 +191,7 @@ if (process.argv[1] && process.argv[1].endsWith('gamestrings.mjs')) {
       answered.add(id);
       const en = m[2].trim() === '=' ? cs : m[2].trim(); // = znamená: píše se stejně (název, kód, anglické slovo)
       if (!en) { problems.push(`${id}: prázdný překlad`); continue; }
-      if (placeholdersOf(cs).join(',') !== placeholdersOf(en).join(',')) problems.push(`${id}: místa se liší (${placeholdersOf(cs).join(',') || '-'} x ${placeholdersOf(en).join(',') || '-'}): ${cs.slice(0, 60)}`);
+      if (!placeholdersOf(en).every((p) => placeholdersOf(cs).includes(p))) problems.push(`${id}: v překladu je místo, které česky není (${placeholdersOf(cs).join(',') || '-'} x ${placeholdersOf(en).join(',') || '-'}): ${cs.slice(0, 60)}`); // anglicky smí některé místo chybět (české koncovky rodu {1})
       else if (hasCzechDiacritics(en) && en !== cs) problems.push(`${id}: česká diakritika v překladu: ${en.slice(0, 60)}`);
       else add[cs] = en;
     }

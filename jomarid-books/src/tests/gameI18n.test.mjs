@@ -17,7 +17,7 @@ const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (...p) => fs.readFileSync(path.join(SRC, ...p), 'utf8');
 
 // Hry, jejichž slovník je hotový (úplnost se u nich hlídá); ostatní se doplňují po jedné.
-const DONE = ['koulovikamosi'];
+const DONE = ['koulovikamosi', 'chess', 'cityclicker'];
 
 // Spustí vrstvu v izolovaném kontextu s minimálním oknem a vrátí window.
 const runLayer = (lang, dict, extra = {}, intl = Intl) => {
@@ -82,11 +82,11 @@ test('vrstva: česká jazyková verze se při formátování nahradí anglickou,
   assert.deepEqual(seen, [['N', 'en-GB'], ['N', 'en-GB'], ['D', 'en-GB'], ['N', 'de-DE']]);
 });
 
-test('slovníky: každý má stejná místa {0} jako klíč, v překladu není česká diakritika (kromě záměrně stejných) a jde se stáhnout přes loader', async () => {
+test('slovníky: překlad nemá víc míst {0} než klíč, v překladu není česká diakritika (kromě záměrně stejných) a jde se stáhnout přes loader', async () => {
   for (const id of GAME_IDS) {
     const dict = await readGameDict(id);
     for (const [cs, en] of Object.entries(dict)) {
-      assert.equal(placeholdersOf(en).join(','), placeholdersOf(cs).join(','), `${id}: místa se liší: ${cs}`);
+      assert.ok(placeholdersOf(en).every((p) => placeholdersOf(cs).includes(p)), `${id}: v překladu je místo, které česky není: ${cs}`); // anglicky smí místo chybět (české koncovky rodu)
       assert.ok(en.trim(), `${id}: prázdný překlad: ${cs}`);
       if (en !== cs) assert.ok(!hasCzechDiacritics(en), `${id}: česká diakritika v překladu: ${cs} -> ${en}`);
     }
@@ -104,6 +104,21 @@ test('hry s hotovým slovníkem: každý český text ve zdroji hry má anglick�
     const missing = [...keys.entries()].filter(([k]) => !(k in dict)).map(([k, locs]) => `${k}  @${locs[0]}`);
     assert.deepEqual(missing, [], `${id}: chybí překlad (npm run i18n:games -- extract ${id} soubor)`);
   }
+});
+
+test('šachy: věty pro čtečky obrazovky se anglicky skládají z anglických názvů, česky zůstávají beze změny', () => {
+  const src = read('gameContent', 'chess', 'speech.js');
+  const load = (lang) => {
+    const win = lang === 'en' ? { jomaridLang: 'en' } : {};
+    const ctx = vm.createContext({ window: lang ? win : undefined, ChessEngine: { isCheckmate: () => false, isInCheck: () => true } });
+    vm.runInContext(`${src}\nthis.Speech = Speech;`, ctx);
+    return ctx.Speech;
+  };
+  const move = { piece: { type: 'n', color: 'b' }, from: { r: 0, c: 6 }, to: { r: 2, c: 5 }, captured: { type: 'p', color: 'w' } };
+  assert.equal(load('en').describeMove(move, { turn: 'w' }), 'knight from g8 to f6, captures a pawn. Check.');
+  assert.equal(load('en').squareLabel(6, 4, { type: 'p', color: 'w' }, { selected: true }), 'e2, white pawn, selected');
+  assert.equal(load('en').describeSelection({ type: 'q', color: 'b' }, 0, 3, []), "Selected: black queen at d8. This piece can't move right now.");
+  assert.match(load(null).describeMove(move, { turn: 'w' }), /^jezdcem z g8 na f6, bere pěšce\. Šach\.$/);
 });
 
 test('zapojení: Games.jsx vkládá vrstvu a slovník hry jen v angličtině, nástroje a test jsou v npm test', () => {
