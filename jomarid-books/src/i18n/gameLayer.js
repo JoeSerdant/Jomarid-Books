@@ -31,6 +31,7 @@ const LAYER_TEMPLATE = `(function () {
   var cache = Object.create(null), cacheCount = 0;
   var partialHit = false;
   var LETTER = /[A-Za-z\\u00C0-\\u024F]/;
+  var WORD = /[A-Za-z\\u00C0-\\u024F]{4,}/;
   var PREFIX = /^([^A-Za-z0-9\\u00C0-\\u024F\\s]+\\s)([\\s\\S]+)$/;
   var ENDING = /^([\\s\\S]*?)([.!?]+)$/;
   function lookup(core, depth) {
@@ -46,7 +47,8 @@ const LAYER_TEMPLATE = `(function () {
       var args = [], whole = true;
       for (var i = 0; i < pats[p].idx.length; i++) {
         var g = m[i + 1]; var tr = LETTER.test(g) ? lookup(norm(g), depth + 1) : null;
-        if (tr === null && LETTER.test(g)) whole = false;
+        if (tr !== null) tr = /^[\\s\\u200b\\ufeff]*/.exec(g)[0] + tr + /[\\s\\u200b\\ufeff]*$/.exec(g)[0];
+        if (tr === null && WORD.test(g)) whole = false; // units and numbers such as "3 min" or "1.5K" are not an unknown text
         args[pats[p].idx[i]] = tr === null ? g : tr;
       }
       var text = pats[p].en.replace(PH, function (x, n) { return args[n] !== undefined ? args[n] : x; });
@@ -76,8 +78,8 @@ const LAYER_TEMPLATE = `(function () {
     // A list of known names separated by commas.
     if (depth < 4 && core.indexOf(', ') > 0) {
       var items = core.split(', '), listed = [];
-      for (var j = 0; j < items.length; j++) { var one = lookup(items[j], depth + 1); if (one === null) return null; listed.push(one); }
-      return listed.join(', ');
+      for (var j = 0; j < items.length; j++) { var one = lookup(items[j], depth + 1); if (one === null) break; listed.push(one); }
+      if (listed.length === items.length) return listed.join(', ');
     }
     // A short name made of known words ("Icy Arrow" built from an adjective and a noun): every word must be known.
     if (depth < 4 && core.indexOf(' ') > 0 && core.length < 60) {

@@ -18,7 +18,7 @@ const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (...p) => fs.readFileSync(path.join(SRC, ...p), 'utf8');
 
 // Hry, jejichž slovník je hotový (úplnost se u nich hlídá); ostatní se doplňují po jedné.
-const DONE = ['koulovikamosi', 'chess', 'cityclicker', 'hannibal', 'warroom', 'polygonarena'];
+const DONE = ['koulovikamosi', 'chess', 'cityclicker', 'hannibal', 'warroom', 'polygonarena', 'rocket'];
 
 // Spustí vrstvu v izolovaném kontextu s minimálním oknem a vrátí window.
 const runLayer = (lang, dict, extra = {}, intl = Intl) => {
@@ -97,6 +97,14 @@ test('vrstva: krátký název ze známých slov se přeloží po slovech, s nezn
   assert.equal(T('Ledový Neznámý'), 'Ledový Neznámý');
   assert.equal(T('AKCE: Neznámé (5)'), 'ACTION: Neznámé (5)');
   assert.ok(win.__jomaridMiss && win.__jomaridMiss['AKCE: Neznámé (5)'], 'částečně přeložený text je v seznamu chybějících');
+});
+
+test('vrstva: mezery kolem přeloženého místa zůstanou a seznam s neznámou položkou nezahodí částečnou shodu', () => {
+  const T = runLayer('en', {
+    'Postup: {0}|{1}': 'Progress: {0}|{1}', tahů: 'moves', '{0}, úloha {1}': '{0}, puzzle {1}', Mat: 'Mate',
+  }).win.jomaridT;
+  assert.equal(T('Postup: 1| tahů'), 'Progress: 1| moves', 'mezera před přeloženým slovem se nesmí ztratit');
+  assert.equal(T('Mat, úloha 1, neznámé'), 'Mate, puzzle 1, neznámé', 'neznámá položka seznamu: použije se částečná shoda vzoru');
 });
 
 test('vrstva: znaky regulárních výrazů v klíči nevadí a slovník s </script> nerozbije dokument', () => {
