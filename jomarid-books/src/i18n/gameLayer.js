@@ -29,6 +29,7 @@ const LAYER_TEMPLATE = `(function () {
   });
   pats.sort(function (a, b) { return b.lit - a.lit; });
   var cache = Object.create(null), cacheCount = 0;
+  var partialHit = false;
   var LETTER = /[A-Za-z\\u00C0-\\u024F]/;
   var PREFIX = /^([^A-Za-z0-9\\u00C0-\\u024F\\s]+\\s)([\\s\\S]+)$/;
   var ENDING = /^([\\s\\S]*?)([.!?]+)$/;
@@ -78,13 +79,28 @@ const LAYER_TEMPLATE = `(function () {
       for (var j = 0; j < items.length; j++) { var one = lookup(items[j], depth + 1); if (one === null) return null; listed.push(one); }
       return listed.join(', ');
     }
+    // A short name made of known words ("Icy Arrow" built from an adjective and a noun): every word must be known.
+    if (depth < 4 && core.indexOf(' ') > 0 && core.length < 60) {
+      var words = core.split(' '), named = [];
+      if (words.length <= 4) {
+        for (var w = 0; w < words.length; w++) {
+          var wt = lookup(words[w], depth + 1);
+          if (wt === null && /^[a-z\\u00e0-\\u017e]/.test(words[w])) wt = lookup(words[w].charAt(0).toUpperCase() + words[w].slice(1), depth + 1); // generated names write the noun in lower case
+          if (wt === null) break;
+          named.push(wt);
+        }
+        if (named.length === words.length) return named.join(' ');
+      }
+    }
+    if (partial !== null && depth === 0) partialHit = true;
     return partial;
   }
   function T(text) {
     if (typeof text !== 'string' || text.length === 0 || !LETTER.test(text)) return text;
     var c = cache[text];
     if (c !== undefined) return c;
-    var core = norm(text); var out = lookup(core, 0);
+    var core = norm(text); partialHit = false; var out = lookup(core, 0);
+    if (partialHit && CFG.collect) (window.__jomaridMiss = window.__jomaridMiss || {})[core] = 1;
     if (out === null) { if (CFG.collect) (window.__jomaridMiss = window.__jomaridMiss || {})[core] = 1; out = text; }
     else out = /^[\\s\\u200b\\ufeff]*/.exec(text)[0] + out + /[\\s\\u200b\\ufeff]*$/.exec(text)[0];
     if (cacheCount > 4000) { cache = Object.create(null); cacheCount = 0; }

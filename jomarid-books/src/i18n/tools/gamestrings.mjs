@@ -10,6 +10,10 @@ import _traverse from '@babel/traverse';
 import { SRC_DIR, hasCzechDiacritics, placeholdersOf } from './scan.mjs';
 
 const traverse = _traverse.default || _traverse;
+
+// Vlastní jména postav (příběh Rocketu) se v angličtině píšou s původní diakritikou: nepočítají se jako česká diakritika v překladu.
+export const NAMES_WITH_DIACRITICS = /Dušan|Eliška|Ondřej|Rybák|Kopecká|Kamenář|Hájková|Včelka|Vránová|Zedníková|Dolejš|Šíp|Jonáš|Kosová/g;
+export const withoutNames = (en) => String(en).replace(NAMES_WITH_DIACRITICS, '');
 export const GAME_DICT_DIR = path.join(SRC_DIR, 'i18n', 'games');
 
 // hra -> složka v gameContent (kromě testů a stylů se čtou všechny .js a .html)
@@ -160,7 +164,7 @@ export const readGameDict = async (gameId) => {
   return (await import(`${dictFile(gameId)}?t=${Date.now()}`)).default;
 };
 export const formatGameDict = (gameId, dict) => {
-  const entries = Object.keys(dict).sort((a, b) => a.localeCompare(b, 'cs')).map((k) => `  ${JSON.stringify(k)}: ${JSON.stringify(dict[k])},`);
+  const entries = Object.keys(dict).sort((a, b) => a.localeCompare(b, 'cs')).map((k) => `  ${JSON.stringify(k)}: ${JSON.stringify(dict[k])},${hasCzechDiacritics(dict[k]) ? ' // i18n-ok' : ''}`); // jméno s diakritikou v hodnotě: značka pro hlídání nepřeloženého textu
   return `// Anglický slovník hry ${gameId}: klíč je původní český text (místa {0}, {1} pro dosazené hodnoty), hodnota anglický překlad.\n// Vytváří nástroj src/i18n/tools/gamestrings.mjs, ručně se neupravuje. Slovník se stahuje až při otevření hry v angličtině.\nexport default {\n${entries.join('\n')}\n};\n`;
 };
 export const writeGameDict = (gameId, dict) => { fs.mkdirSync(GAME_DICT_DIR, { recursive: true }); fs.writeFileSync(dictFile(gameId), formatGameDict(gameId, dict)); };
@@ -192,7 +196,7 @@ if (process.argv[1] && process.argv[1].endsWith('gamestrings.mjs')) {
       const en = m[2].trim() === '=' ? cs : m[2].trim(); // = znamená: píše se stejně (název, kód, anglické slovo)
       if (!en) { problems.push(`${id}: prázdný překlad`); continue; }
       if (!placeholdersOf(en).every((p) => placeholdersOf(cs).includes(p))) problems.push(`${id}: v překladu je místo, které česky není (${placeholdersOf(cs).join(',') || '-'} x ${placeholdersOf(en).join(',') || '-'}): ${cs.slice(0, 60)}`); // anglicky smí některé místo chybět (české koncovky rodu {1})
-      else if (hasCzechDiacritics(en) && en !== cs) problems.push(`${id}: česká diakritika v překladu: ${en.slice(0, 60)}`);
+      else if (hasCzechDiacritics(withoutNames(en)) && en !== cs) problems.push(`${id}: česká diakritika v překladu: ${en.slice(0, 60)}`);
       else add[cs] = en;
     }
     for (const id of todo.keys()) if (!answered.has(id)) problems.push(`chybí odpověď na číslo ${id}: ${todo.get(id).slice(0, 50)}`);
