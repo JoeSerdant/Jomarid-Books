@@ -17,7 +17,7 @@ const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (...p) => fs.readFileSync(path.join(SRC, ...p), 'utf8');
 
 // Hry, jejichž slovník je hotový (úplnost se u nich hlídá); ostatní se doplňují po jedné.
-const DONE = ['koulovikamosi', 'chess', 'cityclicker'];
+const DONE = ['koulovikamosi', 'chess', 'cityclicker', 'hannibal'];
 
 // Spustí vrstvu v izolovaném kontextu s minimálním oknem a vrátí window.
 const runLayer = (lang, dict, extra = {}, intl = Intl) => {
@@ -52,6 +52,26 @@ test('vrstva: místa {0} se shodují s dosazenou částí věty a ta se přelož
   assert.equal(T('Vlna 3 z 10'), 'Wave 3 of 10');
   assert.equal(T('Rekord: 12 bodů'), 'Record: 12 points', 'konkrétnější vzor má přednost před obecným {0} bodů');
   assert.equal(T('Jiný text 5'), 'Jiný text 5');
+});
+
+test('vrstva: ikona před známým textem, tečka na konci a více vět v jednom textu se přeloží, neznámá věta nechá celek česky', () => {
+  const T = runLayer('en', {
+    Zdupání: 'Trample', 'Přesná muška': 'Sharp Aim', 'Silný útok.': 'Strong attack.', 'Rychlá jízda - výpad a ústup.': 'Fast cavalry - charge and retreat.',
+    '{0} (pasivní): {1}': '{0} (passive): {1}', 'Zvuk: vypnutý': 'Sound: off',
+  }).win.jomaridT;
+  assert.equal(T('🔇 Zvuk: vypnutý'), '🔇 Sound: off');
+  assert.equal(T('🐘 Zdupání'), '🐘 Trample');
+  assert.equal(T('🐘 Zdupání.'), '🐘 Trample.', 'tečka za známým textem bez tečky');
+  assert.equal(T('🎯 Přesná muška (pasivní): Silný útok.'), '🎯 Sharp Aim (passive): Strong attack.');
+  assert.equal(T('Rychlá jízda - výpad a ústup. 🐘 Zdupání.'), 'Fast cavalry - charge and retreat. 🐘 Trample.');
+  assert.equal(T('Silný útok. Neznámá věta.'), 'Silný útok. Neznámá věta.', 'když některá věta chybí, zůstane celek česky a je vidět');
+  assert.equal(T('Silný útok. Rychlá jízda - výpad a ústup. Zdupání.'), 'Strong attack. Fast cavalry - charge and retreat. Trample.', 'víc vět za sebou');
+  assert.equal(T('Zdupání, Přesná muška, Zdupání'), 'Trample, Sharp Aim, Trample', 'seznam známých názvů');
+  assert.equal(T('Zdupání, Neznámé'), 'Zdupání, Neznámé');
+  assert.equal(T('Zdupání: Silný útok.'), 'Trample: Strong attack.', 'název: popis ze dvou známých textů');
+  assert.equal(T('Zdupání: Neznámé'), 'Zdupání: Neznámé');
+  assert.equal(T('⚠ Neznámé'), '⚠ Neznámé');
+  assert.equal(T('— 5'), '— 5');
 });
 
 test('vrstva: znaky regulárních výrazů v klíči nevadí a slovník s </script> nerozbije dokument', () => {
