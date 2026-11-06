@@ -30,21 +30,55 @@ const LAYER_TEMPLATE = `(function () {
   pats.sort(function (a, b) { return b.lit - a.lit; });
   var cache = Object.create(null), cacheCount = 0;
   var LETTER = /[A-Za-z\\u00C0-\\u024F]/;
+  var PREFIX = /^([^A-Za-z0-9\\u00C0-\\u024F\\s]+\\s)([\\s\\S]+)$/;
+  var ENDING = /^([\\s\\S]*?)([.!?]+)$/;
   function lookup(core, depth) {
     var hit = exact[core];
     if (hit !== undefined) return hit;
-    if (depth > 2) return null;
+    var end = ENDING.exec(core);
+    if (end && exact[end[1]] !== undefined) return exact[end[1]] + end[2];
+    if (depth > 4) return null;
+    var partial = null;
     for (var p = 0; p < pats.length; p++) {
       var m = pats[p].re.exec(core);
       if (!m) continue;
-      var args = [];
+      var args = [], whole = true;
       for (var i = 0; i < pats[p].idx.length; i++) {
         var g = m[i + 1]; var tr = LETTER.test(g) ? lookup(norm(g), depth + 1) : null;
+        if (tr === null && LETTER.test(g)) whole = false;
         args[pats[p].idx[i]] = tr === null ? g : tr;
       }
-      return pats[p].en.replace(PH, function (x, n) { return args[n] !== undefined ? args[n] : x; });
+      var text = pats[p].en.replace(PH, function (x, n) { return args[n] !== undefined ? args[n] : x; });
+      if (whole) return text;
+      if (partial === null) partial = text; // a pattern whose parts are not all known is used only when nothing better is found
     }
-    return null;
+    // An icon or symbol in front of a known text ("<icon> Text") keeps the icon and translates the text.
+    var pm = PREFIX.exec(core);
+    if (pm) { var rest = lookup(pm[2], depth + 1); if (rest !== null) return pm[1] + rest; }
+    // "Name: description" built from two known texts.
+    var ci = core.indexOf(': ');
+    if (ci > 0 && depth < 4) {
+      var head = lookup(core.slice(0, ci), depth + 1), tail = head === null ? null : lookup(core.slice(ci + 2), depth + 1);
+      if (head !== null && tail !== null) return head + ': ' + tail;
+    }
+    // Several sentences joined into one text: the longest known beginning is translated, then the rest; unknown text stays as it is.
+    if (depth < 4) {
+      var re = /[.!?]+\\s+/g, cuts = [], sm;
+      while ((sm = re.exec(core))) cuts.push([sm.index + sm[0].replace(/\\s+$/, '').length, sm.index + sm[0].length]);
+      for (var k = cuts.length - 1; k >= 0; k--) {
+        var first = lookup(core.slice(0, cuts[k][0]), depth + 1);
+        if (first === null) continue;
+        var more = lookup(core.slice(cuts[k][1]), depth + 1);
+        if (more !== null) return first + ' ' + more;
+      }
+    }
+    // A list of known names separated by commas.
+    if (depth < 4 && core.indexOf(', ') > 0) {
+      var items = core.split(', '), listed = [];
+      for (var j = 0; j < items.length; j++) { var one = lookup(items[j], depth + 1); if (one === null) return null; listed.push(one); }
+      return listed.join(', ');
+    }
+    return partial;
   }
   function T(text) {
     if (typeof text !== 'string' || text.length === 0 || !LETTER.test(text)) return text;
