@@ -12,12 +12,13 @@ import { buildGameLayer, withGameLanguage } from '../i18n/gameLayer.js';
 import { GAME_IDS, loadGameDictionary } from '../i18n/games/index.js';
 import { GAMES, extractGameKeys, readGameDict } from '../i18n/tools/gamestrings.mjs';
 import { placeholdersOf, hasCzechDiacritics } from '../i18n/tools/scan.mjs';
+import { withoutNames } from '../i18n/tools/gamestrings.mjs';
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (...p) => fs.readFileSync(path.join(SRC, ...p), 'utf8');
 
 // Hry, jejichž slovník je hotový (úplnost se u nich hlídá); ostatní se doplňují po jedné.
-const DONE = ['koulovikamosi', 'chess', 'cityclicker', 'hannibal', 'warroom'];
+const DONE = ['koulovikamosi', 'chess', 'cityclicker', 'hannibal', 'warroom', 'polygonarena'];
 
 // Spustí vrstvu v izolovaném kontextu s minimálním oknem a vrátí window.
 const runLayer = (lang, dict, extra = {}, intl = Intl) => {
@@ -84,6 +85,20 @@ test('vrstva: vzor, jehož části se všechny přeloží, má přednost před v
   assert.equal(T('AKCE: Neznámé věci (+2 VB)'), 'ACTION: Neznámé věci (+2 CP)', 'když nic nesedí úplně, použije se částečná shoda');
 });
 
+test('vrstva: krátký název ze známých slov se přeloží po slovech, s neznámým slovem zůstane česky; částečná shoda se v kolekci ohlásí', () => {
+  const dict = { Ledový: 'Icy', Šíp: 'Arrow', 'AKCE: {0} ({1})': 'ACTION: {0} ({1})' };
+  const win = { addEventListener() {} };
+  const ctx = vm.createContext({ window: win, document: { addEventListener() {}, documentElement: { setAttribute() {} }, title: '' }, Intl, Number, Date, Object, String, Array, RegExp, WeakMap });
+  win.window = win;
+  vm.runInContext(buildGameLayer('en', dict, { collect: true }), ctx);
+  const T = win.jomaridT;
+  assert.equal(T('Ledový Šíp'), 'Icy Arrow');
+  assert.equal(T('Ledový šíp'), 'Icy Arrow', 'podstatné jméno malým písmenem se hledá i s velkým začátkem');
+  assert.equal(T('Ledový Neznámý'), 'Ledový Neznámý');
+  assert.equal(T('AKCE: Neznámé (5)'), 'ACTION: Neznámé (5)');
+  assert.ok(win.__jomaridMiss && win.__jomaridMiss['AKCE: Neznámé (5)'], 'částečně přeložený text je v seznamu chybějících');
+});
+
 test('vrstva: znaky regulárních výrazů v klíči nevadí a slovník s </script> nerozbije dokument', () => {
   const T = runLayer('en', { 'Cena (v 1. kole)?': 'Price (round 1)?', 'Bonus +{0} [x]': 'Bonus +{0} [x]' }).win.jomaridT;
   assert.equal(T('Cena (v 1. kole)?'), 'Price (round 1)?');
@@ -118,7 +133,7 @@ test('slovníky: překlad nemá víc míst {0} než klíč, v překladu není č
     for (const [cs, en] of Object.entries(dict)) {
       assert.ok(placeholdersOf(en).every((p) => placeholdersOf(cs).includes(p)), `${id}: v překladu je místo, které česky není: ${cs}`); // anglicky smí místo chybět (české koncovky rodu)
       assert.ok(en.trim(), `${id}: prázdný překlad: ${cs}`);
-      if (en !== cs) assert.ok(!hasCzechDiacritics(en), `${id}: česká diakritika v překladu: ${cs} -> ${en}`);
+      if (en !== cs) assert.ok(!hasCzechDiacritics(withoutNames(en)), `${id}: česká diakritika v překladu: ${cs} -> ${en}`);
     }
     assert.deepEqual(await loadGameDictionary(id), dict, `${id}: loader vrací stejný slovník`);
   }
