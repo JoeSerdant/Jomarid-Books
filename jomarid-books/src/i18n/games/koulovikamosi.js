@@ -1,13 +1,16 @@
 // Anglický slovník hry koulovikamosi: klíč je původní český text (místa {0}, {1} pro dosazené hodnoty), hodnota anglický překlad.
 // Vytváří nástroj src/i18n/tools/gamestrings.mjs, ručně se neupravuje. Slovník se stahuje až při otevření hry v angličtině.
 export default {
-  "dnes 🏆 {0}": "today 🏆 {0}",
   "· Sloučení:": "· Merges:",
   "↶ Zpět": "↶ Undo",
+  "↶ Zpět ×{0}": "↶ Undo ×{0}",
   "+1 000 🪙 (mince ve hře).": "+1,000 🪙 (in-game coins).",
   "≋ Zatřes": "≋ Shake",
+  "≋ Zatřes ×{0}": "≋ Shake ×{0}",
   "◎ Zásah": "◎ Strike",
+  "◎ Zásah ×{0}": "◎ Strike ×{0}",
   "✕ Smaž nejmenší": "✕ Clear Smallest",
+  "✕ Smaž nejmenší ×{0}": "✕ Clear Smallest ×{0}",
   "🎖️ Všechny odznaky": "🎖️ All badges",
   "🏆 Skóre ve všech režimech": "🏆 Score in all modes",
   "🔮 Objevit všechny koule": "🔮 Discover all balls",
@@ -24,6 +27,7 @@ export default {
   "Další:": "Next:",
   "Denní výzva": "Daily Challenge",
   "Dnes": "Today",
+  "dnes 🏆 {0}": "today 🏆 {0}",
   "do větší a dají body.": "into a bigger one and give points.",
   "Dvě stejné koule se spojí": "Two identical balls merge",
   "Her:": "Games:",
@@ -54,6 +58,7 @@ export default {
   "Nenech miskou přetéct:": "Don't let the bowl overflow:",
   "Nová koule objevena!": "New ball discovered!",
   "Nový rekord!": "New record!",
+  "Nový rekord! +{0} 🪙 (ze {1})": "New record! +{0} 🪙 (was {1})",
   "Obchod": "Shop",
   "Objeveno všech 12 typů koulí.": "All 12 ball types discovered.",
   "Odstraní nejmenší koule": "Removes the smallest balls",
