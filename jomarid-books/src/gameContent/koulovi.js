@@ -6,11 +6,13 @@
 //   index.html - kostra dokumentu, most pro odměny (JOMARID-BRIDGE) a značky rozhraní
 //   style.css  - vzhled
 //   game.js    - hra (fyzika měkkých koulí, režimy, obchod, uložený postup)
+//   mp.js      - online zápas ve dvou (multiplayer): střídání tahů v jedné míse; bez rozhraní window.jomaridMP z appky nedělá nic
 import shell from './koulovi/index.html?raw';
 import css from './koulovi/style.css?raw';
 import game from './koulovi/game.js?raw';
+import mp from './koulovi/mp.js?raw';
 
 // Funkce jako náhrada (ne řetězec), aby se v kódu nevykládaly speciální sekvence jako "$&".
 export const KOULOVI_HTML = shell
   .replace('/*__CSS__*/', () => css)
-  .replace('<!--__SCRIPTS__-->', () => `<script id="src-game">\n${game}\n</script>`);
+  .replace('<!--__SCRIPTS__-->', () => `<script id="src-game">\n${game}\n</script>\n<script id="src-mp">\n${mp}\n</script>`);

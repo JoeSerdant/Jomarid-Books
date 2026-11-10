@@ -12,7 +12,7 @@ export const MP_GAMES = {
     options: [{ key: 'tc', title: tk('Hodiny'), choices: [{ value: '3+2', label: '3 + 2' }, { value: '5+3', label: '5 + 3' }, { value: '10+5', label: '10 + 5' }], def: '5+3' }],
   },
   koulovikamosi: {
-    ready: false,
+    ready: true,
     kind: 'turn',
     modes: [{ id: 'duel', title: tk('Souboj v jedné míse'), text: tk('Střídáte se v pouštění koulí do společné misky. Komu koule vypadne první, prohrává.'), reward: 20 }],
     options: [],

@@ -13,6 +13,7 @@ const read = (p) => fs.readFileSync(p, 'utf8');
 const shell = read(path.join(DIR, 'index.html'));
 const css = read(path.join(DIR, 'style.css'));
 const game = read(path.join(DIR, 'game.js'));
+const mpGame = read(path.join(DIR, 'mp.js'));
 const assembler = read(path.join(SRC, 'gameContent', 'koulovi.js'));
 const gamesPage = read(path.join(SRC, 'pages', 'Games.jsx'));
 
@@ -53,7 +54,7 @@ test('hra nenačítá cizí skripty (jen písmo) a ukládá pod vlastním klíč
 });
 
 /* ---------------------------------------------------------------- chod hry v Node */
-function makeEnv({ tut = true, store: preset = {} } = {}) {
+function makeEnv({ tut = true, store: preset = {}, mp = null } = {}) {
   const store = Object.assign({}, preset);
   const rewards = [];
   const records = [];
@@ -93,10 +94,12 @@ function makeEnv({ tut = true, store: preset = {} } = {}) {
     jomaridRecord: (stat, value) => { records.push([stat, value]); },
   };
   sandbox.window = sandbox;
+  if (mp) sandbox.jomaridMP = mp;   // online zápas: hra dostane rozhraní z appky (src/mp)
   vm.createContext(sandbox);
   // Pevné náhodné číslo, ať jsou testy opakovatelné; Math patří vm kontextu, vnější proces se nemění.
   vm.runInContext('(function () { var s = 12345; Math.random = function () { s = (s * 1664525 + 1013904223) % 4294967296; return s / 4294967296; }; })()', sandbox);
   new vm.Script(game, { filename: 'game.js' }).runInContext(sandbox);
+  new vm.Script(mpGame, { filename: 'mp.js' }).runInContext(sandbox);
   const run = (code) => vm.runInContext(code, sandbox);
   if (tut) run('S.tut = 1');   // návod pro první hru se zkouší zvlášť, jinak by první klepnutí jen zavřelo návod
   return { sandbox, run, store, rewards, records, docListeners };
@@ -938,4 +941,223 @@ test('klávesnice: stisky se v prohlížeči nezpracují dvakrát (preventDefaul
   assert.match(game, /if\(pc\)txt\('Na počítači: ← → a mezerník'/);
   assert.match(game, /document\.addEventListener\('keyup',e=>\{if\(e\.key==='ArrowLeft'\)kb\.l=0;if\(e\.key==='ArrowRight'\)kb\.r=0\}\)/);
   assert.match(game, /addEventListener\('blur',\(\)=>\{kb\.l=kb\.r=0\}\)/, 'po přepnutí okna šipka nezůstane "stisknutá"');
+});
+
+/* ---------------------------------------------------------------- online zápas (multiplayer) */
+// Falešné rozhraní window.jomaridMP z appky: zaznamenává, co hra posílá, a dovolí poslat hře události.
+function makeMp({ slot = 1, seed = 777, opponent = 'Marie' } = {}) {
+  const handlers = {};
+  const sent = [];
+  const reports = [];
+  const api = {
+    enabled: true,
+    init: { slot, seed, opponent: { name: opponent }, game: 'koulovikamosi', mode: 'duel', kind: 'turn' },
+    on(ev, fn) { (handlers[ev] = handlers[ev] || []).push(fn); return api; },
+    listen() { api.listened = true; },
+    move(payload, opts) { sent.push({ payload, endTurn: !(opts && opts.endTurn === false) }); return Promise.resolve({ ok: true }); },
+    report(outcome, reason) { reports.push([outcome, reason]); return Promise.resolve({}); },
+    close() { api.closed = (api.closed || 0) + 1; },
+    serverNow: () => Date.now(),
+  };
+  const emit = (ev, data) => { for (const fn of handlers[ev] || []) fn(data); };
+  return { api, sent, reports, emit, handlers };
+}
+const view = (o = {}) => Object.assign({ status: 'active', turn: 1, slot: 1, deadline: Date.now() + 60000, move_count: 0 }, o);
+const mpEnv = (opts) => {
+  const mp = makeMp(opts);
+  const env = makeEnv({ mp: mp.api });
+  return Object.assign(env, { mp });
+};
+// Spočítá fyziku, dokud se miska po mém tahu neusadí (mpSettle pošle výsledek); vrací počet kroků.
+const settle = (run, limit = 900) => { for (let i = 0; i < limit; i++) { run('step(); mpStep()'); if (run("g.mp.phase") !== 'mine') return i + 1; } return limit; };
+
+test('online: hra se v online zápase spustí rovnou do zápasu, přihlásí se k odběru a nemá cheat, obchod ani sólové odměny', () => {
+  const { run, mp, rewards, records } = mpEnv();
+  assert.equal(mp.api.listened, true);
+  assert.equal(run('st'), 'play');
+  assert.equal(run('g.mode'), 'mp');
+  for (const ev of ['sync', 'moves', 'match', 'end']) assert.ok(mp.handlers[ev] && mp.handlers[ev].length === 1, ev);
+  assert.equal(run('S.tut'), 1, 'návod pro první hru se neukazuje');
+  mp.emit('sync', { match: view(), moves: [], outcome: null });
+  run("ability('undo'); ability('shake'); cashOut();");
+  assert.equal(run('g.used || g.cashed || 0'), 0, 'vylepšení a vybrání z misky jsou v online zápase vypnuté');
+  assert.deepEqual(rewards, []);
+  assert.deepEqual(records, []);
+  assert.doesNotMatch(mpGame, /67MILUJU|CHEAT/);
+});
+
+test('online: pořadí koulí je společné (stejné semínko = stejné koule, jiné semínko = jiné) a nezávisí na tom, co se děje v misce', () => {
+  const a = mpEnv({ seed: 4242, slot: 1 }), b = mpEnv({ seed: 4242, slot: 2 }), c = mpEnv({ seed: 99, slot: 1 });
+  const seq = (env) => JSON.parse(env.run('JSON.stringify(Array.from({ length: 60 }, (_, k) => mpType(k)))'));
+  assert.deepEqual(seq(a), seq(b));
+  assert.notDeepEqual(seq(a), seq(c));
+  assert.ok(seq(a).every((t) => t >= 0 && t <= 3), 'jen nejmenší čtyři typy jako v klasice');
+  assert.ok(new Set(seq(a)).size >= 3, 'koule se střídají');
+  a.run('start(\'mp\'); g.mp = { k: 5, phase: \'wait\' }; mpTurnBalls()');
+  assert.equal(a.run('g.cur'), seq(a)[5]);
+  assert.equal(a.run('g.next'), seq(a)[6]);
+});
+
+test('online: můj tah. Hod se pošle hned (bez konce tahu), po usazení misky se pošle její stav a tah přejde na soupeře', async () => {
+  const { run, mp } = mpEnv({ slot: 1 });
+  mp.emit('sync', { match: view({ turn: 1 }), moves: [], outcome: null });
+  assert.equal(run('mpCanAim()'), true);
+  run('g.aimX = 230; mpDrop()');
+  assert.equal(mp.sent.length, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(mp.sent[0])), { payload: { d: 1, k: 0, x: 230, t: run('mpType(0)') }, endTurn: false });
+  assert.equal(run('g.mp.phase'), 'mine');
+  assert.equal(run('g.balls.length'), 1);
+  run('g.aimX = 300; mpDrop()');
+  assert.equal(mp.sent.length, 1, 'druhý hod ve stejném tahu nejde');
+  const steps = settle(run);
+  assert.ok(steps >= 70 && steps < 480, `miska se usadila po ${steps} krocích`);
+  assert.equal(mp.sent.length, 2);
+  const res = mp.sent[1];
+  assert.equal(res.endTurn, true);
+  assert.equal(res.payload.r, 1);
+  assert.equal(res.payload.k, 0);
+  assert.equal(res.payload.b.length, 1);
+  assert.equal(res.payload.b[0].length, 2 + 16);
+  assert.equal(run('g.mp.k'), 1, 'pořadí tahu se zvedne hned');
+  assert.equal(run('g.cur'), run('mpType(1)'));
+  await Promise.resolve();
+  assert.equal(run('g.mp.phase'), 'wait');
+  assert.equal(run('mpCanAim()'), true, 'dokud server nepřepne tah (match), pořád jsem na tahu podle pohledu serveru');
+  mp.emit('match', { match: view({ turn: 2 }) });
+  assert.equal(run('mpCanAim()'), false, 'po přepnutí tahu hráč míří až na svůj tah');
+});
+
+test('online: tah soupeře. Jeho hod se přehraje a stav misky po tahu je závazný (nahradí můj vlastní výpočet)', () => {
+  const { run, mp } = mpEnv({ slot: 2 });
+  mp.emit('sync', { match: view({ turn: 1, slot: 2 }), moves: [], outcome: null });
+  assert.equal(run('mpCanAim()'), false, 'nejsem na tahu');
+  const t = run('mpType(0)');
+  mp.emit('moves', { moves: [{ seq: 1, p: 1, payload: { d: 1, k: 0, x: 200, t }, end: false, mine: false, replay: false }] });
+  assert.equal(run('g.mp.phase'), 'replay');
+  assert.equal(run('g.balls.length'), 1);
+  for (let i = 0; i < 40; i++) run('step(); mpStep()');
+  assert.equal(mp.sent.length, 0, 'při cizím tahu hra nic neposílá');
+  const snap = [[t, 0.5, ...Array.from({ length: 8 }, (_, i) => [300 + Math.cos(i * 0.785) * 10, 700 + Math.sin(i * 0.785) * 10]).flat().map((v) => +v.toFixed(1))]];
+  mp.emit('moves', { moves: [{ seq: 2, p: 1, payload: { r: 1, k: 0, b: snap }, end: true, mine: false, replay: false }] });
+  assert.equal(run('g.mp.phase'), 'wait');
+  assert.equal(run('g.mp.k'), 1);
+  assert.equal(run('g.balls.length'), 1);
+  assert.ok(Math.abs(run('g.balls[0].x') - 300) < 3 && Math.abs(run('g.balls[0].y') - 700) < 3, 'koule je tam, kde ji soupeř nechal');
+  assert.equal(run('g.cur'), run('mpType(1)'));
+  mp.emit('match', { match: view({ turn: 2, slot: 2 }) });
+  assert.equal(run('mpCanAim()'), true, 'teď jsem na tahu já');
+});
+
+test('online: neplatné zprávy se nepřijmou (špatné pořadí tahu, nesmyslný stav misky, nesmyslná koule)', () => {
+  const { run, mp } = mpEnv({ slot: 2 });
+  mp.emit('sync', { match: view({ turn: 1, slot: 2 }), moves: [], outcome: null });
+  const m = (payload) => ({ moves: [{ seq: 1, p: 1, payload, end: false }] });
+  mp.emit('moves', m({ d: 1, k: 3, x: 200, t: 0 }));
+  mp.emit('moves', m({ d: 1, k: 0, x: 'a', t: 0 }));
+  mp.emit('moves', m({ d: 1, k: 0, x: 200, t: 99 }));
+  mp.emit('moves', m({ d: 1, k: 0, x: 200, t: 1.5 }));
+  assert.equal(run('g.balls.length'), 0);
+  mp.emit('moves', m({ r: 1, k: 5, b: [] }));
+  assert.equal(run('g.mp.k'), 0);
+  const bad = [[0, 0.1, 1, 2, 3]];
+  mp.emit('moves', m({ r: 1, k: 0, b: bad }));
+  assert.equal(run('g.mp.k'), 0, 'stav s chybným počtem čísel se zahodí');
+  mp.emit('moves', m({ r: 1, k: 0, b: [[0, 0.1, ...Array(16).fill(NaN)]] }));
+  assert.equal(run('g.mp.k'), 0, 'NaN se zahodí');
+  mp.emit('moves', m({ r: 1, k: 0, b: Array.from({ length: 400 }, () => [0, 0.1, ...Array(16).fill(10)]) }));
+  assert.equal(run('g.mp.k'), 0, 'příliš mnoho koulí se zahodí');
+  assert.match(run('g.mp.note'), /neplatn|neodpovídá/);
+});
+
+test('online: vypadne koule při mém tahu: prohrávám, hra pošle konec tahu s out a ohlásí prohru', async () => {
+  const { run, mp } = mpEnv({ slot: 1 });
+  mp.emit('sync', { match: view({ turn: 1 }), moves: [], outcome: null });
+  run('g.aimX = 270; mpDrop()');
+  run('g.balls[0].y = F + 120; for (const p of g.balls[0].P) p.y = F + 120; cm(g.balls[0])');
+  for (let i = 0; i < 80 && run('g.mp.ended') === null; i++) run('step(); mpStep()');
+  assert.equal(run('g.mp.ended'), 'loss');
+  assert.deepEqual(JSON.parse(JSON.stringify(mp.sent[mp.sent.length - 1])), { payload: { r: 1, k: 0, out: 1 }, endTurn: true });
+  await Promise.resolve();
+  assert.deepEqual(mp.reports, [['loss', 'out']]);
+});
+
+test('online: soupeři vypadne koule (jeho zpráva s out): vyhrávám a hra to ohlásí; podruhé se nic neohlásí', async () => {
+  const { run, mp } = mpEnv({ slot: 2 });
+  mp.emit('sync', { match: view({ turn: 1, slot: 2 }), moves: [], outcome: null });
+  mp.emit('moves', { moves: [{ seq: 1, p: 1, payload: { d: 1, k: 0, x: 250, t: run('mpType(0)') }, end: false }] });
+  mp.emit('moves', { moves: [{ seq: 2, p: 1, payload: { r: 1, k: 0, out: 1 }, end: true }] });
+  assert.equal(run('g.mp.ended'), 'win');
+  assert.deepEqual(mp.reports, [['win', 'out']]);
+  mp.emit('moves', { moves: [{ seq: 3, p: 1, payload: { r: 1, k: 0, out: 1 }, end: true }] });
+  assert.equal(mp.reports.length, 1);
+  assert.equal(run('g.mp.final'), undefined, 'server výsledek ještě nepotvrdil');
+  mp.emit('end', { match: view({ status: 'finished', winner: 2, slot: 2, reason: 'agreed' }), outcome: 'win' });
+  assert.equal(run('g.mp.final'), true);
+});
+
+test('online: po obnovení stránky se z historie postaví miska i pořadí tahu a rozehraný vlastní hod se dopočítá', () => {
+  const { run, mp } = mpEnv({ slot: 1 });
+  const t0 = run('mpType(0)'), t1 = run('mpType(1)'), t2 = run('mpType(2)');
+  const ball = (t, x, y) => [t, 0.3, ...Array.from({ length: 8 }, (_, i) => [x + Math.cos(i * 0.785) * 8, y + Math.sin(i * 0.785) * 8]).flat().map((v) => +v.toFixed(1))];
+  const moves = [
+    { seq: 1, p: 1, payload: { d: 1, k: 0, x: 200, t: t0 }, end: false, mine: true, replay: true },
+    { seq: 2, p: 1, payload: { r: 1, k: 0, b: [ball(t0, 250, 700)] }, end: true, mine: true, replay: true },
+    { seq: 3, p: 2, payload: { d: 1, k: 1, x: 300, t: t1 }, end: false, mine: false, replay: true },
+    { seq: 4, p: 2, payload: { r: 1, k: 1, b: [ball(t0, 250, 700), ball(t1, 330, 700)] }, end: true, mine: false, replay: true },
+    { seq: 5, p: 1, payload: { d: 1, k: 2, x: 280, t: t2 }, end: false, mine: true, replay: true },
+  ];
+  mp.emit('sync', { match: view({ turn: 1 }), moves, outcome: null });
+  assert.equal(run('g.mp.synced'), true);
+  assert.equal(run('g.mp.k'), 2, 'dva dokončené tahy');
+  assert.equal(run('g.mp.phase'), 'mine', 'můj rozehraný hod se dopočítá a pak odešle výsledek');
+  assert.equal(run('g.balls.length'), 3, 'dvě koule z předchozích tahů a ta čerstvě pustená');
+  assert.equal(mp.sent.length, 0, 'z historie se nic neposílá znovu');
+  const steps = settle(run);
+  assert.ok(steps <= 480);
+  assert.equal(mp.sent.length, 1);
+  assert.equal(mp.sent[0].payload.k, 2);
+});
+
+test('online: konec od serveru (čas, vzdání soupeře, zrušení) se převezme a hra nic neposílá zpět', () => {
+  for (const [outcome, status, winner, reason] of [['win', 'finished', 1, 'timeout'], ['loss', 'finished', 2, 'resign'], ['void', 'void', null, 'no_show']]) {
+    const { run, mp } = mpEnv({ slot: 1 });
+    mp.emit('sync', { match: view({ turn: 2 }), moves: [], outcome: null });
+    mp.emit('end', { match: view({ status, winner, slot: 1, reason }), outcome });
+    assert.equal(run('g.mp.ended'), outcome);
+    assert.equal(run('g.mp.reason'), reason);
+    assert.equal(run('g.mp.final'), true);
+    assert.equal(mp.sent.length + mp.reports.length, 0);
+    assert.equal(run('mpCanAim()'), false);
+  }
+});
+
+test('online: klepnutí na „Odejít“ pošle appce žádost o odchod, míření jde jen na mém tahu', () => {
+  const { run, mp, docListeners } = mpEnv({ slot: 1 });
+  mp.emit('sync', { match: view({ turn: 2 }), moves: [], outcome: null });
+  run('toMenu()');
+  assert.equal(mp.api.closed, 1);
+  assert.equal(run('st'), 'play', 'hra zůstává (rozhodne appka)');
+  mp.emit('match', { match: view({ turn: 1 }) });
+  assert.equal(run('mpAim()'), true);
+  assert.equal(typeof docListeners, 'object');
+});
+
+test('online: velikost stavu misky při dlouhé hře zůstane hluboko pod mezí serveru (16 kB), miska se po každém tahu usadí', async () => {
+  const { run, mp } = mpEnv({ slot: 1 });
+  mp.emit('sync', { match: view({ turn: 1 }), moves: [], outcome: null });
+  let worst = 0, longest = 0, lost = false; const all = [];
+  for (let turn = 0; turn < 70 && !lost; turn++) {
+    run(`g.aimX = ${180 + ((turn * 53) % 180)}; mpDrop()`);
+    const n = settle(run); all.push(n); longest = Math.max(longest, n);
+    if (n >= 480) console.log('   DEBUG', run('JSON.stringify(g.balls.map(b => [b.t, +Math.hypot(b.vx, b.vy).toFixed(3), Math.round(b.x), Math.round(b.y)]))'), run('g.mp.calm'));
+    const last = mp.sent[mp.sent.length - 1];
+    if (last.payload.out) { lost = true; break; }
+    worst = Math.max(worst, JSON.stringify(last.payload).length);
+    await Promise.resolve();                           // potvrzení serveru (hra pak míří znovu)
+    mp.emit('match', { match: view({ turn: 1 }) });   // tah se hned vrátí, ať se dá zkoušet dál
+  }
+  console.log(`   usazení po tazích: ${all.join(' ')}`);
+  console.log(`   online Kouloví: nejdelší usazení ${longest} kroků, největší stav misky ${worst} bajtů, ${run('g.balls.length')} koulí${lost ? ', hra skončila pádem koule' : ''}`);
+  assert.ok(worst < 16000, `stav misky ${worst} bajtů`);
+  assert.ok(longest <= 480);
 });
