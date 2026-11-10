@@ -16,14 +16,14 @@
 
   var SLOTS = 10;                // tanků v aréně: hráči a boti dohromady
   var ROUND_MS = 160000;         // délka kola
-  var SEND_EVERY = 80;           // ms mezi zprávami o poloze
+  var SEND_EVERY = 80;           // ms mezi zprávami o poloze (s víc hráči se zpomaluje, ať se kanál nezahltí)
   var INFO_EVERY = 1500;         // ms mezi zprávami o stavbě tanku
   var SILENT_MS = 9000;          // hráč, od kterého nic nepřišlo tak dlouho, z arény odešel
-  var DELAY = 140;               // duch se kreslí o tolik ms za skutečností, ať se pohyb vyhladí
+  var DELAY = 140;               // nejmenší zpoždění, o které se duch kreslí za skutečností, ať se pohyb vyhladí (při řidších zprávách je větší)
   var ZONE_SEED = 20240611;      // zóny (láva, led, oáza) jsou u všech hráčů stejné
   var ME = MP.init.me || { id: 'me', name: 'Ty' };
 
-  var V = { open: false, started: false, peers: {}, seq: 0, lastSend: 0, lastInfo: 0, lastAsk: 0, infoSig: '', round: -1, snap: null, claimBusy: false, botT: 0, roundWins: 0 };
+  var V = { clock: function () { return Date.now(); }, open: false, started: false, peers: {}, seq: 0, lastSend: 0, lastInfo: 0, lastAsk: 0, infoSig: '', round: -1, snap: null, claimBusy: false, botT: 0, roundWins: 0 };
 
   // ---------- Pomocné funkce (bez závislosti na hře, jdou zkoušet samostatně) ----------
   function clampN(v, lo, hi, dflt) { v = Number(v); if (!isFinite(v)) return dflt; return v < lo ? lo : v > hi ? hi : v; }
@@ -129,7 +129,11 @@
     var t = pr.tank; if (!t) return;
     var R = t.remote;
     R.seen = Date.now();
-    var s = { t: clampN(p.t, 0, 1e15, now()), x: clampN(p.x, 0, WORLD, 0), y: clampN(p.y, 0, WORLD, 0), a: clampN(p.a, -10, 10, 0) };
+    // Vzorky se řadí podle času příchodu v mých hodinách (ne podle hodin odesílatele): hodiny zařízení se u hráčů liší o vteřiny a duch by stál nebo skákal
+    var arrive = V.clock();
+    var s = { t: arrive, x: clampN(p.x, 0, WORLD, 0), y: clampN(p.y, 0, WORLD, 0), a: clampN(p.a, -10, 10, 0) };
+    if (R.lastArrive) R.gap = R.gap ? R.gap * 0.8 + (arrive - R.lastArrive) * 0.2 : arrive - R.lastArrive;
+    R.lastArrive = arrive;
     R.fire = !!p.f; R.hp = clampN(p.hp, 0, 1e7, R.hp); R.mh = clampN(p.mh, 1, 1e7, R.mh);
     var alive = p.al ? 1 : 0;
     if (alive && !t.alive) reviveGhost(t, s);
@@ -171,7 +175,7 @@
   // Duch místo AI: poloha, směr a střelba podle sítě, zdraví podle jeho hráče (na vlastním tanku se zdraví nikdy nesníží zásahem z mé kopie světa)
   function remoteControl(t) {
     var R = t.remote; if (!R) return;
-    var g = ghostAt(R.samples, now() - DELAY);
+    var g = ghostAt(R.samples, V.clock() - Math.max(DELAY, Math.min(450, 1.7 * (R.gap || 0))));
     if (g) { t.x = clampN(g.x, 0, WORLD, t.x); t.y = clampN(g.y, 0, WORLD, t.y); t.angle = g.a; }
     t.vx = 0; t.vy = 0; t.moveX = 0; t.moveY = 0; t.dashT = 0;
     t.wantFire = !!R.fire && R.al === 1;
@@ -251,8 +255,8 @@
   }
 
   function sendState() {
-    var t = Date.now(), p = player;
-    if (t - V.lastSend < SEND_EVERY - 5) return;
+    var t = Date.now(), p = player, every = SEND_EVERY * (humans() <= 2 ? 1 : humans() <= 4 ? 1.6 : 2.5);
+    if (t - V.lastSend < every - 5) return;
     V.lastSend = t;
     send({ k: 's', q: ++V.seq, t: Math.round(now()), x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10, a: Math.round(p.angle * 100) / 100, f: p.wantFire ? 1 : 0,
       hp: Math.max(0, Math.round(p.hp)), mh: Math.round(p.maxHp), al: p.alive ? 1 : 0 });

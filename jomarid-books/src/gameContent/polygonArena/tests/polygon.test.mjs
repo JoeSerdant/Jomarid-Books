@@ -913,6 +913,7 @@ function arenaGame({ seed = 7 } = {}) {
   };
   // Časovač sítě se v testu nespouští sám (setInterval je prázdná atrapa): zprávy a čas řídí test
   const game = loadGame({ seed, globals: { jomaridMP: MP, setInterval: () => 1, clearInterval() {} } });
+  game.ctx.__arenaMp.V.clock = () => clock;             // duchové se vyhlazují podle času příchodu zpráv: v testu ho řídí falešné hodiny
   const A = game.ctx.__arenaMp;
   const peer = (p) => handlers.rt({ p });
   const step = (n = 60) => { for (let i = 0; i < n; i++) game.run('update(STEP)'); };
