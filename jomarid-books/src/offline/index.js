@@ -24,6 +24,15 @@ export const activeGames = new Set();
 // Při odhlášení se smaže všechno, co je v zařízení: stažené knihy, klíč zařízení i fronta změn.
 registerLogoutCleanup(() => offlineStore.wipe());
 
+// Odebrání jednoho účtu z přepínače účtů: smaže se jen to, co patří jemu (stažené knihy, fronta změn, postup her v zařízení); data ostatních účtů
+// i klíč zařízení zůstanou. Při odhlášení posledního účtu se maže všechno (registerLogoutCleanup výš).
+export async function purgeUserData(userId, store = offlineStore) {
+  if (!userId) return;
+  for (const e of await store.all(STORES.books)) if (e.key.startsWith(`${userId}:`)) await store.del(STORES.books, e.key);
+  for (const e of await store.all(STORES.queue)) if (e.value?.userId === userId) await store.del(STORES.queue, e.key);
+  for (const k of await store.keys(STORES.meta)) if (k.startsWith(`gamesave:${userId}:`)) await store.del(STORES.meta, k);
+}
+
 // Co čeká na odeslání: změny z čtení a her ve frontě a hry, které mají v zařízení postup, který server ještě nezná.
 export const pendingChanges = async (userId) => {
   const queued = await outbox.pending(userId).catch(() => 0);

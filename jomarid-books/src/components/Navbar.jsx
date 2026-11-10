@@ -6,6 +6,7 @@ import { ROLE_READER, ROLE_PUBLISHER, ROLE_ADMIN, ROLE_LABELS } from '../constan
 import { Award, BarChart3, Coins, Compass, Gamepad2, Layers, Library, LogOut, Search, Settings, Shield } from 'lucide-react';
 import { t, formatNumber } from '../i18n';
 import { LanguageSwitch } from '../i18n/LanguageSwitch';
+import { AccountMenu } from '../accounts/AccountMenu.jsx';
 
 export const Navbar = ({ onOpenSearch }) => {
   const { user, logout, role, username: accountName } = useAuth();
@@ -296,6 +297,8 @@ export const Navbar = ({ onOpenSearch }) => {
                 {renderRoleBadge()}
               </div>
               
+              <AccountMenu />
+
               <button
                 onClick={logout}
                 title={t('Odhlásit se')}

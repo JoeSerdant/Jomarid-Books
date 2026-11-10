@@ -48,6 +48,12 @@ export function writeCachedProfile(userId, profile, storage = safeStorage()) {
   try { storage.setItem(PROFILE_PREFIX + userId, JSON.stringify({ role: profile?.role ?? null, username: profile?.username ?? '' })); } catch { /* plné úložiště: profil se příště načte ze serveru */ }
 }
 
+// Profil jednoho účtu (odebrání účtu z přepínače: ostatní účty na zařízení zůstanou).
+export function clearCachedProfile(userId, storage = safeStorage()) {
+  if (!storage || !userId) return;
+  try { storage.removeItem(PROFILE_PREFIX + userId); } catch { /* nic */ }
+}
+
 export function clearCachedProfiles(storage = safeStorage()) {
   if (!storage) return;
   try {
