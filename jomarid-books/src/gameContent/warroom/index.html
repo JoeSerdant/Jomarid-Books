@@ -1960,7 +1960,9 @@
     function getEnemyPush() {
         if (state.godMode) return 0;
         if (state.enemyStunned > 0) return 0;
-        let base = state.baseEnemyPush + Math.floor(state.day / 4) + ((state.sector - 1) * 3);
+        // V online souboji (src/gameContent/warroom/mp.js) je denní tlak útok soupeře: base je to, o kolik soupeř postoupil, plus malá únava, která s dny roste
+        // (jinak by se vyrovnaní hráči jen přetahovali donekonečna); zbytek (pancíř, doktríny, technologie) platí dál
+        let base = window.jomaridMP ? (state.mpIncoming || 0) + 1 + Math.floor(state.day / 2) : state.baseEnemyPush + Math.floor(state.day / 4) + ((state.sector - 1) * 3);
         
         let pctMod = 1.0; 
 
@@ -2999,5 +3001,6 @@
         document.addEventListener('visibilitychange', () => { if (document.hidden) saveRunNow(false); });
     };
 </script>
+<!--__MP__-->
 </body>
 </html>

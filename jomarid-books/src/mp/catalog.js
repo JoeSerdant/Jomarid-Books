@@ -18,7 +18,7 @@ export const MP_GAMES = {
     options: [],
   },
   warroom: {
-    ready: false,
+    ready: true,
     kind: 'turn',
     modes: [{ id: 'duel', title: tk('Souboj velitelů'), text: tk('Střídáte se v tazích. Denní tlak je útok soupeře.'), reward: 35 }],
     options: [],
