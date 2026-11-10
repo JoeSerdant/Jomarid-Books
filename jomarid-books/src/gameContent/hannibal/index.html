@@ -357,6 +357,7 @@
       .title-box h1 { font-size: 1.8rem; }
       #main-menu { gap: 8px; }
     }
+    html:not(.jomarid-online) [data-jomarid-online] { display: none !important; }
   </style>
 </head>
 <body>
@@ -492,6 +493,7 @@
     <div style="display:flex; flex-direction:column; gap:15px; width:280px;">
       <button class="btn btn-success" id="btn-continue-campaign" style="font-size:1.1rem; padding:14px; display:none;" onclick="audioFX.init(); Game.continueCampaign();">▶ Pokračovat v kampani</button>
       <button class="btn" id="btn-new-campaign" style="font-size:1.1rem; padding:14px;" onclick="audioFX.init(); Game.newCampaign();">Nová Kampaň</button>
+      <button class="btn" id="btn-online" data-jomarid-online style="font-size:1.1rem; padding:14px;">🌐 Hrát online</button>
       <button class="btn" style="font-size:0.9rem;" onclick="Game.openHelpModal()">❓ Jak se hraje</button>
       <button class="btn sound-toggle" id="btn-sound-menu" data-full="1" style="font-size:0.85rem;" onclick="Game.toggleSound()">🔊 Zvuk: zapnutý</button>
       <button class="btn" id="btn-fullscreen-menu" style="font-size:0.85rem;" onclick="Game.toggleLandscape()">📱 Celá obrazovka / na šířku</button>
@@ -3996,5 +3998,6 @@
       GameCampaign.reportRecords(GameCampaign.readSave() || { nodes: {}, doctrines: {}, roster: [] });   // postup z dřívějška se ohlásí hned, ne až po dalším uložení
     });
   </script>
+<!--__MP__-->
 </body>
 </html>

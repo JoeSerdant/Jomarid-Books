@@ -90,6 +90,25 @@
   "lib/friendlyError.js": [
     "FRIENDLY[kind]"
   ],
+  "mp/MpArenaScreen.jsx": [
+    "game.title"
+  ],
+  "mp/MpGameScreen.jsx": [
+    "game.title"
+  ],
+  "mp/MpSection.jsx": [
+    "c.labelKey",
+    "def.arena.text",
+    "m.title",
+    "modeDef.text",
+    "o.title"
+  ],
+  "mp/errors.js": [
+    "MESSAGES[errorCode(err)] || FALLBACK"
+  ],
+  "mp/reasons.js": [
+    "REASONS[reason]"
+  ],
   "offline/OfflineGamesSection.jsx": [
     "GAME_NAMES[s.gameId] || s.gameId"
   ],

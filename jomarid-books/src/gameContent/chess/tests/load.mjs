@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export const SOURCES = ['rules.js', 'search.js', 'book.js', 'league.js', 'puzzles.js', 'speech.js', 'bots.js', 'session.js'];
+export const SOURCES = ['rules.js', 'search.js', 'book.js', 'league.js', 'puzzles.js', 'speech.js', 'bots.js', 'session.js', 'online.js'];
 
 export function loadGame(files = SOURCES) {
   const ctx = vm.createContext({ console, Math, Date, JSON, setTimeout, clearTimeout });

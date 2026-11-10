@@ -649,3 +649,120 @@ test('záhlaví bitvy roste podle obsahu (dřív mělo pevnou výšku a na ší�
   // úzké obrazovky mají vlastní pravidlo s height: auto, to zůstává
   assert.match(css, /\.battle-hud, \.minigame-hud \{ height: auto; min-height: 48px;/);
 });
+
+/* ---------------------------------------------------------------- online souboj armád (multiplayer) */
+const mpSrc = read(path.join(DIR, 'mp.js'));
+
+// mp.js v atrapě prohlížeče: dá se z něj vytáhnout pomocné funkce (mapa, rozestavení, otisk stavu), které nepotřebují celou hru
+function loadMp({ seed = 12345, preset = 'medium', slot = 1, withMp = true } = {}) {
+  const el = () => ({ style: {}, classList: { add() {}, remove() {}, toggle() {} }, appendChild() {}, innerText: '', textContent: '' });
+  const listeners = [];
+  const sandbox = {
+    Math, Number, String, Object, Array, JSON, Map, console, setInterval() { return 0; }, confirm() { return true; },
+    document: { body: el(), head: el(), createElement: el, getElementById: () => el(), querySelector: () => el() },
+    addEventListener(t) { listeners.push(t); },
+  };
+  sandbox.window = sandbox;
+  if (withMp) {
+    sandbox.jomaridMP = { enabled: true, init: { seed, slot, params: { preset }, opponent: { name: 'Marie' }, match: 'm1' }, on() { return this; }, listen() {}, move: () => Promise.resolve({}), report: () => Promise.resolve({}), resign: () => Promise.resolve({}), serverNow: () => Date.now() };
+  }
+  vm.createContext(sandbox);
+  new vm.Script(mpSrc).runInContext(sandbox);
+  return { api: sandbox.__hannibalMp, listeners };
+}
+
+test('souboj: mp.js se do dokumentu skládá na jedno místo, bez rozhraní z appky nic nedělá a nemá cheat kód', () => {
+  assert.equal(html.split('<!--__MP__-->').length, 2, 'jedno místo pro mp.js');
+  assert.match(assembler, /import mp from '\.\/hannibal\/mp\.js\?raw'/);
+  assert.match(assembler, /html\.replace\('<!--__MP__-->', \(\) =>/);
+  assert.doesNotMatch(mpSrc, /67MILUJU|IMAGINEFLEXIT|CHEAT/);
+  new vm.Script(mpSrc);
+  const bare = loadMp({ withMp: false });
+  assert.equal(bare.api, undefined, 'bez window.jomaridMP se nic nespustí');
+  assert.deepEqual(bare.listeners, []);
+  const on = loadMp();
+  assert.ok(on.api && on.listeners.includes('load'), 'v zápase se bitva založí po načtení hry');
+});
+
+test('souboj: mp.js stojí jen na tom, co hra opravdu má (metody enginu, globální objekty a prvky stránky)', () => {
+  for (const m of ['moveSelectedTo', 'executeAttack', 'activateAbility', 'undoMove', 'canUndo', 'checkBattleEnd', 'endTurn', 'handleCanvasClick', 'eventToTile', 'getReachableTiles',
+    'autoFleeRoutedPlayers', 'tickStatuses', 'resetBattleUiState', 'showBanner', 'updateUnitDetailCard', 'clearBattleSave', 'phaseWait', 'getUnitStats', 'log', 'render']) {
+    assert.ok(new RegExp(`\\n      ${m}\\([^)]*\\) \\{`).test(html), `TacticalEngine.${m}`);
+  }
+  assert.match(html, /class MetaStrategyManager \{/);
+  assert.match(html, /function makeUnit\(id, name, type, team, x, y, stats, extra = \{\}\)/);
+  assert.match(html, /const UNIT_INFO = \{/);
+  assert.match(html, /\n      showBattleResultModal\(isVictory, desc, buttonLabel, buttonAction\) \{/);
+  assert.match(html, /\n      retreatFromBattle\(\) \{/);
+  assert.match(html, /window\.gameEngine = new TacticalEngine\('gameCanvas'\);/);
+  for (const id of ['battle-title', 'battle-turn-info', 'combat-log', 'result-title']) assert.ok(html.includes(`id="${id}"`), id);
+  assert.match(html, /<button class="btn btn-danger" onclick="GameCampaign\.retreatFromBattle\(\)">Ústup<\/button>/);
+  // všechny typy jednotek z velikostí armád má hra definované
+  for (const type of [...new Set(['hannibal', 'carthage_spearmen', 'numidian_cavalry', 'balearic_sling', 'celtiberian_swordsman', 'elephants', 'libyan_heavy'])]) {
+    assert.ok(html.includes(`case '${type}':`), type);
+    assert.ok(new RegExp(`\\n      ${type}: +\\{ label:`).test(html), `UNIT_INFO.${type}`);
+  }
+});
+
+test('souboj: náhodná mapa z čísla zápasu je pro stejné číslo stejná, zrcadlově souměrná, průchodná a bez překážek v rozestavení armád', () => {
+  const { api } = loadMp();
+  const seeds = [0, 1, 2, 3, 12345, 4294967295, 2147483648, 99999999];
+  for (let i = 0; i < 300; i++) seeds.push((i * 2654435761 + 17) >>> 0);
+  const kinds = new Set(); const distinct = new Set(); let rivers = 0, cliffs = 0;
+  for (const seed of seeds) {
+    const map = api.buildTerrain(seed);
+    assert.equal(JSON.stringify(map), JSON.stringify(api.buildTerrain(seed)), `stejné číslo ${seed} dá stejnou mapu`);
+    for (const [k, t] of Object.entries(map)) {
+      const [x, y] = k.split(',').map(Number);
+      assert.ok(x >= 3 && x <= 8 && y >= 0 && y < 8, `terén jen uprostřed mapy (${k})`);
+      assert.equal(map[(11 - x) + ',' + y], t, `mapa ${seed} je zrcadlově souměrná (${k})`);
+      kinds.add(t);
+    }
+    assert.ok(api.connected(map), `mapa ${seed} je průchodná`);
+    distinct.add(JSON.stringify(map));
+    if (Object.values(map).includes('river')) rivers += 1;
+    if (Object.values(map).includes('cliff')) cliffs += 1;
+  }
+  assert.ok(distinct.size > seeds.length * 0.8, `mapy jsou různé (${distinct.size} z ${seeds.length})`);
+  for (const t of ['hill', 'forest', 'snow', 'cliff', 'river', 'ford']) assert.ok(kinds.has(t), `někde je ${t}`);
+  assert.ok(rivers > seeds.length * 0.15 && rivers < seeds.length * 0.6, `řeka je zhruba na třetině map (${rivers})`);
+  assert.ok(cliffs > seeds.length * 0.3, `skály jsou na hodně mapách (${cliffs})`);
+});
+
+test('souboj: obě armády mají stejné složení a zrcadlové rozestavení, v každé je velitel a velikosti sedí na malou, střední a velkou', () => {
+  const want = { small: 5, medium: 8, large: 12 };
+  for (const [name, size] of Object.entries(want)) {
+    const { api } = loadMp({ preset: name });
+    const a = api.armyLayout(1), b = api.armyLayout(2);
+    assert.equal(a.length, size, name);
+    assert.equal(b.length, size);
+    assert.deepEqual(a.map((u) => u.type), b.map((u) => u.type), 'stejné složení ve stejném pořadí');
+    assert.equal(a.filter((u) => u.type === 'hannibal').length, 1, 'jeden velitel');
+    const tiles = new Set();
+    a.forEach((u, i) => {
+      assert.equal(b[i].x, 11 - u.x, 'zrcadlově');
+      assert.equal(b[i].y, u.y);
+      assert.ok(u.x >= 1 && u.x <= 2 && u.y >= 0 && u.y < 8, 'vlevo v rozestavení');
+      for (const p of [u, b[i]]) { const k = p.x + ',' + p.y; assert.ok(!tiles.has(k), 'každá jednotka má vlastní pole ' + k); tiles.add(k); }
+    });
+    assert.deepEqual([...new Set([...a, ...b].map((u) => u.id))].length, size * 2, 'jedinečná označení');
+    assert.equal(api.preset.rounds >= 10 && api.preset.rounds <= 14, true);
+  }
+  assert.equal(loadMp({ preset: 'nesmysl' }).api.armyLayout(1).length, 8, 'neznámá volba se bere jako střední');
+});
+
+test('souboj: otisk stavu bitvy nezávisí na pořadí jednotek, mění se s polohou a zdravím a generátor hodů je pro stejný vstup stejný', () => {
+  const { api } = loadMp();
+  const u = (id, x, y, hp) => ({ id, x, y, hp, morale: 100, routed: false });
+  const base = [u('a', 1, 1, 100), u('b', 2, 2, 80), u('c', 3, 3, 0)];
+  const h = api.stateHash(base);
+  assert.equal(api.stateHash([base[1], base[2], base[0]]), h, 'pořadí nehraje roli');
+  assert.equal(api.stateHash([...base, u('d', 5, 5, 0)]), h, 'padlé jednotky se nepočítají');
+  assert.notEqual(api.stateHash([u('a', 1, 2, 100), base[1], base[2]]), h, 'poloha');
+  assert.notEqual(api.stateHash([u('a', 1, 1, 99), base[1], base[2]]), h, 'zdraví');
+  const r1 = api.mulberry32(api.mix(7, 3, 99)), r2 = api.mulberry32(api.mix(7, 3, 99)), r3 = api.mulberry32(api.mix(7, 4, 99));
+  const s1 = [r1(), r1(), r1()], s2 = [r2(), r2(), r2()], s3 = [r3(), r3(), r3()];
+  assert.deepEqual(s1, s2, 'stejný vstup, stejné hody');
+  assert.notDeepEqual(s1, s3, 'jiné pořadí akce, jiné hody');
+  assert.ok(s1.every((v) => v >= 0 && v < 1));
+});

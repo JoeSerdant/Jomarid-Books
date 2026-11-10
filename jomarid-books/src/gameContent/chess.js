@@ -13,6 +13,7 @@
 //   speech.js   - české popisky polí a hlášení tahů pro čtečky obrazovky
 //   bots.js     - soupeři: síla, osobnost, hlášky, tempo, vzdávání, remízy
 //   session.js  - řadič jedné partie (hodiny, tah bota, nápověda, uložení)
+//   online.js   - online partie proti živému soupeři (multiplayer): podtřída session.js, tahy a hodiny přes server
 //   ui.js       - React rozhraní
 //
 // Pořadí skriptů je důležité: pozdější soubory používají globální konstanty z dřívějších.
@@ -32,6 +33,7 @@ import puzzles from './chess/puzzles.js?raw';
 import speech from './chess/speech.js?raw';
 import bots from './chess/bots.js?raw';
 import session from './chess/session.js?raw';
+import online from './chess/online.js?raw';
 import ui from './chess/ui.js?raw';
 
 const SCRIPTS = [
@@ -43,6 +45,7 @@ const SCRIPTS = [
   ['speech', speech],
   ['bots', bots],
   ['session', session],
+  ['online', online],
   ['ui', ui],
 ]
   .map(([id, code]) => `<script id="src-${id}">\n${code}\n</script>`)

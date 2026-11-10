@@ -23,6 +23,11 @@ import { t, getLang } from '../i18n';
 import { tk } from '../i18n/mark.js';
 import { withGameLanguage } from '../i18n/gameLayer';
 import { loadGameDictionary } from '../i18n/games';
+import { MpResume, useMpAvailability } from '../mp/MpSection.jsx';
+import { MpLobbyDialog } from '../mp/MpLobbyDialog.jsx';
+import { withOnlineEntry, onlineMessage } from '../mp/entry.js';
+import { MpGameScreen } from '../mp/MpGameScreen.jsx';
+import { MpArenaScreen } from '../mp/MpArenaScreen.jsx';
 
 // Každá hra je velký kus textu (stovky kB, šachy i s Reactem). Stahuje se až při spuštění (dynamický import), ne spolu
 // se stránkou Her - jinak by si hráč už při otevření seznamu stáhl všechny hry najednou.
@@ -133,6 +138,13 @@ export const GameLauncher = ({ game }) => {
   const [saveStatus, setSaveStatus] = useState(null); // 'failing' | 'conflict' | 'rejected': postup se právě neukládá
   const [loadingGame, setLoadingGame] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [mpMatch, setMpMatch] = useState(null); // rozehraný online zápas (pohled serveru), nebo null
+  const [mpAuto, setMpAuto] = useState(null); // volby posledního zápasu: po „Hrát znovu“ se hledá soupeř rovnou
+  const [mpArena, setMpArena] = useState(false); // hráč je ve sdílené aréně (Polygon aréna)
+  const [mpLobby, setMpLobby] = useState(false); // okno Hrát online je otevřené (z tlačítka v menu hry, nebo po „Hrát znovu“)
+  const mpAvail = useMpAvailability(game.id, online); // je na serveru multiplayer a má tahle hra online režim
+  const mpAvailRef = useRef(mpAvail);
+  mpAvailRef.current = mpAvail;
   const gameOpenedAtRef = useRef(null);
   const [flash, setFlash] = useState(null); // krátké potvrzení odměny v liště nad hrou
   const iframeRef = useRef(null);
@@ -196,6 +208,13 @@ export const GameLauncher = ({ game }) => {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => { tokenRef.current = session?.access_token || null; });
     return () => { cancelled = true; sub?.subscription?.unsubscribe(); };
   }, []);
+
+  // Hra v iframu ukazuje tlačítko „Hrát online“ ve svém menu jen tehdy, když jí to appka povolí (src/mp/entry.js): multiplayer musí být na serveru.
+  const postOnline = useCallback(() => {
+    const w = iframeRef.current?.contentWindow;
+    if (w) w.postMessage(onlineMessage(mpAvailRef.current.state === 'ready'), '*');
+  }, []);
+  useEffect(() => { if (showGame) postOnline(); }, [showGame, mpAvail.state, postOnline]);
 
   // Hra, která se v iframu sama znovu načte (třeba restart ve Warroomu), si aktuální postup bere přímo odsud (gameSave/shim.js), ne z kopie
   // vložené při otevření: ta by byla zastaralá a hra by se vrátila o krok zpět.
@@ -301,7 +320,7 @@ export const GameLauncher = ({ game }) => {
     const lang = getLang();
     const dict = lang === 'en' ? await loadGameDictionary(game.id) : null;
     if (!mountedRef.current) return;
-    setGameDoc(withGameLanguage(withStorageShim(src, game.id, sync.snapshot().map), lang, dict, { collect: typeof window !== 'undefined' && window.__JOMARID_I18N_COLLECT === true }));
+    setGameDoc(withGameLanguage(withOnlineEntry(withStorageShim(src, game.id, sync.snapshot().map), game.id), lang, dict, { collect: typeof window !== 'undefined' && window.__JOMARID_I18N_COLLECT === true }));
     setLoadingGame(false);
     gameOpenedAtRef.current = Date.now();
     limitShownRef.current = false;
@@ -339,10 +358,16 @@ export const GameLauncher = ({ game }) => {
   useEffect(() => {
     const handleMessage = (event) => {
       if (event.data?.source !== 'jomarid-game') return;
-      if (iframeRef.current && event.source !== iframeRef.current.contentWindow) return;
+      // Zprávy se berou jen z iframu sólové hry. Bez něj (třeba za online zápasu, který má vlastní iframe a vlastní most) se nepřijme nic,
+      // jinak by online hra mohla psát do uloženého postupu nebo žádat o Coiny jako sólová.
+      if (!iframeRef.current || event.source !== iframeRef.current.contentWindow) return;
 
       if (event.data?.type === 'close') {
         handleCloseGame();
+      } else if (event.data?.type === 'online-ask') {
+        postOnline();
+      } else if (event.data?.type === 'online') {
+        if (mpAvailRef.current.state === 'ready') setMpLobby(true); // tlačítko Hrát online v menu hry
       } else if (event.data?.type === 'storage') {
         // Změna "localStorage" ve hře (viz gameSave/shim.js): drží se v paměti a posílá se na server s odkladem.
         syncRef.current?.apply(event.data);
@@ -375,7 +400,7 @@ export const GameLauncher = ({ game }) => {
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [handleCloseGame, user, game.id, showFlash]);
+  }, [handleCloseGame, postOnline, user, game.id, showFlash]);
 
   const canClaim = hasPlayedEnough && !checkingStatus && !claimedToday && online;
 
@@ -400,6 +425,52 @@ export const GameLauncher = ({ game }) => {
     }
   };
 
+  // Zápas nebo aréna se otevírá místo hry: sólová hra se zavře (uloží se její postup) a okno Hrát online také.
+  const handleMpMatch = useCallback((m) => { setMpAuto(null); setMpLobby(false); handleCloseGame(); setMpMatch(m); }, [handleCloseGame]);
+  const handleMpArena = useCallback(() => { setMpAuto(null); setMpLobby(false); handleCloseGame(); setMpArena(true); }, [handleCloseGame]);
+  const closeLobby = useCallback(() => {
+    setMpLobby(false);
+    setMpAuto(null);
+    try { iframeRef.current?.contentWindow?.focus(); } catch { /* okno hry se zaměřit nedá: klávesy začnou platit po kliknutí do hry */ }
+  }, []);
+  const lobbyDialog = mpLobby ? (
+    <MpLobbyDialog game={game} online={online} avail={mpAvail} auto={mpAuto} onMatch={handleMpMatch} onArena={handleMpArena} onClose={closeLobby} />
+  ) : null;
+
+  // Sdílená aréna má obrazovku bez zápasu: hra v iframu napojená jen na společný kanál (src/mp)
+  if (mpArena) {
+    return (
+      <MpArenaScreen
+        game={game}
+        userId={user.id}
+        coins={coins}
+        coinsLoaded={coinsLoaded}
+        reader={reader}
+        gameFx={gameFx}
+        onExit={() => setMpArena(false)}
+        onCoins={(n) => setCoins((c) => c + n)}
+      />
+    );
+  }
+
+  // Online zápas má vlastní obrazovku (src/mp): hra v iframu s čistým úložištěm, bez cheatů a s napojením na server.
+  if (mpMatch) {
+    return (
+      <MpGameScreen
+        key={mpMatch.id}
+        game={game}
+        match={mpMatch}
+        coins={coins}
+        coinsLoaded={coinsLoaded}
+        reader={reader}
+        gameFx={gameFx}
+        onExit={() => { setMpMatch(null); setMpAuto(null); }}
+        onAgain={() => { setMpAuto({ mode: mpMatch.mode, params: mpMatch.params }); setMpMatch(null); setMpLobby(true); }}
+        onCoins={(n) => setCoins((c) => c + n)}
+      />
+    );
+  }
+
   // Hra běží v izolovaném iframu (srcDoc) přímo nad zbytkem appky - žádná
   // navigace pryč z SPA, žádný samostatný soubor ani public/ složka. Herní
   // vlastní CSS reset a stovky document.getElementById volání tak nemůžou
@@ -423,6 +494,7 @@ export const GameLauncher = ({ game }) => {
           style={{ border: 'none', display: 'block', ...(gameFx ? { filter: gameFx } : {}) }}
           className="flex-1 min-h-0 min-w-0 w-full"
         />
+        {lobbyDialog}
       </div>
     );
   }
@@ -462,6 +534,8 @@ export const GameLauncher = ({ game }) => {
         >
           {loadingGame ? <><Loader2 size={16} className="animate-spin" /> {t('Načítám hru...')}</> : <><GameIcon size={16} /> {t('Spustit hru')}</>}
         </button>
+        <MpResume game={game} online={online} avail={mpAvail} onMatch={handleMpMatch} />
+        {lobbyDialog}
         {saveLoadError && (
           <div role="alert" data-testid="save-load-error" className="-mt-3 flex flex-col items-center gap-2">
             <p style={{ color: 'var(--text-body)', borderColor: '#ef4444' }} className="text-xs m-0 border-l-2 pl-2 text-left max-w-sm">

@@ -179,7 +179,7 @@ test('zapojení: Games.jsx vkládá vrstvu a slovník hry jen v angličtině, n�
   assert.match(games, /import \{ withGameLanguage \} from '\.\.\/i18n\/gameLayer';/);
   assert.match(games, /import \{ loadGameDictionary \} from '\.\.\/i18n\/games';/);
   assert.match(games, /const dict = lang === 'en' \? await loadGameDictionary\(game\.id\) : null;/);
-  assert.match(games, /setGameDoc\(withGameLanguage\(withStorageShim\(src, game\.id, sync\.snapshot\(\)\.map\), lang, dict,/);
+  assert.match(games, /setGameDoc\(withGameLanguage\(withOnlineEntry\(withStorageShim\(src, game\.id, sync\.snapshot\(\)\.map\), game\.id\), lang, dict,/);
   const pkg = JSON.parse(fs.readFileSync(path.join(SRC, '..', 'package.json'), 'utf8'));
   assert.equal(pkg.scripts['test:gamei18n'], 'node --test src/tests/gameI18n.test.mjs');
   assert.ok(pkg.scripts.test.includes('npm run test:gamei18n'));

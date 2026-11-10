@@ -55,6 +55,7 @@ const SOURCE_LABELS = {
   badge: tk('Odznaky'),
   game_event: tk('Události ve hrách'),
   game_bonus: tk('Denní bonus za hru'),
+  mp_win: tk('Výhry v online hrách'),
   daily_login: tk('Denní přihlášení'),
   admin_grant: tk('Přidělil admin'),
   book_purchase: tk('Nákupy knih'),

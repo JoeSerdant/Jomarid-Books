@@ -27,6 +27,7 @@
 //   collection.js  - sbírka a nastavení
 //   cheat.js       - skryté pole (číslo verze dole v menu) a cheat menu pro testování
 //   main.js        - start
+//   mp.js          - sdílená aréna pro víc hráčů (multiplayer); bez rozhraní window.jomaridMP z appky nedělá nic
 //
 // Skripty jsou obyčejné (ne moduly) a sdílejí globální rozsah, takže pozdější soubory používají
 // konstanty a funkce z dřívějších. Pořadí níže je proto důležité.
@@ -54,6 +55,7 @@ import ui from './polygonArena/ui.js?raw';
 import collection from './polygonArena/collection.js?raw';
 import cheat from './polygonArena/cheat.js?raw';
 import main from './polygonArena/main.js?raw';
+import mp from './polygonArena/mp.js?raw';
 
 const SCRIPTS = [
   ['core', core],
@@ -78,6 +80,7 @@ const SCRIPTS = [
   ['collection', collection],
   ['cheat', cheat],
   ['main', main],
+  ['mp', mp],
 ]
   .map(([id, code]) => `<script id="src-${id}">\n${code}\n</script>`)
   .join('\n');

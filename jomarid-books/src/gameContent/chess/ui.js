@@ -12,6 +12,9 @@
   const BOT_RATINGS = BOTS.map((bt) => bt.rating);
   const BOT_LIST = BOTS.map((bt) => ({ key: bt.key, rating: bt.rating }));
   const embedded = (() => { try { return window.parent !== window; } catch (e) { return false; } })();
+  // Online partie (multiplayer): appka hru spustila s rozhraním window.jomaridMP, takže místo menu je rovnou partie proti živému soupeři
+  // (online.js). Bez ratingu, bez uloženého postupu, bez nápovědy, vracení tahů a cheat menu.
+  const ONLINE = !!(window.jomaridMP && window.jomaridMP.enabled);
 
   // ---------- Pomocné funkce ----------
   function pad2(n) { return String(n).padStart(2, "0"); }
@@ -19,7 +22,7 @@
   function todayStr() { return dateStr(new Date()); }
   // Rekordy se hlásí appce (jomaridRecord v mostu v index.html; mimo appku funkce není a nic se neděje).
   function reportRecords(s) {
-    if (typeof jomaridRecord !== "function" || !s) return;
+    if (ONLINE || typeof jomaridRecord !== "function" || !s) return;
     const stats = League.recordStats(s);
     Object.keys(stats).forEach((k) => jomaridRecord(k, stats[k]));
   }
@@ -686,6 +689,7 @@
       if (isCheatCode(text)) { setVal(""); if (ref.current) ref.current.blur(); onOpen(); return; }
       setVal(text);
     }
+    if (ONLINE) return null; // v online partii cheat menu není (appka navíc cheat kód ve hře nahradí náhodným textem)
     return h("div", { className: "version-foot" + (withNav ? " with-nav" : "") }, h("input", { ref, className: "cheat-field", type: "text", value: val, placeholder: CHEAT_FIELD_HINT, maxLength: 20, autoComplete: "off", autoCorrect: "off", autoCapitalize: "characters", spellCheck: false, "aria-label": "Tajný kód", onChange: (e) => change(e.target.value), onBlur: () => setVal("") }));
   }
 
@@ -789,6 +793,16 @@
         : button({ className: "btn btn-ghost btn-sm", onClick: onShowAll }, "Zobrazit"));
   }
 
+  // Vstup do online partie: karta se ukáže jen ve hře spuštěné z appky (atribut data-jomarid-online řeší appka, src/mp/entry.js)
+  function OnlineTeaser() {
+    return div({ className: "pz-teaser pz-online", "data-jomarid-online": "" },
+      span({ className: "pz-teaser-icon", "aria-hidden": "true" }, "🌐"),
+      div({ className: "pz-teaser-body" },
+        div({ className: "pz-teaser-title" }, "Hrát online"),
+        div({ className: "pz-teaser-sub" }, "Partie proti živému soupeři")),
+      button({ className: "btn btn-primary btn-sm", "data-jomarid-online": "" }, "Hrát"));
+  }
+
   function MenuScreen({ save, savedGame, onStart, onResume, onAbandon, onUpdate, onOpenReview, onResetProgress, theme, setTheme, menuTab, setMenuTab, onOpenPuzzle }) {
     const [colorChoice, setColorChoice] = useState(save.playerColor === "b" ? "b" : "w");
     const [tc, setTc] = useState(save.tc || "none");
@@ -817,6 +831,7 @@
               div({ className: "resume-body" }, div({ className: "resume-title" }, "Rozehraná partie s ", resumeBot.name), div({ className: "resume-sub" }, Math.ceil(savedGame.moves.length / 2), ". tah · ", savedGame.color === "w" ? "bílými" : "černými", savedGame.assisted ? " · cvičná" : " · hodnocená")),
               div({ className: "resume-actions" }, button({ className: "btn btn-primary btn-sm", onClick: onResume }, "Pokračovat"), button({ className: "btn btn-ghost btn-sm", onClick: onAbandon }, "Vzdát"))),
             h(PuzzleTeaser, { save, onOpen: onOpenPuzzle, onShowAll: () => setMenuTab("puzzles") }),
+            h(OnlineTeaser),
             h(SetupPicker, { save, colorChoice, setColorChoice, tc, setTc }),
             h(BotCards, { save, onStart: start }),
             div({ className: "section-head" }, "Historie zápasů", total > 0 && small(null, save.record.w, "–", save.record.d, "–", save.record.l)),
@@ -910,6 +925,8 @@
             setBubble((bb) => bb && Object.assign({}, bb, { out: true }));
             bubbleTimer.current = setTimeout(() => setBubble(null), 320);
           }, 3300);
+        } else if (type === "problem") {
+          setToast(data.text);
         } else if (type === "gameover") {
           if (settingsRef.current.sound) SoundFX[data.result === "win" ? "win" : data.result === "loss" ? "lose" : "draw"]();
           announce("Konec hry: " + (data.result === "win" ? "výhra" : data.result === "loss" ? "prohra" : "remíza") + (REASON_LABELS[data.reason] ? " (" + REASON_LABELS[data.reason] + ")" : "") + ".");
@@ -1023,6 +1040,7 @@
     useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2600); return () => clearTimeout(t); }, [toast]);
 
     function handleBack() {
+      if (session.online) { session.net.close(); return; } // odchod z online partie řeší appka
       if (session.over) { onFinished(); return; } // výsledek se musí zaznamenat i při dřívějším odchodu
       onExit(); // rozehraná partie se ukládá, takže se k ní jde vrátit z menu
     }
@@ -1030,7 +1048,8 @@
     // ---------- Vykreslení ----------
     const inCheckNow = !session.over && ChessEngine.isInCheck(session.state, session.state.turn);
     let turnText;
-    if (session.over) turnText = "Konec hry";
+    if (session.over) turnText = session.online && session.waitingForServer ? "Konec hry — čekám na potvrzení výsledku" : "Konec hry";
+    else if (session.online && !session.synced) turnText = "Načítám partii…";
     else if (!liveView) turnText = "Prohlížíš tah " + viewIdx + " z " + session.moves.length;
     else if (session.thinking) turnText = bot.name + " přemýšlí…";
     else if (session.state.turn === session.playerColor) turnText = "Jsi na tahu";
@@ -1063,34 +1082,38 @@
       div({ className: "container" },
         div({ className: "game-layout" },
           div({ className: "board-col" + (botTime != null ? " timed" : "") },
-            h(PlayerStrip, { who: "bot", bot, name: bot.name, rating: "≈ " + bot.rating, captured: capturedByBot, glyphColor: session.playerColor, advantage: -advPlayer, time: botTime, active: clockRunning === session.botColor, low: lowTime(botTime), turn: !session.over && session.state.turn === session.botColor }),
+            h(PlayerStrip, { who: "bot", bot, name: bot.name, rating: session.online ? "" : "≈ " + bot.rating, captured: capturedByBot, glyphColor: session.playerColor, advantage: -advPlayer, time: botTime, active: clockRunning === session.botColor, low: lowTime(botTime), turn: !session.over && session.state.turn === session.botColor }),
             bubble && div({ key: bubble.key, className: "bot-bubble" + (bubble.out ? " out" : ""), role: "status" }, bubble.text),
             h(Board, {
               state: view, flipped, selected: liveView ? selected : null, targets: liveView ? targets : [], lastMove, hint: session.hint && liveView ? session.hint : null, arrows: hintArrow, anim: topAnim,
               interactive: myTurn, showTargets, onPick, onTapRelease, onDrop, draggingFrom: dragFrom,
               onDragStart: (from) => { setDragFrom(from); }, keyboard: true, onCancel: () => { if (selected) { clearSelection(); announce("Výběr zrušen."); } }
             }),
-            h(PlayerStrip, { who: "me", name: "Ty", rating: String(save.rating), captured: capturedByPlayer, glyphColor: session.botColor, advantage: advPlayer, time: playerTime, active: clockRunning === session.playerColor, low: lowTime(playerTime), turn: !session.over && session.state.turn === session.playerColor }),
+            h(PlayerStrip, { who: "me", name: "Ty", rating: session.online ? "" : String(save.rating), captured: capturedByPlayer, glyphColor: session.botColor, advantage: advPlayer, time: playerTime, active: clockRunning === session.playerColor, low: lowTime(playerTime), turn: !session.over && session.state.turn === session.playerColor }),
             nonLive && div({ className: "view-banner" }, "Prohlížíš starší pozici — ", button({ className: "link-btn", onClick: () => view_(session.moves.length) }, "ZPĚT NA AKTUÁLNÍ")),
             div({ className: "board-controls" },
-              button({ className: "btn btn-ghost btn-sm", onClick: () => { if (session.undo()) { clearSelection(); setAnim(null); } }, disabled: !session.canUndo || !liveView, "aria-label": "Vrátit tah" }, "↩", span({ className: "lbl" }, " Vrátit")),
-              button({ className: "btn btn-ghost btn-sm", onClick: doHint, disabled: !myTurn || !!busy, "aria-label": "Nápověda" }, busy === "hint" ? "…" : "💡", span({ className: "lbl" }, " Nápověda")),
-              button({ className: "btn btn-ghost btn-sm", onClick: () => setModal("draw"), disabled: !myTurn || !!busy || session.moves.length < 2, "aria-label": "Remíza: nabídnout soupeři" }, busy === "draw" ? "…" : "🤝", span({ className: "lbl" }, " Remíza")),
+              !session.online && button({ className: "btn btn-ghost btn-sm", onClick: () => { if (session.undo()) { clearSelection(); setAnim(null); } }, disabled: !session.canUndo || !liveView, "aria-label": "Vrátit tah" }, "↩", span({ className: "lbl" }, " Vrátit")),
+              !session.online && button({ className: "btn btn-ghost btn-sm", onClick: doHint, disabled: !myTurn || !!busy, "aria-label": "Nápověda" }, busy === "hint" ? "…" : "💡", span({ className: "lbl" }, " Nápověda")),
+              !session.online && button({ className: "btn btn-ghost btn-sm", onClick: () => setModal("draw"), disabled: !myTurn || !!busy || session.moves.length < 2, "aria-label": "Remíza: nabídnout soupeři" }, busy === "draw" ? "…" : "🤝", span({ className: "lbl" }, " Remíza")),
               button({ className: "btn btn-ghost btn-sm btn-icon", onClick: () => setFlipped((f) => !f), "aria-label": "Otočit desku" }, "⇅"),
               button({ className: "btn btn-danger btn-sm", onClick: () => setModal("resign"), disabled: session.over, "aria-label": "Vzdát" }, "🏳", span({ className: "lbl" }, " Vzdát")))),
           div({ className: "side-panel" },
             div({ className: "panel-card" },
               div({ className: "panel-title" }, "Zahájení"),
               opening ? div({ className: "opening-name" }, opening) : div({ className: "opening-empty" }, session.playerColor === "w" ? "Zatím se nehrálo — táhni jako první!" : "Zatím se nehrálo."),
-              div({ className: "mode-pill " + (session.rated ? "rated" : "practice") }, session.rated ? "🏅 Hodnocená partie" : "🎓 Cvičná partie"),
-              div({ className: "mode-note" }, session.rated ? "Vrácení tahu a nápověda změní partii na cvičnou — rating se pak nezmění a nedostaneš Coiny." : "Pomoc byla použita: rating se nezmění a nedostaneš Coiny.")),
+              session.online
+                ? div(null, div({ className: "mode-pill rated" }, "🌐 Online partie"), div({ className: "mode-note" }, "Hodiny běží na serveru. Nápověda ani vrácení tahu nejsou a rating se nemění. Za výhru dostaneš Coiny."))
+                : div(null,
+                  div({ className: "mode-pill " + (session.rated ? "rated" : "practice") }, session.rated ? "🏅 Hodnocená partie" : "🎓 Cvičná partie"),
+                  div({ className: "mode-note" }, session.rated ? "Vrácení tahu a nápověda změní partii na cvičnou — rating se pak nezmění a nedostaneš Coiny." : "Pomoc byla použita: rating se nezmění a nedostaneš Coiny."))),
             h(MoveListPanel, { moves: session.moves, viewIdx, onView: view_, showNav: true })))));
   }
 
   // ---------- Konec zápasu ----------
   const REASON_LABELS = {
     checkmate: "matem", resign: "vzdáním", stalemate: "patem", insufficient: "nedostatkem materiálu", fiftymove: "pravidlem 50 tahů",
-    repetition: "trojím opakováním pozice", timeout: "časem", "timeout-material": "časem (soupeř nemá dost materiálu na mat)", agreement: "dohodou", botresign: "vzdáním soupeře", cheat: "cheat kódem"
+    repetition: "trojím opakováním pozice", timeout: "časem", "timeout-material": "časem (soupeř nemá dost materiálu na mat)", agreement: "dohodou", botresign: "vzdáním soupeře", cheat: "cheat kódem",
+    opponent_gone: "odpojením soupeře", dispute: "sporem o výsledek", no_show: "nepřipojením soupeře", abandoned: "opuštěním partie"
   };
 
   function EndScreen({ info, bot, analysis, onContinue, onRematch, onReview }) {
@@ -1484,12 +1507,12 @@
     const storage = window.localStorage;
     const [save, setSave] = useState(() => League.loadSave(storage, BOT_RATINGS));
     const [savedGame, setSavedGame] = useState(() => League.loadGame(storage, BOTS.length));
-    const [view, setView] = useState("menu");
+    const [view, setView] = useState(ONLINE ? "game" : "menu");
     const [announcement, setAnnouncement] = useState({ text: "", n: 0 });
     const [menuTab, setMenuTab] = useState("play");
     const [puzzleId, setPuzzleId] = useState(null);
     const [puzzleTry, setPuzzleTry] = useState(0);
-    const [session, setSession] = useState(null);
+    const [session, setSession] = useState(() => (ONLINE ? new OnlineSession({ net: window.jomaridMP }) : null));
     const [endInfo, setEndInfo] = useState(null);
     const [analysis, setAnalysis] = useState(null);
     const [reviewData, setReviewData] = useState(null);
@@ -1585,6 +1608,7 @@
     function onFinished() {
       const sess = session;
       if (!sess || !sess.result || processedRef.current === sess) return;
+      if (sess.online) return; // online partie nemá rating ani vlastní konec: výsledek a odměnu ukazuje appka podle serveru
       processedRef.current = sess;
       const { result, reason } = sess.result;
       const botIdx = sess.botIdx, rated = sess.rated, coords = sess.coords();
@@ -1636,6 +1660,7 @@
 
     // ---------- Navigace ----------
     function leaveGame() {
+      if (session && session.online) { session.net.close(); return; } // odchod z online partie řeší appka (potvrdí vzdání)
       // Zpět do menu; nedokončená partie zůstává uložená a nabídne se k pokračování.
       if (session && !session.over && session.moves.length >= 2) { const ser = session.serialize(); League.persistGame(storage, ser); setSavedGame(ser); }
       if (session) session.destroy();
@@ -1701,7 +1726,7 @@
       content,
       h(CheatField, { open: cheatOpen, withNav: view === "menu", onOpen: () => setCheatOpen(true) }),
       confettiKey > 0 && h("canvas", { key: confettiKey, ref: confettiRef, className: "confetti-canvas", "aria-hidden": "true" }),
-      cheatOpen && h(CheatMenu, { session: view === "game" ? session : null, disco, soundOn: save.sound, onDisco: () => setDisco((d) => !d), onConfetti: () => { setConfettiKey((k) => k + 1); }, onBadges: () => setSaveFull(League.cheatAllBadges(saveRef.current)), onClose: () => setCheatOpen(false) }),
+      cheatOpen && !ONLINE && h(CheatMenu, { session: view === "game" ? session : null, disco, soundOn: save.sound, onDisco: () => setDisco((d) => !d), onConfetti: () => { setConfettiKey((k) => k + 1); }, onBadges: () => setSaveFull(League.cheatAllBadges(saveRef.current)), onClose: () => setCheatOpen(false) }),
       confirm && confirm.abandon && h(ConfirmModal, { title: "Vzdát rozehranou partii?", text: "Zápas se započítá jako prohra.", confirmLabel: "Vzdát", danger: true, onConfirm: () => { setConfirm(null); doAbandon(); }, onCancel: () => setConfirm(null) }),
       confirm && confirm.reset && h(ConfirmModal, { title: "Resetovat veškerý postup?", text: "Smaže se rating, rekordy, výhry, odemčení soupeři i vyřešené úlohy. Tohle nejde vrátit.", confirmLabel: "Resetovat", danger: true, onConfirm: () => { setConfirm(null); doReset(); }, onCancel: () => setConfirm(null) }),
       confirm && confirm.start && h(ConfirmModal, { title: "Máš rozehranou partii", text: "Když začneš novou, rozehraná partie se započítá jako prohra.", confirmLabel: "Začít novou", danger: true, onConfirm: () => { const c = confirm.start; setConfirm(null); doAbandon(); reallyStart(c.botIdx, c.color, c.tc, c.colorChoice); }, onCancel: () => setConfirm(null) }));

@@ -42,7 +42,7 @@ const SHIM_TEMPLATE = `(function () {
 // Hodnota bezpečná pro vložení do <script> (u postupu jako řetězec s JSON, který si skript rozebere JSON.parse; objektový literál by klíč
 // "__proto__" vyložil jinak): znak "<" se zapíše jako \u003c (aby se nedal předčasně ukončit skript ani začít komentář)
 // a oddělovače řádků U+2028 a U+2029 se zapíšou výslovně.
-const scriptJson = (value) => JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+export const scriptJson = (value) => JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 
 // Text skriptu s předvyplněným postupem (map: {klíč: text}).
 export function buildStorageShim(gameId, map) {
@@ -50,11 +50,14 @@ export function buildStorageShim(gameId, map) {
   return SHIM_TEMPLATE.replace('__GAME__', () => scriptJson(gameId)).replace('__SEED__', () => `JSON.parse(${scriptJson(JSON.stringify(map || {}))})`);
 }
 
-// Vloží skript na úplný začátek <head> hry (před všechny její skripty). Dokument bez <head> dostane skript za <html>, bez obojího na začátek.
-export function withStorageShim(html, gameId, map) {
-  const tag = `<script>${buildStorageShim(gameId, map)}</script>`;
+// Vloží text na úplný začátek <head> hry (před všechny její skripty). Dokument bez <head> ho dostane za <html>, bez obojího na začátek.
+export function insertAtHead(html, tag) {
   const at = (re) => { const m = re.exec(html); return m ? m.index + m[0].length : -1; };
   const i = at(/<head(?:\s[^>]*)?>/i);
   const j = i >= 0 ? i : at(/<html(?:\s[^>]*)?>/i);
   return j >= 0 ? html.slice(0, j) + tag + html.slice(j) : tag + html;
+}
+
+export function withStorageShim(html, gameId, map) {
+  return insertAtHead(html, `<script>${buildStorageShim(gameId, map)}</script>`);
 }

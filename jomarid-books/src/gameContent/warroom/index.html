@@ -460,6 +460,7 @@
             .particle { display: none; }
             #sound-toggle:hover { transform: none; }
         }
+        html:not(.jomarid-online) [data-jomarid-online] { display: none !important; }
     </style>
 <script>/* JOMARID-BRIDGE */
 (function () {
@@ -594,6 +595,10 @@
         <button class="btn-main resume-btn" id="btn-resume" onclick="resumeRun()">▶ POKRAČOVAT V ROZEHRANÉM TAŽENÍ</button>
         <div class="resume-info" id="resume-info"></div>
         <button class="btn-link" onclick="discardRun()">Zahodit rozehrané tažení</button>
+    </div>
+
+    <div style="margin-bottom: 22px;" data-jomarid-online>
+        <button class="btn-main" id="btn-online" data-jomarid-online>⚔ HRÁT ONLINE: SOUBOJ VELITELŮ</button>
     </div>
 
     <div class="scenarios-grid" id="scenarios-container">
@@ -1960,7 +1965,9 @@
     function getEnemyPush() {
         if (state.godMode) return 0;
         if (state.enemyStunned > 0) return 0;
-        let base = state.baseEnemyPush + Math.floor(state.day / 4) + ((state.sector - 1) * 3);
+        // V online souboji (src/gameContent/warroom/mp.js) je denní tlak útok soupeře: base je to, o kolik soupeř postoupil, plus malá únava, která s dny roste
+        // (jinak by se vyrovnaní hráči jen přetahovali donekonečna); zbytek (pancíř, doktríny, technologie) platí dál
+        let base = window.jomaridMP ? (state.mpIncoming || 0) + 1 + Math.floor(state.day / 2) : state.baseEnemyPush + Math.floor(state.day / 4) + ((state.sector - 1) * 3);
         
         let pctMod = 1.0; 
 
@@ -2999,5 +3006,6 @@
         document.addEventListener('visibilitychange', () => { if (document.hidden) saveRunNow(false); });
     };
 </script>
+<!--__MP__-->
 </body>
 </html>

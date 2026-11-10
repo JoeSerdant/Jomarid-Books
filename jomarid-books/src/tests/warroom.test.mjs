@@ -399,3 +399,223 @@ test('statistiky: tlačítko na výběru scénáře, okno je dialog, vrací foku
   const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
   for (const fg of ['#cbd5e1', '#9ca3af', '#93c5fd', '#ffffff']) assert.ok(contrast(fg, '#0a101c') >= 4.5, fg);
 });
+
+/* ---------------------------------------------------------------- online souboj velitelů (multiplayer) */
+const mpSrc = fs.readFileSync(path.join(SRC, 'gameContent', 'warroom', 'mp.js'), 'utf8');
+const assembler = fs.readFileSync(path.join(SRC, 'gameContent', 'warroom.js'), 'utf8');
+
+test('souboj: denní tlak nepřítele je v online souboji útok soupeře (zbytek výpočtu zůstal), mp.js se do dokumentu skládá a bez rozhraní z appky nic nemění', () => {
+  assert.equal(html.split('<!--__MP__-->').length, 2, 'jedno místo pro mp.js');
+  assert.match(assembler, /import mp from '\.\/warroom\/mp\.js\?raw'/);
+  assert.match(assembler, /html\.replace\('<!--__MP__-->', \(\) =>/);
+  assert.match(fnSrc('getEnemyPush'), /let base = window\.jomaridMP \? \(state\.mpIncoming \|\| 0\) \+ 1 \+ Math\.floor\(state\.day \/ 2\) : state\.baseEnemyPush \+ Math\.floor\(state\.day \/ 4\) \+ \(\(state\.sector - 1\) \* 3\);/);
+  assert.match(fnSrc('getEnemyPush'), /pctMod -= \(\(state\.upgrades\.armor\.level - 1\) \* 0\.05\);/, 'pancíř a doktríny zmírňují útok soupeře jako dřív tlak nepřítele');
+  assert.doesNotMatch(mpSrc, /67MILUJU|CHEAT/);
+});
+
+// mp.js v atrapě hry: stav, den, tlak a funkce, které hra má. Ukáže se, co mp.js přidává: zamčení mimo tah, posun fronty, zprávy soupeře, konec.
+function makeDuel({ slot = 1 } = {}) {
+  const handlers = {}; const sent = []; const reports = []; const logs = [];
+  const session = {};
+  const mp = {
+    enabled: true, init: { slot, match: 'm-test', opponent: { name: 'Marie' } },
+    on(ev, fn) { handlers[ev] = fn; return mp; }, listen() { mp.listening = true; },
+    move(p) { sent.push(p); return Promise.resolve({ ok: true }); }, report(o, r) { reports.push([o, r]); return Promise.resolve({}); }, serverNow: () => Date.now(),
+  };
+  const nodes = new Map();
+  const el = (id) => { if (!nodes.has(id)) nodes.set(id, { style: {}, classList: { add() {}, remove() {}, toggle() {} }, appendChild() {}, querySelector: () => el('q'), innerHTML: '', textContent: '', className: '' }); return nodes.get(id); };
+  const store = new Map();
+  const sandbox = {
+    console, Math, Object, JSON, Date, Number, String, setInterval: () => 0, el, mp,
+    localStorage: { setItem() {}, getItem: () => null },
+    document: { createElement: () => el('x'), head: el('head'), body: el('body'), getElementById: el },
+    DOCTRINE_SHORT: { intel: 'INTEL' }, Sound: { deny() {} }, logMessage: (m) => logs.push(m),
+    state: { front: 250, maxFront: 500, cp: 0, doctrine: '', gamePaused: false, enemyStunned: 0 },
+    updateUI() {}, warTrack() {}, saveRunNow() {},
+  };
+  sandbox.window = sandbox; sandbox.jomaridMP = mp;
+  sandbox.window.parent = { sessionStorage: { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)) } };
+  const listeners = {};
+  sandbox.window.addEventListener = (t, f) => { (listeners[t] = listeners[t] || []).push(f); };
+  vm.createContext(sandbox);
+  // funkce hry, které mp.js přepisuje: den jen použije tlak soupeře a přičte den
+  vm.runInContext(`
+    function getEnemyPush() { return Math.floor((state.mpIncoming || 0) * (1 - (state.armor || 0))); }
+    function endTurn(msg) { state.front -= getEnemyPush(); state.day = (state.day || 1) + 1; checkWinLoss(); updateUI(); }
+    function checkWinLoss() {}
+    function setDoctrine(doc) { state.doctrine = doc; state.front = 250; }
+    function setScenario(s) { state.scenario = s; }
+    function startTutorial() {}
+    function startAttack() { state.front += 30; endTurn('OFENZÍVA'); }
+    function doLogistics() { state.front -= 12; endTurn('Logistika'); }
+    function useArtillery() { state.front += 25; }
+    function useAirdrop() {}
+    function useScenarioSkill() {}
+    function buyUpgrade() {}
+    function buyExclusiveTech() {}
+  `, sandbox);
+  new vm.Script(mpSrc).runInContext(sandbox);
+  for (const f of listeners.load || []) f();
+  const run = (code) => vm.runInContext(code, sandbox);
+  const view = (o = {}) => Object.assign({ status: 'active', turn: 1, slot, deadline: Date.now() + 120000 }, o);
+  return { sandbox, handlers, sent, reports, logs, run, view, store, mp };
+}
+const settleMicro = async () => { for (let i = 0; i < 4; i += 1) await Promise.resolve(); };
+
+test('souboj: po načtení se hra přihlásí k odběru, zvolí scénář Základ a čeká na doktrínu; mimo tah jsou akce zamčené', () => {
+  const d = makeDuel({ slot: 2 });
+  assert.equal(d.mp.listening, true);
+  assert.equal(d.run('state.scenario'), 'default');
+  d.handlers.sync({ match: d.view({ turn: 1 }), moves: [], outcome: null });
+  d.run("setDoctrine('intel')");
+  const front = d.run('state.front');
+  d.run('startAttack()');
+  assert.equal(d.run('state.front'), front, 'nejsem na tahu: nic se nestane');
+  assert.equal(d.sent.length, 0);
+});
+
+test('souboj: den jde soupeři jako zpráva s posunem fronty, další den až po jeho odpovědi; jeho posun se stane mým tlakem na konci mého dne', async () => {
+  const d = makeDuel({ slot: 1 });
+  d.handlers.sync({ match: d.view({ turn: 1 }), moves: [], outcome: null });
+  d.run("setDoctrine('intel')");
+  d.run('startAttack()');
+  assert.equal(d.run('state.front'), 130, 'začátek 100 + útok 30');
+  assert.equal(d.sent.length, 1);
+  const m = d.sent[0];
+  assert.deepEqual(JSON.parse(JSON.stringify({ t: m.t, k: m.k, adv: m.adv, d: m.d })), { t: 'a', k: 1, adv: 30, d: 'intel' });
+  d.run('startAttack()');
+  assert.equal(d.sent.length, 1, 'dokud neodpoví soupeř, další den nejde');
+  d.handlers.match({ match: d.view({ turn: 2 }) });
+  d.handlers.moves({ moves: [{ seq: 2, p: 2, payload: { t: 'a', k: 1, adv: 40, m: 'OFENZÍVA: Přesný zásah!' } }] });
+  assert.ok(d.logs.some((l) => /Marie: OFENZÍVA/.test(l)));
+  assert.equal(d.run('state.mpIncoming'), 40);
+  d.handlers.match({ match: d.view({ turn: 1 }) });
+  d.run('state.armor = 0.25');
+  const before = d.run('state.front');
+  d.run('startAttack()');
+  assert.equal(d.run('state.front'), before + 30 - 30, 'útok +30, tlak soupeře 40 zmírněný pancířem o čtvrtinu = -30');
+  assert.equal(d.run('state.mpIncoming'), 0, 'vyřízený tlak se nepřičítá podruhé');
+  assert.equal(d.sent[1].adv, 30);
+});
+
+test('souboj: souboj je kratší než tažení (po volbě doktríny je fronta i její maximum na 40 %, maximum aspoň 120) a pozdější volba to nezopakuje', () => {
+  const d = makeDuel({ slot: 1 });
+  d.handlers.sync({ match: d.view({ turn: 1 }), moves: [], outcome: null });
+  d.run("setDoctrine('intel')");
+  assert.equal(d.run('state.maxFront'), 200);
+  assert.equal(d.run('state.front'), 100);
+  d.run("setDoctrine('intel')");
+  assert.equal(d.run('state.maxFront'), 200, 'podruhé se nezkracuje');
+  const tiny = makeDuel({ slot: 1 });
+  tiny.run('state.maxFront = 100');
+  tiny.handlers.sync({ match: tiny.view({ turn: 1 }), moves: [], outcome: null });
+  tiny.run("setDoctrine('intel')");
+  assert.equal(tiny.run('state.maxFront'), 120, 'nejmenší maximum');
+});
+
+test('souboj: okamžité akce se do posunu fronty počítají (dělostřelectvo +25 a útok +30 = 55)', async () => {
+  const d = makeDuel({ slot: 1 });
+  d.handlers.sync({ match: d.view({ turn: 1 }), moves: [], outcome: null });
+  d.run("setDoctrine('intel')");
+  d.run('useArtillery()');
+  d.run('startAttack()');
+  assert.equal(d.sent[0].adv, 55);
+});
+
+test('souboj: logistika (cena v frontě) soupeři nic nepřidá', () => {
+  const d = makeDuel({ slot: 1 });
+  d.handlers.sync({ match: d.view({ turn: 1 }), moves: [], outcome: null });
+  d.run("setDoctrine('intel')");
+  d.run('doLogistics()');
+  assert.equal(d.sent[0].adv, 0);
+});
+
+test('souboj: dotlačím frontu na maximum: vítězství se ohlásí serveru i soupeři (w), hra se zastaví', async () => {
+  const d = makeDuel({ slot: 1 });
+  d.handlers.sync({ match: d.view({ turn: 1 }), moves: [], outcome: null });
+  d.run("setDoctrine('intel')");
+  d.run('state.front = 190');
+  d.run('startAttack()');
+  assert.equal(d.run('state.gamePaused'), true);
+  assert.deepEqual(d.reports, [['win', 'front']]);
+  assert.equal(d.sent[0].w, 1);
+  assert.equal(d.sent.length, 1);
+});
+
+test('souboj: zpráva soupeře s w znamená moji porážku, s l moje výhru; po konci se zprávy nepřijímají', () => {
+  const lost = makeDuel({ slot: 2 });
+  lost.handlers.sync({ match: lost.view({ turn: 1 }), moves: [], outcome: null });
+  lost.run("setDoctrine('intel')");
+  lost.handlers.moves({ moves: [{ seq: 1, p: 1, payload: { t: 'a', k: 1, adv: 10, w: 1 } }] });
+  assert.deepEqual(lost.reports, [['loss', 'front']]);
+  assert.equal(lost.run('state.mpIncoming || 0'), 0);
+  lost.handlers.moves({ moves: [{ seq: 3, p: 1, payload: { t: 'a', k: 2, adv: 99 } }] });
+  assert.equal(lost.run('state.mpIncoming || 0'), 0, 'po konci se nic nepřijme');
+  const won = makeDuel({ slot: 1 });
+  won.handlers.sync({ match: won.view({ turn: 2 }), moves: [], outcome: null });
+  won.run("setDoctrine('intel')");
+  won.handlers.moves({ moves: [{ seq: 2, p: 2, payload: { t: 'a', k: 1, adv: 0, l: 1 } }] });
+  assert.deepEqual(won.reports, [['win', 'front']]);
+});
+
+test('souboj: zprávy soupeře, které přišly dřív než výběr doktríny, se vyřídí po něm; zpráva se dvakrát nepřičte', () => {
+  const d = makeDuel({ slot: 2 });
+  d.handlers.sync({ match: d.view({ turn: 1 }), moves: [{ seq: 1, p: 1, payload: { t: 'a', k: 1, adv: 33, d: 'intel', m: 'Rychlý start' } }], outcome: null });
+  assert.equal(d.run('state.mpIncoming || 0'), 0, 'doktrína ještě není vybraná');
+  d.run("setDoctrine('intel')");
+  assert.equal(d.run('state.mpIncoming'), 0, 'zahajovací útok prvního hráče druhému tlak nepřidá');
+  assert.ok(d.logs.some((l) => /Marie - zahajovací útok \(\+33\)/.test(l)));
+  assert.ok(d.logs.some((l) => /Marie - doktrína INTEL/.test(l)));
+  d.handlers.moves({ moves: [{ seq: 1, p: 1, payload: { t: 'a', k: 1, adv: 33 } }] });
+  assert.equal(d.run('state.mpIncoming'), 0, 'stejné číslo zprávy se nepřičte znovu');
+  d.handlers.match({ match: d.view({ turn: 2 }) });
+  d.run('startAttack()');
+  d.handlers.match({ match: d.view({ turn: 1 }) });
+  d.handlers.moves({ moves: [{ seq: 3, p: 1, payload: { t: 'a', k: 2, adv: 33 } }] });
+  assert.equal(d.run('state.mpIncoming'), 33, 'od druhého dne už útok soupeře tlačí');
+});
+
+test('souboj: nesmyslná zpráva se ignoruje, posun se ořízne na rozumnou mez', () => {
+  const d = makeDuel({ slot: 1 });
+  d.handlers.sync({ match: d.view({ turn: 1 }), moves: [], outcome: null });
+  d.run("setDoctrine('intel')");
+  d.run('startAttack()');
+  d.handlers.match({ match: d.view({ turn: 2 }) });
+  d.handlers.moves({ moves: [{ seq: 2, p: 2, payload: 'x' }, { seq: 3, p: 2, payload: { t: 'jine' } }, { seq: 4, p: 2, payload: { t: 'a', adv: -500 } }] });
+  assert.equal(d.run('state.mpIncoming || 0'), 0);
+  d.handlers.moves({ moves: [{ seq: 5, p: 2, payload: { t: 'a', adv: 1e9 } }] });
+  assert.equal(d.run('state.mpIncoming'), 1000);
+});
+
+test('souboj: stav hry se ukládá po každém dni a obnovená stránka z něj pokračuje; v cizím okně se partie obnovit nedá', () => {
+  const d = makeDuel({ slot: 1 });
+  d.handlers.sync({ match: d.view({ turn: 1 }), moves: [], outcome: null });
+  d.run("setDoctrine('intel')");
+  d.run('startAttack()');
+  const saved = JSON.parse(d.store.get('jomarid-mp-warroom:m-test'));
+  assert.equal(saved.state.front, 130);
+  assert.equal(saved.turnNo, 1);
+  // obnovená stránka (nové okno hry, stejné úložiště okna appky)
+  const again = makeDuel({ slot: 1 });
+  for (const [k, v] of d.store) again.store.set(k, v);
+  again.handlers.sync({ match: again.view({ turn: 2 }), moves: [{ seq: 1, p: 1, payload: { t: 'a', k: 1, adv: 30 } }, { seq: 2, p: 2, payload: { t: 'a', k: 1, adv: 20 } }], outcome: null });
+  assert.equal(again.run('state.front'), 130, 'stav z uložení');
+  assert.equal(again.run('state.mpIncoming'), 20, 'zpráva soupeře, která přišla při obnově, se vyřídí');
+  assert.equal(again.run('state.doctrine'), 'intel');
+  // jiné okno: moje zprávy v historii jsou, uložení ne
+  const other = makeDuel({ slot: 1 });
+  other.handlers.sync({ match: other.view({ turn: 2 }), moves: [{ seq: 1, p: 1, payload: { t: 'a', k: 1, adv: 30 } }], outcome: null });
+  assert.equal(other.sent.length, 0);
+  assert.equal(other.run('typeof state.mpIncoming'), 'undefined');
+});
+
+test('souboj: konec od serveru (čas, vzdání soupeře) hru zastaví a nic neodesílá', () => {
+  const d = makeDuel({ slot: 1 });
+  d.handlers.sync({ match: d.view({ turn: 2 }), moves: [], outcome: null });
+  d.run("setDoctrine('intel')");
+  d.handlers.end({ match: { status: 'finished', winner: 1, slot: 1, reason: 'timeout' }, outcome: 'win' });
+  assert.equal(d.run('state.gamePaused'), true);
+  d.run('startAttack()');
+  assert.equal(d.sent.length, 0);
+  assert.equal(d.reports.length, 0);
+});

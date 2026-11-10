@@ -1101,6 +1101,7 @@ h2 {
     cursor: pointer;
     padding: 8px;
 }
+html:not(.jomarid-online) [data-jomarid-online] { display: none !important; }
 </style>
 <script>/* JOMARID-BRIDGE */
 (function () {
@@ -1281,6 +1282,7 @@ h2 {
             </button>
         </div>
 
+        <button class="btn btn-small" id="btn-online" data-jomarid-online style="margin-bottom: 14px;">🌐 Hrát online</button>
         <button class="btn btn-ghost btn-small" id="btn-open-stats" style="margin-bottom: 14px;">Postup a relikvie</button>
         <button class="btn btn-ghost btn-small hidden" id="btn-open-story" style="margin-bottom: 14px;"><i class="glyph"></i>Střepy<span class="new-dot"></span></button>
 
@@ -4841,9 +4843,12 @@ class GameManager {
         const setTarget = e => {
             const rect = this.canvas.getBoundingClientRect();
             const fingerOffset = e.pointerType === 'touch' ? 38 : 0;
+            // Plátno může být na obrazovce zvětšené nebo zmenšené (online hra má pevný rozměr bojiště), proto se přepočítá na souřadnice hry
+            const sx = rect.width > 0 ? this.width / rect.width : 1;
+            const sy = rect.height > 0 ? this.height / rect.height : 1;
             this.input.pointerTarget = {
-                x: e.clientX - rect.left,
-                y: e.clientY - rect.top - fingerOffset
+                x: (e.clientX - rect.left) * sx,
+                y: (e.clientY - rect.top - fingerOffset) * sy
             };
         };
 
@@ -8205,5 +8210,6 @@ document.addEventListener('keydown', e => {
     if (e.code === 'Escape' && !cheatOverlay.classList.contains('hidden')) closeCheatMenu();
 });
 </script>
+<!--__MP__-->
 </body>
 </html>

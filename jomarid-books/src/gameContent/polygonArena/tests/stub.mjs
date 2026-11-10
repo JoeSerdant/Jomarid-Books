@@ -31,13 +31,13 @@ function dummy(extra = {}) {
   return p;
 }
 
-export function loadGame({ seed = 1, storage = {} } = {}) {
+export function loadGame({ seed = 1, storage = {}, globals = null } = {}) {
   const listeners = {};
   const store = Object.assign({}, storage);
   const documentStub = {
     getElementById: () => dummy(), querySelector: () => dummy(), querySelectorAll: () => [],
     createElement: () => dummy(), addEventListener: (t, f) => { (listeners[t] = listeners[t] || []).push(f); }, removeEventListener() {},
-    documentElement: dummy(), body: dummy(), hidden: false,
+    documentElement: dummy(), body: dummy(), head: dummy(), hidden: false,
   };
   const ctx = vm.createContext({
     console, Object, Array, Set, Map, JSON, Number, String, Boolean, Symbol, Proxy, Promise, parseInt, parseFloat, isFinite, isNaN, Error, RegExp, Date, Uint8Array, Float32Array,
@@ -50,6 +50,7 @@ export function loadGame({ seed = 1, storage = {} } = {}) {
     setTimeout, clearTimeout, AudioContext: undefined, webkitAudioContext: undefined,
   });
   ctx.window = ctx;
+  if (globals) Object.assign(ctx, globals);          // např. rozhraní window.jomaridMP z appky (sdílená aréna)
   // Math.random podle seedu (každý kontext má vlastní Math)
   vm.runInContext(`(() => { let s = ${seed >>> 0}; Math.random = () => { s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();`, ctx);
   for (const id of ORDER) vm.runInContext(fs.readFileSync(path.join(DIR, id + '.js'), 'utf8'), ctx, { filename: id + '.js' });
