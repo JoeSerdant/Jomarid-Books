@@ -24,7 +24,7 @@ export const MP_GAMES = {
     options: [],
   },
   hannibal: {
-    ready: false,
+    ready: true,
     kind: 'turn',
     modes: [{ id: 'duel', title: tk('Souboj armád'), text: tk('Náhodná mapa a stejně velká armáda pro oba.'), reward: 40 }],
     options: [{ key: 'preset', title: tk('Velikost armády'), choices: [{ value: 'small', labelKey: tk('Malá') }, { value: 'medium', labelKey: tk('Střední') }, { value: 'large', labelKey: tk('Velká') }], def: 'medium' }],
