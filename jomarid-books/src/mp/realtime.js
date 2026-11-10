@@ -10,7 +10,7 @@
 // status: 'open' (kanál je připravený, i po automatickém obnovení spojení), 'down' (spojení se přerušilo, klient ho obnovuje), 'error' (kanál se nepodařilo otevřít).
 
 export const BROADCAST_EVENT = 'g';
-export const MAX_PAYLOAD_CHARS = 3000;   // větší zpráva se zahodí (polohy a střely jsou na desítky bajtů)
+export const MAX_PAYLOAD_CHARS = 48000;  // větší zpráva se zahodí (Supabase povolí 256 kB; obraz světa od hostitele má jednotky kB, jen úplná zpráva pro nově příchozího přes desítku)
 export const MIN_SEND_GAP_MS = 20;       // nejvýš 50 zpráv za vteřinu z jednoho hráče
 
 export function openRealtime({ client, topic, key = null, preferPrivate = true, timeoutMs = 12000, now = () => Date.now(), timers = null, onMessage, onStatus, onPresence }) {

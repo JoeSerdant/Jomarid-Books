@@ -53,7 +53,7 @@ export function loadGame({ seed = 1, storage = {}, globals = null } = {}) {
   if (globals) Object.assign(ctx, globals);          // např. rozhraní window.jomaridMP z appky (sdílená aréna)
   // Math.random podle seedu (každý kontext má vlastní Math)
   vm.runInContext(`(() => { let s = ${seed >>> 0}; Math.random = () => { s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();`, ctx);
-  for (const id of ORDER) vm.runInContext(fs.readFileSync(path.join(DIR, id + '.js'), 'utf8'), ctx, { filename: id + '.js' });
+  for (const id of ORDER) vm.runInContext(fs.readFileSync(id === 'net' ? path.join(DIR, '..', 'shared', 'net.js') : path.join(DIR, id + '.js'), 'utf8'), ctx, { filename: id + '.js' });
   for (const f of listeners.DOMContentLoaded || []) f();          // main.js: zpřístupní __arena a spustí boot()
   const G = (name) => vm.runInContext(name, ctx);
   const run = (code) => vm.runInContext(code, ctx);

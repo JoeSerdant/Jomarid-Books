@@ -35,11 +35,22 @@ Kanál `mp:<id zápasu>` pouští jen hráče zápasu (pravidla na `realtime.mes
 
 Hra o odměně nerozhoduje: Coiny vyplácí server podle pravidel v `mp_cfg` (výhra, délka zápasu, denní strop, soupeř).
 
+## Společný svět (net.js): jak hry sdílejí jeden svět
+
+Rychlé hry (Polygon aréna, Rocket) nepočítají každý svůj svět. Jeden hráč je **hostitel**: počítá celý svět jako v sólové hře (nepřátele, boty, střely, bonusy, zásahy). Ostatní jsou **hosté**: posílají hostiteli vstupy a od něj dostávají obraz světa, který kreslí stejným kreslením jako sólová hra. Všichni tak mají opravdu totéž. Stavební kameny jsou v `src/gameContent/shared/net.js` (vkládá se do dokumentu hry před jejím `mp.js`):
+
+- `Replicator` (hostitel): z polí entit ve hře sestaví zprávu jen s tím, co se změnilo. Posílá se "odhad podle rychlosti": střela letící rovně se pošle jednou, tvar, který stojí, taky; entita se pošle znovu, až když se skutečnost rozejde s odhadem hosta víc než o toleranci, nebo po delší době. Každé 4 s přijde klíčová zpráva se stavem všeho (host podle ní odstraní, co už neexistuje); nově příchozí o úplnou zprávu i s popisy požádá.
+- `Mirror` (host): zprávy skládá do tabulky entit a vrací jejich polohu odhadnutou podle rychlosti a vyhlazenou: při opravě se zbytek chyby plynule ztrácí (kolem 0,13 s), takže nic neskáče. Test se zpožděním 60 ms a kolísáním 40 ms: skoky mezi snímky do 6 jednotek.
+- `Roster`: kdo je ve hře. Hostitelem je nejdřív příchozí. Kdo je hostitel doopravdy, určuje **číslo období** (term): každé převzetí ho zvýší a vyšší vyhrává, takže se vrátivší starý hostitel (třeba po uspání karty) nikoho nepřeskočí a stane se hostem.
+- Když hostitel ztichne na 5 s nebo odejde, převezme to nejdřív příchozí z ostatních z toho, co měl na obrazovce (boti, tvary, hráči zůstanou, jen střely se zahodí).
+
+Dvě omezení, která plynou z Realtime: každá zpráva se u Supabase počítá i za každého příjemce a bezplatný projekt snese **100 zpráv za vteřinu** a **2 miliony zpráv za měsíc**. Zprávy se proto posílají jen při změně a s víc hráči se zpomalují (`ratesFor` v `polygonArena/mp.js`: pro dva hráče asi 20 zpráv za vteřinu, pro šest ještě pod limit). Prohlížeč hostitele musí být vidět (uspaná karta se přestane počítat, hostitelství se pak předá).
+
 ## Sdílená aréna (Polygon aréna)
 
 Žádné zápasy ani hledání soupeře: hráč vstoupí do jedné společné arény (`MpArenaScreen.jsx`, tlačítko Vstoupit do arény v okně Hrát online). Hra dostane `init.arena = true` (`initForArena`) a kanál `mp-arena:polygonarena`; most `attachArenaBridge` má jen operace kanálu (`rt-*`), `claim(sekundy, skóre)` (odměna za vyhrané kolo, server: `mp_arena_claim`) a `close`.
 
-V `polygonArena/mp.js` je deset míst: hráči a boti dohromady. Když se připojí hráč, jeden bot zmizí; když odejde, bot se vrátí. Aréna běží jen tomu, kdo ji má otevřenou. Každý prohlížeč počítá svou kopii světa a ostatní hráče dostane jako „duchy“ (tanky řízené podle sítě, ne umělou inteligencí); střely ducha vznikají normálně z jeho třídy a stavby a zraňují jen toho, na koho letí, takže si každý hlídá zásahy na vlastním tanku. Boti, tvary a bonusy má každý prohlížeč vlastní, zóny jsou u všech stejné. Kolo trvá 160 vteřin; vyhrává ho ten, komu za kolo nejvíc přibylo bodů.
+`polygonArena/mp.js` je deset míst: hráči a boti dohromady (když se připojí hráč, jeden bot zmizí; když odejde, bot se vrátí). Hostitel počítá celou arénu. Host si **pohyb svého tanku počítá sám** (odezva nic nestojí; hostitel mu polohu uvěří, jen ji omezí rychlostí, takže se nedá "teleportovat"). **Zdraví, zásahy, zkušenosti, třídy a výhody určuje hostitel**: host posílá jen vstupy (poloha, míření, střelba) a příkazy (koupit vlastnost, vybrat třídu nebo výhodu, skok, znovuzrození), které hostitel ověří (vlastnost jen za bod, třída a výhoda jen z nabídky). Pro rovné podmínky má aréna vlastní obtížnost bez bonusů pro hráče. Kolo trvá 160 s; vítěze kola oznámí hostitel a výherce o odměnu požádá server.
 
 ## Jak se přidá další hra
 
