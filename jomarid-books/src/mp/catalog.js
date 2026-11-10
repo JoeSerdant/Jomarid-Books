@@ -30,7 +30,7 @@ export const MP_GAMES = {
     options: [{ key: 'preset', title: tk('Velikost armády'), choices: [{ value: 'small', labelKey: tk('Malá') }, { value: 'medium', labelKey: tk('Střední') }, { value: 'large', labelKey: tk('Velká') }], def: 'medium' }],
   },
   cityclicker: {
-    ready: false,
+    ready: true,
     kind: 'race',
     modes: [{ id: 'race', title: tk('Závod o peníze'), text: tk('Oba začnete od nuly. Vyhrává, kdo první vydělá cílový obnos.'), reward: 40 }],
     options: [{ key: 'goal', title: tk('Cíl závodu'), choices: [{ value: 'quick', labelKey: tk('Rychlý') }, { value: 'standard', labelKey: tk('Standardní') }, { value: 'long', labelKey: tk('Dlouhý') }], def: 'standard' }],

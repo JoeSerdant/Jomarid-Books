@@ -1242,6 +1242,8 @@
   }
 
   var state = defaultState();
+  // Online závod (src/gameContent/cityClicker/mp.js): celkem vyděláno napříč přestavbami a zmrazení hry (odpočet před startem, konec závodu)
+  var mpCarry = 0, mpFrozen = false;
 
   var crisisInterval = null;
   var crisisTimeout = null;
@@ -1501,6 +1503,7 @@
      ========================================================= */
 
   function buyBuilding(key){
+    if(mpFrozen) return;
     if(state.endgame.active){ showToast('Nákup zón je během EndCraze uzamčen.', 'error'); return; }
     var plan = planPurchase(key, normalizeBuyAmount(state.buyAmount));
     if(state.budget < plan.cost){ showToast('Nedostatek rozpočtu na tuto stavbu.', 'error'); return; }
@@ -1546,6 +1549,7 @@
   }
 
   function onTownHallClick(evt){
+    if(mpFrozen) return;
     if(state.endgame.active){
       onEndgameClick(evt);
       return;
@@ -2060,6 +2064,7 @@
     if(!state.endgame.archaCompleted){ showToast('Archa ještě není dokončena.', 'error'); return; }
     var ok = confirm('Spustit dimenzionální skok?\n\nZtratíš rozpočet, populaci i všechny stavby (pokud nevlastníš Gravitační kotvu). Toto je definitivní konec současné časové linie — ale odměna tě čeká pokaždé, natrvalo a bez konce.');
     if(!ok) return;
+    mpCarry += state.lifetimeEarnings;
 
     updatePeaks();
     var keepStats = JSON.parse(JSON.stringify(state.stats));
@@ -2689,6 +2694,7 @@
     var permitsEarned = Math.max(1, Math.floor(Math.sqrt(state.lifetimeEarnings / 1000000)));
     var ok = confirm('Provést generální přestavbu?\n\nZískáš ' + permitsEarned + ' Zlatých stavebních povolení (trvale +' + (permitsEarned * 2) + ' % pasivního příjmu).\nRozpočet, budovy, vyhlášky a megaprojekty se vynulují. Tato akce je nevratná.');
     if(!ok) return;
+    mpCarry += state.lifetimeEarnings;
 
     updatePeaks();
     var keepStats = JSON.parse(JSON.stringify(state.stats));
@@ -3655,8 +3661,14 @@
     if(!isFreshGame){
       applyOfflineProgress();
     } else {
-      setTimeout(openHelpModal, 600);
+      if(!window.jomaridMP) setTimeout(openHelpModal, 600);   // v online závodě návod nevyskakuje
     }
+
+    window.__ccHooks = {
+      total: function(){ return mpCarry + state.lifetimeEarnings; },
+      fmt: formatCurrency,
+      freeze: function(on){ mpFrozen = !!on; }
+    };
 
     renderAll();
 
@@ -3684,5 +3696,6 @@
 })();
 </script>
 
+<!--__MP__-->
 </body>
 </html>

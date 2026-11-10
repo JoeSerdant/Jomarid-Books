@@ -163,7 +163,7 @@ function makeShop({ budget = 1e6, counts = {}, policies = {}, dimension = null, 
   const buildingDefs = { residential: { baseCost: 50 }, commercial: { baseCost: 180 }, industrial: { baseCost: 480 }, techeco: { baseCost: 1500 }, park: { baseCost: 350 } };
   const toasts = [];
   const ctx = run(`${varLine('BUY_AMOUNTS')}\n${fnSrc('buildingCostAt')}\n${fnSrc('getBuildingCost')}\n${fnSrc('normalizeBuyAmount')}\n${fnSrc('planPurchase')}\n${fnSrc('zoneGain')}\n${fnSrc('buyBuilding')}`, {
-    state, buildingDefs, hasRelic: (k) => relics.includes(k), showToast: (m) => toasts.push(m), playBuySound() {}, renderAll() {}, trk(k, n) { state.stats[k] = (state.stats[k] || 0) + (n === undefined ? 1 : n); },
+    state, mpFrozen: false, buildingDefs, hasRelic: (k) => relics.includes(k), showToast: (m) => toasts.push(m), playBuySound() {}, renderAll() {}, trk(k, n) { state.stats[k] = (state.stats[k] || 0) + (n === undefined ? 1 : n); },
     BUILD_STAT: { residential: 'houses_built', commercial: 'shops_built', industrial: 'factories_built', techeco: 'labs_built', park: 'parks_built' },
     computePassiveIncome: () => buildings.commercial.count * 1.4 + buildings.residential.count * 0.5, computeSatisfaction: () => 100 - buildings.industrial.count, computePopulation: () => 80 + buildings.residential.count * 20,
   });
@@ -565,4 +565,108 @@ test('klávesy: zdroj používá bezpečný výběr prvků, klik bez souřadnic 
   for (const fn of ['spawnFloatingText', 'spawnClickParticles']) assert.match(fnSrc(fn), /evt && evt\.clientX !== undefined/, fn);
   const help = html.slice(html.indexOf('<div class="modal hidden" id="helpModal"'), html.indexOf('id="offlineModal"'));
   assert.match(help, /mezerník/);
+});
+
+/* ---------------------------------------------------------------- online závod (multiplayer) */
+const mpSrc = fs.readFileSync(path.join(SRC, 'gameContent', 'cityClicker', 'mp.js'), 'utf8');
+const assembler = fs.readFileSync(path.join(SRC, 'gameContent', 'cityClicker.js'), 'utf8');
+
+test('závod: hra má háčky pro online zápas (celkový výdělek napříč přestavbami, zmrazení, bez návodu) a mp.js se do dokumentu skládá', () => {
+  assert.equal(html.split('<!--__MP__-->').length, 2, 'jedno místo pro mp.js');
+  assert.match(assembler, /import mp from '\.\/cityClicker\/mp\.js\?raw'/);
+  assert.match(assembler, /html\.replace\('<!--__MP__-->', \(\) =>/);
+  assert.match(gameJs, /var mpCarry = 0, mpFrozen = false;/);
+  assert.match(fnSrc('onTownHallClick'), /if\(mpFrozen\) return;/);
+  assert.match(fnSrc('buyBuilding'), /if\(mpFrozen\) return;/);
+  assert.match(fnSrc('doPrestige'), /if\(!ok\) return;\s*mpCarry \+= state\.lifetimeEarnings;/, 'výdělek před přestavbou se nezapomene');
+  assert.match(fnSrc('doDimensionalJump'), /if\(!ok\) return;\s*mpCarry \+= state\.lifetimeEarnings;/, 'ani před skokem');
+  assert.match(gameJs, /window\.__ccHooks = \{\s*total: function\(\)\{ return mpCarry \+ state\.lifetimeEarnings; \},\s*fmt: formatCurrency,\s*freeze: function\(on\)\{ mpFrozen = !!on; \}\s*\};/);
+  assert.match(gameJs, /if\(!window\.jomaridMP\) setTimeout\(openHelpModal, 600\);/, 'návod v online závodě nevyskakuje');
+});
+
+// mp.js v atrapě prohlížeče: řízené hodiny a časovače, atrapa dokumentu (prvky jen drží text a styl) a atrapa rozhraní z appky.
+function makeRace({ target = 1e10, slot = 1, created = 100000, withMp = true } = {}) {
+  let now = created + 500;
+  const timers = [];
+  const el = () => ({ style: {}, textContent: '', innerHTML: '', classList: { add() {}, remove() {} }, appendChild() {}, querySelector: () => el() });
+  const root = el();
+  const hooks = { frozen: [], value: 0, total() { return hooks.value; }, freeze(on) { hooks.frozen.push(!!on); }, fmt: (n) => '$' + Math.round(n) };
+  const handlers = {}; const sent = [];
+  const mp = withMp ? {
+    enabled: true, init: { slot, target, opponent: { name: 'Marie' } },
+    on(ev, fn) { handlers[ev] = fn; return mp; }, listen() { mp.listening = true; }, progress(v) { sent.push([now, v]); return Promise.resolve({}); }, serverNow: () => now,
+  } : undefined;
+  const sandbox = {
+    window: { jomaridMP: mp, __ccHooks: hooks }, document: { createElement: el, head: root, body: root, querySelector: () => el() },
+    setInterval: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearInterval() {}, Date: { now: () => now },
+    Math, String, Number,
+  };
+  sandbox.window.document = sandbox.document;
+  vm.createContext(sandbox);
+  new vm.Script(mpSrc).runInContext(sandbox);
+  const step = (ms) => { for (let i = 0; i < ms / 100; i += 1) { now += 100; for (const t of timers) if (t.ms === 100) t.fn(); } };
+  const boot = () => { for (const t of timers) if (t.ms === 50) t.fn(); };
+  return { hooks, handlers, sent, step, boot, timers, mp, setNow: (v) => { now = v; } };
+}
+
+test('závod: bez rozhraní z appky mp.js nic nespustí', () => {
+  const r = makeRace({ withMp: false });
+  assert.equal(r.timers.length, 0);
+});
+
+test('závod: hra se po načtení zmrazí, počká na odpočet od založení zápasu, pak se odmrazí; průběh jde serveru jednou za vteřinu a půl', () => {
+  const r = makeRace({ created: 100000 });
+  r.boot();
+  assert.deepEqual(r.hooks.frozen, [true], 'zmrazená do startu');
+  assert.equal(r.mp.listening, true);
+  r.handlers.sync({ match: { created: 100000, status: 'active', prog: [0, 0] }, outcome: null });
+  r.step(3000);
+  assert.deepEqual(r.hooks.frozen, [true], 'odpočet běží');
+  assert.equal(r.sent.length, 0, 'před startem se nic neposílá');
+  r.hooks.value = 1234;
+  r.setNow(107000);
+  r.step(100);
+  assert.deepEqual(r.hooks.frozen, [true, false], 'start po sedmi vteřinách od založení');
+  r.step(5000);
+  assert.ok(r.sent.length >= 3 && r.sent.length <= 4, 'průběh po 1,5 s (' + r.sent.length + 'x za 5 s)');
+  assert.ok(r.sent.every(([, v]) => v === 1234));
+});
+
+test('závod: cíl se pošle hned a jen jednou; konec od serveru hru zmrazí a ukáže výsledek', () => {
+  const r = makeRace({ target: 1e9, created: 100000 });
+  r.boot();
+  r.handlers.sync({ match: { created: 100000, status: 'active', prog: [0, 0] }, outcome: null });
+  r.setNow(108000); r.step(100);
+  r.sent.length = 0;
+  r.hooks.value = 1e9 + 5;
+  r.step(200);
+  assert.equal(r.sent.length, 1, 'cíl se pošle okamžitě');
+  assert.equal(r.sent[0][1], 1e9 + 5);
+  r.step(5000);
+  assert.equal(r.sent.length, 1, 'a podruhé už ne');
+  r.handlers.end({ match: { status: 'finished', winner: 1, slot: 1, reason: 'goal' }, outcome: 'win' });
+  assert.deepEqual(r.hooks.frozen.slice(-1), [true]);
+  r.step(2000);
+  assert.equal(r.sent.length, 1, 'po konci se nic neposílá');
+});
+
+test('závod: zápas, který už skončil, se po načtení rovnou ukáže jako konec (hra zůstane zmrazená)', () => {
+  const r = makeRace({ created: 1000 });
+  r.boot();
+  r.handlers.sync({ match: { created: 1000, status: 'finished', winner: 2, slot: 1, reason: 'goal', prog: [5, 9e9] }, outcome: 'loss' });
+  r.step(3000);
+  assert.deepEqual(r.hooks.frozen, [true, true]);
+  assert.equal(r.sent.length, 0);
+});
+
+test('závod: ukazatel soupeře se bere z průběhu na serveru (místo 1 čte druhý údaj, místo 2 první)', () => {
+  for (const [slot, prog, want] of [[1, [5, 123], 123], [2, [456, 5], 456]]) {
+    const r = makeRace({ slot, created: 100000 });
+    r.boot();
+    const seen = [];
+    r.hooks.fmt = (n) => { seen.push(n); return String(n); };
+    r.handlers.sync({ match: { created: 100000, status: 'active', prog }, outcome: null });
+    r.setNow(107500); r.step(300);
+    assert.ok(seen.includes(want), 'místo ' + slot + ': soupeř ' + want);
+  }
 });
