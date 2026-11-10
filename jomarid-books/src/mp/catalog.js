@@ -27,7 +27,7 @@ export const MP_GAMES = {
     ready: false,
     kind: 'turn',
     modes: [{ id: 'duel', title: tk('Souboj armád'), text: tk('Náhodná mapa a stejně velká armáda pro oba.'), reward: 40 }],
-    options: [{ key: 'preset', title: tk('Velikost armády'), choices: [{ value: 'small', labelKey: tk('Malá') }, { value: 'medium', labelKey: tk('Střední') }, { value: 'large', labelKey: tk('Velká') }, { value: 'budget', labelKey: tk('Nákup z rozpočtu') }], def: 'medium' }],
+    options: [{ key: 'preset', title: tk('Velikost armády'), choices: [{ value: 'small', labelKey: tk('Malá') }, { value: 'medium', labelKey: tk('Střední') }, { value: 'large', labelKey: tk('Velká') }], def: 'medium' }],
   },
   cityclicker: {
     ready: false,

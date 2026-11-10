@@ -174,7 +174,6 @@ export default {
   'Nájezdník': 'Raider',
   'Najít soupeře': 'Find an opponent',
   'Nákup se nezdařil. Zkus to znovu.': 'The purchase failed. Try again.',
-  'Nákup z rozpočtu': 'Buy from a budget',
   'Naposledy odemčeno': 'Last unlocked',
   'Napsat ohledně publikování': 'Write to us about publishing',
   'Nasadit': 'Equip',
