@@ -40,6 +40,9 @@ export function createMpApi(client) {
     report: (match, outcome, reason) => call('mp_report', { p_match: match, p_outcome: outcome, p_reason: reason || null }),
     resign: (match) => call('mp_resign', { p_match: match }),
     abort: (match) => call('mp_abort', { p_match: match }),
+    leaderboard: (game, mode, limit) => call('mp_leaderboard', { p_game: game, p_mode: mode, p_limit: limit || 10 }),
+    emote: (match, code) => call('mp_emote', { p_match: match, p_code: code }),
+    rematch: (match) => call('mp_rematch', { p_match: match }),
     arenaClaim: (seconds, score) => call('mp_arena_claim', { p_seconds: Math.max(0, Math.floor(seconds)), p_score: Math.max(0, Math.floor(score || 0)) }),
   };
 }

@@ -56,6 +56,27 @@ Dvě omezení, která plynou z Realtime: každá zpráva se u Supabase počítá
 
 Spolupráce (dvě rakety) používá stejný základ: bojiště počítá **hostitel** (hráč na místě 1 v zápase) včetně druhé lodi, kterou řídí poloha od hosta; **host** (místo 2) dostává obraz (nepřátelé, bossové, střely, bonusy, paprsky a vlny) a posílá jen polohu své lodi a použití bomby. Nepřátelé míří na nejbližší živou loď, zásahy a bonusy druhé lodi počítá hostitel stejnými pravidly jako u jeho lodi (`rocket/mp.js`: `peerHits`). Zdraví lodí určuje hostitel. Boj dvou hráčů (souboj) zůstává u dvou samostatných polovin bojiště se stejnými vlnami podle společného času, protože tam se každý brání vlastním nepřátelům a jde o souboj lodí. Hostitel hry nemá zálohu: když jeho hra ztichne, host to uvidí a může hru ukončit, server pak zápas uzavře.
 
+## Server hlídá pravidla tahových her (db/multiplayer.sql)
+- **Šachy** (`mp_chess_*`): server drží stav partie v `mp_matches.gstate` (šachovnice jako 64 znaků, strana na tahu, práva rošády, pole pro braní mimochodem,
+  počítadlo půltahů, počty pozic od posledního nevratného tahu). `mp_move` tah `{c: "e2e4"}` přehraje (`mp_chess_step`): nelegální tah je chyba `illegal_move`,
+  mat vyhrává ten, kdo táhl, pat, nedostatek materiálu, padesát tahů a trojí opakování jsou remíza a zápas se uzavře hned tímhle tahem (odpověď na tah nese
+  `status`, `winner`, `reason` a celý pohled `match`). Hlášení výsledku (`mp_report`) se u šachů nebere. Při vypršení času hráči prohrává, jen když soupeř ještě
+  může matovat, jinak je to remíza `timeout-material` (`mp_timeout_result`). Zápas, který začal před nasazením téhle verze (v pravidlech zápasu není `engine`), dohraje po starém.
+- **Kouloví Kámoši, Warroom, Hannibal** (`mp_check_payload`, v pravidlech zápasu `check: "shape"`): fyziku a bitvu server nepřehraje, kontroluje tvar a meze tahu
+  (žádná pole navíc, pořadí, čísla v rozumných mezích) a u Kouloví Kámošů typ hozené koule ze semínka (`mp_koulovi_type`, stejný vzorec jako `mpType` ve hře). Co
+  tahová hra spočítá sama (výsledek fyziky, bitvy), zůstává na soupeřově ověření u sebe a na shodě hlášení obou hráčů.
+- Testy: `db/tests/multiplayer.test.sql` (perft šachového enginu na pěti známých pozicích, scénáře konců partií, hodiny, odměna, kontroly ostatních her).
+
+## Žebříček, rychlé reakce a odveta
+- **Žebříček** (`mp_record`, `mp_leaderboard`, `MpBoard.jsx` v okně Hrát online): po každém řádně odehraném zápase (stejné podmínky jako pro odměnu: dost tahů a dost
+  dlouho) server zapíše výhru, prohru nebo remízu a upraví hodnocení (Elo, start 1000, K = 32, nejméně 100). Týmová hra (Rocket spolupráce) počítá jen výhry. Žebříček
+  je zvlášť pro každou hru a režim a ukáže prvních 10 a pozici hráče. Je to jen pro zábavu, žádné Coiny z něj neplynou. Když SQL na serveru není nové, okno napíše,
+  že žebříček není zapnutý.
+- **Rychlé reakce** (`mp_emote`, `emotes.js`): osm hotových reakcí, kód 1 až 8; server drží poslední reakci každého hráče a soupeř ji dostane v pohledu na zápas
+  (`opp_emote`: kód, pořadí, stáří) s dalším dotazem na stav, takže to nepotřebuje Realtime. Jedna za 3 vteřiny, jen v běžícím zápase.
+- **Odveta** (`mp_rematch`, tlačítko na konci zápasu): chtějí-li ji oba do 10 minut od konce, vznikne nový zápas se stejnými volbami a prohozenými stranami
+  (barvami). První hráč čeká a ptá se znovu, druhý ji dostane hned; soupeřova žádost je vidět v `rematch` v pohledu na zápas.
+
 ## Jak se přidá další hra
 
 1. Pravidla hry do `mp_cfg` a `mp_clean_params` v `db/multiplayer.sql` (už jsou pro všech sedm her) a do `catalog.js` (`ready: true`). Do menu hry tlačítko s `data-jomarid-online` a styl, který ho schová (viz `entry.js`).

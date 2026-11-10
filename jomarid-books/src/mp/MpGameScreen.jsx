@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2, WifiOff, Trophy, Frown, Handshake, Ban } from 'lucide-react';
+import { Loader2, WifiOff, Trophy, Frown, Handshake, Ban, Smile, RotateCcw } from 'lucide-react';
 import { GameBar } from '../components/GameBar';
 import { t, getLang } from '../i18n';
 import { withGameLanguage } from '../i18n/gameLayer';
@@ -12,6 +12,7 @@ import { supabase } from '../lib/supabase';
 import { withMultiplayer, initForGame } from './inject.js';
 import { reasonText } from './reasons.js';
 import { mpErrorText } from './errors.js';
+import { EMOTES, emoteByCode, freshEmote } from './emotes.js';
 
 const OFFLINE_AFTER_S = 15; // tolik vteřin ticha od soupeře a ukáže se, že je offline
 const GONE_AFTER_S = 25; // a tolik, než se dá zápas ukončit (server to pak sám přijme)
@@ -20,7 +21,7 @@ const GONE_AFTER_S = 25; // a tolik, než se dá zápas ukončit (server to pak 
 // stavové pásy (offline soupeř, výpadek spojení) a hláška o konci zápasu. O výsledku a Coinech rozhoduje server; tady se jen ukazují.
 //   game: položka seznamu her (id, title, load), match: pohled na zápas z mp_find / mp_active, onExit: zpět na stránku hry,
 //   onAgain: konec a rovnou hledat dalšího soupeře, onCoins(n): hráč dostal n Coinů (lišta ukáže nový zůstatek)
-export const MpGameScreen = ({ game, match, coins, coinsLoaded, reader, gameFx, onExit, onAgain, onCoins }) => {
+export const MpGameScreen = ({ game, match, coins, coinsLoaded, reader, gameFx, onExit, onAgain, onCoins, onRematch }) => {
   const [doc, setDoc] = useState(null);
   const [loadError, setLoadError] = useState(false);
   const [view, setView] = useState(match);
@@ -31,8 +32,17 @@ export const MpGameScreen = ({ game, match, coins, coinsLoaded, reader, gameFx, 
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
   const [flash, setFlash] = useState(null);
+  const [emoteOpen, setEmoteOpen] = useState(false);
+  const [bubble, setBubble] = useState(null); // reakce soupeře nad hrou: { code, id }
+  const [rematch, setRematch] = useState('idle'); // idle | waiting
   const [, setTick] = useState(0);
   const iframeRef = useRef(null);
+  const emoteSeenRef = useRef(Number(match?.opp_emote?.n) || 0); // reakce, které už jsou ukázané (ať se po návratu do zápasu neukáže stará)
+  const emoteLastSentRef = useRef(0);
+  const bubbleTimerRef = useRef(null);
+  const rematchRef = useRef('idle');
+  const onRematchRef = useRef(onRematch);
+  onRematchRef.current = onRematch;
   const sessionRef = useRef(null);
   if (!sessionRef.current) sessionRef.current = new MpSession({ api: mpApi, match });
   const session = sessionRef.current;
@@ -78,6 +88,61 @@ export const MpGameScreen = ({ game, match, coins, coinsLoaded, reader, gameFx, 
     const bridge = attachMpBridge({ session, getWindow: () => iframeRef.current?.contentWindow || null, onClose: askLeave, openChannel });
     return () => bridge.dispose();
   }, [doc, session, askLeave, match.id]);
+
+  // Reakce soupeře: přijde v pohledu na zápas (opp_emote) a ukáže se nad hrou na pár vteřin.
+  // Časovač bubliny je v refu, ne v úklidu efektu: pohled na zápas se obměňuje s každým dotazem a úklid by bublinu nechal viset.
+  useEffect(() => () => clearTimeout(bubbleTimerRef.current), []);
+  useEffect(() => {
+    const fresh = freshEmote(view, emoteSeenRef.current);
+    if (!fresh) return;
+    emoteSeenRef.current = fresh.n;
+    setBubble({ code: fresh.code, id: fresh.n });
+    clearTimeout(bubbleTimerRef.current);
+    bubbleTimerRef.current = setTimeout(() => setBubble(null), 3500);
+  }, [view]);
+
+  // Po konci zápasu: odveta. Dokud hráč odvetu nechce, ptá se server jen občas, jestli ji nechce soupeř; po stisknutí se ptá častěji, dokud nevznikne nový zápas.
+  useEffect(() => {
+    if (!ended || ended.status !== 'finished') return undefined;
+    let stop = false;
+    let timer = null;
+    const tick = async () => {
+      if (stop) return;
+      if (rematchRef.current === 'waiting') {
+        const res = await mpApi.rematch(match.id);
+        if (stop) return;
+        if (res.error) { rematchRef.current = 'idle'; setRematch('idle'); setNote(mpErrorText(res.error)); }
+        else if (res.data?.status === 'matched') { onRematchRef.current?.(res.data.match); return; }
+      } else {
+        const res = await mpApi.state(match.id, 1000000);
+        if (stop) return;
+        if (res.data?.match) setEnded(res.data.match);
+      }
+      timer = setTimeout(tick, rematchRef.current === 'waiting' ? 2000 : 4000);
+    };
+    timer = setTimeout(tick, 2500);
+    return () => { stop = true; clearTimeout(timer); };
+  }, [ended?.status, match.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startRematch = async () => {
+    setNote('');
+    rematchRef.current = 'waiting';
+    setRematch('waiting');
+    const res = await mpApi.rematch(match.id);
+    if (res.error) { rematchRef.current = 'idle'; setRematch('idle'); setNote(mpErrorText(res.error)); return; }
+    if (res.data?.status === 'matched') onRematchRef.current?.(res.data.match);
+  };
+
+  const sendEmote = async (code) => {
+    if (Date.now() - emoteLastSentRef.current < 3000) return; // server pustí jednu za 3 vteřiny
+    emoteLastSentRef.current = Date.now();
+    setEmoteOpen(false);
+    setBubble({ code, id: 'mine', mine: true });
+    clearTimeout(bubbleTimerRef.current);
+    bubbleTimerRef.current = setTimeout(() => setBubble(null), 1800);
+    const res = await mpApi.emote(match.id, code);
+    if (res.error && res.error.code !== 'too_soon' && res.error.code !== 'not_active') setNote(mpErrorText(res.error));
+  };
 
   // Ztráta soupeře se počítá z času; překreslení jednou za vteřinu stačí.
   useEffect(() => {
@@ -173,6 +238,35 @@ export const MpGameScreen = ({ game, match, coins, coinsLoaded, reader, gameFx, 
           />
         )}
 
+        {active && doc && (
+          <div className="absolute left-2 bottom-2 z-10 flex flex-col items-start gap-1.5">
+            {emoteOpen && (
+              <div role="group" aria-label={t('Rychlé reakce')} data-testid="mp-emotes" style={overlayCard} className="border rounded-2xl shadow-xl p-1.5 grid grid-cols-4 gap-1">
+                {EMOTES.map((e) => (
+                  <button key={e.code} type="button" onClick={() => sendEmote(e.code)} aria-label={t(e.label)} title={t(e.label)} data-testid={`mp-emote-${e.code}`} className="w-9 h-9 rounded-xl border-none bg-transparent text-xl cursor-pointer leading-none">{e.icon}</button>
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setEmoteOpen((o) => !o)}
+              aria-expanded={emoteOpen}
+              aria-label={t('Rychlé reakce')}
+              data-testid="mp-emote-toggle"
+              style={{ ...overlayCard, opacity: 0.85 }}
+              className="w-9 h-9 rounded-full border shadow flex items-center justify-center cursor-pointer"
+            >
+              <Smile size={18} aria-hidden="true" />
+            </button>
+          </div>
+        )}
+        {bubble && emoteByCode(bubble.code) && (
+          <div data-testid={bubble.mine ? 'mp-emote-mine' : 'mp-emote-bubble'} role="status" style={overlayCard} className="absolute top-2 left-1/2 -translate-x-1/2 z-10 border rounded-2xl shadow-xl px-3 py-1.5 flex items-center gap-2 animate-in fade-in duration-200">
+            <span className="text-3xl leading-none" aria-hidden="true">{emoteByCode(bubble.code).icon}</span>
+            <span className="text-xs font-bold">{bubble.mine ? t(emoteByCode(bubble.code).label) : `${opp.name || ''}: ${t(emoteByCode(bubble.code).label)}`}</span>
+          </div>
+        )}
+
         {ended && (
           <div data-testid="mp-end" role="status" style={overlayCard} className="absolute left-2 right-2 bottom-2 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-96 border rounded-2xl shadow-xl p-3 flex items-center gap-3 animate-in fade-in duration-300">
             <OutcomeIcon size={28} className={outcome === 'win' ? 'text-amber-500 shrink-0' : 'shrink-0 opacity-70'} aria-hidden="true" />
@@ -182,11 +276,21 @@ export const MpGameScreen = ({ game, match, coins, coinsLoaded, reader, gameFx, 
                 {(ended.my_coins || 0) > 0 && <span data-testid="mp-coins" className="ml-2 text-amber-500">{t('+{n} Coinů', { n: ended.my_coins })}</span>}
               </p>
               <p style={{ color: 'var(--text-muted)' }} className="m-0 text-xs">{reasonText(ended.reason)}</p>
+              {ended.status === 'finished' && (ended.rematch?.theirs || ended.rematch?.next) && rematch !== 'waiting' && (
+                <p data-testid="mp-rematch-offer" className="m-0 mt-1 text-[0.6875rem] font-bold" style={{ color: 'var(--text-badge)' }}>{t('{name} chce odvetu.', { name: opp.name || '' })}</p>
+              )}
+              {note && <p role="alert" className="m-0 mt-1 text-[0.6875rem] font-bold" style={{ color: '#ef4444' }}>{note}</p>}
               {outcome === 'win' && (ended.my_coins || 0) === 0 && (ended.reward || 0) > 0 && (
                 <p data-testid="mp-nocoins" style={{ color: 'var(--text-muted)' }} className="m-0 mt-1 text-[0.6875rem]">{t('Bez Coinů: zápas byl příliš krátký, nebo je dnešní strop z online výher vyčerpaný.')}</p>
               )}
             </div>
             <div className="shrink-0 flex flex-col gap-1.5">
+              {ended.status === 'finished' && (
+                <button type="button" onClick={startRematch} disabled={rematch === 'waiting'} data-testid="mp-rematch" style={btn(!!ended.rematch?.theirs || !!ended.rematch?.next)} className="px-3 py-1.5 rounded-lg border text-[0.625rem] font-black uppercase tracking-wider cursor-pointer inline-flex items-center justify-center gap-1 disabled:opacity-80">
+                  {rematch === 'waiting' ? <Loader2 size={11} className="animate-spin" aria-hidden="true" /> : <RotateCcw size={11} aria-hidden="true" />}
+                  {rematch === 'waiting' ? t('Čekám na soupeře') : t('Odveta')}
+                </button>
+              )}
               <button type="button" onClick={onAgain} data-testid="mp-again" style={btn(true)} className="px-3 py-1.5 rounded-lg border-none text-[0.625rem] font-black uppercase tracking-wider cursor-pointer">{t('Hrát znovu')}</button>
               <button type="button" onClick={onExit} data-testid="mp-exit" style={btn(false)} className="px-3 py-1.5 rounded-lg border text-[0.625rem] font-black uppercase tracking-wider cursor-pointer">{t('Zavřít')}</button>
             </div>

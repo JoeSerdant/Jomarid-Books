@@ -4,6 +4,7 @@ import { t } from '../i18n';
 import { mpApi } from './index.js';
 import { MP_GAMES, cleanParams, defaultParams, hasArena, hasOnline } from './catalog.js';
 import { mpErrorText } from './errors.js';
+import { MpBoard } from './MpBoard.jsx';
 
 const FIND_EVERY_MS = 2000;
 
@@ -292,6 +293,7 @@ export const MpSection = ({ game, online, avail, auto, onMatch, onArena }) => {
                 />
                 <button type="submit" disabled={busy || joinCode.length < 6} data-testid="mp-join" style={pill(false)} className="px-3 py-2 rounded-lg border text-[0.6875rem] font-black uppercase tracking-wider cursor-pointer disabled:opacity-50">{t('Vstoupit')}</button>
               </form>
+              <MpBoard gameId={game.id} mode={mode} />
             </>
           )}
         </>
