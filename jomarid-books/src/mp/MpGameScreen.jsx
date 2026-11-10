@@ -7,6 +7,8 @@ import { loadGameDictionary } from '../i18n/games';
 import { mpApi } from './index.js';
 import { MpSession, outcomeFor } from './session.js';
 import { attachMpBridge } from './bridge.js';
+import { openRealtime } from './realtime.js';
+import { supabase } from '../lib/supabase';
 import { withMultiplayer, initForGame } from './inject.js';
 import { reasonText } from './reasons.js';
 import { mpErrorText } from './errors.js';
@@ -71,9 +73,11 @@ export const MpGameScreen = ({ game, match, coins, coinsLoaded, reader, gameFx, 
   // Most ke hře: žádosti hry (tah, výsledek) jdou na server přes řadič, události zpět do hry.
   useEffect(() => {
     if (!doc) return undefined;
-    const bridge = attachMpBridge({ session, getWindow: () => iframeRef.current?.contentWindow || null, onClose: askLeave });
+    // Hry v reálném čase (Rocket) si posílají polohy přes kanál zápasu 'mp:<id>' (viz realtime.js); ostatní hry kanál nepotřebují
+    const openChannel = (handlers) => openRealtime({ client: supabase, topic: `mp:${match.id}`, ...handlers });
+    const bridge = attachMpBridge({ session, getWindow: () => iframeRef.current?.contentWindow || null, onClose: askLeave, openChannel });
     return () => bridge.dispose();
-  }, [doc, session, askLeave]);
+  }, [doc, session, askLeave, match.id]);
 
   // Ztráta soupeře se počítá z času; překreslení jednou za vteřinu stačí.
   useEffect(() => {

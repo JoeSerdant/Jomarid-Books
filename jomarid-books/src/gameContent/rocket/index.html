@@ -4841,9 +4841,12 @@ class GameManager {
         const setTarget = e => {
             const rect = this.canvas.getBoundingClientRect();
             const fingerOffset = e.pointerType === 'touch' ? 38 : 0;
+            // Plátno může být na obrazovce zvětšené nebo zmenšené (online hra má pevný rozměr bojiště), proto se přepočítá na souřadnice hry
+            const sx = rect.width > 0 ? this.width / rect.width : 1;
+            const sy = rect.height > 0 ? this.height / rect.height : 1;
             this.input.pointerTarget = {
-                x: e.clientX - rect.left,
-                y: e.clientY - rect.top - fingerOffset
+                x: (e.clientX - rect.left) * sx,
+                y: (e.clientY - rect.top - fingerOffset) * sy
             };
         };
 
@@ -8205,5 +8208,6 @@ document.addEventListener('keydown', e => {
     if (e.code === 'Escape' && !cheatOverlay.classList.contains('hidden')) closeCheatMenu();
 });
 </script>
+<!--__MP__-->
 </body>
 </html>

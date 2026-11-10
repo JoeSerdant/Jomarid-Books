@@ -27,6 +27,9 @@ Server je `db/multiplayer.sql` (fronta, zápasy, tahy, hlášení výsledku, odm
 | `progress(hodnota)` | průběh v závodě (City Clicker); server hlídá cíl |
 | `resign()`, `close()` | vzdání; `close` je „chci odejít“ (appka se zeptá) |
 | `serverNow()` | čas serveru |
+| `rt.open()`, `rt.send(payload, { force })`, `rt.track(stav)`, `rt.close()` | kanál v reálném čase pro rychlé hry (Rocket, aréna Polygonu): zprávy jdou přes Supabase Realtime Broadcast, ne přes databázi. `on('rt')` dá zprávu soupeře (`d.p`), `on('rt-status')` stav kanálu (`open`, `down`, `error`), `on('rt-presence')` kdo je v kanálu. Appka zprávy omezuje (nejvýš 50 za vteřinu, do 3000 znaků); `force: true` je pro důležité zprávy (konec, výsledek), které se neomezují odstupem |
+
+Kanál `mp:<id zápasu>` pouští jen hráče zápasu (pravidla na `realtime.messages` v `db/multiplayer.sql`). Appka zkusí nejdřív soukromý kanál; kdyby ho projekt neměl zapnutý, zkusí obyčejný kanál stejného jména (číslo zápasu je náhodné a zná ho jen dvojice) a když nejde ani ten, hra to hráči řekne (`realtime.js`).
 
 Hra o odměně nerozhoduje: Coiny vyplácí server podle pravidel v `mp_cfg` (výhra, délka zápasu, denní strop, soupeř).
 

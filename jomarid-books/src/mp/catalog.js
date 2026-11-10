@@ -36,7 +36,7 @@ export const MP_GAMES = {
     options: [{ key: 'goal', title: tk('Cíl závodu'), choices: [{ value: 'quick', labelKey: tk('Rychlý') }, { value: 'standard', labelKey: tk('Standardní') }, { value: 'long', labelKey: tk('Dlouhý') }], def: 'standard' }],
   },
   rocket: {
-    ready: false,
+    ready: true,
     kind: 'realtime',
     modes: [
       { id: 'coop', title: tk('Spolupráce'), text: tk('Dvě rakety proti nepřátelům. Vyhráváte nebo prohráváte společně.'), reward: 25 },

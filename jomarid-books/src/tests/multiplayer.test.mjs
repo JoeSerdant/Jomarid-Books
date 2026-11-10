@@ -13,6 +13,7 @@ import { errorCode, mpErrorText } from '../mp/errors.js';
 import { MpSession, outcomeFor, POLL } from '../mp/session.js';
 import { stripCheatCodes, buildMpPrelude, withMultiplayer, initForGame } from '../mp/inject.js';
 import { attachMpBridge } from '../mp/bridge.js';
+import { openRealtime, MAX_PAYLOAD_CHARS, MIN_SEND_GAP_MS } from '../mp/realtime.js';
 
 const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DB = path.join(SRC, '..', 'db');
@@ -566,6 +567,165 @@ test('most: zprávy ze hry projdou jen z okna této hry, žádosti se ověří a
   bridge.dispose();
   assert.equal(host.count(), 0, 'po odpojení mostu nezůstane posluchač');
   session.stop();
+});
+
+// ---------- kanál v reálném čase ----------
+// Falešný klient Supabase: channel() vrací kanál, jehož subscribe() si test řídí (SUBSCRIBED, CHANNEL_ERROR...).
+function fakeRealtimeClient({ denyPrivate = false, denyAll = false } = {}) {
+  const made = [], removed = [];
+  const client = {
+    made, removed,
+    channel(topic, opts) {
+      const ch = { topic, opts, sent: [], handlers: [], statusCb: null,
+        on(type, filter, fn) { ch.handlers.push({ type, filter, fn }); return ch; },
+        subscribe(cb) {
+          ch.statusCb = cb;
+          Promise.resolve().then(() => cb(denyAll || (denyPrivate && opts.config.private) ? 'CHANNEL_ERROR' : 'SUBSCRIBED'));
+          return ch;
+        },
+        send(m) { ch.sent.push(m); return Promise.resolve('ok'); },
+        track() {}, presenceState: () => ({}),
+        emit(payload) { ch.handlers.filter((h) => h.type === 'broadcast').forEach((h) => h.fn({ payload })); },
+      };
+      made.push(ch);
+      return ch;
+    },
+    removeChannel(ch) { removed.push(ch); },
+  };
+  return client;
+}
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
+test('kanál v reálném čase: otevře se soukromý, zprávy jdou oběma směry a jsou omezené (odstup, velikost), důležité se neomezují', async () => {
+  const client = fakeRealtimeClient();
+  let t = 1000; const got = [], status = [];
+  const rt = openRealtime({ client, topic: 'mp:abc', key: 'u1', now: () => t, onMessage: (p) => got.push(p), onStatus: (s) => status.push(s) });
+  await tick();
+  assert.equal(client.made.length, 1);
+  assert.equal(client.made[0].topic, 'mp:abc');
+  assert.equal(client.made[0].opts.config.private, true, 'nejdřív soukromý kanál ověřený pravidly v databázi');
+  assert.deepEqual(client.made[0].opts.config.broadcast, { self: false, ack: false });
+  assert.deepEqual(status, [{ status: 'open', private: true }]);
+  assert.ok(rt.isOpen() && rt.isPrivate());
+  assert.equal(rt.send({ k: 's', x: 1 }), true);
+  assert.deepEqual(client.made[0].sent[0], { type: 'broadcast', event: 'g', payload: { k: 's', x: 1 } });
+  t += MIN_SEND_GAP_MS - 1;
+  assert.equal(rt.send({ k: 's', x: 2 }), false, 'příliš brzy po předchozí');
+  assert.equal(rt.send({ k: 'dead' }, { force: true }), true, 'důležitá zpráva projde i hned');
+  t += MIN_SEND_GAP_MS;
+  assert.equal(rt.send({ big: 'x'.repeat(MAX_PAYLOAD_CHARS + 1) }), false, 'obrovská zpráva se zahodí');
+  assert.equal(rt.send({ k: 's', x: 3 }), true);
+  assert.equal(client.made[0].sent.length, 3);
+  client.made[0].emit({ k: 's', x: 9 });
+  assert.deepEqual(got, [{ k: 's', x: 9 }]);
+  rt.close();
+  assert.equal(client.removed.length, 1);
+  assert.equal(rt.send({ k: 's' }, { force: true }), false, 'po zavření se nic neposílá');
+  client.made[0].emit({ k: 'po konci' });
+  assert.equal(got.length, 1, 'ani nic nepřijímá');
+});
+
+test('kanál v reálném čase: když soukromý kanál nejde, zkusí se obyčejný stejného jména; když nejde nic, ohlásí se chyba', async () => {
+  const c1 = fakeRealtimeClient({ denyPrivate: true }); const s1 = [];
+  const rt1 = openRealtime({ client: c1, topic: 'mp:x', onStatus: (s) => s1.push(s) });
+  await tick(); await tick();
+  assert.deepEqual(c1.made.map((c) => c.opts.config.private), [true, false], 'soukromý, pak obyčejný');
+  assert.equal(c1.removed.length, 1, 'neúspěšný pokus se uklidí');
+  assert.deepEqual(s1, [{ status: 'open', private: false }]);
+  assert.ok(rt1.isOpen() && !rt1.isPrivate());
+  const c2 = fakeRealtimeClient({ denyAll: true }); const s2 = [];
+  const rt2 = openRealtime({ client: c2, topic: 'mp:y', onStatus: (s) => s2.push(s) });
+  await tick(); await tick(); await tick();
+  assert.deepEqual(s2, [{ status: 'error' }]);
+  assert.ok(!rt2.isOpen());
+  assert.equal(rt2.send({ a: 1 }, { force: true }), false);
+  // jen obyčejný kanál na požádání
+  const c3 = fakeRealtimeClient(); openRealtime({ client: c3, topic: 'mp:z', preferPrivate: false, onStatus() {} });
+  await tick();
+  assert.deepEqual(c3.made.map((c) => c.opts.config.private), [false]);
+});
+
+test('kanál v reálném čase: výpadek spojení se ohlásí a po obnovení kanál zase hlásí, že je otevřený', async () => {
+  const client = fakeRealtimeClient(); const status = [];
+  openRealtime({ client, topic: 'mp:r', onStatus: (s) => status.push(s.status) });
+  await tick();
+  const ch = client.made[0];
+  ch.statusCb('CLOSED'); ch.statusCb('SUBSCRIBED');
+  assert.deepEqual(status, ['open', 'down', 'open']);
+});
+
+test('kanál v reálném čase: neodpovídající kanál se po lhůtě vzdá (a zkusí další)', async () => {
+  const client = fakeRealtimeClient(); const pending = [];
+  client.channel = (topic, opts) => { const ch = { opts, handlers: [], on() { return ch; }, subscribe() { return ch; }, send() {} }; pending.push(ch); return ch; };
+  client.removeChannel = () => {};
+  const timers = []; const status = [];
+  openRealtime({ client, topic: 'mp:t', timeoutMs: 500, timers: { setTimeout: (f) => { timers.push(f); return timers.length; }, clearTimeout() {} }, onStatus: (s) => status.push(s) });
+  assert.equal(pending.length, 1);
+  timers[0]();
+  assert.equal(pending.length, 2, 'po lhůtě se zkusí obyčejný kanál');
+  timers[1]();
+  assert.deepEqual(status, [{ status: 'error' }]);
+});
+
+test('most: kanál v reálném čase se otevře na žádost hry, zprávy jdou oběma směry a po odpojení se kanál zavře', async () => {
+  const { clock, session } = make();
+  const sent = [];
+  const gameWin = { postMessage: (m) => sent.push(m) };
+  const ls = []; const host = { addEventListener: (t, f) => ls.push(f), removeEventListener: (t, f) => ls.splice(ls.indexOf(f), 1), fire: (e) => ls.slice().forEach((f) => f(e)) };
+  const opened = []; let handlers = null; const out = []; let closedCh = 0;
+  const openChannel = (h) => { opened.push(1); handlers = h; return { send: (p, o) => { out.push([p, o]); return true; }, close: () => { closedCh++; }, track: () => {} }; };
+  const bridge = attachMpBridge({ session, getWindow: () => gameWin, onClose() {}, win: host, openChannel });
+  const msg = (data) => host.fire({ source: gameWin, data: Object.assign({ source: 'jomarid-game', type: 'mp' }, data) });
+  msg({ op: 'rt-send', id: 0, args: { payload: { k: 's' } } });
+  assert.equal(out.length, 0, 'před otevřením se nic neposílá');
+  msg({ op: 'rt-open', id: 0, args: {} }); msg({ op: 'rt-open', id: 0, args: {} });
+  assert.equal(opened.length, 1, 'kanál se otevře jednou');
+  msg({ op: 'rt-send', id: 0, args: { payload: { k: 's', x: 1 } } });
+  msg({ op: 'rt-send', id: 0, args: { payload: { k: 'dead' }, force: true } });
+  msg({ op: 'rt-send', id: 0, args: { payload: { k: 's', x: 2 }, force: 'ano' } });
+  assert.deepEqual(out.map((o) => [o[0].k, o[1].force]), [['s', false], ['dead', true], ['s', false]], 'force platí jen s hodnotou true');
+  handlers.onMessage({ k: 's', x: 5 }); handlers.onStatus({ status: 'open', private: true }); handlers.onPresence({ a: 1 });
+  const ev = (name) => sent.find((m) => m.type === 'mp-event' && m.event === name);
+  assert.deepEqual(ev('rt').data.p, { k: 's', x: 5 });
+  assert.deepEqual({ status: ev('rt-status').data.status, private: ev('rt-status').data.private }, { status: 'open', private: true });
+  assert.deepEqual(ev('rt-presence').data.state, { a: 1 });
+  assert.equal(typeof ev('rt').data.offset, 'number', 'k události patří i posun času serveru');
+  msg({ op: 'rt-close', id: 0 });
+  assert.equal(closedCh, 1);
+  msg({ op: 'rt-send', id: 0, args: { payload: { k: 's' } } });
+  assert.equal(out.length, 3, 'po zavření se neposílá');
+  msg({ op: 'rt-open', id: 0, args: {} }); bridge.dispose();
+  assert.equal(closedCh, 2, 'po odpojení mostu se kanál zavře');
+  // bez kanálu (appka ho nedodá) hra dostane chybu místo ticha
+  const sent2 = []; const w2 = { postMessage: (m) => sent2.push(m) };
+  const b2 = attachMpBridge({ session, getWindow: () => w2, onClose() {}, win: host });
+  host.fire({ source: w2, data: { source: 'jomarid-game', type: 'mp', op: 'rt-open', id: 0, args: {} } });
+  assert.equal(sent2.find((m) => m.event === 'rt-status').data.status, 'error');
+  b2.dispose(); session.stop(); await clock.advance(1);
+});
+
+test('rozhraní hry: rt.open, rt.send, rt.track a rt.close posílají žádosti, události rt a rt-status dorazí po listen()', async () => {
+  const posts = []; const listeners = [];
+  const sandbox = { setTimeout, clearTimeout, console, Date, JSON, Promise };
+  sandbox.window = sandbox; sandbox.parent = { postMessage: (m) => posts.push(m) };
+  sandbox.window.parent = sandbox.parent;
+  sandbox.addEventListener = (t, f) => listeners.push(f);
+  vm.createContext(sandbox);
+  new vm.Script(buildMpPrelude({ match: 'm', slot: 1 })).runInContext(sandbox);
+  const MP = sandbox.jomaridMP;
+  MP.rt.open(); MP.rt.send({ a: 1 }); MP.rt.send({ b: 2 }, { force: true }); MP.rt.track({ x: 1 }); MP.rt.close();
+  assert.deepEqual(posts.map((p) => [p.op, p.args && p.args.force]), [['rt-open', undefined], ['rt-send', false], ['rt-send', true], ['rt-track', undefined], ['rt-close', undefined]]);
+  assert.ok(posts.every((p) => p.source === 'jomarid-game' && p.type === 'mp' && p.id === 0));
+  const got = [];
+  MP.on('rt', (d) => got.push(d.p)).on('rt-status', (d) => got.push(d.status));
+  const fire = (event, data) => listeners.forEach((f) => f({ source: sandbox.parent, data: { source: 'jomarid-host', type: 'mp-event', event, data } }));
+  fire('rt-status', { status: 'open', offset: 5 });
+  assert.deepEqual(got, [], 'před listen() se události zdrží');
+  MP.listen();
+  assert.deepEqual(got, ['open']);
+  fire('rt', { p: { k: 's' }, offset: 6 });
+  assert.deepEqual(got, ['open', { k: 's' }]);
+  assert.equal(MP.serverNow() - Date.now() >= 5 && MP.serverNow() - Date.now() <= 8, true, 'posun času se bere z každé události');
 });
 
 // ---------- zapojení do appky ----------

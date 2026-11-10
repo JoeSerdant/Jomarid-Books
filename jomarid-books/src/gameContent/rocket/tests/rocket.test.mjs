@@ -371,3 +371,104 @@ test('Opustit hru: sanitizeRun zahodí nesmysly a staré Denní výzvy, hodnoty 
   assert.equal(r.triple, 0);
   assert.equal(sanitizeRun({ mode: 'rush', rushStreak: 4 }).rushStreak, 4);
 });
+
+/* ---------------------------------------------------------------- online hra pro dva (multiplayer) */
+const mpSrc = read(path.join(DIR, 'mp.js'));
+
+// Části hry, které mp.js používá a které se dají vyzkoušet bez prohlížeče: formace nepřátel a pomocné funkce U
+const uSrc = html.match(/const U = \{[\s\S]*?\n\};/)[0];
+const formationsSrc = html.match(/const FORMATIONS = \[[\s\S]*?\n\];/)[0];
+function loadMp({ seed = 4242, mode = 'coop', withMp = true } = {}) {
+  const el = () => ({ style: {}, classList: { add() {}, remove() {}, toggle() {} }, appendChild() {}, innerText: '', textContent: '' });
+  const sandbox = { Math, Number, String, Object, Array, JSON, Date, console, setInterval() { return 0; }, setTimeout() { return 0; }, document: { body: el(), head: el(), createElement: el, getElementById: () => el() }, addEventListener() {} };
+  sandbox.window = sandbox;
+  if (withMp) sandbox.jomaridMP = { enabled: true, init: { seed, mode, slot: 1, opponent: { name: 'Marie' } }, on() { return this; }, listen() {}, rt: { open() {}, send() {} }, report: () => Promise.resolve({}), serverNow: () => Date.now() };
+  vm.createContext(sandbox);
+  new vm.Script(`${uSrc}\n${formationsSrc}\nglobalThis.__U = U; globalThis.__F = FORMATIONS;`).runInContext(sandbox);
+  new vm.Script(mpSrc).runInContext(sandbox);
+  return { api: sandbox.__rocketMp, U: sandbox.__U, F: sandbox.__F, sandbox };
+}
+
+test('hra pro dva: mp.js se do dokumentu skládá na jedno místo, bez rozhraní z appky nic nedělá a nemá cheat kód', () => {
+  assert.equal(html.split('<!--__MP__-->').length, 2, 'jedno místo pro mp.js');
+  assert.match(assembler, /import mp from '\.\/rocket\/mp\.js\?raw'/);
+  assert.match(assembler, /html\.replace\('<!--__MP__-->', \(\) =>/);
+  assert.doesNotMatch(mpSrc, /67MILUJU|IMAGINEFLEXIT|CHEAT/);
+  new vm.Script(mpSrc);
+  assert.equal(loadMp({ withMp: false }).api, undefined, 'bez window.jomaridMP se nic nespustí');
+  assert.ok(loadMp().api, 'v zápase se pomocné funkce zpřístupní (hra se bez GameManager nespouští)');
+  // zápis pozice myši je přepočítaný na souřadnice hry (bojiště je na obrazovce zvětšené nebo zmenšené)
+  assert.match(html, /const sx = rect\.width > 0 \? this\.width \/ rect\.width : 1;/);
+  assert.match(html, /x: \(e\.clientX - rect\.left\) \* sx,/);
+});
+
+test('hra pro dva: mp.js stojí jen na tom, co hra opravdu má (třídy, metody a prvky stránky)', () => {
+  for (const c of ['Player', 'Enemy', 'Bullet', 'GameManager']) assert.match(html, new RegExp(`\\nclass ${c} \\{`), c);
+  for (const c of ['FORMATIONS', 'Story', 'Storage', 'Art']) assert.match(html, new RegExp(`\\nconst ${c} = `), c);
+  assert.match(html, /\nconst Game = new GameManager\(\);/);
+  assert.match(html, /\nconst U = \{[\s\S]*?\n    rand: \(min, max\)[\s\S]*?pick: arr =>/);
+  for (const m of ['spawnBoss', 'killBoss', 'useBomb', 'gameOver', 'drawOverlays', 'updateEvents', 'nextBossScore', 'resize', 'start', 'pause', 'boom']) {
+    assert.ok(new RegExp(`\\n    ${m}\\([^)]*\\) \\{`).test(html), `GameManager.${m}`);
+  }
+  assert.match(html, /\n    get phase\(\) \{/);
+  assert.match(html, /\n    shoot\(game\) \{/);
+  assert.match(html, /\n    update\(dt, input, game\) \{/);
+  assert.match(html, /constructor\(x, y, vx, vy, dmg, color, isEnemy, r\) \{/);
+  assert.match(html, /if \(Story\.off\) return undefined;/, 'příběh jde vypnout');
+  assert.match(html, /this\.director\.update\(dt\);/);
+  assert.match(html, /Art\.ship\(this\.r, rapid\)/);
+  for (const id of ['game-container', 'boss-bar', 'boss-name', 'boss-fill', 'boss-phase', 'btn-pause', 'menu-overlay', 'hud-coins', 'btn-bomb']) assert.ok(html.includes(`id="${id}"`), id);
+  // bez výcviku: příznak, který mp.js nastavuje, hra opravdu čte
+  assert.match(html, /if \(!Storage\.data\.tutorialDone\) \{\s*this\.startTutorialDialog\(\);/);
+});
+
+test('hra pro dva: řada nepřátel z čísla zápasu je pro stejné číslo stejná, mimo bossy souvislá a podle času těžší', () => {
+  const { api, U, F } = loadMp();
+  const seeds = [0, 1, 7, 4242, 4294967295, 123456789];
+  for (let i = 0; i < 60; i++) seeds.push((i * 2654435761 + 11) >>> 0);
+  const known = new Set(['basic', 'fast', 'tank', 'destroyer']);
+  for (const seed of seeds) {
+    const a = api.buildSchedule(seed, true, F, U), b = api.buildSchedule(seed, true, F, U);
+    assert.equal(JSON.stringify(a), JSON.stringify(b), `stejné číslo ${seed} dá stejnou řadu`);
+    assert.ok(a.length > 60, 'dost nepřátel na čtrnáct minut');
+    for (let k = 1; k < a.length; k++) assert.ok(a[k].at >= a[k - 1].at, 'seřazeno podle času');
+    for (const e of a) {
+      assert.ok(known.has(e.type), e.type);
+      assert.ok(e.x >= -30 && e.x <= 430, `x ${e.x}`);
+      assert.ok(e.wob >= 0 && e.wob <= 3000 && e.fire >= 900 && e.fire <= 2200);
+    }
+    // ve spolupráci se kolem příletu bossů nic nepouští (a jinde ano)
+    for (const bt of [60000, 150000, 255000]) assert.ok(!a.some((e) => e.at > bt - 8000 && e.at < bt + 50000), `kolem bosse ${bt} ticho (číslo ${seed})`);
+    assert.ok(a.some((e) => e.at > 5000 && e.at < 50000) && a.some((e) => e.at > 80000 && e.at < 140000), 'mezi bossy se létá');
+    // později přibývají těžší typy (tank a destroyer od 3. fáze)
+    const early = a.filter((e) => e.at < 70000).map((e) => e.type), late = a.filter((e) => e.at > 300000).map((e) => e.type);
+    assert.ok(!early.includes('destroyer'), 'v první minutě nejsou destroyery');
+    assert.ok(late.includes('tank') || late.includes('destroyer'), 'později jsou i těžší typy');
+  }
+  const pvp = api.buildSchedule(77, false, F, U);
+  assert.ok(pvp.some((e) => e.at > 60000 && e.at < 70000) && pvp.some((e) => e.at > 150000 && e.at < 160000), 'v souboji se létá pořád');
+  assert.notEqual(JSON.stringify(api.buildSchedule(1, true, F, U)), JSON.stringify(api.buildSchedule(2, true, F, U)), 'jiné číslo, jiná řada');
+  // náhoda hry zůstala po sestavení řady původní (nahrazuje se jen na dobu sestavování)
+  const orig = U.rand, origPick = U.pick;
+  api.buildSchedule(5, true, F, U);
+  assert.equal(U.rand, orig); assert.equal(U.pick, origPick);
+});
+
+test('hra pro dva: poloha ducha se vyhladí mezi vzorky, za posledním se chvíli pokračuje a pak stojí; fáze a čas startu', () => {
+  const { api } = loadMp();
+  const at = (s, t) => { const r = api.ghostAt(s, t); return r && JSON.parse(JSON.stringify(r)); };   // objekt z jiného kontextu: porovnává se jako čistá data
+  const s = [{ t: 1000, x: 100, y: 500 }, { t: 1100, x: 140, y: 500 }, { t: 1200, x: 140, y: 460 }];
+  assert.deepEqual(at(s, 900), { x: 100, y: 500 }, 'před prvním vzorkem stojí');
+  assert.deepEqual(at(s, 1050), { x: 120, y: 500 }, 'uprostřed mezi dvěma vzorky');
+  assert.deepEqual(at(s, 1150), { x: 140, y: 480 });
+  const out = at(s, 1300);
+  assert.ok(out.y < 460 && out.y >= 460 - 0.4 * 100, 'za posledním vzorkem se krátce pokračuje směrem pohybu');
+  assert.deepEqual(at(s, 9999), { x: 140, y: 460 - 0.4 * 160 }, 'a nejvýš 160 ms');
+  assert.equal(at([], 5), null);
+  assert.deepEqual(at([{ t: 1, x: 3, y: 4 }], 99), { x: 3, y: 4 });
+  assert.equal(api.phaseAt(0), 1); assert.equal(api.phaseAt(39999), 1); assert.equal(api.phaseAt(40000), 2); assert.equal(api.phaseAt(1e9), 9); assert.equal(api.phaseAt(-5), 1);
+  // oba si čas startu spočítají stejně, bez ohledu na pořadí
+  const a = api.proposeStart(100000, 104000), b = api.proposeStart(100000, 112000);
+  assert.equal(a, 108000, 'nejdřív osm vteřin po založení zápasu'); assert.equal(b, 114500, 'a nejdřív 2,5 vteřiny po tom, co je hráč připravený');
+  assert.equal(api.agreedStart(a, b), api.agreedStart(b, a)); assert.equal(api.agreedStart(a, b), 114500);
+});

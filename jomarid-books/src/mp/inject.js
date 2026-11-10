@@ -30,6 +30,8 @@ export function stripCheatCodes(html, rng = secureRng()) {
   return out;
 }
 
+// Část rt v rozhraní níže je kanál v reálném čase pro rychlé hry: open() ho otevře (stav přijde událostí rt-status), send() pošle zprávu ostatním
+// a zprávy ostatních chodí jako událost rt. (Text uvnitř skriptu je jen kód bez komentářů, aby ho kontrola překladů nebrala za český text.)
 const PRELUDE = `(function () {
   var INIT = __INIT__;
   var queue = [], handlers = {}, waits = {}, nextId = 0, listening = false, offset = INIT.offset || 0;
@@ -72,6 +74,12 @@ const PRELUDE = `(function () {
     resign: function () { return call('resign', {}); },
     progress: function (value) { return call('progress', { value: value }); },
     close: function () { post({ op: 'close', id: 0 }); },
+    rt: {
+      open: function () { post({ op: 'rt-open', id: 0, args: {} }); },
+      send: function (payload, opts) { post({ op: 'rt-send', id: 0, args: { payload: payload, force: !!(opts && opts.force) } }); },
+      track: function (state) { post({ op: 'rt-track', id: 0, args: { state: state } }); },
+      close: function () { post({ op: 'rt-close', id: 0 }); }
+    },
     serverNow: function () { return Date.now() + offset; }
   };
   Object.defineProperty(window, 'jomaridMP', { value: api, writable: false, configurable: false });

@@ -7,8 +7,9 @@ import { outcomeFor } from './session.js';
 const OUTCOMES = new Set(['win', 'loss', 'draw']);
 const errOf = (e) => ({ code: (e && e.code) || 'error', message: String((e && e.message) || '') });
 
-// session: MpSession; getWindow: () => okno hry; onClose: hráč v rozhraní hry zvolil odchod; win: okno appky (pro zprávy).
-export function attachMpBridge({ session, getWindow, onClose, win }) {
+// session: MpSession; getWindow: () => okno hry; onClose: hráč v rozhraní hry zvolil odchod; win: okno appky (pro zprávy);
+// openChannel(handlers) otevře kanál v reálném čase pro hru (viz realtime.js) a vrátí { send, close, track }; bez něj hra v reálném čase nepojede.
+export function attachMpBridge({ session, getWindow, onClose, win, openChannel }) {
   const host = win || (typeof window !== 'undefined' ? window : null);
   const post = (msg) => { const w = getWindow(); if (w) { try { w.postMessage(Object.assign({ source: 'jomarid-host' }, msg), '*'); } catch { /* okno hry už neexistuje */ } } };
   const event = (name, data) => post({ type: 'mp-event', event: name, data: Object.assign({ offset: session.offset }, data) });
@@ -20,6 +21,17 @@ export function attachMpBridge({ session, getWindow, onClose, win }) {
     session.on('end', (match) => event('end', { match, outcome: outcomeFor(match) })),
     session.on('connection', (c) => event('connection', c)),
   ];
+
+  // Kanál v reálném čase: hra o něj požádá (rt-open), pak do něj posílá zprávy (rt-send) a dostává zprávy soupeře (událost rt) a stav kanálu (rt-status).
+  let rt = null;
+  const rtOpen = () => {
+    if (rt || !openChannel) return;
+    rt = openChannel({
+      onMessage: (p) => event('rt', { p }),
+      onStatus: (s) => event('rt-status', s),
+      onPresence: (state) => event('rt-presence', { state }),
+    });
+  };
 
   const run = (id, promise) => { Promise.resolve(promise).then((data) => reply(id, true, data === undefined ? null : data), (err) => reply(id, false, errOf(err))); };
 
@@ -50,6 +62,19 @@ export function attachMpBridge({ session, getWindow, onClose, win }) {
         run(d.id, session.progress(v));
         break;
       }
+      case 'rt-open':
+        if (!openChannel) { event('rt-status', { status: 'error' }); break; }
+        rtOpen();
+        break;
+      case 'rt-send':
+        if (rt && args.payload !== undefined) rt.send(args.payload, { force: args.force === true });
+        break;
+      case 'rt-track':
+        if (rt && args.state && typeof args.state === 'object') rt.track(args.state);
+        break;
+      case 'rt-close':
+        if (rt) { rt.close(); rt = null; }
+        break;
       case 'close':
         if (onClose) onClose();
         break;
@@ -61,6 +86,7 @@ export function attachMpBridge({ session, getWindow, onClose, win }) {
 
   return {
     dispose() {
+      if (rt) { rt.close(); rt = null; }
       for (const off of listeners) off();
       if (host) host.removeEventListener('message', onMessage);
     },
