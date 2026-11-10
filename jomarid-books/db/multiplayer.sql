@@ -81,8 +81,8 @@ returns jsonb language sql immutable set search_path to 'public' as $$
   select case p_game || '/' || p_mode
     when 'chess/duel'         then jsonb_build_object('kind', 'turn',     'turn_seconds', 0,   'bank', 300, 'inc', 3, 'first_move', 60, 'reward', 30, 'min_moves', 10, 'min_seconds', 45,  'max_payload', 400,   'max_moves', 700,  'team', false)
     when 'koulovikamosi/duel' then jsonb_build_object('kind', 'turn',     'turn_seconds', 60,  'bank', 0,   'inc', 0, 'first_move', 60, 'reward', 20, 'min_moves', 6,  'min_seconds', 30,  'max_payload', 16000, 'max_moves', 400,  'team', false)
-    when 'warroom/duel'       then jsonb_build_object('kind', 'turn',     'turn_seconds', 120, 'bank', 0,   'inc', 0, 'first_move', 90, 'reward', 35, 'min_moves', 8,  'min_seconds', 60,  'max_payload', 16000, 'max_moves', 900,  'team', false)
-    when 'hannibal/duel'      then jsonb_build_object('kind', 'turn',     'turn_seconds', 150, 'bank', 0,   'inc', 0, 'first_move', 90, 'reward', 40, 'min_moves', 8,  'min_seconds', 90,  'max_payload', 16000, 'max_moves', 1500, 'team', false)
+    when 'warroom/duel'       then jsonb_build_object('kind', 'turn',     'turn_seconds', 120, 'bank', 0,   'inc', 0, 'first_move', 90, 'reward', 35, 'min_moves', 4,  'min_seconds', 40,  'max_payload', 16000, 'max_moves', 900,  'team', false)
+    when 'hannibal/duel'      then jsonb_build_object('kind', 'turn',     'turn_seconds', 180, 'bank', 0,   'inc', 0, 'first_move', 90, 'reward', 40, 'min_moves', 4,  'min_seconds', 30,  'max_payload', 16000, 'max_moves', 1500, 'team', false)
     when 'cityclicker/race'   then jsonb_build_object('kind', 'race',     'turn_seconds', 0,   'bank', 0,   'inc', 0, 'first_move', 0,  'reward', 40, 'min_moves', 0,  'min_seconds', 38,  'max_payload', 600,   'max_moves', 0,    'team', false, 'target', 10000000000)
     when 'rocket/coop'        then jsonb_build_object('kind', 'realtime', 'turn_seconds', 0,   'bank', 0,   'inc', 0, 'first_move', 0,  'reward', 25, 'min_moves', 0,  'min_seconds', 60,  'max_payload', 600,   'max_moves', 0,    'team', true)
     when 'rocket/pvp'         then jsonb_build_object('kind', 'realtime', 'turn_seconds', 0,   'bank', 0,   'inc', 0, 'first_move', 0,  'reward', 35, 'min_moves', 0,  'min_seconds', 30,  'max_payload', 600,   'max_moves', 0,    'team', false)
@@ -90,7 +90,7 @@ returns jsonb language sql immutable set search_path to 'public' as $$
   end
 $$;
 
--- Zkontroluje a očistí nastavení zápasu (p_params): šachy tc (3+2, 5+3, 10+5), City Clicker goal (quick, standard, long), Hannibal preset (small, medium, large, budget).
+-- Zkontroluje a očistí nastavení zápasu (p_params): šachy tc (3+2, 5+3, 10+5), City Clicker goal (quick, standard, long), Hannibal preset (small, medium, large).
 -- Neznámá hodnota se odmítne chybou invalid_params, chybějící dostane výchozí. Hráči se párují jen s někým se stejným nastavením.
 create or replace function public.mp_clean_params(p_game text, p_mode text, p_params jsonb)
 returns jsonb language plpgsql immutable set search_path to 'public' as $$
@@ -107,7 +107,7 @@ begin
     return jsonb_build_object('goal', v);
   elsif p_game = 'hannibal' then
     v := coalesce(p_params ->> 'preset', 'medium');
-    if v not in ('small', 'medium', 'large', 'budget') then raise exception 'invalid_params'; end if;
+    if v not in ('small', 'medium', 'large') then raise exception 'invalid_params'; end if;
     return jsonb_build_object('preset', v);
   end if;
   return '{}'::jsonb;
