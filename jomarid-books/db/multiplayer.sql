@@ -83,7 +83,7 @@ returns jsonb language sql immutable set search_path to 'public' as $$
     when 'koulovikamosi/duel' then jsonb_build_object('kind', 'turn',     'turn_seconds', 60,  'bank', 0,   'inc', 0, 'first_move', 60, 'reward', 20, 'min_moves', 6,  'min_seconds', 30,  'max_payload', 16000, 'max_moves', 400,  'team', false)
     when 'warroom/duel'       then jsonb_build_object('kind', 'turn',     'turn_seconds', 120, 'bank', 0,   'inc', 0, 'first_move', 90, 'reward', 35, 'min_moves', 8,  'min_seconds', 60,  'max_payload', 16000, 'max_moves', 900,  'team', false)
     when 'hannibal/duel'      then jsonb_build_object('kind', 'turn',     'turn_seconds', 150, 'bank', 0,   'inc', 0, 'first_move', 90, 'reward', 40, 'min_moves', 8,  'min_seconds', 90,  'max_payload', 16000, 'max_moves', 1500, 'team', false)
-    when 'cityclicker/race'   then jsonb_build_object('kind', 'race',     'turn_seconds', 0,   'bank', 0,   'inc', 0, 'first_move', 0,  'reward', 40, 'min_moves', 0,  'min_seconds', 120, 'max_payload', 600,   'max_moves', 0,    'team', false, 'target', 100000)
+    when 'cityclicker/race'   then jsonb_build_object('kind', 'race',     'turn_seconds', 0,   'bank', 0,   'inc', 0, 'first_move', 0,  'reward', 40, 'min_moves', 0,  'min_seconds', 30,  'max_payload', 600,   'max_moves', 0,    'team', false, 'target', 10000000000)
     when 'rocket/coop'        then jsonb_build_object('kind', 'realtime', 'turn_seconds', 0,   'bank', 0,   'inc', 0, 'first_move', 0,  'reward', 25, 'min_moves', 0,  'min_seconds', 60,  'max_payload', 600,   'max_moves', 0,    'team', true)
     when 'rocket/pvp'         then jsonb_build_object('kind', 'realtime', 'turn_seconds', 0,   'bank', 0,   'inc', 0, 'first_move', 0,  'reward', 35, 'min_moves', 0,  'min_seconds', 30,  'max_payload', 600,   'max_moves', 0,    'team', false)
     else null
@@ -123,7 +123,7 @@ begin
   if p_game = 'chess' then
     v := v || case p_params ->> 'tc' when '3+2' then '{"bank":180,"inc":2}'::jsonb when '10+5' then '{"bank":600,"inc":5}'::jsonb else '{"bank":300,"inc":3}'::jsonb end;
   elsif p_game = 'cityclicker' then
-    v := v || case p_params ->> 'goal' when 'quick' then '{"target":25000,"min_seconds":90}'::jsonb when 'long' then '{"target":500000,"min_seconds":420}'::jsonb else '{"target":100000,"min_seconds":240}'::jsonb end;
+    v := v || case p_params ->> 'goal' when 'quick' then '{"target":1000000000,"min_seconds":18}'::jsonb when 'long' then '{"target":100000000000,"min_seconds":60}'::jsonb else '{"target":10000000000,"min_seconds":30}'::jsonb end;
   end if;
   return v;
 end $$;
@@ -718,7 +718,7 @@ begin
   return jsonb_build_object('ok', true, 'seq', p_seq, 'turn', m.turn, 'deadline', (extract(epoch from m.deadline) * 1000)::bigint, 'bank', jsonb_build_array(m.bank1, m.bank2));
 end $$;
 
--- Průběh hráče v závodě (City Clicker: kolik peněz celkem vydělal). Jen roste (nižší hodnota se ignoruje) a nesmí předběhnout nejkratší možnou dobu závodu:
+-- Průběh hráče v závodě (City Clicker: kolik peněz celkem vydělal; cíle jsou 1 miliarda, 10 miliard a 100 miliard podle měření ekonomiky hry). Jen roste (nižší hodnota se ignoruje) a nesmí předběhnout nejkratší možnou dobu závodu:
 -- dřív, než uplyne min_seconds, se hodnota ořízne tak, aby ani při podvodu nešlo dosáhnout cíle. Kdo první dosáhne cíle, vyhrává a zápas se uzavře hned.
 -- Vrací stav zápasu (průběh obou hráčů v prog).
 create or replace function public.mp_progress(p_match uuid, p_value double precision)

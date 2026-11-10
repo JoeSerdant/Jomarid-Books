@@ -98,8 +98,8 @@ select tt.fails(1, $$select public.mp_clean_params('chess', 'duel', '{"tc":"1+0"
 select tt.fails(1, $$select public.mp_clean_params('hannibal', 'duel', '{"preset":"huge"}')$$, 'invalid_params', 'neznámá velikost armády se odmítne');
 select tt.fails(1, $$select public.mp_clean_params('cityclicker', 'race', '{"goal":"x"}')$$, 'invalid_params', 'neznámý cíl závodu se odmítne');
 select tt.ok(public.mp_rules('chess', 'duel', '{"tc":"3+2"}') @> '{"bank":180,"inc":2}' and public.mp_rules('chess', 'duel', '{"tc":"10+5"}') @> '{"bank":600,"inc":5}' and public.mp_rules('chess', 'duel', '{"tc":"5+3"}') @> '{"bank":300,"inc":3}', 'pravidla šachů berou hodiny podle volby');
-select tt.ok((public.mp_rules('cityclicker', 'race', '{"goal":"quick"}') ->> 'target')::int < (public.mp_rules('cityclicker', 'race', '{"goal":"standard"}') ->> 'target')::int
-         and (public.mp_rules('cityclicker', 'race', '{"goal":"standard"}') ->> 'target')::int < (public.mp_rules('cityclicker', 'race', '{"goal":"long"}') ->> 'target')::int, 'City Clicker: cíl roste od krátkého přes standardní po dlouhý závod');
+select tt.ok((public.mp_rules('cityclicker', 'race', '{"goal":"quick"}') ->> 'target')::bigint < (public.mp_rules('cityclicker', 'race', '{"goal":"standard"}') ->> 'target')::bigint
+         and (public.mp_rules('cityclicker', 'race', '{"goal":"standard"}') ->> 'target')::bigint < (public.mp_rules('cityclicker', 'race', '{"goal":"long"}') ->> 'target')::bigint, 'City Clicker: cíl roste od krátkého přes standardní po dlouhý závod');
 
 -- ===== oprávnění =====
 select tt.ok(not has_function_privilege('anon', 'public.mp_find(text,text,jsonb)', 'execute') and has_function_privilege('authenticated', 'public.mp_find(text,text,jsonb)', 'execute'), 'hledat soupeře smí jen přihlášený');
@@ -360,7 +360,7 @@ select tt.ok((public.mp_stats() -> 'games' -> 'chess' ->> 'draws')::int = 1, 'mp
 
 -- ===== závod (City Clicker) =====
 create temp table t_race as select tt.pair(1, 2, 'cityclicker', 'race', '{"goal":"quick"}') as id;
-select tt.ok((tt.row((select id from t_race)) -> 'rules' ->> 'target')::int = 25000 and (select tt.row(id) ->> 'turn' from t_race) is null and (select tt.row(id) ->> 'deadline' from t_race) is null, 'závod nemá tahy ani limit; cíl rychlého závodu je 25000');
+select tt.ok((tt.row((select id from t_race)) -> 'rules' ->> 'target')::bigint = 1000000000 and (select tt.row(id) ->> 'turn' from t_race) is null and (select tt.row(id) ->> 'deadline' from t_race) is null, 'závod nemá tahy ani limit; cíl rychlého závodu je miliarda');
 select tt.fails(1, format($$select public.mp_move(%L, 1, '{"a":1}')$$, (select id from t_race)), 'not_turn_based', 'do závodu se netáhne');
 select tt.fails(1, format($$select public.mp_report(%L, 'win')$$, (select id from t_race)), 'not_reportable', 'závod se nehlásí, rozhoduje server');
 select tt.fails(1, format($$select public.mp_progress(%L, -5)$$, (select id from t_race)), 'invalid_value', 'záporný průběh se odmítne');
@@ -368,25 +368,25 @@ select tt.fails(1, format($$select public.mp_progress(%L, 'NaN'::double precisio
 select tt.fails(1, format($$select public.mp_progress(%L, null)$$, (select id from t_race)), 'invalid_value', 'prázdný průběh se odmítne');
 select tt.fails(1, format($$select public.mp_progress(%L, 1e301)$$, (select id from t_race)), 'invalid_value', 'a nesmyslně velké číslo také');
 select tt.ok((tt.prog(1, (select id from t_race), 300) -> 'prog' ->> 0)::numeric between 0 and 300, 'průběh hráče 1 se zapíše (a hned po startu se ořízne podle nejkratší možné doby)');
-select tt.ff((select id from t_race), 50);
-select tt.ok((tt.prog(1, (select id from t_race), 300) -> 'prog' ->> tt.slot((select id from t_race), 1) - 1)::numeric = 300, 'za 50 vteřin je 300 věrohodných a zapíše se přesně');
+select tt.ff((select id from t_race), 10);
+select tt.ok((tt.prog(1, (select id from t_race), 300) -> 'prog' ->> tt.slot((select id from t_race), 1) - 1)::numeric = 300, 'za 10 vteřin je 300 věrohodných a zapíše se přesně');
 select tt.ok((tt.prog(1, (select id from t_race), 100) -> 'prog' ->> tt.slot((select id from t_race), 1) - 1)::numeric = 300, 'nižší hodnota nic nesníží');
-select tt.ok((tt.prog(2, (select id from t_race), 1e9) -> 'prog' ->> tt.slot((select id from t_race), 2) - 1)::numeric between 13000 and 14500 and (select tt.row(id) ->> 'status' from t_race) = 'active', 'podvodná obrovská hodnota se ořízne na lineární strop (cca 25000 · 50/90) a závod nekončí');
-select tt.ok((tt.st(1, (select id from t_race)) -> 'match' -> 'prog' ->> tt.slot((select id from t_race), 2) - 1)::numeric > 13000, 'oba hráči vidí průběh soupeře v mp_state');
-select tt.ff((select id from t_race), 50);
-select tt.ok(tt.prog(1, (select id from t_race), 25000) ->> 'status' = 'finished' and (select tt.row(id) ->> 'winner' from t_race) = tt.slot((select id from t_race), 1)::text and (select tt.row(id) ->> 'reason' from t_race) = 'goal', 'kdo první pošle hodnotu na cíli (po nejkratší době), vyhrává hned');
+select tt.ok((tt.prog(2, (select id from t_race), 1e12) -> 'prog' ->> tt.slot((select id from t_race), 2) - 1)::numeric between 5.4e8 and 5.7e8 and (select tt.row(id) ->> 'status' from t_race) = 'active', 'podvodná obrovská hodnota se ořízne na lineární strop (miliarda · 10/18) a závod nekončí');
+select tt.ok((tt.st(1, (select id from t_race)) -> 'match' -> 'prog' ->> tt.slot((select id from t_race), 2) - 1)::numeric > 5e8, 'oba hráči vidí průběh soupeře v mp_state');
+select tt.ff((select id from t_race), 10);
+select tt.ok(tt.prog(1, (select id from t_race), 1000000000) ->> 'status' = 'finished' and (select tt.row(id) ->> 'winner' from t_race) = tt.slot((select id from t_race), 1)::text and (select tt.row(id) ->> 'reason' from t_race) = 'goal', 'kdo první pošle hodnotu na cíli (po nejkratší době), vyhrává hned');
 select tt.ok(tt.coins(1) = 40 and tt.coins(2) = 0, 'vítěz závodu dostal 40 Coinů, druhý nic');
 select tt.ok((tt.prog(2, (select id from t_race), 99999) ->> 'winner')::int = tt.slot((select id from t_race), 1) and tt.coins(2) = 0, 'pozdější průběh druhého nic nezmění');
 -- rychlý podvod: cíl hned po startu
 create temp table t_race2 as select tt.pair(3, 4, 'cityclicker', 'race', '{"goal":"quick"}') as id;
-select tt.ok(tt.prog(3, (select id from t_race2), 25000) ->> 'status' = 'active', 'cíl poslaný vteřinu po startu závod neukončí (ořízne se)');
-select tt.ok((select tt.row(id) ->> 'prog1' from t_race2)::numeric < 1000 and (select tt.row(id) ->> 'prog2' from t_race2)::numeric < 1000, 'a průběh zůstane těsně nad nulou');
+select tt.ok(tt.prog(3, (select id from t_race2), 1000000000) ->> 'status' = 'active', 'cíl poslaný vteřinu po startu závod neukončí (ořízne se)');
+select tt.ok((select tt.row(id) ->> 'prog1' from t_race2)::numeric < 5e7 and (select tt.row(id) ->> 'prog2' from t_race2)::numeric < 5e7, 'a průběh zůstane hluboko pod cílem (lineární strop za pár vteřin)');
 create temp table t_c3b as select tt.coins(3) c, tt.coins(4) d;
 select tt.resign(4, (select id from t_race2));
 select tt.ok((select tt.row(id) ->> 'winner' from t_race2) = tt.slot((select id from t_race2), 3)::text, 'vzdání v závodě dá výhru soupeři');
-select tt.ok(tt.coins(3) = (select c from t_c3b) and tt.coins(4) = (select d from t_c3b), 'ale za pár vteřin závodu bez odměny (nejkratší doba 90 vteřin)');
+select tt.ok(tt.coins(3) = (select c from t_c3b) and tt.coins(4) = (select d from t_c3b), 'ale za pár vteřin závodu bez odměny (nejkratší doba 18 vteřin)');
 create temp table t_race3 as select tt.pair(3, 4, 'cityclicker', 'race') as id;
-select tt.ok((tt.row((select id from t_race3)) -> 'rules' ->> 'target')::int = 100000 and (tt.row((select id from t_race3)) ->> 'params') = '{"goal": "standard"}', 'výchozí závod je standardní (cíl 100000)');
+select tt.ok((tt.row((select id from t_race3)) -> 'rules' ->> 'target')::bigint = 10000000000 and (tt.row((select id from t_race3)) ->> 'params') = '{"goal": "standard"}', 'výchozí závod je standardní (cíl 10 miliard)');
 select tt.fails(3, format($$select public.mp_move(%L, 1, '{"a":1}')$$, (select id from t_race3)), 'not_turn_based', 'ani do dalšího závodu se netáhne');
 select tt.resign(3, (select id from t_race3));
 
