@@ -2,16 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Coins, Loader2, Swords, Users, KeyRound, X } from 'lucide-react';
 import { t } from '../i18n';
 import { mpApi } from './index.js';
-import { MP_GAMES, cleanParams, defaultParams, hasOnline } from './catalog.js';
+import { MP_GAMES, cleanParams, defaultParams, hasArena, hasOnline } from './catalog.js';
 import { mpErrorText } from './errors.js';
 
 const FIND_EVERY_MS = 2000;
 
 // Oddíl „Hrát online“ pod tlačítkem spustit hru: hledání náhodného soupeře, hra s kamarádem přes kód a návrat do rozehraného zápasu.
 // Ukáže se jen tehdy, když je multiplayer na serveru zapnutý (mp_ping) a hra má online režim.
-export const MpSection = ({ game, online, auto, onMatch }) => {
+export const MpSection = ({ game, online, auto, onMatch, onArena }) => {
   const def = MP_GAMES[game.id];
-  const enabled = hasOnline(game.id);
+  const arena = hasArena(game.id);
+  const enabled = hasOnline(game.id) || arena;
   const [state, setState] = useState('checking'); // checking | off | ready
   const [realtime, setRealtime] = useState(false);
   const [phase, setPhase] = useState('idle'); // idle | searching | room
@@ -139,9 +140,35 @@ export const MpSection = ({ game, online, auto, onMatch }) => {
 
   if (!enabled || state !== 'ready') return null;
   const modeDef = def.modes.find((m) => m.id === mode) || def.modes[0];
-  const needsRealtime = def.kind === 'realtime' && !realtime;
+  const needsRealtime = (def.kind === 'realtime' || arena) && !realtime;
   const pill = (on) => ({ backgroundColor: on ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: on ? 'var(--text-primary)' : 'var(--text-body)', borderColor: 'var(--border-color)' });
   const cardStyle = { backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' };
+
+  // Sdílená aréna: jedno tlačítko, žádné hledání soupeře
+  if (arena) {
+    return (
+      <div data-testid="mp-section" style={cardStyle} className="w-full max-w-md border rounded-2xl p-4 text-left space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="m-0 text-xs font-black uppercase tracking-wider flex items-center gap-1.5"><Swords size={14} aria-hidden="true" /> {t('Hrát online')}</h2>
+          {stats && stats.daily_cap > 0 && (
+            <span data-testid="mp-daily" style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-bold flex items-center gap-1" title={t('Kolik Coinů z online výher dnes ještě můžeš získat')}>
+              <Coins size={11} className="text-amber-500" aria-hidden="true" /> {t('Dnes můžeš získat ještě {n} z {max} Coinů', { n: stats.room_left, max: stats.daily_cap })}
+            </span>
+          )}
+        </div>
+        {!online && <p style={{ color: 'var(--text-muted)' }} className="m-0 text-xs">{t('Online hra potřebuje připojení k internetu.')}</p>}
+        {online && needsRealtime && <p style={{ color: 'var(--text-muted)' }} className="m-0 text-xs">{t('Tahle hra potřebuje rychlé kanály, které na serveru zatím nejsou zapnuté.')}</p>}
+        {online && !needsRealtime && (
+          <>
+            <p style={{ color: 'var(--text-muted)' }} className="m-0 text-xs leading-relaxed">{t(def.arena.text)}</p>
+            <button type="button" onClick={onArena} data-testid="mp-arena-enter" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="px-4 py-2.5 rounded-xl border-none text-[0.6875rem] font-black uppercase tracking-wider cursor-pointer inline-flex items-center gap-1.5">
+              <Users size={14} aria-hidden="true" /> {t('Vstoupit do arény')}
+            </button>
+          </>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div data-testid="mp-section" style={cardStyle} className="w-full max-w-md border rounded-2xl p-4 text-left space-y-3">

@@ -7,6 +7,40 @@ import { outcomeFor } from './session.js';
 const OUTCOMES = new Set(['win', 'loss', 'draw']);
 const errOf = (e) => ({ code: (e && e.code) || 'error', message: String((e && e.message) || '') });
 
+// Společná část obou mostů: kanál v reálném čase. Hra o něj požádá (rt-open), pak do něj posílá zprávy (rt-send, rt-track) a dostává zprávy ostatních
+// (událost rt), stav kanálu (rt-status) a kdo je v kanálu (rt-presence). handle(op, args) vrací true, když operaci vyřídila.
+function createRtRelay({ openChannel, event }) {
+  let rt = null;
+  return {
+    handle(op, args) {
+      switch (op) {
+        case 'rt-open':
+          if (!openChannel) { event('rt-status', { status: 'error' }); return true; }
+          if (!rt) {
+            rt = openChannel({
+              onMessage: (p) => event('rt', { p }),
+              onStatus: (s) => event('rt-status', s),
+              onPresence: (state) => event('rt-presence', { state }),
+            });
+          }
+          return true;
+        case 'rt-send':
+          if (rt && args.payload !== undefined) rt.send(args.payload, { force: args.force === true });
+          return true;
+        case 'rt-track':
+          if (rt && args.state && typeof args.state === 'object') rt.track(args.state);
+          return true;
+        case 'rt-close':
+          if (rt) { rt.close(); rt = null; }
+          return true;
+        default:
+          return false;
+      }
+    },
+    dispose() { if (rt) { rt.close(); rt = null; } },
+  };
+}
+
 // session: MpSession; getWindow: () => okno hry; onClose: hráč v rozhraní hry zvolil odchod; win: okno appky (pro zprávy);
 // openChannel(handlers) otevře kanál v reálném čase pro hru (viz realtime.js) a vrátí { send, close, track }; bez něj hra v reálném čase nepojede.
 export function attachMpBridge({ session, getWindow, onClose, win, openChannel }) {
@@ -22,16 +56,7 @@ export function attachMpBridge({ session, getWindow, onClose, win, openChannel }
     session.on('connection', (c) => event('connection', c)),
   ];
 
-  // Kanál v reálném čase: hra o něj požádá (rt-open), pak do něj posílá zprávy (rt-send) a dostává zprávy soupeře (událost rt) a stav kanálu (rt-status).
-  let rt = null;
-  const rtOpen = () => {
-    if (rt || !openChannel) return;
-    rt = openChannel({
-      onMessage: (p) => event('rt', { p }),
-      onStatus: (s) => event('rt-status', s),
-      onPresence: (state) => event('rt-presence', { state }),
-    });
-  };
+  const relay = createRtRelay({ openChannel, event });
 
   const run = (id, promise) => { Promise.resolve(promise).then((data) => reply(id, true, data === undefined ? null : data), (err) => reply(id, false, errOf(err))); };
 
@@ -40,6 +65,7 @@ export function attachMpBridge({ session, getWindow, onClose, win, openChannel }
     const d = e.data;
     if (!d || d.source !== 'jomarid-game' || d.type !== 'mp') return;
     const args = d.args && typeof d.args === 'object' ? d.args : {};
+    if (relay.handle(d.op, args)) return;
     switch (d.op) {
       case 'listen':
         // Hra má obsluhu připravenou: dostane celou historii tahů a aktuální pohled na zápas.
@@ -62,19 +88,6 @@ export function attachMpBridge({ session, getWindow, onClose, win, openChannel }
         run(d.id, session.progress(v));
         break;
       }
-      case 'rt-open':
-        if (!openChannel) { event('rt-status', { status: 'error' }); break; }
-        rtOpen();
-        break;
-      case 'rt-send':
-        if (rt && args.payload !== undefined) rt.send(args.payload, { force: args.force === true });
-        break;
-      case 'rt-track':
-        if (rt && args.state && typeof args.state === 'object') rt.track(args.state);
-        break;
-      case 'rt-close':
-        if (rt) { rt.close(); rt = null; }
-        break;
       case 'close':
         if (onClose) onClose();
         break;
@@ -86,8 +99,51 @@ export function attachMpBridge({ session, getWindow, onClose, win, openChannel }
 
   return {
     dispose() {
-      if (rt) { rt.close(); rt = null; }
+      relay.dispose();
       for (const off of listeners) off();
+      if (host) host.removeEventListener('message', onMessage);
+    },
+  };
+}
+
+// Most pro sdílenou arénu (Polygon aréna): žádný zápas ani řadič, jen kanál v reálném čase, žádost o odměnu za vyhrané kolo (claim) a odchod.
+// claim(sekundy, skóre) vrací { granted, capped, balance }; o odměně rozhoduje server.
+export function attachArenaBridge({ getWindow, onClose, win, openChannel, claim }) {
+  const host = win || (typeof window !== 'undefined' ? window : null);
+  const post = (msg) => { const w = getWindow(); if (w) { try { w.postMessage(Object.assign({ source: 'jomarid-host' }, msg), '*'); } catch { /* okno hry už neexistuje */ } } };
+  const event = (name, data) => post({ type: 'mp-event', event: name, data: Object.assign({ offset: 0 }, data) });
+  const reply = (id, ok, payload) => post(ok ? { type: 'mp-reply', id, ok: true, data: payload } : { type: 'mp-reply', id, ok: false, error: payload });
+  const relay = createRtRelay({ openChannel, event });
+  const run = (id, promise) => { Promise.resolve(promise).then((data) => reply(id, true, data === undefined ? null : data), (err) => reply(id, false, errOf(err))); };
+
+  const onMessage = (e) => {
+    if (e.source !== getWindow()) return;
+    const d = e.data;
+    if (!d || d.source !== 'jomarid-game' || d.type !== 'mp') return;
+    const args = d.args && typeof d.args === 'object' ? d.args : {};
+    if (relay.handle(d.op, args)) return;
+    switch (d.op) {
+      case 'listen':
+        event('sync', { arena: true });
+        break;
+      case 'claim': {
+        const sec = Number(args.seconds), score = Number(args.score);
+        if (!Number.isFinite(sec) || sec < 0 || !claim) { reply(d.id, false, { code: 'invalid_value' }); break; }
+        run(d.id, claim(sec, Number.isFinite(score) ? score : 0));
+        break;
+      }
+      case 'close':
+        if (onClose) onClose();
+        break;
+      default:
+        if (d.id) reply(d.id, false, { code: 'unknown_op' });
+    }
+  };
+  if (host) host.addEventListener('message', onMessage);
+
+  return {
+    dispose() {
+      relay.dispose();
       if (host) host.removeEventListener('message', onMessage);
     },
   };

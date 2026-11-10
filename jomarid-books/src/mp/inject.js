@@ -73,6 +73,7 @@ const PRELUDE = `(function () {
     report: function (outcome, reason) { return call('report', { outcome: outcome, reason: reason || null }); },
     resign: function () { return call('resign', {}); },
     progress: function (value) { return call('progress', { value: value }); },
+    claim: function (seconds, score) { return call('claim', { seconds: seconds, score: score }); },
     close: function () { post({ op: 'close', id: 0 }); },
     rt: {
       open: function () { post({ op: 'rt-open', id: 0, args: {} }); },
@@ -106,6 +107,11 @@ export function initForGame(view, offset) {
     me: view.me, opponent: { id: view.opponent && view.opponent.id, name: view.opponent && view.opponent.name },
     offset: offset || 0,
   };
+}
+
+// Co dostane hra při vstupu do sdílené arény (žádný zápas, soupeř ani pořadí tahů): jen kdo je a že jde o arénu.
+export function initForArena(me, game = 'polygonarena') {
+  return { arena: true, match: null, game, mode: 'arena', params: {}, seed: 0, slot: 0, kind: 'arena', team: false, reward: 0, target: null, inc: 0, me: { id: me.id, name: me.name }, opponent: null, offset: 0 };
 }
 
 // Dokument hry pro online zápas. Úložiště dostane jiné označení hry (mp:...), takže ho appka nespojí s uloženým postupem hráče.

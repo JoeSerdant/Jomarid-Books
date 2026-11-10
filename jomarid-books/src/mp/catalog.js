@@ -44,13 +44,23 @@ export const MP_GAMES = {
     ],
     options: [],
   },
-  polygonarena: { ready: false, kind: 'arena', modes: [], options: [] },
+  // Sdílená aréna: žádné zápasy ani soupeři na výběr, jen vstup do jedné společné arény (kanál mp-arena:polygonarena). Odměna za vyhrané kolo: db mp_arena_claim.
+  polygonarena: {
+    ready: true,
+    kind: 'arena',
+    modes: [],
+    options: [],
+    arena: { title: tk('Sdílená aréna'), text: tk('Jedna aréna pro všechny: deset tanků, boti uvolňují místa hráčům. Aréna běží, jen když je v ní nějaký hráč. Za vyhrané kolo (2 a půl minuty) je odměna.'), reward: 15 },
+  },
 };
 
 export const mpGame = (gameId) => MP_GAMES[gameId] || null;
 
 // Hra s alespoň jedním zápasovým režimem, který je zapnutý v appce.
 export const hasOnline = (gameId) => { const g = MP_GAMES[gameId]; return !!(g && g.ready && g.modes.length > 0); };
+
+// Hra se sdílenou arénou, která je zapnutá v appce.
+export const hasArena = (gameId) => { const g = MP_GAMES[gameId]; return !!(g && g.ready && g.kind === 'arena' && g.arena); };
 
 // Výchozí volby režimu (jen ty, které si hra vybírá před zápasem).
 export function defaultParams(gameId) {

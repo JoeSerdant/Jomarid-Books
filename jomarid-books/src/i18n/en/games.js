@@ -487,4 +487,8 @@ export default {
   'Žádné odznaky neodpovídají tvému vyhledávání.': 'No badges match your search.',
   'Žánry se právě načítají z katalogu…': 'Genres are loading from the catalog…',
   'Žár': 'Blaze',
+  'Hráč': 'Player',
+  'Vstoupit do arény': 'Enter the arena',
+  'Sdílená aréna': 'Shared arena',
+  'Jedna aréna pro všechny: deset tanků, boti uvolňují místa hráčům. Aréna běží, jen když je v ní nějaký hráč. Za vyhrané kolo (2 a půl minuty) je odměna.': 'One arena for everyone: ten tanks, and bots make room for players. The arena only runs while a player is in it. Winning a round (two and a half minutes) earns a reward.',
 };

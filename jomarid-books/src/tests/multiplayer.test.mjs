@@ -7,12 +7,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
-import { MP_GAMES, hasOnline, defaultParams, cleanParams } from '../mp/catalog.js';
+import { MP_GAMES, hasOnline, hasArena, defaultParams, cleanParams } from '../mp/catalog.js';
 import { normalizeError, createMpApi } from '../mp/api.js';
 import { errorCode, mpErrorText } from '../mp/errors.js';
 import { MpSession, outcomeFor, POLL } from '../mp/session.js';
-import { stripCheatCodes, buildMpPrelude, withMultiplayer, initForGame } from '../mp/inject.js';
-import { attachMpBridge } from '../mp/bridge.js';
+import { stripCheatCodes, buildMpPrelude, withMultiplayer, initForGame, initForArena } from '../mp/inject.js';
+import { attachMpBridge, attachArenaBridge } from '../mp/bridge.js';
 import { openRealtime, MAX_PAYLOAD_CHARS, MIN_SEND_GAP_MS } from '../mp/realtime.js';
 
 const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -726,6 +726,56 @@ test('rozhraní hry: rt.open, rt.send, rt.track a rt.close posílají žádosti,
   fire('rt', { p: { k: 's' }, offset: 6 });
   assert.deepEqual(got, ['open', { k: 's' }]);
   assert.equal(MP.serverNow() - Date.now() >= 5 && MP.serverNow() - Date.now() <= 8, true, 'posun času se bere z každé události');
+});
+
+test('sdílená aréna: je jen u Polygon arény, odměna za kolo sedí na databázi (mp_limits) a init pro hru nese jen účet', () => {
+  assert.equal(hasArena('polygonarena'), true);
+  for (const id of Object.keys(MP_GAMES)) if (id !== 'polygonarena') assert.equal(hasArena(id), false, id);
+  assert.equal(hasArena('neexistuje'), false);
+  assert.equal(MP_GAMES.polygonarena.kind, 'arena');
+  assert.equal(MP_GAMES.polygonarena.arena.reward, Number(/'arena_reward', (\d+)/.exec(sql)[1]), 'odměna za vyhrané kolo je v databázi stejná');
+  assert.equal(hasOnline('polygonarena'), false, 'aréna nejde přes zápasy');
+  const init = initForArena({ id: 'u1', name: 'Anna' });
+  assert.deepEqual(init, { arena: true, match: null, game: 'polygonarena', mode: 'arena', params: {}, seed: 0, slot: 0, kind: 'arena', team: false, reward: 0, target: null, inc: 0, me: { id: 'u1', name: 'Anna' }, opponent: null, offset: 0 });
+  const doc = withMultiplayer('<html><head></head><body>67MILUJU</body></html>', 'polygonarena', init, () => 0.5);
+  assert.ok(!doc.includes('67MILUJU'), 'cheat kód zmizí i v aréně');
+  assert.match(doc, /mp:polygonarena/, 'úložiště arény je čisté a odděleně označené');
+  assert.match(doc, /"arena":true/);
+});
+
+test('most arény: kanál v reálném čase, žádost o odměnu za kolo s kontrolou hodnot a odchod; zprávy jen z okna hry', async () => {
+  const sent = []; const gameWin = { postMessage: (m) => sent.push(m) };
+  const ls = []; const host = { addEventListener: (t, f) => ls.push(f), removeEventListener: (t, f) => ls.splice(ls.indexOf(f), 1), fire: (e) => ls.slice().forEach((f) => f(e)), count: () => ls.length };
+  const claims = []; let closed = 0, chClosed = 0; const out = [];
+  const claim = async (sec, score) => { claims.push([sec, score]); if (sec === 999) throw { code: 'too_soon' }; return { granted: 15, capped: false, balance: 40 }; };
+  const openChannel = (h) => ({ send: (p, o) => { out.push([p, o]); return true; }, close: () => { chClosed++; }, track() {}, _h: h });
+  const bridge = attachArenaBridge({ getWindow: () => gameWin, onClose: () => { closed++; }, win: host, openChannel, claim });
+  const msg = (data, source = gameWin) => host.fire({ source, data: Object.assign({ source: 'jomarid-game', type: 'mp' }, data) });
+  msg({ op: 'listen', id: 0 });
+  assert.deepEqual(sent.find((m) => m.event === 'sync').data, { offset: 0, arena: true });
+  msg({ op: 'claim', id: 5, args: { seconds: 160, score: 1234.7 } });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(claims[0], [160, 1234.7]);
+  const ok = sent.find((m) => m.type === 'mp-reply' && m.id === 5);
+  assert.ok(ok.ok && ok.data.granted === 15);
+  msg({ op: 'claim', id: 6, args: { seconds: 999, score: 1 } });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(sent.find((m) => m.id === 6).error.code, 'too_soon', 'chyba serveru jde hře jako chyba');
+  msg({ op: 'claim', id: 7, args: { seconds: -3, score: 1 } });
+  msg({ op: 'claim', id: 8, args: { seconds: 'x' } });
+  assert.equal(sent.find((m) => m.id === 7).error.code, 'invalid_value');
+  assert.equal(sent.find((m) => m.id === 8).error.code, 'invalid_value');
+  assert.equal(claims.length, 2, 'neplatné hodnoty na server nejdou');
+  msg({ op: 'move', id: 9, args: { payload: 1 } });
+  assert.equal(sent.find((m) => m.id === 9).error.code, 'unknown_op', 'v aréně nejsou tahy ani zápas');
+  msg({ op: 'rt-open', id: 0, args: {} }); msg({ op: 'rt-send', id: 0, args: { payload: { k: 's' }, force: true } });
+  assert.deepEqual(out, [[{ k: 's' }, { force: true }]]);
+  msg({ op: 'rt-send', id: 0, args: { payload: { k: 'x' } } }, { postMessage() {} });
+  assert.equal(out.length, 1, 'cizí okno nic neodešle');
+  msg({ op: 'close', id: 0 });
+  assert.equal(closed, 1);
+  bridge.dispose();
+  assert.equal(chClosed, 1, 'po odpojení se kanál zavře'); assert.equal(host.count(), 0);
 });
 
 // ---------- zapojení do appky ----------

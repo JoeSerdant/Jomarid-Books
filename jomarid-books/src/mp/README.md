@@ -33,6 +33,12 @@ Kanál `mp:<id zápasu>` pouští jen hráče zápasu (pravidla na `realtime.mes
 
 Hra o odměně nerozhoduje: Coiny vyplácí server podle pravidel v `mp_cfg` (výhra, délka zápasu, denní strop, soupeř).
 
+## Sdílená aréna (Polygon aréna)
+
+Žádné zápasy ani hledání soupeře: hráč vstoupí do jedné společné arény (`MpArenaScreen.jsx`, tlačítko Vstoupit do arény z `MpSection.jsx`). Hra dostane `init.arena = true` (`initForArena`) a kanál `mp-arena:polygonarena`; most `attachArenaBridge` má jen operace kanálu (`rt-*`), `claim(sekundy, skóre)` (odměna za vyhrané kolo, server: `mp_arena_claim`) a `close`.
+
+V `polygonArena/mp.js` je deset míst: hráči a boti dohromady. Když se připojí hráč, jeden bot zmizí; když odejde, bot se vrátí. Aréna běží jen tomu, kdo ji má otevřenou. Každý prohlížeč počítá svou kopii světa a ostatní hráče dostane jako „duchy“ (tanky řízené podle sítě, ne umělou inteligencí); střely ducha vznikají normálně z jeho třídy a stavby a zraňují jen toho, na koho letí, takže si každý hlídá zásahy na vlastním tanku. Boti, tvary a bonusy má každý prohlížeč vlastní, zóny jsou u všech stejné. Kolo trvá 160 vteřin; vyhrává ho ten, komu za kolo nejvíc přibylo bodů.
+
 ## Jak se přidá další hra
 
 1. Pravidla hry do `mp_cfg` a `mp_clean_params` v `db/multiplayer.sql` (už jsou pro všech sedm her) a do `catalog.js` (`ready: true`).
