@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint src vite.config.js --ext .js,.jsx",
-    "test": "npm run test:theme && npm run test:notices && npm run test:tour && npm run test:browse && npm run test:settings && npm run test:lively && npm run test:pwa && npm run test:booktext && npm run test:xp && npm run test:email && npm run test:push && npm run test:chess && npm run test:polygon && npm run test:koulovi && npm run test:city && npm run test:warroom && npm run test:rocket && npm run test:story && npm run test:hannibal && npm run test:offlinelogin && npm run test:offlinebooks && npm run test:offlinegames && npm run test:gamebar && npm run test:gamerecords && npm run test:shop && npm run test:gamesave && npm run test:cheats && npm run test:badges && npm run test:shorts && npm run test:shortsai && npm run test:helpbot && npm run test:friendly && npm run test:security && npm run test:i18n && npm run test:gamei18n && npm run test:accounts",
+    "test": "npm run test:theme && npm run test:notices && npm run test:tour && npm run test:browse && npm run test:settings && npm run test:lively && npm run test:pwa && npm run test:booktext && npm run test:xp && npm run test:email && npm run test:push && npm run test:chess && npm run test:polygon && npm run test:koulovi && npm run test:city && npm run test:warroom && npm run test:rocket && npm run test:story && npm run test:hannibal && npm run test:offlinelogin && npm run test:offlinebooks && npm run test:offlinegames && npm run test:gamebar && npm run test:gamerecords && npm run test:shop && npm run test:gamesave && npm run test:cheats && npm run test:badges && npm run test:shorts && npm run test:shortsai && npm run test:helpbot && npm run test:friendly && npm run test:security && npm run test:i18n && npm run test:gamei18n && npm run test:accounts && npm run test:mp",
     "test:theme": "node --test src/tests/theme.test.mjs",
     "test:notices": "node --test src/tests/accountNotices.test.mjs",
     "test:tour": "node --test src/tests/tour.test.mjs",
@@ -19,7 +19,7 @@
     "test:email": "node --test src/tests/emailChange.test.mjs",
     "test:push": "node --test src/tests/push.test.mjs",
     "test:sql": "bash db/tests/run.sh",
-    "test:chess": "node --test src/gameContent/chess/tests/chess.test.mjs src/gameContent/chess/tests/puzzles.test.mjs src/gameContent/chess/tests/speech.test.mjs",
+    "test:chess": "node --test src/gameContent/chess/tests/chess.test.mjs src/gameContent/chess/tests/puzzles.test.mjs src/gameContent/chess/tests/speech.test.mjs src/gameContent/chess/tests/online.test.mjs",
     "test:polygon": "node --test src/gameContent/polygonArena/tests/polygon.test.mjs",
     "test:koulovi": "node --test src/gameContent/koulovi/tests/koulovi.test.mjs",
     "test:city": "node --test src/tests/cityClicker.test.mjs",
@@ -53,7 +53,8 @@
     "preview": "vite preview",
     "test:gamei18n": "node --test src/tests/gameI18n.test.mjs",
     "i18n:games": "node src/i18n/tools/gamestrings.mjs",
-    "test:accounts": "node --test src/tests/accounts.test.mjs"
+    "test:accounts": "node --test src/tests/accounts.test.mjs",
+    "test:mp": "node --test src/tests/multiplayer.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",

@@ -42,7 +42,7 @@ const SHIM_TEMPLATE = `(function () {
 // Hodnota bezpečná pro vložení do <script> (u postupu jako řetězec s JSON, který si skript rozebere JSON.parse; objektový literál by klíč
 // "__proto__" vyložil jinak): znak "<" se zapíše jako \u003c (aby se nedal předčasně ukončit skript ani začít komentář)
 // a oddělovače řádků U+2028 a U+2029 se zapíšou výslovně.
-const scriptJson = (value) => JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+export const scriptJson = (value) => JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 
 // Text skriptu s předvyplněným postupem (map: {klíč: text}).
 export function buildStorageShim(gameId, map) {

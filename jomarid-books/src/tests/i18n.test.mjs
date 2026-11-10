@@ -20,7 +20,7 @@ const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (...p) => fs.readFileSync(path.join(SRC, ...p), 'utf8');
 
 // Texty, které se v angličtině píšou stejně jako česky (název, zkratka, obecné slovo): jen tyto smějí mít překlad shodný s klíčem.
-const IDENTICAL_OK = new Set(['Admin', 'Studio', 'E-mail', 'Text', 'Tip', 'Role', 'shortB', 'Menu: shortB', 'Jomarid Coins',
+const IDENTICAL_OK = new Set(['Admin', 'Online', 'Studio', 'E-mail', 'Text', 'Tip', 'Role', 'shortB', 'Menu: shortB', 'Jomarid Coins',
   // názvy her, zkratky a jednotky, které se píšou stejně
   'XP', 'Streak', '🔥 Streak', 'Offline', 'Coins', 'Noir', 'Retro', 'Neon', 'Lv. {n}', '{n}px', '{cur}/{need} XP', '+{n} XP', '© {year} Jomarid Books', 'streak * 10 XP', 'streak * 25 XP', 'streak * 50 XP',
   'Jomarid Rocket Game', 'Warroom: Frontlines', 'City Clicker', 'Chess League', 'Hannibal: Barca', 'Pilot',

@@ -23,6 +23,8 @@ import { t, getLang } from '../i18n';
 import { tk } from '../i18n/mark.js';
 import { withGameLanguage } from '../i18n/gameLayer';
 import { loadGameDictionary } from '../i18n/games';
+import { MpSection } from '../mp/MpSection.jsx';
+import { MpGameScreen } from '../mp/MpGameScreen.jsx';
 
 // Každá hra je velký kus textu (stovky kB, šachy i s Reactem). Stahuje se až při spuštění (dynamický import), ne spolu
 // se stránkou Her - jinak by si hráč už při otevření seznamu stáhl všechny hry najednou.
@@ -133,6 +135,8 @@ export const GameLauncher = ({ game }) => {
   const [saveStatus, setSaveStatus] = useState(null); // 'failing' | 'conflict' | 'rejected': postup se právě neukládá
   const [loadingGame, setLoadingGame] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [mpMatch, setMpMatch] = useState(null); // rozehraný online zápas (pohled serveru), nebo null
+  const [mpAuto, setMpAuto] = useState(null); // volby posledního zápasu: po „Hrát znovu“ se hledá soupeř rovnou
   const gameOpenedAtRef = useRef(null);
   const [flash, setFlash] = useState(null); // krátké potvrzení odměny v liště nad hrou
   const iframeRef = useRef(null);
@@ -339,7 +343,9 @@ export const GameLauncher = ({ game }) => {
   useEffect(() => {
     const handleMessage = (event) => {
       if (event.data?.source !== 'jomarid-game') return;
-      if (iframeRef.current && event.source !== iframeRef.current.contentWindow) return;
+      // Zprávy se berou jen z iframu sólové hry. Bez něj (třeba za online zápasu, který má vlastní iframe a vlastní most) se nepřijme nic,
+      // jinak by online hra mohla psát do uloženého postupu nebo žádat o Coiny jako sólová.
+      if (!iframeRef.current || event.source !== iframeRef.current.contentWindow) return;
 
       if (event.data?.type === 'close') {
         handleCloseGame();
@@ -399,6 +405,26 @@ export const GameLauncher = ({ game }) => {
       setClaiming(false);
     }
   };
+
+  const handleMpMatch = useCallback((m) => { setMpAuto(null); setMpMatch(m); }, []);
+
+  // Online zápas má vlastní obrazovku (src/mp): hra v iframu s čistým úložištěm, bez cheatů a s napojením na server.
+  if (mpMatch) {
+    return (
+      <MpGameScreen
+        key={mpMatch.id}
+        game={game}
+        match={mpMatch}
+        coins={coins}
+        coinsLoaded={coinsLoaded}
+        reader={reader}
+        gameFx={gameFx}
+        onExit={() => { setMpMatch(null); setMpAuto(null); }}
+        onAgain={() => { setMpAuto({ mode: mpMatch.mode, params: mpMatch.params }); setMpMatch(null); }}
+        onCoins={(n) => setCoins((c) => c + n)}
+      />
+    );
+  }
 
   // Hra běží v izolovaném iframu (srcDoc) přímo nad zbytkem appky - žádná
   // navigace pryč z SPA, žádný samostatný soubor ani public/ složka. Herní
@@ -462,6 +488,7 @@ export const GameLauncher = ({ game }) => {
         >
           {loadingGame ? <><Loader2 size={16} className="animate-spin" /> {t('Načítám hru...')}</> : <><GameIcon size={16} /> {t('Spustit hru')}</>}
         </button>
+        <MpSection game={game} online={online} auto={mpAuto} onMatch={handleMpMatch} />
         {saveLoadError && (
           <div role="alert" data-testid="save-load-error" className="-mt-3 flex flex-col items-center gap-2">
             <p style={{ color: 'var(--text-body)', borderColor: '#ef4444' }} className="text-xs m-0 border-l-2 pl-2 text-left max-w-sm">

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SQL testy na skutečném PostgreSQL: db/push-notifications.sql (oznámení), db/email-change.sql (změna e-mailu přes správce), db/game-records.sql (herní rekordy a odznaky)
 # db/shop.sql (obchůdek), db/game-saves.sql (uložený postup her), db/game-coins.sql (denní limity Coinů z her) a db/shorts.sql (shortB, krátké knihy ve feedu), db/help-bot.sql (denní limit pomocníka v appce), db/leaderboard-streaks.sql (série ostatních v žebříčku), db/login-code.sql (přihlašovací kód) a db/security-diagnostics.sql (bezpečnostní diagnostika)
-# proti zjednodušenému schématu Supabase (mock_schema.sql).
+# db/multiplayer.sql (online hra ve dvou) proti zjednodušenému schématu Supabase (mock_schema.sql).
 #   bash db/tests/run.sh        (nebo: npm run test:sql)
 # Potřebuje PostgreSQL 14+ (initdb, pg_ctl, psql v PATH nebo v /usr/lib/postgresql/*/bin). Vytvoří dočasný cluster mimo síť (jen unix socket),
 # po doběhnutí ho smaže. Při spuštění jako root používá uživatele postgres. Návratový kód 0 = vše prošlo, 77 = PostgreSQL není k dispozici.
@@ -20,6 +20,7 @@ LOGINCODE_SQL="$HERE/../login-code.sql"
 SECDIAG_SQL="$HERE/../security-diagnostics.sql"
 HARDEN_SQL="$HERE/../security-hardening.sql"
 UNDO_SQL="$HERE/../security-hardening-undo.sql"
+MP_SQL="$HERE/../multiplayer.sql"
 
 BIN=""
 for d in $(command -v initdb >/dev/null 2>&1 && dirname "$(command -v initdb)") /usr/lib/postgresql/*/bin; do
@@ -31,7 +32,7 @@ TMP="$(mktemp -d)"
 RUNAS=""
 if [ "$(id -u)" = "0" ]; then
   id postgres >/dev/null 2>&1 || { echo "Jako root je potřeba uživatel postgres." >&2; rm -rf "$TMP"; exit 77; }
-  chown postgres "$TMP"; chmod 755 "$HERE" "$HERE"/*.sql "$SQL" "$EMAIL_SQL" "$GAME_SQL" "$SHOP_SQL" "$SAVES_SQL" "$COINS_SQL" "$SHORTS_SQL" "$HELP_SQL" "$STREAKS_SQL" "$LOGINCODE_SQL" "$SECDIAG_SQL" "$HARDEN_SQL" "$UNDO_SQL" 2>/dev/null || true
+  chown postgres "$TMP"; chmod 755 "$HERE" "$HERE"/*.sql "$SQL" "$EMAIL_SQL" "$GAME_SQL" "$SHOP_SQL" "$SAVES_SQL" "$COINS_SQL" "$SHORTS_SQL" "$HELP_SQL" "$STREAKS_SQL" "$LOGINCODE_SQL" "$SECDIAG_SQL" "$HARDEN_SQL" "$UNDO_SQL" "$MP_SQL" 2>/dev/null || true
   RUNAS="runuser -u postgres --"
 fi
 run() { $RUNAS "$@"; }
@@ -69,6 +70,8 @@ OUT="$TMP/out.txt"
   PSQLQ -f "$STREAKS_SQL" &&    # i série v žebříčku
   PSQLQ -f "$LOGINCODE_SQL" &&
   PSQLQ -f "$LOGINCODE_SQL" &&  # i přihlašovací kód
+  PSQLQ -f "$MP_SQL" &&
+  PSQLQ -f "$MP_SQL" &&         # i multiplayer
   PSQLQ -f "$HERE/push_logic.test.sql" &&
   PSQLQ -f "$HERE/push_rpc.test.sql" &&
   PSQLQ -f "$HERE/email_change.test.sql" &&
@@ -80,6 +83,7 @@ OUT="$TMP/out.txt"
   PSQLQ -f "$HERE/help_bot.test.sql" &&
   PSQLQ -f "$HERE/leaderboard_streaks.test.sql" &&
   PSQLQ -f "$HERE/login_code.test.sql" &&
+  PSQLQ -f "$HERE/multiplayer.test.sql" &&
   PSQLQ -f "$HERE/security_diagnostics.test.sql"
 } >"$OUT" 2>&1
 STATUS=$?
@@ -187,6 +191,32 @@ if [ $STATUS -eq 0 ]; then
       "create or replace function public.update_user_coins_balance() returns trigger language plpgsql as \$f\$ begin update public.profiles set coins = coins + new.amount where id = new.user_id; return new; end \$f\$;"
   MARK=$(PSQL -At -c "select coalesce(proconfig::text, '') like '%statement_timeout%' from pg_proc where oid = 'public.award_game_coins(text, integer, text)'::regprocedure" 2>&1)
   [ "$MARK" = "f" ] || { echo "SELÁHALO: po úklidu zkoušek db/game-coins.sql zůstala na funkci značka ($MARK)" >>"$OUT"; STATUS=1; }
+fi
+
+# Zkušební zápis v db/multiplayer.sql: odměny za výhry se zapisují do coin_transactions a zůstatek zvyšuje spoušť trg_update_coins. Když spoušť zůstatek nezvýší přesně o zapsanou částku,
+# soubor se zastaví a nic nezmění. Značka: nastavení funkce, které by nahrazení smazalo.
+if [ $STATUS -eq 0 ]; then
+  pfm() {  # pfm <popis> <příprava> <úklid>
+    PSQLQ -c "alter function public.mp_limits() set statement_timeout = '7s';" || STATUS=1
+    PSQLQ -c "$2" || STATUS=1
+    local out; out=$(PSQL -At -f "$MP_SQL" 2>&1); local rc=$?
+    PSQLQ -c "$3" || STATUS=1
+    local kept; kept=$(PSQL -At -c "select coalesce(proconfig::text, '') like '%statement_timeout%' from pg_proc where oid = 'public.mp_limits()'::regprocedure" 2>&1)
+    if [ $rc -ne 0 ] && echo "$out" | grep -q "zapsanou částku" && [ "$kept" = "t" ]; then
+      echo "NOTICE:  OK   db/multiplayer.sql se zastaví a nic nezmění, když $1" >>"$OUT"
+    else
+      echo "SELÁHALO: db/multiplayer.sql při '$1' (kód $rc, nezměněno: '$kept'): $out" >>"$OUT"; STATUS=1
+    fi
+    PSQLQ -f "$MP_SQL" 2>/dev/null || STATUS=1   # zpátky do pořádku (značka zmizí)
+  }
+  pfm "zápis do coin_transactions zůstatek vůbec nemění (chybí spoušť)" \
+      "alter table public.coin_transactions disable trigger trg_update_coins;" \
+      "alter table public.coin_transactions enable trigger trg_update_coins;"
+  pfm "zápis do coin_transactions zvýší zůstatek o jinou částku, než se zapsala" \
+      "create or replace function public.update_user_coins_balance() returns trigger language plpgsql as \$f\$ begin update public.profiles set coins = coins + 2 * new.amount where id = new.user_id; return new; end \$f\$;" \
+      "create or replace function public.update_user_coins_balance() returns trigger language plpgsql as \$f\$ begin update public.profiles set coins = coins + new.amount where id = new.user_id; return new; end \$f\$;"
+  MARK=$(PSQL -At -c "select coalesce(proconfig::text, '') like '%statement_timeout%' from pg_proc where oid = 'public.mp_limits()'::regprocedure" 2>&1)
+  [ "$MARK" = "f" ] || { echo "SELÁHALO: po úklidu zkoušek db/multiplayer.sql zůstala na funkci značka ($MARK)" >>"$OUT"; STATUS=1; }
 fi
 
 # Zpevnění (db/security-hardening.sql): až úplně nakonec, protože test smaže a znovu založí schéma public (zkušební databáze s děravými právy jako ve skutečné).
