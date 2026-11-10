@@ -627,6 +627,7 @@
     background-size:auto, 160px 160px; background-attachment:fixed, scroll;
   }
   [data-theme="mars"] .column{ box-shadow:0 16px 36px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,220,180,.1), inset 0 0 0 1px var(--border), inset 0 -30px 50px rgba(217,112,46,.08); }
+html:not(.jomarid-online) [data-jomarid-online] { display: none !important; }
 </style>
 <script>/* JOMARID-BRIDGE */
 (function () {
@@ -720,6 +721,7 @@
       <button type="button" class="btn-util" id="helpBtn" title="Nápověda" aria-label="Nápověda">❓<span class="bl"> Nápověda</span></button>
       <button type="button" class="btn-util" id="soundToggleBtn" title="Zvuk" aria-label="Přepnout zvuk">🔊</button>
       <button type="button" class="btn-util" id="statsBtn" title="Statistiky" aria-label="Statistiky">📊<span class="bl"> Statistiky</span></button>
+      <button type="button" class="btn-util" id="onlineBtn" data-jomarid-online title="Hrát online" aria-label="Hrát online">🌐<span class="bl"> Hrát online</span></button>
       <button type="button" class="btn-util" id="saveBtn" title="Uložit" aria-label="Uložit hru">💾<span class="bl"> Uložit</span></button>
       <button type="button" class="btn-util" id="loadBtn" title="Načíst" aria-label="Načíst uloženou hru">📂<span class="bl"> Načíst</span></button>
       <button type="button" class="btn-util" id="resetBtn" title="Hard Reset" aria-label="Hard Reset">🗑️<span class="bl"> Hard Reset</span></button>

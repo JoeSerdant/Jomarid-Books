@@ -7,15 +7,80 @@ import { mpErrorText } from './errors.js';
 
 const FIND_EVERY_MS = 2000;
 
-// Oddíl „Hrát online“ pod tlačítkem spustit hru: hledání náhodného soupeře, hra s kamarádem přes kód a návrat do rozehraného zápasu.
-// Ukáže se jen tehdy, když je multiplayer na serveru zapnutý (mp_ping) a hra má online režim.
-export const MpSection = ({ game, online, auto, onMatch, onArena }) => {
+// Je multiplayer na serveru (mp_ping) a má tahle hra online režim? Zeptá se jednou, a když se spojení vrátí, ptá se znovu. Dokud odpověď nepřijde,
+// je stav 'checking'; 'off' = na serveru multiplayer není (SQL nebylo spuštěno); 'ready' = online hra jde nabídnout. realtime: server má pravidla
+// pro rychlé kanály (Rocket a Polygon aréna je bez nich nenabídnou).
+export function useMpAvailability(gameId, online) {
+  const enabled = hasOnline(gameId) || hasArena(gameId);
+  const [state, setState] = useState('checking');
+  const [realtime, setRealtime] = useState(false);
+  const stateRef = useRef('checking');
+  useEffect(() => {
+    if (!enabled || !online || stateRef.current === 'ready') return undefined;
+    let cancelled = false;
+    (async () => {
+      const res = await mpApi.ping();
+      if (cancelled) return;
+      if (res.error || !res.data?.ok) { stateRef.current = 'off'; setState('off'); return; }
+      stateRef.current = 'ready';
+      setRealtime(!!res.data.realtime);
+      setState('ready');
+    })();
+    return () => { cancelled = true; };
+  }, [enabled, online]);
+  return { enabled, state, realtime };
+}
+
+// Karta s rozehraným zápasem z dřívějška: návrat do něj, nebo vzdání.
+const ActiveMatchCard = ({ active, gameId, busy, onResume, onGiveUp, pill }) => (
+  <div data-testid="mp-active" role="status" className="border rounded-xl p-3 space-y-2" style={{ borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.10)' }}>
+    <p className="m-0 text-xs font-bold">
+      {active.game === gameId
+        ? t('Máš rozehraný zápas proti hráči {name}.', { name: active.opponent?.name || '?' })
+        : t('Máš rozehraný zápas v jiné hře (proti hráči {name}). Nejdřív ho dohraj nebo vzdej.', { name: active.opponent?.name || '?' })}
+    </p>
+    <div className="flex flex-wrap gap-2">
+      {active.game === gameId && (
+        <button type="button" onClick={onResume} data-testid="mp-resume" style={pill(true)} className="px-3 py-2 rounded-lg border text-[0.6875rem] font-black uppercase tracking-wider cursor-pointer">{t('Pokračovat')}</button>
+      )}
+      <button type="button" onClick={onGiveUp} disabled={busy} data-testid="mp-resign" style={pill(false)} className="px-3 py-2 rounded-lg border text-[0.6875rem] font-black uppercase tracking-wider cursor-pointer disabled:opacity-60">{t('Vzdát zápas')}</button>
+    </div>
+  </div>
+);
+
+const pillStyle = (on) => ({ backgroundColor: on ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: on ? 'var(--text-primary)' : 'var(--text-body)', borderColor: 'var(--border-color)' });
+
+// Pruh na stránce hry: jen když má hráč rozehraný online zápas (jinak nic). Vstup do online hry je v menu samotné hry (src/mp/entry.js).
+export const MpResume = ({ game, online, avail, onMatch }) => {
+  const [active, setActive] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const aliveRef = useRef(true);
+  useEffect(() => { aliveRef.current = true; return () => { aliveRef.current = false; }; }, []);
+  const refresh = useCallback(async () => {
+    const a = await mpApi.active();
+    if (aliveRef.current) setActive(a.data && a.data.id ? a.data : null);
+  }, []);
+  useEffect(() => { if (avail.state === 'ready' && online) refresh(); }, [avail.state, online, refresh]);
+  if (avail.state !== 'ready' || !online || !active) return null;
+  const giveUp = async () => { setBusy(true); await mpApi.resign(active.id); if (aliveRef.current) { setBusy(false); setActive(null); refresh(); } };
+  return (
+    <div className="w-full max-w-md">
+      <ActiveMatchCard active={active} gameId={game.id} busy={busy} onResume={() => onMatch(active)} onGiveUp={giveUp} pill={pillStyle} />
+    </div>
+  );
+};
+
+// Okno „Hrát online“ (otevírá se z tlačítka v menu hry): hledání náhodného soupeře, hra s kamarádem přes kód, vstup do sdílené arény a návrat
+// do rozehraného zápasu. avail: výsledek useMpAvailability.
+export const MpSection = ({ game, online, avail, auto, onMatch, onArena }) => {
   const def = MP_GAMES[game.id];
   const arena = hasArena(game.id);
   const enabled = hasOnline(game.id) || arena;
-  const [state, setState] = useState('checking'); // checking | off | ready
-  const [realtime, setRealtime] = useState(false);
-  const [phase, setPhase] = useState('idle'); // idle | searching | room
+  const state = avail.state; // checking | off | ready
+  const realtime = avail.realtime;
+  const [phase, setPhaseState] = useState('idle'); // idle | searching | room
+  const phaseRef = useRef('idle');
+  const setPhase = (p) => { phaseRef.current = p; setPhaseState(p); };
   const [mode, setMode] = useState(auto?.mode && def?.modes.some((m) => m.id === auto.mode) ? auto.mode : def?.modes[0]?.id || '');
   const [params, setParams] = useState(() => (auto ? cleanParams(game.id, auto.params) : defaultParams(game.id)));
   const [waited, setWaited] = useState(0);
@@ -31,7 +96,15 @@ export const MpSection = ({ game, online, auto, onMatch, onArena }) => {
   const startedRef = useRef(0);
   const autoDoneRef = useRef(false);
 
-  useEffect(() => { aliveRef.current = true; return () => { aliveRef.current = false; clearTimeout(loopRef.current); }; }, []);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+      clearTimeout(loopRef.current);
+      // Okno se zavřelo při hledání soupeře nebo čekání v místnosti: zápas by jinak vznikl s někým, kdo už se nedívá, a soupeř by na první tah čekal zbytečně
+      if (phaseRef.current !== 'idle') mpApi.cancel();
+    };
+  }, []);
 
   const refreshInfo = useCallback(async () => {
     const [a, s] = await Promise.all([mpApi.active(), mpApi.stats()]);
@@ -40,20 +113,8 @@ export const MpSection = ({ game, online, auto, onMatch, onArena }) => {
     setStats(s.data || null);
   }, []);
 
-  // Je multiplayer na serveru? Dokud odpověď nepřijde, nic se neukazuje. Bez spojení se zeptá, až se spojení vrátí.
-  useEffect(() => {
-    if (!enabled || !online || state === 'ready') return undefined;
-    let cancelled = false;
-    (async () => {
-      const res = await mpApi.ping();
-      if (cancelled) return;
-      if (res.error || !res.data?.ok) { setState('off'); return; }
-      setRealtime(!!res.data.realtime);
-      setState('ready');
-      refreshInfo();
-    })();
-    return () => { cancelled = true; };
-  }, [enabled, online, state, refreshInfo]);
+  // Rozehraný zápas a denní strop se zjistí při otevření okna (a když se vrátí spojení).
+  useEffect(() => { if (state === 'ready' && online) refreshInfo(); }, [state, online, refreshInfo]);
 
   const stopLoop = () => { clearTimeout(loopRef.current); loopRef.current = null; };
 
@@ -141,7 +202,7 @@ export const MpSection = ({ game, online, auto, onMatch, onArena }) => {
   if (!enabled || state !== 'ready') return null;
   const modeDef = def.modes.find((m) => m.id === mode) || def.modes[0];
   const needsRealtime = (def.kind === 'realtime' || arena) && !realtime;
-  const pill = (on) => ({ backgroundColor: on ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: on ? 'var(--text-primary)' : 'var(--text-body)', borderColor: 'var(--border-color)' });
+  const pill = pillStyle;
   const cardStyle = { backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' };
 
   // Sdílená aréna: jedno tlačítko, žádné hledání soupeře
@@ -184,19 +245,7 @@ export const MpSection = ({ game, online, auto, onMatch, onArena }) => {
       {!online && <p style={{ color: 'var(--text-muted)' }} className="m-0 text-xs">{t('Online hra potřebuje připojení k internetu.')}</p>}
 
       {online && active && phase === 'idle' && (
-        <div data-testid="mp-active" role="status" className="border rounded-xl p-3 space-y-2" style={{ borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.10)' }}>
-          <p className="m-0 text-xs font-bold">
-            {active.game === game.id
-              ? t('Máš rozehraný zápas proti hráči {name}.', { name: active.opponent?.name || '?' })
-              : t('Máš rozehraný zápas v jiné hře (proti hráči {name}). Nejdřív ho dohraj nebo vzdej.', { name: active.opponent?.name || '?' })}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {active.game === game.id && (
-              <button type="button" onClick={resume} data-testid="mp-resume" style={pill(true)} className="px-3 py-2 rounded-lg border text-[0.6875rem] font-black uppercase tracking-wider cursor-pointer">{t('Pokračovat')}</button>
-            )}
-            <button type="button" onClick={giveUp} disabled={busy} data-testid="mp-resign" style={pill(false)} className="px-3 py-2 rounded-lg border text-[0.6875rem] font-black uppercase tracking-wider cursor-pointer disabled:opacity-60">{t('Vzdát zápas')}</button>
-          </div>
-        </div>
+        <ActiveMatchCard active={active} gameId={game.id} busy={busy} onResume={resume} onGiveUp={giveUp} pill={pill} />
       )}
 
       {online && !active && phase === 'idle' && (

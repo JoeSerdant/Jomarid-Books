@@ -262,6 +262,7 @@ export default {
   "hráčů {1} z {2}": "players {1} of {2}",
   "Hradby": "Ramparts",
   "Hrát": "Play",
+  "Hrát online: sdílená aréna": "Play online: shared arena",
   "Hrát znovu": "Play again",
   "Hrobník": "Gravedigger",
   "Hroch": "Hippo",

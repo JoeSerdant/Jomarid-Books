@@ -460,6 +460,7 @@
             .particle { display: none; }
             #sound-toggle:hover { transform: none; }
         }
+        html:not(.jomarid-online) [data-jomarid-online] { display: none !important; }
     </style>
 <script>/* JOMARID-BRIDGE */
 (function () {
@@ -594,6 +595,10 @@
         <button class="btn-main resume-btn" id="btn-resume" onclick="resumeRun()">▶ POKRAČOVAT V ROZEHRANÉM TAŽENÍ</button>
         <div class="resume-info" id="resume-info"></div>
         <button class="btn-link" onclick="discardRun()">Zahodit rozehrané tažení</button>
+    </div>
+
+    <div style="margin-bottom: 22px;" data-jomarid-online>
+        <button class="btn-main" id="btn-online" data-jomarid-online>⚔ HRÁT ONLINE: SOUBOJ VELITELŮ</button>
     </div>
 
     <div class="scenarios-grid" id="scenarios-container">

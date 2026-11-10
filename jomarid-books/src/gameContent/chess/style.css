@@ -844,3 +844,5 @@ body.disco .board { animation: disco-hue 2.4s linear infinite; }
 .board-row { display: contents; }
 .square:focus { outline: none; }
 .square:focus-visible { outline: 4px solid var(--blue); outline-offset: -4px; z-index: 3; }
+/* vstup do online partie z menu: ukáže se jen ve hře spuštěné z appky (src/mp/entry.js) */
+html:not(.jomarid-online) [data-jomarid-online]{display:none!important}

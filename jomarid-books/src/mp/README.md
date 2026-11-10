@@ -12,7 +12,9 @@ Server je `db/multiplayer.sql` (fronta, zápasy, tahy, hlášení výsledku, odm
 - `session.js` – `MpSession`: pohled serveru na zápas, dotazování (`mp_state`, zároveň „jsem tu“), tahy po jednom v pořadí (opakování po výpadku je bezpečné, server stejný tah přijme jen jednou), hlášení výsledku, čas serveru. Bez DOM, zkouší se s falešným serverem.
 - `inject.js` – dokument hry pro online zápas: čisté úložiště v paměti (`mp:<hra>`), cheat kódy nahrazené náhodným textem, před skripty hry rozhraní `window.jomaridMP`.
 - `bridge.js` – most: žádosti hry (tah, výsledek, vzdání, průběh, odchod) jdou na server přes řadič, události zpět do hry. Přijímají se jen zprávy z okna té jedné hry.
-- `MpSection.jsx` – lobby pod „Spustit hru“ (hledání soupeře, kamarád přes kód, návrat do rozehraného zápasu).
+- `entry.js` – vstup do online hry z menu samotné hry: ve zdroji každé hry je tlačítko (nebo karta) s atributem `data-jomarid-online`, ve hře spuštěné z appky ho appka ukáže (skript z `withOnlineEntry`, zprávy `online-ask` / `online`) a po kliknutí otevře okno Hrát online. Mimo appku a v online zápase je tlačítko schované (styl `html:not(.jomarid-online) [data-jomarid-online]` je ve hře).
+- `MpLobbyDialog.jsx` – okno Hrát online nad hrou (portál): obsah je `MpSection` (hledání soupeře, kamarád přes kód, vstup do arény, návrat do rozehraného zápasu). Zavření při hledání soupeře hledání ukončí.
+- `MpSection.jsx` – obsah okna a pomocné součásti: `useMpAvailability` (je multiplayer na serveru, `mp_ping`) a `MpResume` (na stránce hry už je jen pruh s rozehraným zápasem; jinak se tam o online nic nenabízí).
 - `MpGameScreen.jsx` – obrazovka zápasu (lišta, iframe, pásy o výpadcích, konec zápasu a odměna).
 
 ## Rozhraní, které hra dostane (`window.jomaridMP`)
@@ -35,13 +37,13 @@ Hra o odměně nerozhoduje: Coiny vyplácí server podle pravidel v `mp_cfg` (v�
 
 ## Sdílená aréna (Polygon aréna)
 
-Žádné zápasy ani hledání soupeře: hráč vstoupí do jedné společné arény (`MpArenaScreen.jsx`, tlačítko Vstoupit do arény z `MpSection.jsx`). Hra dostane `init.arena = true` (`initForArena`) a kanál `mp-arena:polygonarena`; most `attachArenaBridge` má jen operace kanálu (`rt-*`), `claim(sekundy, skóre)` (odměna za vyhrané kolo, server: `mp_arena_claim`) a `close`.
+Žádné zápasy ani hledání soupeře: hráč vstoupí do jedné společné arény (`MpArenaScreen.jsx`, tlačítko Vstoupit do arény v okně Hrát online). Hra dostane `init.arena = true` (`initForArena`) a kanál `mp-arena:polygonarena`; most `attachArenaBridge` má jen operace kanálu (`rt-*`), `claim(sekundy, skóre)` (odměna za vyhrané kolo, server: `mp_arena_claim`) a `close`.
 
 V `polygonArena/mp.js` je deset míst: hráči a boti dohromady. Když se připojí hráč, jeden bot zmizí; když odejde, bot se vrátí. Aréna běží jen tomu, kdo ji má otevřenou. Každý prohlížeč počítá svou kopii světa a ostatní hráče dostane jako „duchy“ (tanky řízené podle sítě, ne umělou inteligencí); střely ducha vznikají normálně z jeho třídy a stavby a zraňují jen toho, na koho letí, takže si každý hlídá zásahy na vlastním tanku. Boti, tvary a bonusy má každý prohlížeč vlastní, zóny jsou u všech stejné. Kolo trvá 160 vteřin; vyhrává ho ten, komu za kolo nejvíc přibylo bodů.
 
 ## Jak se přidá další hra
 
-1. Pravidla hry do `mp_cfg` a `mp_clean_params` v `db/multiplayer.sql` (už jsou pro všech sedm her) a do `catalog.js` (`ready: true`).
+1. Pravidla hry do `mp_cfg` a `mp_clean_params` v `db/multiplayer.sql` (už jsou pro všech sedm her) a do `catalog.js` (`ready: true`). Do menu hry tlačítko s `data-jomarid-online` a styl, který ho schová (viz `entry.js`).
 2. Ve hře: `if (window.jomaridMP && window.jomaridMP.enabled)` místo menu rovnou zápas; `jomaridMP.on(...)`, potom `jomaridMP.listen()`.
 3. Online zápas nemá uložený postup, cheaty, sólové rekordy ani odměny (appka je zahodí).
 4. Test s falešným `jomaridMP` v testech hry a pak dva hráči v prohlížeči proti skutečnému SQL.

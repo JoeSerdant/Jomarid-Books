@@ -793,6 +793,16 @@
         : button({ className: "btn btn-ghost btn-sm", onClick: onShowAll }, "Zobrazit"));
   }
 
+  // Vstup do online partie: karta se ukáže jen ve hře spuštěné z appky (atribut data-jomarid-online řeší appka, src/mp/entry.js)
+  function OnlineTeaser() {
+    return div({ className: "pz-teaser pz-online", "data-jomarid-online": "" },
+      span({ className: "pz-teaser-icon", "aria-hidden": "true" }, "🌐"),
+      div({ className: "pz-teaser-body" },
+        div({ className: "pz-teaser-title" }, "Hrát online"),
+        div({ className: "pz-teaser-sub" }, "Partie proti živému soupeři")),
+      button({ className: "btn btn-primary btn-sm", "data-jomarid-online": "" }, "Hrát"));
+  }
+
   function MenuScreen({ save, savedGame, onStart, onResume, onAbandon, onUpdate, onOpenReview, onResetProgress, theme, setTheme, menuTab, setMenuTab, onOpenPuzzle }) {
     const [colorChoice, setColorChoice] = useState(save.playerColor === "b" ? "b" : "w");
     const [tc, setTc] = useState(save.tc || "none");
@@ -821,6 +831,7 @@
               div({ className: "resume-body" }, div({ className: "resume-title" }, "Rozehraná partie s ", resumeBot.name), div({ className: "resume-sub" }, Math.ceil(savedGame.moves.length / 2), ". tah · ", savedGame.color === "w" ? "bílými" : "černými", savedGame.assisted ? " · cvičná" : " · hodnocená")),
               div({ className: "resume-actions" }, button({ className: "btn btn-primary btn-sm", onClick: onResume }, "Pokračovat"), button({ className: "btn btn-ghost btn-sm", onClick: onAbandon }, "Vzdát"))),
             h(PuzzleTeaser, { save, onOpen: onOpenPuzzle, onShowAll: () => setMenuTab("puzzles") }),
+            h(OnlineTeaser),
             h(SetupPicker, { save, colorChoice, setColorChoice, tc, setTc }),
             h(BotCards, { save, onStart: start }),
             div({ className: "section-head" }, "Historie zápasů", total > 0 && small(null, save.record.w, "–", save.record.d, "–", save.record.l)),

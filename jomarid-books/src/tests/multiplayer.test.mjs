@@ -14,6 +14,7 @@ import { MpSession, outcomeFor, POLL } from '../mp/session.js';
 import { stripCheatCodes, buildMpPrelude, withMultiplayer, initForGame, initForArena } from '../mp/inject.js';
 import { attachMpBridge, attachArenaBridge } from '../mp/bridge.js';
 import { openRealtime, MAX_PAYLOAD_CHARS, MIN_SEND_GAP_MS } from '../mp/realtime.js';
+import { buildOnlineEntry, withOnlineEntry, onlineMessage } from '../mp/entry.js';
 
 const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DB = path.join(SRC, '..', 'db');
@@ -782,4 +783,96 @@ test('most arény: kanál v reálném čase, žádost o odměnu za kolo s kontro
 test('Games.jsx: zprávy ze hry se bez spuštěné vlastní hry nepřijímají (online hra nesmí psát do uloženého postupu ani žádat o Coiny jako sólová)', () => {
   const g = read('pages', 'Games.jsx');
   assert.match(g, /if \(!iframeRef\.current \|\| event\.source !== iframeRef\.current\.contentWindow\) return;/);
+});
+
+// ---------- vstup do online hry z menu hry ----------
+// Skript vložený do sólové hry spustíme s falešným oknem: ptá se appky, jestli smí ukázat tlačítko; ukáže ho jen na pokyn appky (jen z rodičovského okna);
+// klik na prvek s data-jomarid-online pošle appce zprávu a hra ho dál nezpracuje.
+function runEntry(gameId = 'chess') {
+  const parent = { posted: [], postMessage(m) { this.posted.push(JSON.parse(JSON.stringify(m))); } };   // zprávy z jiného kontextu (vm) se porovnávají jako obyčejné objekty
+  const classes = new Set();
+  const win = { parent, handlers: {}, addEventListener(t, f) { this.handlers[t] = f; } };
+  const doc = { handlers: {}, documentElement: { classList: { add: (c) => classes.add(c), remove: (c) => classes.delete(c), contains: (c) => classes.has(c) } }, addEventListener(t, f, cap) { this.handlers[t] = { f, cap }; } };
+  vm.runInNewContext(buildOnlineEntry(gameId), { window: win, document: doc, JSON });
+  const hostMsg = (data, source = parent) => win.handlers.message({ data, source });
+  const click = (match = true) => {
+    const ev = { target: { closest: (sel) => (match && sel === '[data-jomarid-online]' ? { id: 'btn' } : null) }, prevented: 0, stopped: 0, preventDefault() { this.prevented++; }, stopPropagation() { this.stopped++; } };
+    doc.handlers.click.f(ev);
+    return ev;
+  };
+  return { parent, classes, doc, hostMsg, click };
+}
+
+test('vstup do online hry: po načtení se hra zeptá appky; tlačítko se ukáže až na pokyn appky a jen z rodičovského okna', () => {
+  const r = runEntry('hannibal');
+  assert.deepEqual(r.parent.posted, [{ source: 'jomarid-game', type: 'online-ask', game: 'hannibal' }]);
+  assert.equal(r.classes.has('jomarid-online'), false, 'bez pokynu se nic neukazuje');
+  r.hostMsg({ source: 'jomarid-host', type: 'online', available: true }, { postMessage() {} });
+  assert.equal(r.classes.has('jomarid-online'), false, 'zpráva z cizího okna se ignoruje');
+  r.hostMsg({ source: 'jine', type: 'online', available: true });
+  r.hostMsg({ source: 'jomarid-host', type: 'online', available: 'true' });
+  assert.equal(r.classes.has('jomarid-online'), false, 'jen přesné true, jen od appky');
+  r.hostMsg(onlineMessage(true));
+  assert.equal(r.classes.has('jomarid-online'), true);
+  r.hostMsg(onlineMessage(false));
+  assert.equal(r.classes.has('jomarid-online'), false, 'appka může vstup zase vypnout (třeba bez spojení)');
+  r.doc.handlers.DOMContentLoaded.f();
+  assert.equal(r.parent.posted.filter((m) => m.type === 'online-ask').length, 2, 'dotaz se zopakuje po načtení stránky');
+});
+
+test('vstup do online hry: klik na tlačítko pošle appce zprávu a hra ho dál nezpracuje, bez povolení nedělá nic', () => {
+  const r = runEntry('rocket');
+  assert.equal(r.doc.handlers.click.cap, true, 'poslouchá ve fázi zachytávání, ať hra klik nevyřídí první');
+  let ev = r.click();
+  assert.equal(ev.prevented + ev.stopped, 0, 'schované tlačítko nic nedělá');
+  assert.equal(r.parent.posted.filter((m) => m.type === 'online').length, 0);
+  r.hostMsg(onlineMessage(true));
+  ev = r.click();
+  assert.equal(ev.prevented, 1); assert.equal(ev.stopped, 1);
+  assert.deepEqual(r.parent.posted.filter((m) => m.type === 'online'), [{ source: 'jomarid-game', type: 'online', game: 'rocket' }]);
+  ev = r.click(false);
+  assert.equal(ev.prevented, 0, 'klik jinam hra zpracuje sama');
+  assert.equal(r.parent.posted.filter((m) => m.type === 'online').length, 1);
+});
+
+test('vstup do online hry: skript je bez diakritiky, název hry se do něj vloží bezpečně a vloží se na začátek <head>', () => {
+  const code = buildOnlineEntry('a"b</script>$&');
+  assert.doesNotMatch(code, /[^\x00-\x7f]/, 'bez diakritiky (vkládá se do dokumentu hry)');
+  assert.doesNotMatch(code, /<\/script>/i);
+  assert.doesNotThrow(() => new vm.Script(code));
+  const out = withOnlineEntry('<!DOCTYPE html><html><head><title>x</title></head><body></body></html>', 'chess');
+  assert.match(out, /<head><script>\(function \(\) \{\n  var GAME = "chess";/);
+  assert.ok(out.endsWith('<title>x</title></head><body></body></html>'));
+  assert.deepEqual(onlineMessage(true), { source: 'jomarid-host', type: 'online', available: true });
+  assert.equal(onlineMessage('ano').available, false);
+});
+
+test('každá hra s online režimem má ve svém menu tlačítko s data-jomarid-online a styl, který ho mimo appku schová', () => {
+  const FILES = {
+    chess: ['gameContent/chess/ui.js', 'gameContent/chess/style.css'],
+    koulovikamosi: ['gameContent/koulovi/index.html', 'gameContent/koulovi/style.css'],
+    cityclicker: ['gameContent/cityClicker/index.html'],
+    warroom: ['gameContent/warroom/index.html'],
+    hannibal: ['gameContent/hannibal/index.html'],
+    rocket: ['gameContent/rocket/index.html'],
+    polygonarena: ['gameContent/polygonArena/index.html', 'gameContent/polygonArena/style.css'],
+  };
+  assert.deepEqual(Object.keys(FILES).sort(), Object.keys(MP_GAMES).filter((id) => MP_GAMES[id].ready).sort());
+  for (const [game, files] of Object.entries(FILES)) {
+    const text = files.map((f) => read(...f.split('/'))).join('\n');
+    assert.match(text, /data-jomarid-online/, `${game}: tlačítko v menu`);
+    assert.match(text, /html:not\(\.jomarid-online\) \[data-jomarid-online\]\s*\{\s*display:\s*none\s*!important/, `${game}: bez povolení appky je schované`);
+  }
+});
+
+test('Games.jsx: hra spuštěná z appky dostane skript vstupu, zprávy online se berou jen z jejího iframu a zápas nebo aréna sólovou hru zavře', () => {
+  const g = read('pages', 'Games.jsx');
+  assert.match(g, /withOnlineEntry\(withStorageShim\(src, game\.id, sync\.snapshot\(\)\.map\), game\.id\)/);
+  assert.match(g, /type === 'online-ask'\) \{\s*postOnline\(\);/);
+  assert.match(g, /type === 'online'\) \{\s*if \(mpAvailRef\.current\.state === 'ready'\) setMpLobby\(true\);/);
+  assert.match(g, /const handleMpMatch = useCallback\(\(m\) => \{ setMpAuto\(null\); setMpLobby\(false\); handleCloseGame\(\); setMpMatch\(m\); \}, \[handleCloseGame\]\);/);
+  assert.match(g, /const handleMpArena = useCallback\(\(\) => \{ setMpAuto\(null\); setMpLobby\(false\); handleCloseGame\(\); setMpArena\(true\); \}, \[handleCloseGame\]\);/);
+  assert.match(g, /setMpMatch\(null\); setMpLobby\(true\); \}\}/, '„Hrát znovu“ otevře okno a rovnou hledá');
+  assert.match(g, /<MpResume game=\{game\}/, 'na stránce hry zbyl jen pruh s rozehraným zápasem');
+  assert.doesNotMatch(g, /<MpSection/, 'hledání soupeře není na stránce hry, ale v okně nad hrou');
 });

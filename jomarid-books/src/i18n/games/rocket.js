@@ -33,6 +33,7 @@ export default {
   "+50 % život, ale nepřátelé dávají o polovinu víc poškození.": "+50% health, but enemies deal half again as much damage.",
   "⚡ Skóre Blesková 3 000": "⚡ Blitz score 3,000",
   "✦ +1 000 000 prachu": "✦ +1,000,000 stardust",
+  "🌐 Hrát online": "🌐 Play online",
   "🎖️ Všechny odznaky": "🎖️ All badges",
   "🏹 Série Boss Rush 10": "🏹 Boss Rush streak 10",
   "👹 Poražený boss 14": "👹 Boss defeated 14",

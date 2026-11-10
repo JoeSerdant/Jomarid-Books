@@ -74,6 +74,7 @@ export default {
   "❓ Jak se hraje": "❓ How to play",
   "❓ Nápověda": "❓ Help",
   "➕ Verbovat": "➕ Recruit",
+  "🌐 Hrát online": "🌐 Play online",
   "🎯 Cíl": "🎯 Goal",
   "🏆 Kampaň dokončena! Zkus Nekonečné Tažení nebo opakuj bitvy.": "🏆 Campaign complete! Try the Endless Campaign or replay battles.",
   "🏆 Rekord Nekonečna:": "🏆 Endless record:",

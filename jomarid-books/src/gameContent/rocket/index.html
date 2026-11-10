@@ -1101,6 +1101,7 @@ h2 {
     cursor: pointer;
     padding: 8px;
 }
+html:not(.jomarid-online) [data-jomarid-online] { display: none !important; }
 </style>
 <script>/* JOMARID-BRIDGE */
 (function () {
@@ -1281,6 +1282,7 @@ h2 {
             </button>
         </div>
 
+        <button class="btn btn-small" id="btn-online" data-jomarid-online style="margin-bottom: 14px;">🌐 Hrát online</button>
         <button class="btn btn-ghost btn-small" id="btn-open-stats" style="margin-bottom: 14px;">Postup a relikvie</button>
         <button class="btn btn-ghost btn-small hidden" id="btn-open-story" style="margin-bottom: 14px;"><i class="glyph"></i>Střepy<span class="new-dot"></span></button>
 

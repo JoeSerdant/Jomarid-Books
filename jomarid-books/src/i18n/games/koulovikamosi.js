@@ -42,6 +42,7 @@ export default {
   "Hraje": "Playing",
   "Hraje {0}": "{0} is playing",
   "Hrát": "Play",
+  "Hrát online": "Play online",
   "Chaos": "Chaos",
   "Cheat menu": "Cheat menu",
   "Jak hrát": "How to play",

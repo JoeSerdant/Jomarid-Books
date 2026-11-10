@@ -28,3 +28,5 @@ button.sec{font-size:1.5em;background:linear-gradient(#8ccbff,#4aa8ff 48%,#2f84d
 .b span:before{content:"";position:absolute;left:35%;top:35%;width:40%;height:50%;background:#111;border-radius:50%}
 @keyframes bob{50%{transform:translateY(-.5em)}}
 @media (prefers-reduced-motion:reduce){.b{animation:none}}
+/* vstup do online hry z menu: ukáže se jen ve hře spuštěné z appky (src/mp/entry.js) */
+html:not(.jomarid-online) [data-jomarid-online]{display:none !important;}

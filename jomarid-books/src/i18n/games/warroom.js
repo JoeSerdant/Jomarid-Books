@@ -42,6 +42,7 @@ export default {
   "★★ TECHNOLOGIE ZÍSKÁNA: {0} ★★": "★★ TECHNOLOGY ACQUIRED: {0} ★★",
   "☣️ ODEMČENA DOKTRÍNA:": "☣️ DOCTRINE UNLOCKED:",
   "⚓ ODEMČENA DOKTRÍNA:": "⚓ DOCTRINE UNLOCKED:",
+  "⚔ HRÁT ONLINE: SOUBOJ VELITELŮ": "⚔ PLAY ONLINE: COMMANDERS DUEL",
   "⚙️ ODEMČENA DOKTRÍNA:": "⚙️ DOCTRINE UNLOCKED:",
   "⭐ Synergie „{0}\" je aktivní.": "⭐ Synergy \"{0}\" is active.",
   "⭐ SYNERGIE AKTIVNÍ:": "⭐ SYNERGY ACTIVE:",

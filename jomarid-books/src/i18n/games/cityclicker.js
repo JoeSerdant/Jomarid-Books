@@ -240,6 +240,7 @@ export default {
   "Horečka zlata": "Gold Rush",
   "Horká výplata": "Hot Payday",
   "Hra se ukládá automaticky každých 10 vteřin a i při zavření stránky. Po návratu dostaneš i pasivní odměnu za čas strávený offline (max. 12 hodin, s relikvií Věčná baterie až 24 hodin).": "The game saves automatically every 10 seconds and also when the page is closed. On your return you also get a passive reward for the time spent offline (max. 12 hours, up to 24 hours with the Eternal Battery relic).",
+  "Hrát online": "Play online",
   "Hvězdného prachu (celkem": "Stardust (total",
   "Hvězdný katalyzátor": "Star Catalyst",
   "HYSTERICKÝ BOOST!": "HYSTERIA BOOST!",
