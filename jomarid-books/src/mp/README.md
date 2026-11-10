@@ -52,6 +52,10 @@ Dvě omezení, která plynou z Realtime: každá zpráva se u Supabase počítá
 
 `polygonArena/mp.js` je deset míst: hráči a boti dohromady (když se připojí hráč, jeden bot zmizí; když odejde, bot se vrátí). Hostitel počítá celou arénu. Host si **pohyb svého tanku počítá sám** (odezva nic nestojí; hostitel mu polohu uvěří, jen ji omezí rychlostí, takže se nedá "teleportovat"). **Zdraví, zásahy, zkušenosti, třídy a výhody určuje hostitel**: host posílá jen vstupy (poloha, míření, střelba) a příkazy (koupit vlastnost, vybrat třídu nebo výhodu, skok, znovuzrození), které hostitel ověří (vlastnost jen za bod, třída a výhoda jen z nabídky). Pro rovné podmínky má aréna vlastní obtížnost bez bonusů pro hráče. Kolo trvá 160 s; vítěze kola oznámí hostitel a výherce o odměnu požádá server.
 
+## Rocket: spolupráce jako společný svět
+
+Spolupráce (dvě rakety) používá stejný základ: bojiště počítá **hostitel** (hráč na místě 1 v zápase) včetně druhé lodi, kterou řídí poloha od hosta; **host** (místo 2) dostává obraz (nepřátelé, bossové, střely, bonusy, paprsky a vlny) a posílá jen polohu své lodi a použití bomby. Nepřátelé míří na nejbližší živou loď, zásahy a bonusy druhé lodi počítá hostitel stejnými pravidly jako u jeho lodi (`rocket/mp.js`: `peerHits`). Zdraví lodí určuje hostitel. Boj dvou hráčů (souboj) zůstává u dvou samostatných polovin bojiště se stejnými vlnami podle společného času, protože tam se každý brání vlastním nepřátelům a jde o souboj lodí. Hostitel hry nemá zálohu: když jeho hra ztichne, host to uvidí a může hru ukončit, server pak zápas uzavře.
+
 ## Jak se přidá další hra
 
 1. Pravidla hry do `mp_cfg` a `mp_clean_params` v `db/multiplayer.sql` (už jsou pro všech sedm her) a do `catalog.js` (`ready: true`). Do menu hry tlačítko s `data-jomarid-online` a styl, který ho schová (viz `entry.js`).

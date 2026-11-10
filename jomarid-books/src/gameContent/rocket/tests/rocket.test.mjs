@@ -472,3 +472,15 @@ test('hra pro dva: poloha ducha se vyhladí mezi vzorky, za posledním se chvíl
   assert.equal(a, 108000, 'nejdřív osm vteřin po založení zápasu'); assert.equal(b, 114500, 'a nejdřív 2,5 vteřiny po tom, co je hráč připravený');
   assert.equal(api.agreedStart(a, b), api.agreedStart(b, a)); assert.equal(api.agreedStart(a, b), 114500);
 });
+
+test('hra pro dva: spolupráce je společný svět: net.js se vkládá před mp.js, hostitel je místo 1 a hra má všechno, co mp.js do obrazu světa skládá', () => {
+  assert.match(assembler, /import net from '\.\/shared\/net\.js\?raw'/);
+  assert.ok(assembler.indexOf('src-net') < assembler.indexOf('src-mp'), 'net.js je před mp.js');
+  assert.match(mpSrc, /var HOST = Number\(MP\.init\.slot\) === 1;/);
+  assert.match(mpSrc, /var SHARED = MODE === 'coop' && !!Net;/);
+  // třídy a konstanty hry, ze kterých host skládá obraz hostitele
+  for (const name of ['class Enemy', 'class Boss', 'class Bullet', 'class Powerup', 'class Beam', 'class Shockwave', 'class FloatingText', 'class Player']) assert.ok(html.includes(name), name + ' ve hře je');
+  assert.match(html, /const POWERUP_STYLE = /);
+  // souboj (pvp) zůstává u dvou samostatných polovin bojiště: společný svět je jen ve spolupráci
+  assert.match(mpSrc, /if \(SHARED\) return;/);
+});
