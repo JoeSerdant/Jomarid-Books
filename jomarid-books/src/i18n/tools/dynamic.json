@@ -1,4 +1,16 @@
 {
+  "accounts/AccountList.jsx": [
+    "ROLE_LABELS[a.role] || a.role"
+  ],
+  "accounts/useAccountActions.js": [
+    "ADD_ERRORS.full",
+    "ADD_ERRORS.login",
+    "ADD_ERRORS.network",
+    "ADD_ERRORS.throttled",
+    "ADD_ERRORS.unconfirmed",
+    "SWITCH_ERRORS.error",
+    "SWITCH_ERRORS[res?.reason] || SWITCH_ERRORS.error"
+  ],
   "browse/LibraryBrowser.jsx": [
     "f.label",
     "opt.label"

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Smartphone, Share, ArrowLeft, User, ShieldCheck, Palette, Database, Check, Loader2, Download, BookOpen, RotateCcw, Bell, EyeOff, MessageCircle, UserCog, Gift, X, ClipboardCheck, AlertTriangle, Info, RefreshCw, Compass, Play, Mail, MailX } from 'lucide-react';
+import { Smartphone, Share, ArrowLeft, User, ShieldCheck, Palette, Database, Check, Loader2, Download, BookOpen, RotateCcw, Bell, EyeOff, MessageCircle, UserCog, Gift, X, ClipboardCheck, AlertTriangle, Info, RefreshCw, Compass, Play, Mail, MailX, UserPlus } from 'lucide-react';
 import { useAuth, useTheme } from '../contexts/AuthContext';
 import { supabase, verifyPassword, validateNewPassword, mapAuthError } from '../lib/supabase';
 import { friendlyError } from '../lib/friendlyError';
@@ -35,6 +35,10 @@ import { whenOfflineReady, resetApp } from '../pwa/register';
 import { t, tx, formatDate, formatDateTime } from '../i18n';
 import { LanguageSwitch } from '../i18n/LanguageSwitch';
 import { tk } from '../i18n/mark.js';
+import { useAccounts } from '../accounts/useAccounts.js';
+import { useAccountActions } from '../accounts/useAccountActions.js';
+import { AccountList } from '../accounts/AccountList.jsx';
+import { AddAccountDialog } from '../accounts/AddAccountDialog.jsx';
 
 // ---- Sdílené stavební prvky nastavení ----
 const Section = ({ title, description, danger = false, children }) => (
@@ -104,6 +108,24 @@ const Toggle = ({ checked, onChange, disabled, label }) => (
     <span style={{ transform: checked ? 'translateX(20px)' : 'translateX(2px)' }} className="absolute top-0.5 left-0 w-5 h-5 rounded-full bg-white shadow transition-transform" />
   </button>
 );
+
+// Účty na tomto zařízení (přepínač účtů): přepnutí bez odhlášení, přidání dalšího účtu, odebrání z tohoto zařízení.
+const AccountsSection = () => {
+  const { active, accounts } = useAccounts();
+  const { busy, error, doSwitch, doRemove, logoutAll } = useAccountActions();
+  const [adding, setAdding] = useState(false);
+  return (
+    <Section title={t('Účty na tomto zařízení')} description={t('Na jednom zařízení můžeš mít přihlášených víc účtů a přepínat mezi nimi bez odhlášení. Účty zůstávají přihlášené, dokud je odtud neodebereš nebo se neodhlásíš. Oznámení do zařízení chodí vždy jen aktivnímu účtu.')}>
+      <AccountList accounts={accounts} active={active} busy={busy} onSwitch={doSwitch} onRemove={doRemove} />
+      {error && <Notice type="error">{error}</Notice>}
+      <div className="flex flex-wrap gap-2">
+        <ActionButton onClick={() => setAdding(true)} data-testid="settings-add-account"><UserPlus size={13} /> {t('Přidat účet')}</ActionButton>
+        {accounts.length > 1 && <ActionButton variant="ghost" onClick={logoutAll}>{t('Odhlásit ze všech účtů')}</ActionButton>}
+      </div>
+      {adding && <AddAccountDialog onClose={() => setAdding(false)} />}
+    </Section>
+  );
+};
 
 // ---- Záložka: Profil ----
 const USERNAME_PARAMS = { min: USERNAME_MIN, max: USERNAME_MAX };
@@ -275,6 +297,8 @@ const ProfileTab = ({ user, role }) => {
         </dl>
         {profile.missing && <Notice type="info">{t('Profil se ti založí při příštím přihlášení - do té doby jdou nastavit jen údaje výše.')}</Notice>}
       </Section>
+
+      <AccountsSection />
 
       {canEdit && <UsernameSection profile={profile} onSaved={(name) => { setProfile(p => ({ ...p, username: name })); refreshProfile?.(); }} />}
       {canEdit && (role === ROLE_PUBLISHER || role === ROLE_ADMIN) && <PenNameSection profile={profile} onSaved={(pen) => setProfile(p => ({ ...p, pen_name: pen }))} />}

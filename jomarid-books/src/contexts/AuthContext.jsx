@@ -4,7 +4,9 @@ import { Loader2 } from 'lucide-react';
 import { supabase, supabaseUrl, supabaseKey } from '../lib/supabase';
 import { loginWithCode as loginWithCodeApi } from '../offline/loginCode';
 import { confirmLogoutDiscard } from '../offline/index.js';
-import { clearCachedProfiles, clearStoredSession, isNetworkProblem, readCachedProfile, readStoredSession, runLogoutCleanups, writeCachedProfile } from '../offline/session';
+import { clearCachedProfile, clearCachedProfiles, clearStoredSession, isNetworkProblem, readCachedProfile, readStoredSession, runLogoutCleanups, writeCachedProfile } from '../offline/session';
+import { purgeUserData } from '../offline/index.js';
+import { accounts } from '../accounts/index.js';
 import { clearPersonalBrowseState } from '../browse/browseStore';
 import { cleanupOnLogout } from '../push/pushClient';
 import { ROLE_READER, ROLE_ADMIN } from '../constants/roles';
@@ -85,6 +87,7 @@ export function AuthProvider({ children }) {
        setUsername(data?.username || (sessionUser.email ? sessionUser.email.split('@')[0] : ''));
        setMustChange(!!data?.must_change_password);
        writeCachedProfile(sessionUser.id, { role: data?.role || ROLE_READER, username: data?.username || (sessionUser.email ? sessionUser.email.split('@')[0] : '') });
+       accounts.rememberProfile(sessionUser.id, { role: data?.role || ROLE_READER, username: data?.username || (sessionUser.email ? sessionUser.email.split('@')[0] : '') }); // přepínač účtů: seznam ukáže jméno a roli i u neaktivních účtů
        if (data?.email && !sameEmail(data.email, sessionUser.email)) refreshStaleSessionEmail(emailRefreshTried, data.email, sessionUser.email);
      }
    } catch (catchedError) {
@@ -104,7 +107,7 @@ export function AuthProvider({ children }) {
      let err = null;
      try { const res = await supabase.auth.getSession(); session = res.data?.session ?? null; err = res.error ?? null; } catch (e) { err = e; }
      if (!alive) return;
-     if (session?.user) { setOffline(false); syncProfile(session.user); return; }
+     if (session?.user) { setOffline(false); accounts.remember(session); syncProfile(session.user); return; }
      const stored = readStoredSession(supabaseUrl);
      if (stored && ((typeof navigator !== 'undefined' && navigator.onLine === false) || isNetworkProblem(err))) {
        const cached = readCachedProfile(stored.user.id);
@@ -125,6 +128,7 @@ export function AuthProvider({ children }) {
      if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
      if (event === 'SIGNED_OUT') { setRecoveryMode(false); clearPersonalBrowseState(); }
      if (session?.user || event === 'SIGNED_OUT') setOffline(false);
+     if (session?.user) accounts.remember(session); // přepínač účtů: relace aktivního účtu (přihlášení, obnovení tokenu) se zapamatuje, ať se na něj jde vrátit
      syncProfile(session?.user ?? null);
    });
 
@@ -143,8 +147,8 @@ export function AuthProvider({ children }) {
  // Přihlášení přihlašovacím kódem místo hesla (Nastavení -> Zabezpečení, db/login-code.sql); dokončí ho událost SIGNED_IN
  const loginWithCode = (code) => loginWithCodeApi(supabase, { url: supabaseUrl, key: supabaseKey }, code);
 
- const logout = async () => {
-   if (!(await confirmLogoutDiscard(user))) return; // neodeslané změny z offline čtení: odešlou se, nebo čtenář potvrdí, že o ně přijde
+ // Vlastní odhlášení účtu z Supabase a úklid zařízení (jen když na zařízení nezůstává žádný jiný účet).
+ const finishLogout = async () => {
    clearPersonalBrowseState(); // hledání a filtry z knihovny nemají po odhlášení zůstat v kartě
    await runLogoutCleanups(); // stažené knihy a fronta změn nesmí po odhlášení zůstat na zařízení
    try { await cleanupOnLogout({ client: supabase, nav: navigator, win: window }); } catch (e) { console.error('Úklid oznámení při odhlášení selhal:', e); } // zařízení nemá dál dostávat oznámení odhlášeného účtu
@@ -158,6 +162,35 @@ export function AuthProvider({ children }) {
    if (failed || offlineRef.current) { setUser(null); setRole(null); setUsername(''); setMustChange(false); setOffline(false); }
  };
 
+ // Odhlášení účtu, když je na zařízení uložený další (přepínač účtů): odhlásí se jen tenhle, úklid se týká jen jeho dat a zařízení se přepne na jiný účet.
+ const logoutKeepingOthers = async (userId) => {
+   clearPersonalBrowseState();
+   const nextId = accounts.forgetActive(userId);
+   try { await cleanupOnLogout({ client: supabase, nav: navigator, win: window }); } catch (e) { console.error('Úklid oznámení při odhlášení selhal:', e); }
+   let failed = null;
+   try { const res = await supabase.auth.signOut(); failed = res?.error ?? null; } catch (e) { failed = e; }
+   if (failed) clearStoredSession(supabaseUrl);
+   clearCachedProfile(userId);
+   try { await purgeUserData(userId); } catch (e) { console.error('Úklid dat odhlášeného účtu selhal:', e); }
+   const res = nextId ? await accounts.switchTo(nextId) : { ok: false };
+   if (!res.ok) { setUser(null); setRole(null); setUsername(''); setMustChange(false); setOffline(false); } // jiný účet už nejde otevřít: zůstane přihlašovací stránka se seznamem uložených účtů
+ };
+
+ const logout = async () => {
+   if (!(await confirmLogoutDiscard(user))) return; // neodeslané změny z offline čtení: odešlou se, nebo čtenář potvrdí, že o ně přijde
+   if (user?.id && accounts.others(user.id).length > 0) { await logoutKeepingOthers(user.id); return; }
+   accounts.forgetActive(user?.id);
+   await finishLogout();
+ };
+
+ // Odhlášení ze všech účtů na tomto zařízení: ostatním se zneplatní relace tohoto zařízení, nic osobního nezůstane.
+ const logoutAll = async () => {
+   if (!(await confirmLogoutDiscard(user))) return;
+   await accounts.forgetAll(user?.id);
+   accounts.forgetActive(user?.id);
+   await finishLogout();
+ };
+
  // Knihovna si při odpojení ještě dopíše rozdělaný stav (poslední posun stránky), a to by přepsalo předchozí mazání.
  // Efekt rodiče se spouští až po úklidu potomků, takže tohle mazání je poslední a platí.
  useEffect(() => {
@@ -165,7 +198,7 @@ export function AuthProvider({ children }) {
  }, [user, loading]);
 
  return (
-   <AuthContext.Provider value={{ user, role, loading, offline, login, loginWithCode, logout, username, mustChangePassword: mustChange, recoveryMode: recoveryMode || mustChange, clearRecovery: () => { setRecoveryMode(false); setMustChange(false); }, refreshProfile: () => syncProfile(user) }}>
+   <AuthContext.Provider value={{ user, role, loading, offline, login, loginWithCode, logout, logoutAll, switchAccount: accounts.switchTo, addAccount: accounts.add, removeAccount: accounts.remove, username, mustChangePassword: mustChange, recoveryMode: recoveryMode || mustChange, clearRecovery: () => { setRecoveryMode(false); setMustChange(false); }, refreshProfile: () => syncProfile(user) }}>
      {children}
    </AuthContext.Provider>
  );

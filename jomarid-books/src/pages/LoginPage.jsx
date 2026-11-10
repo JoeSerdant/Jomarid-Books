@@ -8,6 +8,9 @@ import { USERNAME_RE, USERNAME_MIN, USERNAME_MAX } from '../lib/username';
 import { CodeLoginError } from '../offline/loginCode';
 import { t } from '../i18n';
 import { tk } from '../i18n/mark.js';
+import { useAccounts } from '../accounts/useAccounts.js';
+import { useAccountActions } from '../accounts/useAccountActions.js';
+import { AccountList } from '../accounts/AccountList.jsx';
 
 const INPUT_STYLE = { backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' };
 const INPUT_CLASS = 'w-full p-3 border rounded-lg text-sm font-bold outline-none transition-colors placeholder:opacity-50';
@@ -50,6 +53,8 @@ export const LoginPage = () => {
   const { login, loginWithCode, user } = useAuth();
   const navigate = useNavigate();
   const [nameCheck, setNameCheck] = useState('idle'); // idle | checking | available | taken | reserved | invalid | error
+  const saved = useAccounts(); // účty uložené na tomto zařízení (přepínač účtů): z přihlašovací stránky jde na některý rovnou přepnout
+  const accountActions = useAccountActions();
 
   // Registrace: průběžná kontrola, jestli je vybrané jméno volné (bez prodlevy by to bylo dotaz na každé písmeno).
   useEffect(() => {
@@ -136,6 +141,15 @@ export const LoginPage = () => {
     <div style={{ color: 'var(--text-body)' }} className="max-w-sm mx-auto py-24 px-4 animate-in fade-in duration-300">
       <Card>
         <h2 style={{ color: 'var(--text-body)' }} className="text-xl font-black text-center uppercase tracking-tight mb-6">{t(TITLES[mode])}</h2>
+
+        {mode === 'login' && saved.accounts.length > 0 && (
+          <div className="mb-5 space-y-2" data-testid="login-saved-accounts">
+            <p style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider m-0 opacity-80">{t('Účty na tomto zařízení')}</p>
+            <AccountList accounts={saved.accounts} active={null} busy={accountActions.busy} onSwitch={accountActions.doSwitch} onRemove={accountActions.doRemove} />
+            {accountActions.error && <p role="alert" className="text-xs font-bold rounded-lg px-3 py-2 m-0 leading-relaxed" style={{ backgroundColor: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>{accountActions.error}</p>}
+            <p style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] m-0 opacity-70">{t('Nebo se přihlas jiným účtem:')}</p>
+          </div>
+        )}
 
         {mode === 'forgot' && (
           <p style={{ color: 'var(--text-muted)' }} className="text-xs text-center mb-4 -mt-3 opacity-80">{t('Heslo ti e-mailem neposíláme: žádost jde správci, který ti vydá dočasné heslo. Napiš e-mail a uživatelské jméno k účtu (když jméno nemáš nastavené, je to začátek e-mailu před @).')}</p>
