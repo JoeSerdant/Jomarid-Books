@@ -35,7 +35,7 @@ test('každý režim v seznamu her je i v databázi (mp_cfg) a naopak, se stejn�
     const def = MP_GAMES[c.game];
     const mode = def.modes.find((m) => m.id === c.mode);
     assert.equal(mode.reward, num(c.body, 'reward'), `odměna ${c.game}/${c.mode}`);
-    assert.match(c.body, new RegExp(`'kind', '${def.kind === 'turn' ? 'turn' : def.kind}'`), `druh ${c.game}/${c.mode}`);
+    assert.match(c.body, new RegExp(`'kind', '${mode.kind || def.kind}'`), `druh ${c.game}/${c.mode}`);
   }
 });
 
@@ -900,6 +900,7 @@ test('každá hra s online režimem má ve svém menu tlačítko s data-jomarid-
     hannibal: ['gameContent/hannibal/index.html'],
     rocket: ['gameContent/rocket/index.html'],
     polygonarena: ['gameContent/polygonArena/index.html', 'gameContent/polygonArena/style.css'],
+    onlinegames: ['gameContent/onlineGames/index.html', 'gameContent/onlineGames/style.css'],
   };
   assert.deepEqual(Object.keys(FILES).sort(), Object.keys(MP_GAMES).filter((id) => MP_GAMES[id].ready).sort());
   for (const [game, files] of Object.entries(FILES)) {
@@ -911,9 +912,9 @@ test('každá hra s online režimem má ve svém menu tlačítko s data-jomarid-
 
 test('Games.jsx: hra spuštěná z appky dostane skript vstupu, zprávy online se berou jen z jejího iframu a zápas nebo aréna sólovou hru zavře', () => {
   const g = read('pages', 'Games.jsx');
-  assert.match(g, /withOnlineEntry\(withStorageShim\(src, game\.id, sync\.snapshot\(\)\.map\), game\.id\)/);
+  assert.match(g, /withOnlineEntry\(withStorageShim\(src, game\.id, sync \? sync\.snapshot\(\)\.map : \{\}\), game\.id\)/);
   assert.match(g, /type === 'online-ask'\) \{\s*postOnline\(\);/);
-  assert.match(g, /type === 'online'\) \{\s*if \(mpAvailRef\.current\.state === 'ready'\) setMpLobby\(true\);/);
+  assert.match(g, /type === 'online'\) \{\s*if \(mpAvailRef\.current\.state === 'ready'\) \{ setMpMode\(typeof event\.data\.mode === 'string' \? event\.data\.mode : null\); setMpLobby\(true\); \}/);
   assert.match(g, /const handleMpMatch = useCallback\(\(m\) => \{ setMpAuto\(null\); setMpLobby\(false\); handleCloseGame\(\); setMpMatch\(m\); \}, \[handleCloseGame\]\);/);
   assert.match(g, /const handleMpArena = useCallback\(\(\) => \{ setMpAuto\(null\); setMpLobby\(false\); handleCloseGame\(\); setMpArena\(true\); \}, \[handleCloseGame\]\);/);
   assert.match(g, /setMpMatch\(null\); setMpLobby\(true\); \}\}/, '„Hrát znovu“ otevře okno a rovnou hledá');

@@ -39,8 +39,9 @@ test('meze v appce jsou stejné jako v db/game-saves.sql a hry jako v seznamu he
   const ids = [...sql.matchAll(/p_game_id not in \(([^)]+)\)/g)][0][1].split(',').map((x) => x.trim().replace(/'/g, ''));
   assert.deepEqual(ids, [...SAVE_GAME_IDS]);
   const games = read('pages', 'Games.jsx');
-  const hub = [...games.matchAll(/^\s+id: '(\w+)',$/gm)].map((m) => m[1]);
-  assert.deepEqual([...hub].sort(), [...SAVE_GAME_IDS].sort(), 'každá hra z Her má uložený postup a naopak');
+  // online-only hry (Jomarid Online Games) postup neukládají: žádný savegame, zápas řeší server
+  const hub = [...games.matchAll(/\n  \{\n    id: '(\w+)',[\s\S]*?\n  \},/g)].filter((m) => !/onlineOnly: true/.test(m[0])).map((m) => m[1]);
+  assert.deepEqual([...hub].sort(), [...SAVE_GAME_IDS].sort(), 'každá hra z Her má uložený postup a naopak (kromě online-only)');
 });
 
 test('SQL: funkce jsou jen pro přihlášené, tabulka má RLS a nikdo k ní nemá přímý přístup', () => {
@@ -541,11 +542,12 @@ test('Games.jsx: hra se spustí až po načtení postupu, iframe dostává dokum
   assert.match(g, /import \{ createGameSync, NoLocalSaveError \} from '\.\.\/gameSave\/sync';/);
   assert.match(g, /srcDoc=\{gameDoc\}/);
   assert.ok(!/srcDoc=\{html\}/.test(g), 'iframe nesmí dostat dokument bez náhrady úložiště');
-  assert.match(g, /setGameDoc\(withGameLanguage\(withOnlineEntry\(withStorageShim\(src, game\.id, sync\.snapshot\(\)\.map\), game\.id\), lang, dict,/);
+  assert.match(g, /setGameDoc\(withGameLanguage\(withOnlineEntry\(withStorageShim\(src, game\.id, sync \? sync\.snapshot\(\)\.map : \{\}\), game\.id\), lang, dict,/, 'online-only hra dostane prázdné úložiště');
   const open = g.slice(g.indexOf('const handleOpenGame'), g.indexOf('// Při najetí myší'));
   assert.ok(open.indexOf('await sync.load({ allowEmpty: allowEmpty === true })') > -1 && open.indexOf('await sync.load({ allowEmpty: allowEmpty === true })') < open.indexOf('setShowGame(true)'), 'postup se načte dřív, než se hra ukáže');
   assert.match(open, /if \(mountedRef\.current\) \{ setSaveLoadError\(err instanceof NoLocalSaveError \? 'nocopy' : true\); setLoadingGame\(false\); \}\n\s+return;/, 'při chybě se hra nespustí');
-  assert.match(open, /!sync\.isLoaded\(\) \|\| sync\.state\(\)\.stopped/, 'načtený postup se znovu nenačítá, jen po konfliktu');
+  assert.match(open, /sync && \(!sync\.isLoaded\(\) \|\| sync\.state\(\)\.stopped\)/, 'načtený postup se znovu nenačítá, jen po konfliktu');
+  assert.match(open, /const sync = game\.onlineOnly \? null : getSync\(\);/, 'online-only hra (Jomarid Online Games) žádný postup nenačítá ani neukládá');
   assert.match(g, /event\.data\?\.type === 'storage'\) \{[^}]*syncRef\.current\?\.apply\(event\.data\);/);
   assert.match(g, /syncRef\.current\?\.flush\(\); \/\/ postup se uloží hned/);
   assert.match(g, /addEventListener\('pagehide', onHide\)/);
@@ -599,7 +601,7 @@ test('npm test pouští i testy uloženého postupu a SQL testy je zahrnují', (
 
 test('znovu otevřená hra přebírá stav ukládání (štítek zůstane, dokud se postup neukládá)', () => {
   const g = read('pages', 'Games.jsx');
-  assert.match(g, /const \{ status \} = sync\.state\(\);[^\n]*\n\s+setSaveStatus\(status === 'ok' \? null : status\);/);
+  assert.match(g, /const status = sync \? sync\.state\(\)\.status : 'ok';[^\n]*\n\s+setSaveStatus\(status === 'ok' \? null : status\);/);
 });
 
 test('shim: hra, která se sama znovu načte, dostane aktuální postup z okna appky; bez něj (nebo při chybě) ten vložený', () => {

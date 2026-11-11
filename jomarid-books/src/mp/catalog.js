@@ -44,6 +44,17 @@ export const MP_GAMES = {
     ],
     options: [],
   },
+  // Jomarid Online Games: dvě coop hry jen pro online pod jednou kartou. Každý režim je jedna hra (vlastní dokument, viz loadMode v Games.jsx) a má vlastní druh
+  // (Katakomby jsou tahové a běží přes mp_move, Chaos Aréna je v reálném čase). Oba režimy jsou týmové: vyhráváte nebo prohráváte společně.
+  onlinegames: {
+    ready: true,
+    kind: 'turn',
+    modes: [
+      { id: 'katakomby', kind: 'turn', title: tk('Katakomby'), text: tk('Karetní výprava ve dvou proti vlnám příšer: střídáte se v tazích, každý máte svého hrdinu a balíček. Poražte strážce katakomb v desáté vlně. Vyhráváte i prohráváte společně.'), reward: 40 },
+      { id: 'chaos', kind: 'realtime', title: tk('Chaos Aréna'), text: tk('Akční aréna ve dvou: každý má svou třídu (střelec, EMP, léčitel, tank, raketomet), společně odrážíte vlny a bossy. Přežijte devět vln.'), reward: 35 },
+    ],
+    options: [{ key: 'diff', title: tk('Obtížnost'), choices: [{ value: 'easy', labelKey: tk('Lehká') }, { value: 'normal', labelKey: tk('Normální') }, { value: 'hard', labelKey: tk('Těžká') }], def: 'normal' }],
+  },
   // Sdílená aréna: žádné zápasy ani soupeři na výběr, jen vstup do jedné společné arény (kanál mp-arena:polygonarena). Odměna za vyhrané kolo: db mp_arena_claim.
   polygonarena: {
     ready: true,

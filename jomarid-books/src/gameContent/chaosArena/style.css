@@ -1,0 +1,22 @@
+:root{color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;background:#0f1226;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+canvas{display:block;width:100%;height:100%}
+#pick{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:12px;background:radial-gradient(120% 70% at 50% 0%,#262e63,#0f1226 70%);color:#f1eefc;font:15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;overflow:auto;touch-action:auto}
+#pick[hidden]{display:none}
+#pick .box{max-width:720px;width:100%;text-align:center}
+#pick h1{font:700 40px Georgia,serif;margin:0 0 4px;text-shadow:0 3px 0 #0006,0 0 26px #ffd43b66}
+#pick .sub{color:#b1addb;margin:0 0 16px}
+#classes{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px}
+#classes button{background:#ffffff14;border:2px solid #ffffff2a;border-radius:16px;padding:12px 8px;color:inherit;font:inherit;cursor:pointer;display:flex;flex-direction:column;gap:6px;align-items:center}
+#classes button b{font:700 18px Georgia,serif}
+#classes button small{color:#b1addb;font-size:12px}
+#classes button .ic{font-size:30px;line-height:1}
+#classes button[aria-pressed=true]{border-color:#ffd43b;background:#ffd43b24}
+#classes button:focus-visible{outline:3px solid #fff;outline-offset:2px}
+#pick .note{min-height:22px;margin:14px 0 0;font-weight:700;color:#ffd43b}
+#pick .hint{color:#b1addb;font-size:12px;margin:8px 0 0}
+#touch{position:fixed;inset:0;pointer-events:none}
+#touch[hidden]{display:none}
+#touch i{position:absolute;width:96px;height:96px;margin:-48px 0 0 -48px;border-radius:50%;border:3px solid #ffffff55;background:#ffffff14;display:none}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}

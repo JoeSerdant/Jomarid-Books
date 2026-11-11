@@ -9,7 +9,7 @@ const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), [href], select
 // Okno „Hrát online“ nad hrou: otevře se z tlačítka v menu hry (src/mp/entry.js) a obsahuje hledání soupeře, hru s kamarádem, vstup do arény
 // a návrat do rozehraného zápasu (MpSection). Zavře se křížkem, klávesou Esc nebo kliknutím vedle; zavření při hledání soupeře hledání ukončí.
 // Okno je ve vlastní vrstvě nad celou stránkou (portál), takže funguje nad hrou i nad stránkou hry.
-export const MpLobbyDialog = ({ game, online, avail, auto, onMatch, onArena, onClose }) => {
+export const MpLobbyDialog = ({ game, online, avail, auto, mode, onMatch, onArena, onClose }) => {
   const closeRef = useRef(null);
   const boxRef = useRef(null);
   useEffect(() => {
@@ -53,7 +53,7 @@ export const MpLobbyDialog = ({ game, online, avail, auto, onMatch, onArena, onC
             <X size={16} aria-hidden="true" />
           </button>
         </div>
-        <MpSection game={game} online={online} avail={avail} auto={auto} onMatch={onMatch} onArena={onArena} />
+        <MpSection game={game} online={online} avail={avail} auto={auto} initialMode={mode} onMatch={onMatch} onArena={onArena} />
       </div>
     </div>,
     document.body,
