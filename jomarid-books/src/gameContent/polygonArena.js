@@ -27,6 +27,7 @@
 //   collection.js  - sbírka a nastavení
 //   cheat.js       - skryté pole (číslo verze dole v menu) a cheat menu pro testování
 //   main.js        - start
+//   net.js         - společný základ pro sdílené světy (shared/net.js): hostitel posílá změny, host je skládá a vyhlazuje
 //   mp.js          - sdílená aréna pro víc hráčů (multiplayer); bez rozhraní window.jomaridMP z appky nedělá nic
 //
 // Skripty jsou obyčejné (ne moduly) a sdílejí globální rozsah, takže pozdější soubory používají
@@ -56,6 +57,7 @@ import collection from './polygonArena/collection.js?raw';
 import cheat from './polygonArena/cheat.js?raw';
 import main from './polygonArena/main.js?raw';
 import mp from './polygonArena/mp.js?raw';
+import net from './shared/net.js?raw';
 
 const SCRIPTS = [
   ['core', core],
@@ -80,6 +82,7 @@ const SCRIPTS = [
   ['collection', collection],
   ['cheat', cheat],
   ['main', main],
+  ['net', net],
   ['mp', mp],
 ]
   .map(([id, code]) => `<script id="src-${id}">\n${code}\n</script>`)

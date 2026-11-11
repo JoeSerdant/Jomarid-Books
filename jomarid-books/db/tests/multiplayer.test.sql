@@ -16,8 +16,28 @@ begin
 end $$;
 -- Hledání soupeře jako účet n; vrací odpověď serveru.
 create or replace function tt.find(n int, g text, m text default 'duel', p jsonb default '{}') returns jsonb language plpgsql as $$ begin perform tt.as_mu(n); return public.mp_find(g, m, p); end $$;
--- Dva účty se spárují; vrací id zápasu.
+-- Dva účty se spárují; vrací id zápasu. Šachy, Kouloví Kámoši, Warroom a Hannibal se tu zakládají jako zápas ZALOŽENÝ PŘED aktualizací (bez enginu a kontroly tvaru
+-- tahů): tahy jsou libovolné a výsledek se hlásí po starém. Díky tomu se tahové mechanismy (pořadí, hodiny, hlášení, odměny) zkouší na těchhle zápasech beze změny
+-- a zároveň se ověřuje zpětná kompatibilita. Zápas s pravidly na serveru dělá tt.pair_chess (šachy) a tt.pair_new (ostatní hry).
+create or replace function tt.pair_chess(a int, b int, p jsonb default '{}') returns uuid language plpgsql as $$
+declare r jsonb;
+begin
+  perform tt.find(a, 'chess', 'duel', p);
+  r := tt.find(b, 'chess', 'duel', p);
+  if r ->> 'status' <> 'matched' then raise exception 'SELÁHALO: účty % a % se nespárovaly (%)', a, b, r; end if;
+  return (r -> 'match' ->> 'id')::uuid;
+end $$;
 create or replace function tt.pair(a int, b int, g text, m text default 'duel', p jsonb default '{}') returns uuid language plpgsql as $$
+declare r jsonb; v_id uuid;
+begin
+  perform tt.find(a, g, m, p);
+  r := tt.find(b, g, m, p);
+  if r ->> 'status' <> 'matched' then raise exception 'SELÁHALO: účty % a % se nespárovaly (%)', a, b, r; end if;
+  v_id := (r -> 'match' ->> 'id')::uuid;
+  if g in ('chess', 'koulovikamosi', 'warroom', 'hannibal') then perform tt.legacy(v_id); end if;
+  return v_id;
+end $$;
+create or replace function tt.pair_new(a int, b int, g text, m text default 'duel', p jsonb default '{}') returns uuid language plpgsql as $$
 declare r jsonb;
 begin
   perform tt.find(a, g, m, p);
@@ -25,6 +45,8 @@ begin
   if r ->> 'status' <> 'matched' then raise exception 'SELÁHALO: účty % a % se nespárovaly (%)', a, b, r; end if;
   return (r -> 'match' ->> 'id')::uuid;
 end $$;
+create or replace function tt.legacy(mid uuid) returns void language plpgsql security definer as $$
+begin update public.mp_matches set rules = rules - 'engine' - 'check', gstate = null where id = mid; end $$;
 create or replace function tt.row(mid uuid) returns jsonb language sql security definer as $$ select to_jsonb(m) from public.mp_matches m where id = mid $$;
 -- Číslo účtu na místě s (1 nebo 2) v zápase a místo účtu n.
 create or replace function tt.who(mid uuid, s int) returns int language sql security definer as $$ select (right((case when s = 1 then p1 else p2 end)::text, 12)::int - 1000) from public.mp_matches where id = mid $$;
@@ -495,6 +517,438 @@ select tt.as_mu(19);
 select tt.ok(public.mp_arena_claim(500, 5) @> '{"granted": 5, "capped": true}', 'strop 150 se sdílí s ostatními online výhrami: zbývalo 5');
 update public.mp_arena_log set last_claim = now() - interval '200 seconds' where user_id = tt.mu(19);
 select tt.ok(public.mp_arena_claim(500, 5) @> '{"granted": 0, "capped": true}', 'a pak nic');
+
+-- ===== Šachy: pravidla hlídá server =====
+select tt.mmk(n) from generate_series(42, 49) n;
+-- Pomůcky: šachovnice z FEN, počítání tahů (perft) a tah hráče na tahu zadaný souřadnicí.
+create or replace function tt.fen(p_fen text) returns text[] language plpgsql immutable as $$
+declare v_rows text[] := string_to_array(split_part(p_fen, ' ', 1), '/'); v_out text := ''; i int; j int; ch text;
+begin
+  for i in 1..8 loop
+    for j in 1..length(v_rows[i]) loop
+      ch := substr(v_rows[i], j, 1);
+      if ch ~ '[1-8]' then v_out := v_out || repeat('.', ch::int); else v_out := v_out || ch; end if;
+    end loop;
+  end loop;
+  return regexp_split_to_array(v_out, '');
+end $$;
+create or replace function tt.perft(p_fen text, p_depth int) returns bigint language plpgsql as $$
+declare
+  v_castle text := case when split_part(p_fen, ' ', 3) = '-' then '' else split_part(p_fen, ' ', 3) end;
+begin
+  return tt.perft_rec(tt.fen(p_fen), v_castle, -1, split_part(p_fen, ' ', 2) = 'w', p_depth);
+end $$;
+create or replace function tt.perft_rec(p_bd text[], p_castle text, p_ep int, p_white boolean, p_depth int) returns bigint language plpgsql as $$
+declare n bigint := 0; r record;
+begin
+  if p_depth = 0 then return 1; end if;
+  if p_depth = 1 then return (select count(*) from public.mp_chess_moves(p_bd, p_castle, p_ep, p_white)); end if;
+  for r in select * from public.mp_chess_moves(p_bd, p_castle, p_ep, p_white) loop
+    n := n + tt.perft_rec(r.nbd, r.ncastle, r.nep, not p_white, p_depth - 1);
+  end loop;
+  return n;
+end $$;
+-- Stav partie z FEN (pole pro braní mimochodem a čítač půltahů se berou z FEN).
+create or replace function tt.fen2g(p_fen text) returns jsonb language plpgsql as $$
+declare
+  v_bd text[] := tt.fen(p_fen);
+  v_t text := split_part(p_fen, ' ', 2);
+  v_c text := case when split_part(p_fen, ' ', 3) = '-' then '' else split_part(p_fen, ' ', 3) end;
+  v_e text := split_part(p_fen, ' ', 4);
+  v_ep int := case when v_e = '-' or v_e = '' then -1 else (8 - substr(v_e, 2, 1)::int) * 8 + ascii(substr(v_e, 1, 1)) - 97 end;
+  v_h int := coalesce(nullif(split_part(p_fen, ' ', 5), '')::int, 0);
+begin
+  return jsonb_build_object('b', array_to_string(v_bd, ''), 't', v_t, 'c', v_c, 'e', v_ep, 'h', v_h, 'k', jsonb_build_object(public.mp_chess_key(v_bd, v_t, v_c, v_ep), 1));
+end $$;
+-- Přepíše stav zápasu na pozici z FEN (a počet tahů); na tahu je podle FEN hráč 1 (bílý) nebo 2 (černý).
+create or replace function tt.setg(mid uuid, p_fen text, p_moves int default 0) returns void language plpgsql security definer as $$
+begin
+  update public.mp_matches set gstate = tt.fen2g(p_fen), move_count = p_moves, turn = case when split_part(p_fen, ' ', 2) = 'w' then 1 else 2 end,
+    turn_started = now(), deadline = now() + interval '300 seconds' where id = mid;
+end $$;
+create or replace function tt.cmv(n int, mid uuid, c text) returns jsonb language plpgsql as $$
+declare s int;
+begin
+  select move_count + 1 into s from public.mp_matches where id = mid;
+  return tt.mv(n, mid, s, jsonb_build_object('c', c));
+end $$;
+-- Odehraje tahy za sebou (mezerou oddělené souřadnice), hráči se střídají podle toho, kdo je na tahu; vrací poslední odpověď.
+create or replace function tt.cplay(mid uuid, p_moves text) returns jsonb language plpgsql as $$
+declare c text; r jsonb; t int;
+begin
+  foreach c in array string_to_array(p_moves, ' ') loop
+    select turn into t from public.mp_matches where id = mid;
+    r := tt.cmv(tt.who(mid, t), mid, c);
+  end loop;
+  return r;
+end $$;
+create or replace function tt.cfail(mid uuid, c text, p_code text, msg text) returns void language plpgsql as $$
+declare t int; n int;
+begin
+  select turn into t from public.mp_matches where id = mid;
+  n := tt.who(mid, t);
+  perform tt.fails(n, format($q$select tt.cmv(%s, %L, %L)$q$, n, mid, c), p_code, msg);
+end $$;
+grant execute on all functions in schema tt to public;
+
+-- pravidla a výpočty (bez zápasu)
+select tt.ok(public.mp_rules('chess', 'duel', '{"tc":"5+3"}') ->> 'engine' = 'chess' and (public.mp_rules('koulovikamosi', 'duel', '{}') ->> 'engine') is null, 'pravidla šachů mají engine, ostatní hry ne');
+select tt.ok(public.mp_chess_init() ->> 'b' = 'rnbqkbnrpppppppp................................PPPPPPPPRNBQKBNR' and public.mp_chess_init() ->> 'c' = 'KQkq', 'základní postavení');
+select tt.ok(tt.perft('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -', 3) = 8902, 'perft: základní postavení, hloubka 3 = 8902');
+select tt.ok(tt.perft('r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -', 3) = 97862, 'perft: Kiwipete (rošády, braní, šachy), hloubka 3 = 97862');
+select tt.ok(tt.perft('8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - -', 4) = 43238, 'perft: koncovka s braním mimochodem a přišpendlením, hloubka 4 = 43238');
+select tt.ok(tt.perft('r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq -', 3) = 9467 and tt.perft('r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ -', 3) = 9467, 'perft: proměny a šachy (obě barvy), hloubka 3 = 9467');
+select tt.ok(tt.perft('rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ -', 3) = 62379, 'perft: proměna se šachem a rošáda, hloubka 3 = 62379');
+select tt.ok(public.mp_chess_insufficient(tt.fen('8/8/8/8/8/8/8/K6k w - -')) and public.mp_chess_insufficient(tt.fen('8/8/8/8/8/8/8/KB5k w - -')) and public.mp_chess_insufficient(tt.fen('8/8/8/8/8/8/8/KN5k w - -'))
+  and public.mp_chess_insufficient(tt.fen('8/8/8/8/8/8/1b6/K1B4k w - -')), 'nedostatek materiálu: holí králové, král a lehká figura, dva střelci na stejné barvě');
+select tt.ok(not public.mp_chess_insufficient(tt.fen('8/8/8/8/8/8/8/KP5k w - -')) and not public.mp_chess_insufficient(tt.fen('8/8/8/8/8/8/8/KR5k w - -')) and not public.mp_chess_insufficient(tt.fen('8/8/8/8/8/8/8/KNN4k w - -'))
+  and not public.mp_chess_insufficient(tt.fen('8/8/8/8/8/8/8/KBb4k w - -')) and not public.mp_chess_insufficient(tt.fen('8/8/8/8/8/8/b7/K1B4k w - -')), 'a není: pěšec, věž, dva jezdci, střelci na různých barvách');
+select tt.ok(public.mp_chess_can_mate(tt.fen('8/8/8/8/8/8/8/KN5k w - -'), true) = false and public.mp_chess_can_mate(tt.fen('8/8/8/8/8/8/8/KNB4k w - -'), true) and public.mp_chess_can_mate(tt.fen('8/8/8/8/8/8/8/KP5k w - -'), true), 'může strana ještě matovat: král s jednou lehkou figurou ne, se dvěma nebo s pěšcem ano');
+
+-- zápas s pravidly na serveru
+create temp table t_e as select tt.pair_chess(42, 43) as id;
+select tt.ok(tt.row((select id from t_e)) -> 'rules' ->> 'engine' = 'chess' and tt.row((select id from t_e)) -> 'gstate' ->> 't' = 'w', 'nový šachový zápas má engine a základní postavení');
+select tt.ok(not (tt.st(42, (select id from t_e)) -> 'match' ? 'gstate'), 'stav postavení se klientům neposílá (mají tahy)');
+select tt.cfail((select id from t_e), 'e2e5', 'illegal_move', 'pěšec o tři pole se odmítne');
+select tt.cfail((select id from t_e), 'e1e2', 'illegal_move', 'král na obsazené pole se odmítne');
+select tt.cfail((select id from t_e), 'b1b3', 'illegal_move', 'jezdec nesmí táhnout jako pěšec');
+select tt.cfail((select id from t_e), 'a1a3', 'illegal_move', 'věž přes vlastního pěšce nejde');
+select tt.cfail((select id from t_e), 'e7e5', 'illegal_move', 'černou figurou táhnout nejde, když je na tahu bílý');
+select tt.cfail((select id from t_e), 'e2e4q', 'illegal_move', 'proměna u tahu, který není proměna, se odmítne');
+select tt.cfail((select id from t_e), 'e2e9', 'illegal_move', 'souřadnice mimo šachovnici se odmítne');
+select tt.cfail((select id from t_e), 'xx', 'illegal_move', 'nesmyslná souřadnice se odmítne');
+select tt.fails(42, format($$select public.mp_move(%L, 1, '{"m":1}')$$, (select id from t_e)), 'illegal_move', 'tah bez souřadnice se odmítne');
+select tt.fails(42, format($$select public.mp_move(%L, 1, '"e2e4"')$$, (select id from t_e)), 'illegal_move', 'souřadnice jako holý text se odmítne (tah musí mít tvar {c: ...})');
+select tt.ok((tt.row((select id from t_e)) ->> 'move_count')::int = 0 and tt.row((select id from t_e)) -> 'gstate' ->> 't' = 'w', 'odmítnuté tahy nic nezměnily');
+select tt.ok(tt.cmv(tt.who((select id from t_e), 1), (select id from t_e), 'e2e4') @> '{"ok": true, "seq": 1, "turn": 2, "status": "active"}' and tt.row((select id from t_e)) -> 'gstate' ->> 't' = 'b', 'platný tah projde a na tahu je černý');
+select tt.ok((select payload from public.mp_moves where match_id = (select id from t_e) and seq = 1) = '{"c": "e2e4"}', 'tah se uloží v čistém tvaru');
+select tt.ok(tt.mv(tt.who((select id from t_e), 1), (select id from t_e), 1, '{"c":"e2e4","x":"navíc"}') @> '{"ok": true, "again": true}', 'opakované odeslání téhož tahu (i s přebytečným polem) projde jako opakování');
+select tt.cfail((select id from t_e), 'e2e4', 'illegal_move', 'bílý pěšec už na e2 nestojí');
+select tt.cfail((select id from t_e), 'a7a8', 'illegal_move', 'pěšec nepřeskočí pole');
+-- hlášení výsledku klientem se u zápasu s pravidly na serveru nebere
+select tt.ok(tt.rep(tt.who((select id from t_e), 1), (select id from t_e), 'win', 'checkmate') ->> 'status' = 'active' and tt.rep(tt.who((select id from t_e), 2), (select id from t_e), 'loss', 'checkmate') ->> 'status' = 'active', 'hlášení hráčů zápas neuzavře (výsledek určuje server)');
+select tt.ok(tt.row((select id from t_e)) -> 'report1' is not distinct from 'null'::jsonb and tt.row((select id from t_e)) -> 'report2' is not distinct from 'null'::jsonb, 'a ani se neukládá');
+
+-- mat: Scholarův mat (7 půltahů), vítěz je ten, kdo mat dal
+select tt.cplay((select id from t_e), 'e7e5 d1h5 b8c6 f1c4 g8f6');
+select tt.ok(tt.cmv(tt.who((select id from t_e), 1), (select id from t_e), 'h5f7') @> '{"ok": true, "status": "finished", "winner": 1, "reason": "checkmate"}', 'mat uzavře zápas: vyhrává bílý, důvod checkmate (odpověď na tah to rovnou hlásí)');
+select tt.ok(tt.row((select id from t_e)) ->> 'status' = 'finished' and tt.row((select id from t_e)) ->> 'winner' = '1' and tt.row((select id from t_e)) ->> 'deadline' is null, 'zápas je uzavřený a bez limitu');
+select tt.ok(tt.st(tt.who((select id from t_e), 2), (select id from t_e)) -> 'match' ->> 'reason' = 'checkmate' and tt.st(tt.who((select id from t_e), 2), (select id from t_e)) -> 'match' ->> 'winner' = '1', 'soupeř se o matu dozví ze stavu zápasu');
+select tt.fails(tt.who((select id from t_e), 1), format($$select tt.cmv(%s, %L, 'a2a3')$$, tt.who((select id from t_e), 1), (select id from t_e)), 'not_active', 'po konci se táhnout nedá');
+select tt.ok(tt.rep(tt.who((select id from t_e), 1), (select id from t_e), 'loss') ->> 'winner' = '1', 'pozdní hlášení výsledek nezmění');
+select tt.ok(tt.mpearn(tt.who((select id from t_e), 1)) = 0, 'Scholarův mat (7 půltahů) nezíská odměnu: míň než 10 tahů');
+
+-- remíza pozice, pat, nedostatek materiálu, padesát tahů (pozice z FEN)
+create temp table t_e2 as select tt.pair_chess(44, 45) as id;
+select tt.setg((select id from t_e2), 'k7/2K5/8/1Q6/8/8/8/8 w - - 0 1');
+select tt.ok(tt.cmv(tt.who((select id from t_e2), 1), (select id from t_e2), 'b5b6') @> '{"status": "finished", "winner": 0, "reason": "stalemate"}', 'pat je remíza (winner 0)');
+create temp table t_e3 as select tt.pair_chess(44, 45) as id;
+select tt.setg((select id from t_e3), '7k/5n2/8/8/2B5/8/8/4K3 w - - 0 1');
+select tt.ok(tt.cmv(tt.who((select id from t_e3), 1), (select id from t_e3), 'c4f7') @> '{"status": "finished", "winner": 0, "reason": "insufficient"}', 'vzetí poslední figury, po kterém zbyde král a střelec proti králi, je remíza (insufficient)');
+create temp table t_e4 as select tt.pair_chess(44, 45) as id;
+select tt.setg((select id from t_e4), 'k7/8/8/8/8/8/8/K6R w - - 98 80');
+select tt.ok(tt.cmv(tt.who((select id from t_e4), 1), (select id from t_e4), 'a1b1') ->> 'status' = 'active', '99. půltah bez braní a tahu pěšcem ještě partii neukončí');
+select tt.ok(tt.cmv(tt.who((select id from t_e4), 2), (select id from t_e4), 'a8b8') @> '{"status": "finished", "winner": 0, "reason": "fiftymove"}', '100. půltah bez braní a tahu pěšcem: remíza (fiftymove)');
+create temp table t_e5 as select tt.pair_chess(44, 45) as id;
+select tt.setg((select id from t_e5), 'k7/8/1K6/8/8/8/8/7Q w - - 99 80');
+select tt.ok(tt.cmv(tt.who((select id from t_e5), 1), (select id from t_e5), 'h1h8') @> '{"status": "finished", "winner": 1, "reason": "checkmate"}', 'mat má přednost před pravidlem padesáti tahů');
+create temp table t_e6 as select tt.pair_chess(44, 45) as id;
+select tt.setg((select id from t_e6), 'k7/8/8/8/8/8/p7/K6R w - - 99 80');
+select tt.ok(tt.cmv(tt.who((select id from t_e6), 1), (select id from t_e6), 'a1a2') @> '{"status": "active"}', 'braní nuluje počítadlo padesáti tahů (partie pokračuje)');
+select tt.ok(tt.row((select id from t_e6)) -> 'gstate' ->> 'h' = '0', 'a počítadlo se vynuluje');
+select tt.resign(44, (select id from t_e6));
+
+-- trojí opakování pozice
+create temp table t_e7 as select tt.pair_chess(46, 47) as id;
+select tt.cplay((select id from t_e7), 'g1f3 g8f6 f3g1 f6g8');
+select tt.ok(tt.row((select id from t_e7)) ->> 'status' = 'active', 'dvakrát stejná pozice partii neukončí');
+select tt.cplay((select id from t_e7), 'g1f3 g8f6 f3g1');
+select tt.ok(tt.row((select id from t_e7)) ->> 'status' = 'active', 'a tři půltahy před koncem také ne');
+select tt.ok(tt.cplay((select id from t_e7), 'f6g8') @> '{"status": "finished", "winner": 0, "reason": "repetition"}', 'potřetí stejná pozice: remíza (repetition)');
+create temp table t_e8 as select tt.pair_chess(46, 47) as id;
+select tt.cplay((select id from t_e8), 'g1f3 g8f6 f3g1 f6g8 g1f3 g8f6 f3g1 e7e5 g1f3 e5e4');
+select tt.ok(tt.row((select id from t_e8)) ->> 'status' = 'active' and jsonb_array_length(jsonb_path_query_array(tt.row((select id from t_e8)) -> 'gstate' -> 'k', '$.*')) <= 3, 'tah pěšcem opakování vynuluje (a paměť pozic se zmenší)');
+select tt.resign(46, (select id from t_e8));
+
+-- braní mimochodem, rošáda, proměna
+create temp table t_e9 as select tt.pair_chess(48, 49) as id;
+select tt.cplay((select id from t_e9), 'e2e4 a7a6 e4e5 d7d5');
+select tt.ok(tt.cplay((select id from t_e9), 'e5d6') ->> 'ok' = 'true' and substr(tt.row((select id from t_e9)) -> 'gstate' ->> 'b', 28, 1) = '.', 'braní mimochodem hned po dvojkroku jde a sebraný pěšec zmizí');
+select tt.resign(48, (select id from t_e9));
+create temp table t_e10 as select tt.pair_chess(48, 49) as id;
+select tt.cplay((select id from t_e10), 'e2e4 a7a6 e4e5 d7d5 h2h3 a6a5');
+select tt.cfail((select id from t_e10), 'e5d6', 'illegal_move', 'braní mimochodem o tah později už nejde');
+select tt.resign(48, (select id from t_e10));
+create temp table t_e11 as select tt.pair_chess(48, 49) as id;
+select tt.setg((select id from t_e11), '5r1k/8/8/8/8/8/8/R3K2R w KQ - 0 1');
+select tt.cfail((select id from t_e11), 'e1g1', 'illegal_move', 'rošáda přes napadené pole (f1) se odmítne');
+select tt.ok(tt.cmv(tt.who((select id from t_e11), 1), (select id from t_e11), 'e1c1') ->> 'ok' = 'true' and (select tt.row(id) -> 'gstate' ->> 'b' from t_e11) like '%..KR%', 'dlouhá rošáda tam, kde napadené pole není na cestě krále, jde a věž přeskočí krále');
+select tt.resign(48, (select id from t_e11));
+create temp table t_e12 as select tt.pair_chess(48, 49) as id;
+select tt.setg((select id from t_e12), '4r2k/8/8/8/8/8/8/R3K2R w KQ - 0 1');
+select tt.cfail((select id from t_e12), 'e1g1', 'illegal_move', 'rošáda z šachu se odmítne');
+select tt.cfail((select id from t_e12), 'e1c1', 'illegal_move', 'ani na druhou stranu');
+select tt.cfail((select id from t_e12), 'e1e2', 'illegal_move', 'z šachu se nedá utéct po stejném sloupci');
+select tt.cfail((select id from t_e12), 'a1a2', 'illegal_move', 'a šach se musí řešit: tah jinou figurou, který ho nechá, se odmítne');
+select tt.ok(tt.cmv(tt.who((select id from t_e12), 1), (select id from t_e12), 'e1d1') ->> 'ok' = 'true', 'ze šachu se uhnout dá (král na d1)');
+select tt.resign(48, (select id from t_e12));
+
+-- proměna pěšce
+create temp table t_e14 as select tt.pair_chess(46, 47) as id;
+select tt.setg((select id from t_e14), '8/P6k/8/8/8/8/8/K7 w - - 0 1');
+select tt.cfail((select id from t_e14), 'a7a8', 'illegal_move', 'pěšec na poslední řadě bez zvolené figury se odmítne');
+select tt.cfail((select id from t_e14), 'a7a8k', 'illegal_move', 'proměna v krále se odmítne');
+select tt.cfail((select id from t_e14), 'a7a8p', 'illegal_move', 'a v pěšce také');
+select tt.ok(tt.cmv(tt.who((select id from t_e14), 1), (select id from t_e14), 'a7a8n') ->> 'ok' = 'true' and substr(tt.row((select id from t_e14)) -> 'gstate' ->> 'b', 1, 1) = 'N', 'proměna v jezdce: na a8 stojí bílý jezdec');
+select tt.resign(46, (select id from t_e14));
+create temp table t_e15 as select tt.pair_chess(46, 47) as id;
+select tt.setg((select id from t_e15), '8/P6k/8/8/8/8/8/K7 w - - 0 1');
+select tt.ok(tt.cmv(tt.who((select id from t_e15), 1), (select id from t_e15), 'a7a8q') ->> 'ok' = 'true' and substr(tt.row((select id from t_e15)) -> 'gstate' ->> 'b', 1, 1) = 'Q', 'proměna v dámu');
+select tt.resign(46, (select id from t_e15));
+
+-- čas: komu vyprší čas, prohrává, ale jen když soupeř ještě může matovat
+create temp table t_e16 as select tt.pair_chess(42, 43) as id;
+select tt.setg((select id from t_e16), 'k7/8/8/8/8/8/1r6/K7 w - - 0 1');
+select tt.ff((select id from t_e16), 400);
+select tt.ok(tt.st(42, (select id from t_e16)) -> 'match' ->> 'status' = 'finished' and tt.row((select id from t_e16)) ->> 'winner' = '2' and tt.row((select id from t_e16)) ->> 'reason' = 'timeout', 'vypršel čas bílému a černý má věž: vyhrává černý (timeout)');
+create temp table t_e17 as select tt.pair_chess(42, 43) as id;
+select tt.setg((select id from t_e17), 'k7/8/8/8/8/8/n7/K1R5 w - - 0 1');
+select tt.ff((select id from t_e17), 400);
+select tt.ok(tt.st(42, (select id from t_e17)) -> 'match' ->> 'status' = 'finished' and tt.row((select id from t_e17)) ->> 'winner' = '0' and tt.row((select id from t_e17)) ->> 'reason' = 'timeout-material', 'vypršel čas bílému, ale černý má jen krále a jezdce: remíza (timeout-material)');
+create temp table t_e18 as select tt.pair_chess(42, 43) as id;
+select tt.setg((select id from t_e18), 'k7/8/8/8/8/8/n7/K1R5 w - - 0 1', 1);
+update public.mp_matches set bank1 = 5 where id = (select id from t_e18);
+select tt.ff((select id from t_e18), 10);
+select tt.ok(tt.cmv(tt.who((select id from t_e18), 1), (select id from t_e18), 'c1c8') @> '{"ok": false, "error": "timeout"}' and tt.row((select id from t_e18)) ->> 'winner' = '0' and tt.row((select id from t_e18)) ->> 'reason' = 'timeout-material', 'tah po vypršení hodin: soupeř bez materiálu na mat jen remizuje');
+create temp table t_e19 as select tt.pair_chess(42, 43) as id;
+select tt.setg((select id from t_e19), 'k7/8/8/8/8/8/1r6/K7 w - - 0 1', 1);
+update public.mp_matches set bank1 = 5 where id = (select id from t_e19);
+select tt.ff((select id from t_e19), 10);
+select tt.ok(tt.cmv(tt.who((select id from t_e19), 1), (select id from t_e19), 'a1b2') @> '{"ok": false, "error": "timeout"}' and tt.row((select id from t_e19)) ->> 'winner' = '2' and tt.row((select id from t_e19)) ->> 'reason' = 'timeout', 'a s věží prohrává ten, komu hodiny došly, i při pokusu o tah');
+
+-- odměna: vítěz vyhrané partie (aspoň 10 tahů, aspoň 45 vteřin) dostane Coiny, remíza nikdo
+create temp table t_e20 as select tt.pair_chess(44, 45) as id;
+create temp table t_e20c as select tt.coins(44) c44, tt.coins(45) c45;
+select tt.setg((select id from t_e20), 'k7/8/1K6/8/8/8/8/7Q w - - 0 1', 10);
+select tt.ff((select id from t_e20), 60);
+select tt.ok(tt.cmv(tt.who((select id from t_e20), 1), (select id from t_e20), 'h1h8') @> '{"status": "finished", "winner": 1, "reason": "checkmate"}', 'mat po dostatečně dlouhé partii');
+select tt.ok(tt.coins(tt.who((select id from t_e20), 1)) - (case when tt.who((select id from t_e20), 1) = 44 then (select c44 from t_e20c) else (select c45 from t_e20c) end) = 30, 'vítěz dostane 30 Coinů za výhru');
+select tt.ok(tt.coins(tt.who((select id from t_e20), 2)) = (case when tt.who((select id from t_e20), 2) = 44 then (select c44 from t_e20c) else (select c45 from t_e20c) end), 'poražený nic');
+create temp table t_e21 as select tt.pair_chess(44, 45) as id;
+create temp table t_e21c as select tt.coins(44) c44, tt.coins(45) c45;
+select tt.setg((select id from t_e21), 'k7/2K5/8/1Q6/8/8/8/8 w - - 0 1', 10);
+select tt.ff((select id from t_e21), 60);
+select tt.cmv(tt.who((select id from t_e21), 1), (select id from t_e21), 'b5b6');
+select tt.ok(tt.coins(44) = (select c44 from t_e21c) and tt.coins(45) = (select c45 from t_e21c) and tt.row((select id from t_e21)) ->> 'winner' = '0', 'remíza (pat) žádné Coiny nepřinese');
+-- vzdání platí jako dřív
+create temp table t_e22 as select tt.pair_chess(46, 47) as id;
+select tt.cplay((select id from t_e22), 'e2e4 e7e5');
+select tt.ok(tt.resign(tt.who((select id from t_e22), 1), (select id from t_e22)) @> '{"status": "finished", "winner": 2, "reason": "resign"}', 'vzdání v zápase s pravidly na serveru');
+-- zápasy založené před aktualizací pravidla nemají
+create temp table t_e23 as select tt.pair(46, 47, 'chess') as id;
+select tt.ok(not (tt.row((select id from t_e23)) -> 'rules' ? 'engine') and tt.row((select id from t_e23)) -> 'gstate' = 'null'::jsonb, 'zápas založený před aktualizací nemá engine ani stav postavení');
+select tt.ok(tt.cmv(tt.who((select id from t_e23), 1), (select id from t_e23), 'e2e5') ->> 'ok' = 'true', 'a hlídá jen pořadí a čas jako dřív (libovolný tah projde)');
+select tt.resign(46, (select id from t_e23));
+-- pomocné funkce serveru nejsou pro klienty
+select tt.ok(not has_function_privilege('authenticated', 'public.mp_chess_step(jsonb, smallint, text)', 'execute') and not has_function_privilege('anon', 'public.mp_chess_try(text[], text, int, int, int, text)', 'execute')
+  and not has_function_privilege('authenticated', 'public.mp_timeout_result(public.mp_matches, smallint)', 'execute') and not has_function_privilege('authenticated', 'public.mp_chess_moves(text[], text, int, boolean)', 'execute'), 'pravidla šachů nemůže volat klient přímo');
+
+-- ===== Ostatní tahové hry: tvar a meze tahů (Kouloví Kámoši, Warroom, Hannibal) =====
+select tt.mmk(n) from generate_series(50, 55) n;
+-- Tah hráče, který je na řadě (číslo tahu se doplní).
+create or replace function tt.xmv(mid uuid, p_payload jsonb, e boolean default true) returns jsonb language plpgsql as $$
+declare t int; s int;
+begin
+  select turn, move_count + 1 into t, s from public.mp_matches where id = mid;
+  return tt.mv(tt.who(mid, t), mid, s, p_payload, e);
+end $$;
+create or replace function tt.xfail(mid uuid, p_payload jsonb, msg text, e boolean default true) returns void language plpgsql as $$
+declare t int; s int; n int;
+begin
+  select turn, move_count + 1 into t, s from public.mp_matches where id = mid;
+  n := tt.who(mid, t);
+  perform tt.fails(n, format($q$select public.mp_move(%L, %s, %L::jsonb, %L)$q$, mid, s, p_payload::text, e), 'illegal_move', msg);
+end $$;
+-- Koule do misky: [typ, fáze, osm bodů x, y]
+create or replace function tt.ball(t int, x numeric default 200) returns jsonb language sql immutable as $$
+  select jsonb_build_array(t, 0.5) || (select jsonb_agg(v order by i, j) from (select i, j, case when j = 0 then x + i else 500 end as v from generate_series(0, 7) i, generate_series(0, 1) j) q)
+$$;
+grant execute on all functions in schema tt to public;
+select tt.ok(jsonb_array_length(tt.ball(0)) = 18, 'zkušební koule má 18 čísel');
+select tt.ok((select count(*) from (values (920370032,0,2),(3761641487,7,1),(2252023330,14,3),(1475571481,21,2),(2340457892,28,3),(1600748723,35,3),(1240767094,42,1),(2297155421,49,1),(1696368920,6,1),(551123351,13,0),(1839942154,20,0),(1218163169,27,0),(1412407756,34,0),(1245541051,41,0),(2978433246,48,0),(1157896869,5,3),(4200532928,12,2),(4155575327,19,1),(2319969010,26,1),(3679735209,33,3),(2351512308,40,1),(2312645059,47,0),(1897382982,4,1),(2645413613,11,0),(3017401192,18,1),(1682108327,25,3),(1721805018,32,1),(4079510129,39,0),(1237186844,46,1),(1163723,3,0),(1029680302,10,3),(1444285493,17,0),(2509746192,24,0),(1993950255,31,3),(2134451138,38,0),(4102492217,45,0),(223509572,2,1),(3922090707,9,0),(38576662,16,0),(3071144573,23,0)) v(seed,k,t) where public.mp_koulovi_type(seed, k) <> t) = 0, 'typ koule ze semínka sedí s hrou (40 kombinací semínka a pořadí, i semínka nad 2^31)');
+
+create temp table t_k1 as select tt.pair_new(50, 51, 'koulovikamosi') as id;
+create temp table t_k1s as select (tt.row((select id from t_k1)) ->> 'seed')::bigint as seed;
+select tt.ok(not (tt.row((select id from t_k1)) -> 'rules' ? 'engine') and tt.row((select id from t_k1)) -> 'rules' ->> 'check' = 'shape', 'Kouloví Kámoši mají jen kontrolu tvaru tahů (bez enginu pravidel)');
+select tt.xfail((select id from t_k1), jsonb_build_object('d', 1, 'k', 0, 'x', 200, 't', (public.mp_koulovi_type((select seed from t_k1s), 0) + 1) % 4), 'hod s jinou koulí, než určuje pořadí ze semínka, se odmítne', false);
+select tt.xfail((select id from t_k1), jsonb_build_object('d', 1, 'k', 1, 'x', 200, 't', public.mp_koulovi_type((select seed from t_k1s), 1)), 'hod se špatným pořadím se odmítne', false);
+select tt.xfail((select id from t_k1), jsonb_build_object('d', 1, 'k', 0, 'x', 9999, 't', public.mp_koulovi_type((select seed from t_k1s), 0)), 'hod mimo misku se odmítne', false);
+select tt.xfail((select id from t_k1), jsonb_build_object('d', 1, 'k', 0, 'x', 200, 't', public.mp_koulovi_type((select seed from t_k1s), 0), 'z', 1), 'hod s přebytečným polem se odmítne', false);
+select tt.xfail((select id from t_k1), '{"k":0}'::jsonb, 'zpráva bez hodu i stavu misky se odmítne', false);
+select tt.xfail((select id from t_k1), '"hod"'::jsonb, 'zpráva, která není objekt, se odmítne', false);
+select tt.ok(tt.xmv((select id from t_k1), jsonb_build_object('d', 1, 'k', 0, 'x', 200, 't', public.mp_koulovi_type((select seed from t_k1s), 0)), false) ->> 'ok' = 'true', 'hod se správnou koulí projde a hráč zůstává na tahu');
+select tt.xfail((select id from t_k1), jsonb_build_object('r', 1, 'k', 0, 'b', jsonb_build_array(tt.ball(0), tt.ball(0, 300))), 'po hodu přibude do misky nejvýš jedna koule', true);
+select tt.xfail((select id from t_k1), jsonb_build_object('r', 1, 'k', 0, 'b', jsonb_build_array(jsonb_build_array(0, 1, 2, 3))), 'koule se špatným počtem čísel se odmítne', true);
+select tt.xfail((select id from t_k1), jsonb_build_object('r', 1, 'k', 0, 'b', jsonb_build_array(tt.ball(99))), 'koule neznámého typu se odmítne', true);
+select tt.xfail((select id from t_k1), jsonb_build_object('r', 1, 'k', 0, 'b', jsonb_build_array(jsonb_set(tt.ball(0), '{4}', '99999'))), 'koule daleko mimo misku se odmítne', true);
+select tt.xfail((select id from t_k1), '{"r":1,"k":0,"b":"nic"}'::jsonb, 'stav misky, který není seznam, se odmítne', true);
+select tt.xfail((select id from t_k1), '{"r":1,"k":0,"b":[]}'::jsonb, 'prázdná miska po hodu je nemožná', true);
+select tt.xfail((select id from t_k1), '{"r":1,"k":0,"out":2}'::jsonb, 'vypadnutí koule se hlásí jen jako out: 1', true);
+create temp table t_k1t as select turn from public.mp_matches where id = (select id from t_k1);
+select tt.ok(tt.xmv((select id from t_k1), jsonb_build_object('r', 1, 'k', 0, 'b', jsonb_build_array(tt.ball(0))), true) ->> 'turn' = (3 - (select turn from t_k1t))::text, 'platný stav misky předá tah soupeři');
+select tt.ok(tt.xmv((select id from t_k1), jsonb_build_object('d', 1, 'k', 1, 'x', 250.5, 't', public.mp_koulovi_type((select seed from t_k1s), 1)), false) ->> 'ok' = 'true', 'soupeř hází druhou koulí v pořadí');
+select tt.ok(tt.xmv((select id from t_k1), jsonb_build_object('r', 1, 'k', 1, 'b', jsonb_build_array(tt.ball(0), tt.ball(1, 300))), true) ->> 'ok' = 'true', 'a po jeho hodu jsou v misce dvě koule');
+select tt.ok(tt.xmv((select id from t_k1), jsonb_build_object('d', 1, 'k', 2, 'x', 250, 't', public.mp_koulovi_type((select seed from t_k1s), 2)), false) ->> 'ok' = 'true', 'pořadí koulí pokračuje (třetí hod)');
+select tt.xfail((select id from t_k1), jsonb_build_object('r', 1, 'k', 2, 'b', jsonb_build_array(tt.ball(0), tt.ball(1, 300), tt.ball(1, 100), tt.ball(2, 400))), 'ze dvou koulí po hodu nemůžou být čtyři', true);
+select tt.ok(tt.xmv((select id from t_k1), '{"r":1,"k":2,"out":1}'::jsonb, true) ->> 'ok' = 'true', 'vypadnutí koule se ohlásí jako out');
+select tt.resign(50, (select id from t_k1));
+
+-- Warroom: den {t:'a', k, adv, m, d, w, l}
+create temp table t_w as select tt.pair_new(52, 53, 'warroom') as id;
+select tt.xfail((select id from t_w), '{"t":"a","k":2,"adv":10}'::jsonb, 'den se špatným pořadím se odmítne');
+select tt.xfail((select id from t_w), '{"t":"b","k":1,"adv":10}'::jsonb, 'jiný druh zprávy se odmítne');
+select tt.xfail((select id from t_w), '{"t":"a","k":1,"adv":-5}'::jsonb, 'záporný posun fronty se odmítne');
+select tt.xfail((select id from t_w), '{"t":"a","k":1,"adv":99999}'::jsonb, 'nesmyslně velký posun fronty se odmítne');
+select tt.xfail((select id from t_w), '{"t":"a","k":1,"adv":"deset"}'::jsonb, 'posun, který není číslo, se odmítne');
+select tt.xfail((select id from t_w), '{"t":"a","k":1,"adv":10,"d":"atomovka"}'::jsonb, 'neznámá doktrína se odmítne');
+select tt.xfail((select id from t_w), '{"t":"a","k":1,"adv":10,"extra":1}'::jsonb, 'zpráva s přebytečným polem se odmítne');
+select tt.xfail((select id from t_w), '{"t":"a","k":1,"adv":10,"w":1,"l":1}'::jsonb, 'výhra i prohra naráz se odmítne');
+select tt.xfail((select id from t_w), jsonb_build_object('t', 'a', 'k', 1, 'adv', 10, 'm', repeat('x', 301)), 'příliš dlouhý popis dne se odmítne');
+select tt.xfail((select id from t_w), '{"t":"a","k":1,"adv":0,"w":1}'::jsonb, 'výhra hned první den bez postupu fronty se odmítne');
+select tt.ok(tt.xmv((select id from t_w), '{"t":"a","k":1,"adv":40,"m":"Útok","d":"fortress"}'::jsonb) ->> 'ok' = 'true', 'platný první den s doktrínou projde');
+select tt.xfail((select id from t_w), '{"t":"a","k":2,"adv":10}'::jsonb, 'druhý hráč má vlastní pořadí dnů: jeho první den je k = 1, ne 2');
+select tt.ok(tt.xmv((select id from t_w), '{"t":"a","k":1,"adv":30,"d":"blitz"}'::jsonb) ->> 'ok' = 'true', 'druhý hráč začíná od k = 1');
+select tt.xfail((select id from t_w), '{"t":"a","k":2,"adv":10,"d":"fortress"}'::jsonb, 'doktrínu lze poslat jen první den');
+select tt.xfail((select id from t_w), '{"t":"a","k":2,"adv":10,"w":1}'::jsonb, 'výhra po 50 bodech postupu se odmítne (fronta se musí dotlačit z poloviny na maximum)');
+select tt.ok(tt.xmv((select id from t_w), '{"t":"a","k":2,"adv":120,"w":1}'::jsonb) ->> 'ok' = 'true', 'výhra po dostatečném postupu projde');
+select tt.resign(52, (select id from t_w));
+
+-- Hannibal: tah {t:'turn', k, a, h, e}
+create temp table t_h as select tt.pair_new(54, 55, 'hannibal', 'duel', '{"preset":"small"}') as id;
+select tt.xfail((select id from t_h), '{"t":"turn","k":1,"a":[],"h":5,"e":0}'::jsonb, 'tah se špatným pořadím se odmítne (první má k = 0)');
+select tt.xfail((select id from t_h), '{"t":"turn","k":0,"a":[["x"]],"h":5,"e":0}'::jsonb, 'neznámá akce se odmítne');
+select tt.xfail((select id from t_h), '{"t":"turn","k":0,"a":[["m","u1",12,0]],"h":5,"e":0}'::jsonb, 'pohyb mimo mapu (sloupec 12) se odmítne');
+select tt.xfail((select id from t_h), '{"t":"turn","k":0,"a":[["m","u1",3]],"h":5,"e":0}'::jsonb, 'pohyb bez řady se odmítne');
+select tt.xfail((select id from t_h), '{"t":"turn","k":0,"a":[["a","u1"]],"h":5,"e":0}'::jsonb, 'útok bez cíle se odmítne');
+select tt.xfail((select id from t_h), '{"t":"turn","k":0,"a":"nic","h":5,"e":0}'::jsonb, 'akce, které nejsou seznam, se odmítnou');
+select tt.xfail((select id from t_h), '{"t":"turn","k":0,"a":[],"h":-1,"e":0}'::jsonb, 'záporný otisk stavu se odmítne');
+select tt.xfail((select id from t_h), '{"t":"turn","k":0,"a":[],"h":4294967296,"e":0}'::jsonb, 'otisk větší než 32 bitů se odmítne');
+select tt.xfail((select id from t_h), '{"t":"turn","k":0,"a":[],"h":1.5,"e":0}'::jsonb, 'otisk, který není celé číslo, se odmítne');
+select tt.xfail((select id from t_h), '{"t":"turn","k":0,"a":[],"h":5,"e":3}'::jsonb, 'příznak konce jen 0 nebo 1');
+select tt.xfail((select id from t_h), '{"t":"turn","k":0,"a":[],"h":5,"e":0,"x":1}'::jsonb, 'zpráva s přebytečným polem se odmítne');
+select tt.xfail((select id from t_h), jsonb_build_object('t', 'turn', 'k', 0, 'a', (select jsonb_agg(jsonb_build_array('u')) from generate_series(1, 151)), 'h', 5, 'e', 0), 'víc než 150 akcí v jednom tahu se odmítne');
+select tt.ok(tt.xmv((select id from t_h), '{"t":"turn","k":0,"a":[["m","u1",3,2],["a","u1","e3"],["b",7],["u"]],"h":123456,"e":0}'::jsonb) ->> 'ok' = 'true', 'platný tah s pohybem, útokem, schopností a vrácením projde');
+select tt.xfail((select id from t_h), '{"t":"turn","k":0,"a":[],"h":5,"e":0}'::jsonb, 'druhý hráč nemůže poslat k = 0 znovu');
+select tt.ok(tt.xmv((select id from t_h), '{"t":"turn","k":1,"a":[],"h":4294967295,"e":1}'::jsonb) ->> 'ok' = 'true', 'tah bez akcí a s koncem bitvy projde');
+select tt.resign(54, (select id from t_h));
+-- zápas, který skončil, se dál neřeší; pomocné funkce nejsou pro klienty
+select tt.ok(not has_function_privilege('authenticated', 'public.mp_check_payload(public.mp_matches, smallint, jsonb)', 'execute') and not has_function_privilege('authenticated', 'public.mp_koulovi_type(bigint, int)', 'execute'), 'kontrolu tahů nemůže volat klient přímo');
+
+
+-- ===== Žebříček, rychlé reakce a odveta =====
+select tt.mmk(n) from generate_series(56, 59) n;
+-- zápasy z dřívějších částí testu žebříček už naplnily (27 hráčů v šachách): pro zkoušku pořadí se začíná čistý
+select tt.ok((select count(*) from public.mp_record where game_id = 'chess') >= 20, 'dřívější zápasy testu už zapsaly výsledky do žebříčku');
+delete from public.mp_record;
+-- Odehraje zápas dvou účtů do konce: dost tahů a času, pak vzdá ten, kdo je na řadě po p_loser_n (vyhrává druhý). Vrací id zápasu.
+create or replace function tt.played(a int, b int, p_loser int, g text default 'chess', m text default 'duel') returns uuid language plpgsql as $$
+declare v_id uuid;
+begin
+  v_id := tt.pair(a, b, g, m);
+  perform tt.play(v_id, 10);
+  perform tt.ff(v_id, 60);
+  perform tt.resign(p_loser, v_id);
+  return v_id;
+end $$;
+grant execute on all functions in schema tt to public;
+
+-- žebříček: zápas s dost tahy a dostatečně dlouhý se započítá, krátký ne
+create temp table t_l0 as select tt.pair(56, 57, 'chess') as id;
+select tt.play((select id from t_l0), 2);
+select tt.resign(56, (select id from t_l0));
+select tt.ok((select count(*) from public.mp_record where user_id in (tt.mu(56), tt.mu(57))) = 0, 'krátký zápas (vzdaný po dvou tazích) se do žebříčku nepočítá');
+create temp table t_l1 as select tt.played(56, 57, 57) as id;   -- vyhrává 56
+select tt.ok((select rating from public.mp_record where user_id = tt.mu(56) and game_id = 'chess') = 1016 and (select rating from public.mp_record where user_id = tt.mu(57) and game_id = 'chess') = 984, 'řádně odehraná výhra: vítěz 1016, poražený 984 (Elo, K = 32)');
+select tt.ok((select wins from public.mp_record where user_id = tt.mu(56) and game_id = 'chess') = 1 and (select losses from public.mp_record where user_id = tt.mu(57) and game_id = 'chess') = 1, 'výhry a prohry se započítají');
+create temp table t_l2 as select tt.played(56, 57, 57) as id;
+select tt.ok((select rating from public.mp_record where user_id = tt.mu(56) and game_id = 'chess') = 1031 and (select rating from public.mp_record where user_id = tt.mu(57) and game_id = 'chess') = 969, 'druhá výhra nad slabším: míň bodů (1031 a 969)');
+select tt.ok(not exists (select 1 from public.mp_record where user_id in (tt.mu(56), tt.mu(57)) and game_id <> 'chess'), 'záznam je jen v zahrané hře');
+-- remíza: oba hlásí draw
+create temp table t_l3 as select tt.pair(56, 57, 'chess') as id;
+select tt.play((select id from t_l3), 10);
+select tt.ff((select id from t_l3), 60);
+select tt.rep(56, (select id from t_l3), 'draw'); select tt.rep(57, (select id from t_l3), 'draw');
+select tt.ok((select draws from public.mp_record where user_id = tt.mu(56) and game_id = 'chess') = 1 and (select rating from public.mp_record where user_id = tt.mu(56) and game_id = 'chess') between 1016 and 1030, 'remíza: počítá se jako remíza a silnější hráč o pár bodů přijde');
+-- týmová hra: výhry bez hodnocení
+create temp table t_l4 as select tt.pair(58, 59, 'rocket', 'coop') as id;
+select tt.ff((select id from t_l4), 70);
+select tt.rep(58, (select id from t_l4), 'win'); select tt.rep(59, (select id from t_l4), 'win');
+select tt.ok((select wins from public.mp_record where user_id = tt.mu(58) and game_id = 'rocket' and mode = 'coop') = 1 and (select rating from public.mp_record where user_id = tt.mu(58) and game_id = 'rocket' and mode = 'coop') = 1000, 'týmová hra: výhra oběma, hodnocení se nemění');
+-- čtení žebříčku
+select tt.as_mu(56);
+select tt.ok((public.mp_leaderboard('chess', 'duel', 10) -> 'rows' -> 0 ->> 'rank') = '1' and (public.mp_leaderboard('chess', 'duel', 10) -> 'rows' -> 0 ->> 'name') = 'Hrac56' and (public.mp_leaderboard('chess', 'duel', 10) -> 'rows' -> 0 ->> 'me')::boolean, 'žebříček: první je Hrac56, je to volající');
+select tt.ok((public.mp_leaderboard('chess', 'duel', 10) -> 'rows' -> 1 ->> 'name') = 'Hrac57' and (public.mp_leaderboard('chess', 'duel', 10) -> 'rows' -> 1 ->> 'me')::boolean = false and (public.mp_leaderboard('chess', 'duel', 10) ->> 'players')::int = 2, 'druhý je Hrac57 a hráčů je dva');
+select tt.ok((public.mp_leaderboard('chess', 'duel', 1) -> 'rows' -> 1) is null and (public.mp_leaderboard('chess', 'duel', 1) -> 'me' ->> 'rank') = '1', 'limit řádků platí a pozice volajícího je vždy vedle');
+select tt.as_mu(57);
+select tt.ok((public.mp_leaderboard('chess', 'duel', 1) -> 'me' ->> 'rank') = '2' and (public.mp_leaderboard('chess', 'duel', 1) -> 'me' ->> 'losses') = '2', 'poražený vidí svou pozici mimo seznam');
+select tt.ok(public.mp_leaderboard('hannibal', 'duel') -> 'rows' = '[]'::jsonb and public.mp_leaderboard('hannibal', 'duel') -> 'me' = 'null'::jsonb, 'žebříček hry, ve které nikdo nehrál, je prázdný');
+select tt.as_mu(58);
+select tt.ok((public.mp_leaderboard('rocket', 'coop') ->> 'team')::boolean and (public.mp_leaderboard('rocket', 'coop') -> 'rows' -> 0 ->> 'wins') = '1', 'týmový žebříček řadí podle výher');
+select tt.fails(58, $$select public.mp_leaderboard('nope', 'duel')$$, 'unknown_mode', 'neznámá hra v žebříčku');
+select tt.fails(null, $$select public.mp_leaderboard('chess', 'duel')$$, 'not_authenticated', 'žebříček jen pro přihlášené');
+select tt.ok(not has_table_privilege('authenticated', 'public.mp_record', 'select') and not has_table_privilege('authenticated', 'public.mp_record', 'insert') and not has_table_privilege('authenticated', 'public.mp_record', 'update')
+  and not has_table_privilege('anon', 'public.mp_record', 'select') and (select relrowsecurity from pg_class where oid = 'public.mp_record'::regclass), 'tabulku žebříčku klient nečte ani nezapíše přímo (práva odebraná, RLS zapnutá)');
+set role authenticated;
+select tt.fails(58, $$select count(*) from public.mp_record$$, '42501', 'přihlášený hráč nepřečte tabulku žebříčku přímo');
+select tt.fails(58, $$update public.mp_record set rating = 3000$$, '42501', 'a hodnocení si nepřepíše');
+reset role;
+select tt.ok(not has_function_privilege('anon', 'public.mp_leaderboard(text, text, int)', 'execute') and has_function_privilege('authenticated', 'public.mp_leaderboard(text, text, int)', 'execute') and not has_function_privilege('authenticated', 'public.mp_record_result(uuid)', 'execute'), 'oprávnění: žebříček smí číst přihlášený, zapisovat jen server');
+
+-- rychlé reakce
+create temp table t_em as select tt.pair(56, 57, 'chess') as id;
+select tt.ok((tt.st(57, (select id from t_em)) -> 'match' -> 'opp_emote') = 'null'::jsonb, 'bez reakce je opp_emote prázdné');
+select tt.as_mu(56);
+select tt.ok(public.mp_emote((select id from t_em), 4) = '{"ok": true}', 'reakce se pošle');
+select tt.ok((tt.st(57, (select id from t_em)) -> 'match' -> 'opp_emote' ->> 'c') = '4' and (tt.st(57, (select id from t_em)) -> 'match' -> 'opp_emote' ->> 'n') = '1' and ((tt.st(57, (select id from t_em)) -> 'match' -> 'opp_emote' ->> 'age')::bigint) < 5000, 'soupeř ji vidí (kód 4, pořadí 1, čerstvá)');
+select tt.ok((tt.st(56, (select id from t_em)) -> 'match' -> 'opp_emote') = 'null'::jsonb, 'odesílatel svou reakci jako soupeřovu nevidí');
+select tt.fails(56, format($$select public.mp_emote(%L, 5)$$, (select id from t_em)), 'too_soon', 'druhá reakce hned po první se odmítne (jedna za 3 vteřiny)');
+update public.mp_matches set emotes = jsonb_set(emotes, array[tt.slot((select id from t_em), 56)::text, 'at'], to_jsonb((extract(epoch from now()) * 1000)::bigint - 5000)) where id = (select id from t_em);
+select tt.ok(public.mp_emote((select id from t_em), 5) = '{"ok": true}' and (tt.st(57, (select id from t_em)) -> 'match' -> 'opp_emote' ->> 'n') = '2', 'po odstupu jde další a má vyšší pořadí');
+select tt.fails(56, format($$select public.mp_emote(%L, 0)$$, (select id from t_em)), 'invalid_emote', 'kód 0 neexistuje');
+select tt.fails(56, format($$select public.mp_emote(%L, 9)$$, (select id from t_em)), 'invalid_emote', 'kód 9 neexistuje');
+select tt.fails(56, format($$select public.mp_emote(%L, null)$$, (select id from t_em)), 'invalid_emote', 'chybějící kód se odmítne');
+select tt.fails(58, format($$select public.mp_emote(%L, 1)$$, (select id from t_em)), 'not_in_match', 'cizí hráč reakci nepošle');
+select tt.resign(56, (select id from t_em));
+select tt.fails(57, format($$select public.mp_emote(%L, 1)$$, (select id from t_em)), 'not_active', 'po konci zápasu reakce nejdou');
+
+-- odveta (t_em je právě skončený zápas 56 vs 57 vzdáním)
+create temp table t_rm1 as select tt.pair(58, 59, 'chess') as id;
+select tt.fails(58, format($$select public.mp_rematch(%L)$$, (select id from t_rm1)), 'not_finished', 'odveta za běžící zápas nejde');
+select tt.resign(58, (select id from t_rm1));
+select tt.ok(public.mp_rematch((select id from t_rm1)) = '{"status": "waiting"}', 'první hráč chce odvetu: čeká');
+select tt.ok((tt.st(59, (select id from t_rm1)) -> 'match' -> 'rematch' ->> 'theirs') = 'true' and (tt.st(59, (select id from t_rm1)) -> 'match' -> 'rematch' ->> 'mine') = 'false', 'soupeř vidí, že chce odvetu');
+select tt.as_mu(58);
+select tt.ok(public.mp_rematch((select id from t_rm1)) ->> 'status' = 'waiting', 'opakované ptaní nic nevytvoří');
+select tt.as_mu(59);
+create temp table t_rm2 as select public.mp_rematch((select id from t_rm1)) as r;
+select tt.ok((select r ->> 'status' from t_rm2) = 'matched' and (select r -> 'match' ->> 'game' from t_rm2) = 'chess', 'když ji chce i druhý, vznikne nový zápas');
+select tt.ok((select (r -> 'match' ->> 'slot')::int from t_rm2) = case when tt.slot((select id from t_rm1), 59) = 1 then 2 else 1 end, 'strany (barvy) se prohodí');
+select tt.ok((select tt.row((r -> 'match' ->> 'id')::uuid) -> 'rules' ->> 'engine' from t_rm2) = 'chess' and (select r -> 'match' -> 'params' ->> 'tc' from t_rm2) = '5+3', 'nový zápas má stejné volby a pravidla na serveru');
+select tt.as_mu(58);
+select tt.ok(public.mp_rematch((select id from t_rm1)) -> 'match' ->> 'id' = (select r -> 'match' ->> 'id' from t_rm2), 'první hráč dostane při dalším ptaní tentýž nový zápas');
+select tt.ok((tt.st(58, (select id from t_rm1)) -> 'match' -> 'rematch' ->> 'next') = (select r -> 'match' ->> 'id' from t_rm2), 'a starý zápas ukazuje na nový');
+select tt.ok(public.mp_active() ->> 'id' = (select r -> 'match' ->> 'id' from t_rm2), 'nový zápas je u obou rozehraný (mp_active)');
+select tt.fails(56, format($$select public.mp_rematch(%L)$$, (select id from t_rm1)), 'not_in_match', 'cizí hráč odvetu nezažádá');
+-- pozdě a obsazený hráč
+select tt.resign(58, (select r -> 'match' ->> 'id' from t_rm2)::uuid);
+update public.mp_matches set finished_at = now() - interval '11 minutes' where id = (select r -> 'match' ->> 'id' from t_rm2)::uuid;
+select tt.fails(58, format($$select public.mp_rematch(%L)$$, (select r -> 'match' ->> 'id' from t_rm2)), 'too_late', 'po deseti minutách je na odvetu pozdě');
+create temp table t_rm3 as select tt.pair(58, 59, 'chess') as id;
+select tt.resign(58, (select id from t_rm3));
+select tt.ok(public.mp_rematch((select id from t_rm3)) ->> 'status' = 'waiting', 'další odveta: první čeká');
+create temp table t_rm4 as select tt.pair(58, 56, 'warroom') as id;
+select tt.fails(59, format($$select public.mp_rematch(%L)$$, (select id from t_rm3)), 'already_in_match', 'hráč, který už hraje jinde, odvetu nezačne');
+select tt.resign(58, (select id from t_rm4));
 
 -- ===== Realtime: kdo smí do kanálu =====
 create temp table t_rt as select tt.pair(20, 21, 'rocket', 'pvp') as id;

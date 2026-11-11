@@ -466,6 +466,7 @@ export const GameLauncher = ({ game }) => {
         gameFx={gameFx}
         onExit={() => { setMpMatch(null); setMpAuto(null); }}
         onAgain={() => { setMpAuto({ mode: mpMatch.mode, params: mpMatch.params }); setMpMatch(null); setMpLobby(true); }}
+        onRematch={(m) => setMpMatch(m)}
         onCoins={(n) => setCoins((c) => c + n)}
       />
     );

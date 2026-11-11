@@ -229,7 +229,14 @@ export class MpSession {
         if (this.moves.length === job.seq - 1) {
           this.moves.push({ seq: job.seq, p: this.slot, payload: job.payload, end: job.endTurn, at: this.serverNow(), mine: true, replay: false });
         }
-        this._setView(Object.assign({}, this.match, { turn: data.turn ?? this.match.turn, deadline: data.deadline ?? this.match.deadline, bank: data.bank || this.match.bank, move_count: Math.max(this.match.move_count || 0, job.seq), turn_started: this.serverNow() }));
+        const view = Object.assign({}, this.match, { turn: data.turn ?? this.match.turn, deadline: data.deadline ?? this.match.deadline, bank: data.bank || this.match.bank, move_count: Math.max(this.match.move_count || 0, job.seq), turn_started: this.serverNow() });
+        // Server, který hlídá pravidla (šachy), uzavře zápas rovnou tímhle tahem (mat, pat, remíza): konec se převezme z odpovědi.
+        if (data.status && data.status !== 'active') {
+          if (data.match) Object.assign(view, data.match);
+          else { view.status = data.status; view.winner = data.winner ?? null; view.reason = data.reason ?? null; view.deadline = null; }
+        }
+        this._setView(view);
+        this._checkEnd();
         job.resolve(data);
         this.kick();
       }

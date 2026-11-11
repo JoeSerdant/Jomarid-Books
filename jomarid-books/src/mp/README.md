@@ -35,11 +35,47 @@ Kanál `mp:<id zápasu>` pouští jen hráče zápasu (pravidla na `realtime.mes
 
 Hra o odměně nerozhoduje: Coiny vyplácí server podle pravidel v `mp_cfg` (výhra, délka zápasu, denní strop, soupeř).
 
+## Společný svět (net.js): jak hry sdílejí jeden svět
+
+Rychlé hry (Polygon aréna, Rocket) nepočítají každý svůj svět. Jeden hráč je **hostitel**: počítá celý svět jako v sólové hře (nepřátele, boty, střely, bonusy, zásahy). Ostatní jsou **hosté**: posílají hostiteli vstupy a od něj dostávají obraz světa, který kreslí stejným kreslením jako sólová hra. Všichni tak mají opravdu totéž. Stavební kameny jsou v `src/gameContent/shared/net.js` (vkládá se do dokumentu hry před jejím `mp.js`):
+
+- `Replicator` (hostitel): z polí entit ve hře sestaví zprávu jen s tím, co se změnilo. Posílá se "odhad podle rychlosti": střela letící rovně se pošle jednou, tvar, který stojí, taky; entita se pošle znovu, až když se skutečnost rozejde s odhadem hosta víc než o toleranci, nebo po delší době. Každé 4 s přijde klíčová zpráva se stavem všeho (host podle ní odstraní, co už neexistuje); nově příchozí o úplnou zprávu i s popisy požádá.
+- `Mirror` (host): zprávy skládá do tabulky entit a vrací jejich polohu odhadnutou podle rychlosti a vyhlazenou: při opravě se zbytek chyby plynule ztrácí (kolem 0,13 s), takže nic neskáče. Test se zpožděním 60 ms a kolísáním 40 ms: skoky mezi snímky do 6 jednotek.
+- `Roster`: kdo je ve hře. Hostitelem je nejdřív příchozí. Kdo je hostitel doopravdy, určuje **číslo období** (term): každé převzetí ho zvýší a vyšší vyhrává, takže se vrátivší starý hostitel (třeba po uspání karty) nikoho nepřeskočí a stane se hostem.
+- Když hostitel ztichne na 5 s nebo odejde, převezme to nejdřív příchozí z ostatních z toho, co měl na obrazovce (boti, tvary, hráči zůstanou, jen střely se zahodí).
+
+Dvě omezení, která plynou z Realtime: každá zpráva se u Supabase počítá i za každého příjemce a bezplatný projekt snese **100 zpráv za vteřinu** a **2 miliony zpráv za měsíc**. Zprávy se proto posílají jen při změně a s víc hráči se zpomalují (`ratesFor` v `polygonArena/mp.js`: pro dva hráče asi 20 zpráv za vteřinu, pro šest ještě pod limit). Prohlížeč hostitele musí být vidět (uspaná karta se přestane počítat, hostitelství se pak předá).
+
 ## Sdílená aréna (Polygon aréna)
 
 Žádné zápasy ani hledání soupeře: hráč vstoupí do jedné společné arény (`MpArenaScreen.jsx`, tlačítko Vstoupit do arény v okně Hrát online). Hra dostane `init.arena = true` (`initForArena`) a kanál `mp-arena:polygonarena`; most `attachArenaBridge` má jen operace kanálu (`rt-*`), `claim(sekundy, skóre)` (odměna za vyhrané kolo, server: `mp_arena_claim`) a `close`.
 
-V `polygonArena/mp.js` je deset míst: hráči a boti dohromady. Když se připojí hráč, jeden bot zmizí; když odejde, bot se vrátí. Aréna běží jen tomu, kdo ji má otevřenou. Každý prohlížeč počítá svou kopii světa a ostatní hráče dostane jako „duchy“ (tanky řízené podle sítě, ne umělou inteligencí); střely ducha vznikají normálně z jeho třídy a stavby a zraňují jen toho, na koho letí, takže si každý hlídá zásahy na vlastním tanku. Boti, tvary a bonusy má každý prohlížeč vlastní, zóny jsou u všech stejné. Kolo trvá 160 vteřin; vyhrává ho ten, komu za kolo nejvíc přibylo bodů.
+`polygonArena/mp.js` je deset míst: hráči a boti dohromady (když se připojí hráč, jeden bot zmizí; když odejde, bot se vrátí). Hostitel počítá celou arénu. Host si **pohyb svého tanku počítá sám** (odezva nic nestojí; hostitel mu polohu uvěří, jen ji omezí rychlostí, takže se nedá "teleportovat"). **Zdraví, zásahy, zkušenosti, třídy a výhody určuje hostitel**: host posílá jen vstupy (poloha, míření, střelba) a příkazy (koupit vlastnost, vybrat třídu nebo výhodu, skok, znovuzrození), které hostitel ověří (vlastnost jen za bod, třída a výhoda jen z nabídky). Pro rovné podmínky má aréna vlastní obtížnost bez bonusů pro hráče. Kolo trvá 160 s; vítěze kola oznámí hostitel a výherce o odměnu požádá server.
+
+## Rocket: spolupráce jako společný svět
+
+Spolupráce (dvě rakety) používá stejný základ: bojiště počítá **hostitel** (hráč na místě 1 v zápase) včetně druhé lodi, kterou řídí poloha od hosta; **host** (místo 2) dostává obraz (nepřátelé, bossové, střely, bonusy, paprsky a vlny) a posílá jen polohu své lodi a použití bomby. Nepřátelé míří na nejbližší živou loď, zásahy a bonusy druhé lodi počítá hostitel stejnými pravidly jako u jeho lodi (`rocket/mp.js`: `peerHits`). Zdraví lodí určuje hostitel. Boj dvou hráčů (souboj) zůstává u dvou samostatných polovin bojiště se stejnými vlnami podle společného času, protože tam se každý brání vlastním nepřátelům a jde o souboj lodí. Hostitel hry nemá zálohu: když jeho hra ztichne, host to uvidí a může hru ukončit, server pak zápas uzavře.
+
+## Server hlídá pravidla tahových her (db/multiplayer.sql)
+- **Šachy** (`mp_chess_*`): server drží stav partie v `mp_matches.gstate` (šachovnice jako 64 znaků, strana na tahu, práva rošády, pole pro braní mimochodem,
+  počítadlo půltahů, počty pozic od posledního nevratného tahu). `mp_move` tah `{c: "e2e4"}` přehraje (`mp_chess_step`): nelegální tah je chyba `illegal_move`,
+  mat vyhrává ten, kdo táhl, pat, nedostatek materiálu, padesát tahů a trojí opakování jsou remíza a zápas se uzavře hned tímhle tahem (odpověď na tah nese
+  `status`, `winner`, `reason` a celý pohled `match`). Hlášení výsledku (`mp_report`) se u šachů nebere. Při vypršení času hráči prohrává, jen když soupeř ještě
+  může matovat, jinak je to remíza `timeout-material` (`mp_timeout_result`). Zápas, který začal před nasazením téhle verze (v pravidlech zápasu není `engine`), dohraje po starém.
+- **Kouloví Kámoši, Warroom, Hannibal** (`mp_check_payload`, v pravidlech zápasu `check: "shape"`): fyziku a bitvu server nepřehraje, kontroluje tvar a meze tahu
+  (žádná pole navíc, pořadí, čísla v rozumných mezích) a u Kouloví Kámošů typ hozené koule ze semínka (`mp_koulovi_type`, stejný vzorec jako `mpType` ve hře). Co
+  tahová hra spočítá sama (výsledek fyziky, bitvy), zůstává na soupeřově ověření u sebe a na shodě hlášení obou hráčů.
+- Testy: `db/tests/multiplayer.test.sql` (perft šachového enginu na pěti známých pozicích, scénáře konců partií, hodiny, odměna, kontroly ostatních her).
+
+## Žebříček, rychlé reakce a odveta
+- **Žebříček** (`mp_record`, `mp_leaderboard`, `MpBoard.jsx` v okně Hrát online): po každém řádně odehraném zápase (stejné podmínky jako pro odměnu: dost tahů a dost
+  dlouho) server zapíše výhru, prohru nebo remízu a upraví hodnocení (Elo, start 1000, K = 32, nejméně 100). Týmová hra (Rocket spolupráce) počítá jen výhry. Žebříček
+  je zvlášť pro každou hru a režim a ukáže prvních 10 a pozici hráče. Je to jen pro zábavu, žádné Coiny z něj neplynou. Když SQL na serveru není nové, okno napíše,
+  že žebříček není zapnutý.
+- **Rychlé reakce** (`mp_emote`, `emotes.js`): osm hotových reakcí, kód 1 až 8; server drží poslední reakci každého hráče a soupeř ji dostane v pohledu na zápas
+  (`opp_emote`: kód, pořadí, stáří) s dalším dotazem na stav, takže to nepotřebuje Realtime. Jedna za 3 vteřiny, jen v běžícím zápase.
+- **Odveta** (`mp_rematch`, tlačítko na konci zápasu): chtějí-li ji oba do 10 minut od konce, vznikne nový zápas se stejnými volbami a prohozenými stranami
+  (barvami). První hráč čeká a ptá se znovu, druhý ji dostane hned; soupeřova žádost je vidět v `rematch` v pohledu na zápas.
 
 ## Jak se přidá další hra
 

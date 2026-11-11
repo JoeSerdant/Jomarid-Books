@@ -898,34 +898,69 @@ test('ovladač: zapojení do rozhraní (načtení po vstupech, hlášení, hint 
 });
 
 /* =====================================================================
-   Sdílená aréna (multiplayer): boti uvolňují místa hráčům, duchové se řídí sítí
+   Sdílená aréna (multiplayer): jeden hostitel počítá svět, hosté ho dostávají po síti a posílají vstupy
    ===================================================================== */
 const ARENA_FILE = fs.readFileSync(new URL('../mp.js', import.meta.url), 'utf8');
-// Atrapa rozhraní window.jomaridMP z appky: zprávy z kanálu hra dostane přes handlers.rt, odeslané se zapisují do sent.
-function arenaGame({ seed = 7 } = {}) {
-  const handlers = {}, sent = [], claims = []; let clock = 1_000_000, closed = 0;
-  const MP = {
-    enabled: true, init: { arena: true, kind: 'arena', me: { id: 'u1', name: 'Anna' }, offset: 0 },
-    on(ev, fn) { handlers[ev] = fn; return MP; }, listen() {},
-    rt: { open() {}, send(p, o) { sent.push([p, !!(o && o.force)]); }, track() {}, close() {} },
-    claim(sec, score) { claims.push([sec, score]); return Promise.resolve({ granted: 15, capped: false }); },
-    close() { closed++; }, serverNow: () => clock,
-  };
-  // Časovač sítě se v testu nespouští sám (setInterval je prázdná atrapa): zprávy a čas řídí test
-  const game = loadGame({ seed, globals: { jomaridMP: MP, setInterval: () => 1, clearInterval() {} } });
-  game.ctx.__arenaMp.V.clock = () => clock;             // duchové se vyhlazují podle času příchodu zpráv: v testu ho řídí falešné hodiny
-  const A = game.ctx.__arenaMp;
-  const peer = (p) => handlers.rt({ p });
-  const step = (n = 60) => { for (let i = 0; i < n; i++) game.run('update(STEP)'); };
-  const counts = () => game.run(`(() => { const t = tanks.filter(x => !x.boss && !x.temp); return { all: t.length, bots: t.filter(x => !x.isPlayer && !x.remote).length, ghosts: t.filter(x => x.remote).length, alive: t.filter(x => x.alive).length }; })()`);
-  return { game, MP, A, handlers, sent, claims, peer, step, counts, setClock: (v) => { clock = v; }, advance: (ms) => { clock += ms; }, get closed() { return closed; } };
-}
-const info = (id, over = {}) => Object.assign({ k: 'i', id, cls: 'basic', lv: 1, st: [0, 0, 0, 0, 0, 0, 0, 0], pk: [], sc: 0, kl: 0, nm: 'Bob', co: '#ff0000' }, over);
-const state = (id, over = {}) => Object.assign({ k: 's', id, q: 1, t: 1_000_000, x: 1500, y: 1500, a: 1, f: 0, hp: 50, mh: 100, al: 1 }, over);
+const P = (v) => JSON.parse(JSON.stringify(v));
+function rngOf(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
-test('aréna: pomocné funkce (počet botů, kola, vítěz kola, vyhlazení ducha)', () => {
-  const { A } = arenaGame();
-  const P = (v) => JSON.parse(JSON.stringify(v));
+// Několik her (každá ve vlastním kontextu) propojených simulovanou sítí: zpráva dorazí po latency +- jitter ms. Čas je společný a řídí ho test.
+// frozen = karta na pozadí (nic nepočítá, zprávy ale přijímá), cut = odpojený od sítě.
+function cluster({ latency = 50, jitter = 0, seed = 1 } = {}) {
+  const nodes = {}, queue = []; let t = 1_000_000, count = 0, sentCount = 0;
+  const rnd = rngOf(seed);
+  const C = {
+    nodes, get t() { return t; }, get sentCount() { return sentCount; }, queue,
+    add(id, name) {
+      const handlers = {}, claims = [], sentLog = []; let closed = 0;
+      const node = { id, name, handlers, claims, sentLog, frozen: false, cut: false, ticks: 0, get closed() { return closed; } };
+      const MP = {
+        enabled: true, init: { arena: true, kind: 'arena', me: { id, name }, offset: 0 },
+        on(ev, fn) { handlers[ev] = fn; return MP; }, listen() {},
+        rt: {
+          open() {}, track() {}, close() {},
+          send(p) {
+            if (node.cut) return false;
+            const copy = P(p); sentLog.push(copy); sentCount++;
+            for (const o of Object.values(nodes)) if (o !== node && !o.cut) queue.push({ at: t + latency + (jitter ? (rnd() - 0.5) * 2 * jitter : 0), to: o, p: copy });
+            return true;
+          },
+        },
+        claim(sec, score) { claims.push([sec, score]); return Promise.resolve({ granted: 15, capped: false }); },
+        close() { closed++; }, serverNow: () => t,
+      };
+      node.game = loadGame({ seed: 100 + ++count, globals: { jomaridMP: MP, setInterval: () => 1, clearInterval() {} } });
+      node.A = node.game.ctx.__arenaMp; node.A.V.clock = () => t;
+      node.run = (code) => node.game.run(code);
+      node.G = (name) => node.game.G(name);
+      nodes[id] = node;
+      handlers['rt-status']({ status: 'open' });
+      return node;
+    },
+    // posune čas o ms: zprávy se doručují, hra běží po 1/60 s, síťový tik po 100 ms
+    run(ms) {
+      const end = t + ms;
+      while (t < end) {
+        t += 1000 / 60;
+        queue.sort((a, b) => a.at - b.at);
+        while (queue.length && queue[0].at <= t) { const m = queue.shift(); if (!m.to.cut) m.to.handlers.rt({ p: m.p }); }
+        for (const n of Object.values(nodes)) {
+          if (n.frozen || n.cut) continue;
+          n.game.run('update(STEP)');
+          if (++n.ticks % 6 === 0) n.A.netTick();
+        }
+      }
+    },
+    // všichni vidí totéž: stejné tanky (id, třída, jméno), tvary a počet bonusů
+    world(n) { return n.run(`({ tanks: tanks.filter(t => !t.boss).map(t => [t.id, t.cls, t.name, t.alive ? 1 : 0, Math.round(t.x), Math.round(t.y)]), shapes: shapes.map(s => [s.id, Math.round(s.x), Math.round(s.y)]), bullets: bullets.length, pickups: world.pickups.length })`); },
+  };
+  return C;
+}
+const ids = (arr) => P(arr).map((r) => r[0]).sort((a, b) => a - b);
+const near = (a, b, d) => Math.hypot(a[0] - b[0], a[1] - b[1]) <= d;
+
+test('aréna: pomocné funkce (počet botů, kola, vítěz kola, omezení polohy, rychlost zpráv, boj o hostitele)', () => {
+  const { A } = cluster().add('u1', 'Anna');
   assert.deepEqual([0, 1, 2, 5, 10, 11, 50].map(A.botsWanted), [9, 9, 8, 5, 0, 0, 0], 'deset tanků: hráči zabírají místa botů');
   assert.equal(A.roundOf(0), 0); assert.equal(A.roundOf(A.ROUND_MS - 1), 0); assert.equal(A.roundOf(A.ROUND_MS), 1);
   assert.equal(A.roundLeft(0), A.ROUND_MS); assert.equal(A.roundLeft(A.ROUND_MS * 3 + 1000), A.ROUND_MS - 1000);
@@ -934,183 +969,275 @@ test('aréna: pomocné funkce (počet botů, kola, vítěz kola, vyhlazení duch
   assert.equal(w([{ id: 1, human: false, gain: 9 }, { id: 2, human: true, gain: 9 }]), 2, 'při shodě vyhrává hráč před botem');
   assert.equal(w([{ id: 1, human: true, gain: 0 }, { id: 2, human: false, gain: -4 }]), null, 'bez zisku bodů nikdo nevyhrál');
   assert.equal(w([]), null);
-  const s = [{ t: 1000, x: 100, y: 500, a: 0 }, { t: 1100, x: 140, y: 500, a: 0.2 }, { t: 1200, x: 140, y: 460, a: 0.2 }];
-  assert.deepEqual(P(A.ghostAt(s, 1050)), { x: 120, y: 500, a: 0.1 });
-  assert.deepEqual(P(A.ghostAt(s, 900)), { x: 100, y: 500, a: 0 });
-  assert.equal(A.ghostAt([], 5), null);
-  const wrap = [{ t: 0, x: 0, y: 0, a: 3.0 }, { t: 100, x: 0, y: 0, a: -3.0 }];
-  const mid = A.ghostAt(wrap, 50).a;
-  assert.ok(Math.abs(Math.abs(mid) - Math.PI) < 0.01, 'úhel se vyhlazuje nejkratší cestou přes ±π, ne přes nulu (' + mid + ')');
   assert.equal(A.clampN('x', 0, 5, 2), 2); assert.equal(A.clampN(99, 0, 5, 2), 5); assert.equal(A.clampN(-9, 0, 5, 2), 0);
+  // omezení polohy hosta: hodně se za chvíli nepřesune, jinak se zkrátí na dosah
+  const ok = P(A.clampMove(100, 100, 130, 100, 0.1, 400));
+  assert.deepEqual(ok, { x: 130, y: 100, clamped: false });
+  const far = P(A.clampMove(100, 100, 3000, 100, 0.1, 400));
+  assert.equal(far.clamped, true); assert.ok(far.x < 300 && far.y === 100, 'teleport se zkrátí: ' + far.x);
+  // zprávy se s hráči zpomalují, ať se nepřekročí 100 zpráv za vteřinu (každá se počítá i za každého příjemce)
+  const load = (h) => { const r = A.ratesFor(h); return (1000 / r.snap) * h + (h - 1) * (1000 / r.input) * h; };
+  for (let h = 1; h <= A.MAX_HUMANS; h++) assert.ok(load(h) <= 100, h + ' hráčů: ' + Math.round(load(h)) + ' zpráv za vteřinu');
+  assert.equal(A.beats(1, 'b', 2, 'a'), true); assert.equal(A.beats(2, 'a', 2, 'b'), true); assert.equal(A.beats(2, 'b', 2, 'a'), false);
 });
 
-test('aréna: po vstupu je v aréně hráč s jménem účtu a devět botů, režim je Sdílená aréna a hra už nepíše o sólovém menu', () => {
-  const g = arenaGame();
-  assert.equal(g.game.G('mode'), 'arena');
-  assert.equal(g.game.G('state'), 'play');
-  assert.equal(g.game.G('player').name, 'Anna');
-  assert.deepEqual(JSON.parse(JSON.stringify(g.counts())), { all: 10, bots: 9, ghosts: 0, alive: 10 });
-  assert.ok(g.sent.some(([p, force]) => p.k === 'i' && p.id === 'u1' && p.nm === 'Anna' && force === false) === false || true);
-  // bez rozhraní z appky mp.js nic nezmění: hra zůstává v sólovém režimu a v menu
+test('aréna: sám v aréně je hráč hostitel s devíti boty, režim je Sdílená aréna a bez appky se hra chová sólově', () => {
+  const C = cluster();
+  const a = C.add('u1', 'Anna');
+  assert.equal(a.G('mode'), 'arena'); assert.equal(a.G('state'), 'play'); assert.equal(a.G('player').name, 'Anna');
+  C.run(2500);
+  assert.equal(a.A.V.role, 'host'); assert.equal(a.A.V.term, 1, 'po chvilce bez ostatních je z předběžného hostitele skutečný');
+  const w = C.world(a);
+  assert.equal(w.tanks.length, 10); assert.equal(a.run('tanks.filter(t => !t.isPlayer && !t.remote).length'), 9);
   const solo = loadGame();
-  assert.equal(solo.G('state'), 'menu');
-  assert.equal(solo.ctx.__arenaMp, undefined);
+  assert.equal(solo.G('state'), 'menu'); assert.equal(solo.ctx.__arenaMp, undefined);
 });
 
-test('aréna: hráč vstoupí a vezme místo botovi (1 hráč = 9 botů, 2 = 8), odchodem se bot vrátí', () => {
-  const g = arenaGame();
-  g.peer(info('u2'));
-  assert.equal(g.counts().ghosts, 1);
-  assert.equal(g.counts().bots, 8, 'jeden bot zmizel hned');
-  assert.equal(g.counts().all, 10);
-  g.peer(info('u3', { nm: 'Cyril' }));
-  assert.deepEqual([g.counts().ghosts, g.counts().bots, g.counts().all], [2, 7, 10]);
-  assert.deepEqual(Array.from(g.game.run('tanks.filter(t => t.remote).map(t => t.name)')), ['Bob', 'Cyril']);
-  assert.equal(g.game.run("tanks.find(t => t.remote).color"), '#ff0000');
-  g.peer({ k: 'bye', id: 'u2' });
-  assert.deepEqual([g.counts().ghosts, g.counts().bots, g.counts().all], [1, 8, 10], 'odešel hráč: bot se vrátil');
-  g.peer({ k: 'bye', id: 'u3' });
-  assert.deepEqual([g.counts().ghosts, g.counts().bots], [0, 9]);
-  // deset a víc hráčů: žádní boti (a nikdy záporný počet)
-  for (let i = 0; i < 12; i++) g.peer(info('p' + i, { nm: 'H' + i }));
-  assert.equal(g.counts().bots, 0);
-  assert.equal(g.counts().ghosts, 12);
+test('aréna: druhý hráč se připojí jako host: dostane stejný svět (tanky, tvary, bonusy) a vezme místo botovi', () => {
+  const C = cluster({ latency: 60 });
+  const a = C.add('u1', 'Anna');
+  C.run(3000);
+  const b = C.add('u2', 'Bořek');
+  C.run(3500);
+  assert.equal(b.A.V.role, 'guest'); assert.equal(a.A.V.role, 'host');
+  const wa = C.world(a), wb = C.world(b);
+  assert.deepEqual(ids(wa.tanks), ids(wb.tanks), 'stejné tanky');
+  assert.equal(wa.tanks.length, 10, 'pořád deset tanků: hráči zabírají místa botů');
+  assert.equal(a.run('tanks.filter(t => !t.isPlayer && !t.remote).length'), 8);
+  assert.deepEqual(ids(wa.shapes), ids(wb.shapes), 'stejné tvary (' + wa.shapes.length + ')');
+  assert.equal(wa.pickups, wb.pickups);
+  assert.ok(wa.shapes.length >= 240);
+  // host je v obraze pod svým jménem a jako sám sebe (jeho vlastní tank je ten, který ovládá)
+  const mine = b.run('tanks.filter(t => t === player).length'), names = P(b.run('tanks.map(t => t.name)'));
+  assert.equal(mine, 1); assert.ok(names.includes('Anna') && names.includes('Bořek'));
+  assert.equal(b.run('player.alive'), true);
+  assert.equal(a.run('tanks.filter(t => t.remote).length'), 1);
+  // polohy tvarů a tanků se shodují (host je o zpoždění sítě pozadu)
+  const sb = new Map(P(wb.shapes).map((r) => [r[0], r])); let far = 0;
+  for (const r of P(wa.shapes)) { const o = sb.get(r[0]); if (!o || !near([r[1], r[2]], [o[1], o[2]], 25)) far++; }
+  assert.ok(far <= 3, 'tvary na jiném místě: ' + far);
+  const tb = new Map(P(wb.tanks).map((r) => [r[0], r])); let tfar = 0;
+  for (const r of P(wa.tanks)) { const o = tb.get(r[0]); if (!o || !near([r[4], r[5]], [o[4], o[5]], 120)) tfar++; }
+  assert.ok(tfar <= 1, 'tanky na jiném místě: ' + tfar);
 });
 
-test('aréna: duch se řídí sítí (poloha, směr, střelba), zdraví určuje jeho hráč, zásah z mé kopie světa mu ho neubere', () => {
-  const g = arenaGame();
-  g.peer(info('u2', { lv: 8, cls: 'twin', st: [1, 2, 3, 0, 0, 4, 0, 0], sc: 400 }));
-  const ghost = () => g.game.run('tanks.find(t => t.remote)');
-  assert.equal(ghost().alive, false, 'duch ožije první zprávou o poloze');
-  g.peer(state('u2', { q: 1, t: g.MP.serverNow(), x: 1500, y: 1700, a: 0.5, f: 1, hp: 60, mh: 100 }));
-  assert.equal(ghost().alive, true);
-  assert.equal(ghost().cls, 'twin'); assert.equal(ghost().level, 8); assert.equal(ghost().score, 400);
-  g.advance(300);
-  g.peer(state('u2', { q: 2, t: g.MP.serverNow(), x: 1600, y: 1700, a: 0.5, f: 1, hp: 60, mh: 100 }));
-  g.step(30);
-  assert.ok(Math.abs(ghost().x - 1600) < 120 && Math.abs(ghost().y - 1700) < 5, 'duch stojí tam, kde hráč: ' + ghost().x + ',' + ghost().y);
-  assert.ok(Math.abs(ghost().angle - 0.5) < 0.2);
-  assert.equal(ghost().wantFire, true, 'střelba podle sítě');
-  const bullets = g.game.run('bullets.filter(b => b.owner === tanks.find(t => t.remote)).length');
-  assert.ok(bullets > 0, 'střely ducha vznikají z jeho třídy (dvojčata): ' + bullets);
-  assert.ok(Math.abs(ghost().hp / ghost().maxHp - 0.6) < 0.05, 'zdraví podle hráče: ' + ghost().hp / ghost().maxHp);
-  g.game.run('tanks.find(t => t.remote).invuln = 0');          // po znovuzrození je krátce nezranitelný
-  const before = ghost().hp;
-  const ret = g.game.run('hurt(tanks.find(t => t.remote), 9999, player, false)');
-  assert.equal(ret, true);
-  assert.equal(ghost().hp, before, 'zásah z mé kopie světa zdraví ducha nesníží');
-  assert.equal(ghost().alive, true);
-  assert.equal(g.game.run('tanks.find(t => t.remote).lastAttacker === player'), true, 'ale pamatuje se, kdo ho zasáhl');
-  // střela, která ducha zasáhne, ho nezabije a můj tank dostane od ducha zásah, když do mě míří (hráč je v téže kopii světa)
-  g.game.run('player.invuln = 0; player.shield = 0; player.hp = player.maxHp');
-  const hpMe = g.game.run('player.hp');
-  g.game.run('hurt(player, 10, tanks.find(t => t.remote), false)');
-  assert.ok(g.game.run('player.hp') < hpMe, 'zásah od ducha ubírá zdraví mému tanku');
+test('aréna: pohyb a střelba hosta jdou hostiteli, střely hosta vidí oba, zdraví určuje hostitel (host ho nesníží)', () => {
+  const C = cluster({ latency: 50 });
+  const a = C.add('u1', 'Anna');
+  C.run(2500);
+  const b = C.add('u2', 'Bořek');
+  C.run(3000);
+  const x0 = b.run('player.x'), y0 = b.run('player.y');
+  b.run("input.keys.d = true; input.keys[' '] = true");     // jede doprava a střílí
+  C.run(2500);
+  const x1 = b.run('player.x');
+  assert.ok(x1 > x0 + 250, 'host se hýbe (poloha počítaná u něj): ' + (x1 - x0));
+  const rem = P(a.run('(() => { const t = tanks.find(t => t.remote); return [t.x, t.y, t.wantFire ? 1 : 0, t.alive ? 1 : 0]; })()'));
+  assert.ok(Math.abs(rem[0] - x1) < 160 && Math.abs(rem[1] - b.run('player.y')) < 160, 'hostitel ho vidí tam, kde je (' + rem[0] + ' vs ' + x1 + ')');
+  assert.equal(rem[3], 1);
+  assert.ok(a.run('bullets.filter(b => b.owner && b.owner.remote).length') > 0, 'střely hosta vznikají u hostitele');
+  const ownBullets = b.run('bullets.filter(b => b.owner === player).length');
+  assert.ok(ownBullets > 0, 'host vidí své střely z obrazu hostitele: ' + ownBullets);
+  b.run("input.keys.d = false; input.keys[' '] = false");
+  // zdraví: hostitel zraní jeho tank, host to uvidí; host sám si zdraví zvýšit ani snížit nemůže
+  const hp0 = b.run('player.hp');
+  b.run('player.hp = player.maxHp * 10');
+  a.run('(() => { const t = tanks.find(t => t.remote); t.invuln = 0; hurt(t, 20, null, false); })()');
+  C.run(600);
+  const hp1 = b.run('player.hp'), mh = b.run('player.maxHp');
+  assert.ok(hp1 <= mh && hp1 < hp0 + 1, 'hostitelův údaj o zdraví platí: ' + hp1 + ' z ' + mh);
+  assert.equal(b.run('hurt(player, 50, null, false)'), false, 'host zdraví nesnižuje, to dělá hostitel');
 });
 
-test('aréna: smrt ducha přijde od jeho hráče (kdo ho zničil dostane zkušenosti), znovuzrození ho oživí, mrtvý duch neožije jako bot', () => {
-  const g = arenaGame();
-  g.peer(info('u2', { sc: 800 }));
-  g.peer(state('u2', { q: 1, t: g.MP.serverNow(), x: 1000, y: 1000 }));
-  const ghost = () => g.game.run('tanks.find(t => t.remote)');
-  g.step(5);
-  const s0 = g.game.run('player.score');
-  g.peer({ k: 'x', id: 'u2', by: 'u1' });
-  g.step(3);
-  assert.equal(ghost().alive, false, 'duch zahynul po zprávě od hráče');
-  assert.ok(g.game.run('player.score') > s0, 'kdo ho zničil, dostal zkušenosti');
-  g.step(600);
-  assert.equal(ghost().alive, false, 'mrtvý duch se sám neoživí jako bot (po deseti vteřinách)');
-  g.peer(state('u2', { q: 5, t: g.MP.serverNow(), x: 400, y: 450, al: 1, hp: 100 }));
-  assert.equal(ghost().alive, true, 'znovuzrození přijde zprávou o poloze');
-  assert.equal(ghost().name, 'Bob'); assert.equal(ghost().color, '#ff0000');
-  assert.ok(Math.abs(ghost().x - 400) < 1 && Math.abs(ghost().y - 450) < 1);
-  assert.equal(ghost().invuln > 0, true, 'krátká ochrana po znovuzrození');
-  // zpráva o poloze s al: 0 (zprávy x se ztratily) ducha také zničí
-  g.peer(state('u2', { q: 6, t: g.MP.serverNow(), al: 0, hp: 0 }));
-  g.step(3);
-  assert.equal(ghost().alive, false);
+test('aréna: příkazy hosta hostitel ověří (vlastnost jen za bod, třída a výhoda jen z nabídky), skok a znovuzrození fungují', () => {
+  const C = cluster({ latency: 40 });
+  const a = C.add('u1', 'Anna'), b = C.add('u2', 'Bořek');
+  C.run(4500);
+  assert.equal(b.A.V.role === 'guest' || a.A.V.role === 'guest', true);
+  const host = a.A.V.role === 'host' ? a : b, guest = host === a ? b : a;
+  const remote = () => host.run('(() => { const t = tanks.find(t => t.remote); return { st: t.stats.slice(), pt: t.points, cls: t.cls, perks: Object.keys(t.perks).length, lvl: t.level, alive: t.alive }; })()');
+  // bez bodů nejde nic koupit
+  guest.run('buyStat(player, 3)');
+  C.run(500);
+  assert.equal(P(remote()).st[3], 0, 'bez bodů se vlastnost nekoupí');
+  // body dá hostitel (zkušenosti): host je uvidí a koupí vlastnost, hostitel ji potvrdí
+  host.run('(() => { const t = tanks.find(t => t.remote); t.score = xpFor(6); addScore(t, 1); })()');
+  C.run(600);
+  assert.ok(guest.run('player.points') >= 4, 'host vidí body od hostitele: ' + guest.run('player.points'));
+  guest.run('buyStat(player, 3)'); guest.run('buyStat(player, 3)');
+  C.run(600);
+  assert.equal(P(remote()).st[3], 2, 'hostitel koupil dvě vlastnosti');
+  assert.equal(guest.run('player.stats[3]'), 2);
+  // nabídka třídy: hostitel ji nabídne od určité úrovně; příkaz mimo nabídku nic neudělá
+  host.run('(() => { const t = tanks.find(t => t.remote); t.score = xpFor(8); addScore(t, 1); })()');
+  C.run(600);
+  guest.run('player.cls = "basic"');
+  const offer = P(guest.run('offerOf(player)'));
+  assert.ok(Array.isArray(offer) && offer.length > 0, 'nabídka tříd: ' + JSON.stringify(offer));
+  host.handlers = host.handlers;
+  host.handlers.rt({ p: { k: 'C', id: guest.id, c: 'cls', v: 'neexistuje' } });
+  assert.equal(P(remote()).cls, 'basic', 'třída mimo nabídku se nepřijme');
+  guest.run('chooseClass(player, ' + JSON.stringify(offer[0]) + ')');
+  C.run(600);
+  assert.equal(P(remote()).cls, offer[0], 'třída z nabídky ano');
+  assert.equal(guest.run('player.cls'), offer[0]);
+  // výhoda bez nabídky se nepřijme
+  host.handlers.rt({ p: { k: 'C', id: guest.id, c: 'perk', v: 'vamp' } });
+  assert.equal(P(remote()).perks, 0, 'výhodu bez nabídky nejde vzít');
+  // skok
+  guest.run('input.keys.d = true'); C.run(300);
+  guest.run('dash(player)'); C.run(300);
+  assert.ok(host.run('tanks.find(t => t.remote).dashCd') > 0, 'hostitel skok zaznamenal (odpočet)');
 });
 
-test('aréna: hráč posílá polohu a stavbu, o smrti a znovuzrození dá vědět, neznámého hráče se zeptá, kdo je, a nesmyslné zprávy ignoruje', () => {
-  const g = arenaGame();
-  const sent = () => g.sent.map(([p]) => p);
-  g.game.run('window.__arenaMp.V.open = true');
-  g.game.run('window.__arenaMp.V.lastSend = 0; window.__arenaMp.V.lastInfo = 0');
-  // netTick běží z časovače, který test zastavil: zavolá se ručně přes odeslání zpráv
-  g.peer({ k: 'q', id: 'u9' });
-  const i = sent().find((p) => p.k === 'i');
-  assert.ok(i && i.id === 'u1' && i.nm === 'Anna' && i.cls === 'basic' && i.lv === 1 && Array.isArray(i.st) && i.st.length === 8, 'na dotaz kdo je pošle údaje o své stavbě');
-  assert.ok(g.sent.find(([p]) => p.k === 'i')[1], 'a bez omezení odstupem (důležitá zpráva)');
-  // neznámý hráč pošle polohu: hra se zeptá (nejvýš jednou za vteřinu)
-  g.peer(state('uX')); g.peer(state('uX', { q: 2 }));
-  assert.equal(sent().filter((p) => p.k === 'q').length, 1);
-  // smrt: zpráva x i s tím, kdo hráče zničil
-  g.peer(info('u2')); g.peer(state('u2', { q: 1, t: g.MP.serverNow() }));
-  g.game.run('player.invuln = 0; player.shield = 0; player.hp = 1; hurt(player, 500, tanks.find(t => t.remote), false)');
-  g.step(3);
-  const dead = sent().find((p) => p.k === 'x');
-  assert.ok(dead && dead.by === 'u2', 'zpráva o smrti nese, kdo zničil: ' + JSON.stringify(dead));
-  // nesmysly
-  const before = JSON.stringify(g.counts());
-  for (const bad of [null, 5, 'x', {}, { k: 's' }, { k: 'i' }, { id: 7, k: 's' }, { id: 'u1', k: 'i' }, { id: 'u5', k: 'zzz' }, { id: 'u5', k: 's', x: 'a' }]) g.peer(bad);
-  assert.equal(JSON.stringify(g.counts()), before, 'nic se nezměnilo');
-  // zprávy s extrémními hodnotami se oříznou
-  g.peer(info('u7', { lv: 99999, st: [99, -5, 'a', 1e9, 0, 0, 0, 0], sc: 1e20, nm: 'x'.repeat(50), co: 'red', pk: ['nic', 5, 'vamp'] }));
-  const t7 = g.game.run("tanks.find(t => t.remote && t.remote.id === 'u7')");
-  assert.ok(t7.level <= 58 && t7.stats.every((v) => v >= 0 && v <= 12) && t7.score <= 1e9 && t7.name.length <= 14 && t7.color === '#f2b84b', JSON.stringify([t7.level, t7.stats, t7.score, t7.name, t7.color]));
-  assert.deepEqual(Object.keys(t7.perks), ['vamp'].filter((k) => g.game.run(`!!PERK_BY['${k}']`)), 'neznámé výhody se zahodí');
+test('aréna: smrt hosta: hostitel ho zničí, host vidí obrazovku zničení s jménem toho, kdo ho zničil, a tlačítkem se vrátí do hry', () => {
+  const C = cluster({ latency: 40 });
+  const a = C.add('u1', 'Anna');
+  C.run(2500);
+  const b = C.add('u2', 'Bořek');
+  C.run(3000);
+  a.run('(() => { const t = tanks.find(t => t.remote); t.invuln = 0; t.shield = 0; t.lastAttacker = player; t.lastAtkT = time; hurt(t, 99999, player, false); })()');
+  C.run(900);
+  assert.equal(b.G('state'), 'dead', 'host vidí, že byl zničen');
+  assert.equal(b.run('player.alive'), false);
+  assert.equal(b.run('deathInfo.by'), 'Anna', 'a kdo to udělal');
+  b.run('startGame(false)');
+  assert.equal(b.G('state'), 'play');
+  C.run(900);
+  assert.equal(b.run('player.alive'), true, 'hostitel ho znovu zrodil');
+  assert.equal(a.run('tanks.find(t => t.remote).alive'), true);
+  assert.ok(b.run('player.invuln') > 0 || a.run('tanks.find(t => t.remote).invuln') > 0, 'po znovuzrození krátká ochrana');
 });
 
-test('aréna: kolo skončí podle času, vyhrává nejvíc bodů za kolo a výherce požádá o odměnu; kdo nebyl na začátku kola, o odměnu nežádá', async () => {
-  const g = arenaGame();
-  g.step(70);                                                   // první vteřina: sejme se výchozí stav kola
-  g.game.run('addScore(player, 3000)');
-  g.advance(g.A.ROUND_MS + 1000);                                // nové kolo
-  g.step(70);
+test('aréna: hostitel odejde (nebo zamrzne): převezme to další, svět zůstane (boti, tvary, hráči), vrátivší se starý hostitel se stane hostem', () => {
+  const C = cluster({ latency: 40 });
+  const a = C.add('u1', 'Anna');
+  C.run(2500);
+  const b = C.add('u2', 'Bořek');
+  C.run(2000);
+  const c = C.add('u3', 'Cyril');
+  C.run(3500);
+  assert.equal(a.A.V.role, 'host'); assert.equal(b.A.V.role, 'guest'); assert.equal(c.A.V.role, 'guest');
+  assert.equal(a.run('tanks.filter(t => !t.isPlayer && !t.remote).length'), 7, 'tři hráči = sedm botů');
+  const shapesBefore = ids(C.world(b).shapes).length;
+  a.frozen = true;                                           // karta hostitele jde na pozadí: nic nepočítá a nic nevysílá
+  C.run(8000);
+  assert.equal(b.A.V.role, 'host', 'nejdřív příchozí z ostatních převzal'); assert.equal(c.A.V.role, 'guest');
+  assert.equal(b.A.V.term, 2, 'převzetí zvýšilo období');
+  assert.equal(P(C.world(c).tanks).length, 10, 'svět zůstal: pořád deset tanků');
+  assert.ok(Math.abs(ids(C.world(c).shapes).length - shapesBefore) < 40, 'tvary zůstaly');
+  assert.ok(P(C.world(c).tanks).some((r) => r[2] === 'Bořek') && P(C.world(c).tanks).some((r) => r[2] === 'Cyril'));
+  assert.equal(a.A.V.role, 'guest', 'i zamrzlá karta zprávy přijímá, takže vidí nového hostitele (vyšší období) a ustoupí');
+  // zamrzlý hráč nic neposílá, takže ho nový hostitel po chvíli odebere (a jeho místo zase zaujme bot)
+  C.run(6000);
+  assert.equal(b.run('tanks.filter(t => t.remote).length'), 1, 'zbyl jen Cyril jako síťový tank');
+  assert.equal(b.run('tanks.filter(t => t.name === "Anna").length'), 0, 'tank zamrzlého hráče zmizel');
+  assert.equal(P(C.world(c).tanks).length, 10);
+  // probudí se: ohlásí se hostiteli a dostane svůj tank zpátky jako host
+  a.frozen = false;
+  C.run(3500);
+  assert.equal(a.A.V.role, 'guest'); assert.equal(b.A.V.role, 'host');
+  assert.equal(b.run('tanks.filter(t => t.remote).length'), 2, 'host se vrátil');
+  assert.deepEqual(ids(C.world(a).tanks), ids(C.world(b).tanks));
+});
+
+test('aréna: dva předběžní hostitelé najednou: vyhraje dřív příchozí, druhý se stane hostem', () => {
+  const C = cluster({ latency: 30 });
+  const a = C.add('u1', 'Anna'), b = C.add('u2', 'Bořek');
+  C.run(6000);
+  const roles = [a.A.V.role, b.A.V.role].sort();
+  assert.deepEqual(roles, ['guest', 'host']);
+  assert.equal(P(C.world(a).tanks).length, 10); assert.equal(P(C.world(b).tanks).length, 10);
+  assert.deepEqual(ids(C.world(a).tanks), ids(C.world(b).tanks));
+});
+
+test('aréna: zprávy: obraz světa je malý a řídký (pár desítek zpráv za vteřinu pro dva hráče, žádná zpráva nad limit)', () => {
+  const C = cluster({ latency: 40 });
+  const a = C.add('u1', 'Anna');
+  C.run(2500);
+  const b = C.add('u2', 'Bořek');
+  C.run(3000);
+  b.run("input.keys.d = true; input.keys[' '] = true");
+  const s0 = C.sentCount;
+  C.run(10000);
+  const perSec = (C.sentCount - s0) / 10;
+  assert.ok(perSec < 30, 'odeslaných zpráv za vteřinu: ' + perSec.toFixed(1) + ' (u Supabase se každá počítá i za příjemce)');
+  const sizes = [...a.sentLog, ...b.sentLog].map((p) => JSON.stringify(p).length);
+  assert.ok(Math.max(...sizes) < 48000, 'největší zpráva: ' + Math.max(...sizes));
+  const snaps = a.sentLog.filter((p) => p.k === 'S' && !p.key).map((p) => JSON.stringify(p).length);
+  assert.ok(snaps.reduce((x, y) => x + y, 0) / snaps.length < 2500, 'běžný obraz je malý: ' + Math.round(snaps.reduce((x, y) => x + y, 0) / snaps.length));
+});
+
+test('aréna: host nemůže podvádět: skok polohy o tisíce jednotek se zkrátí, cizí příkazy a zprávy od neznámých se ignorují', () => {
+  const C = cluster({ latency: 30 });
+  const a = C.add('u1', 'Anna');
+  C.run(2500);
+  const b = C.add('u2', 'Bořek');
+  C.run(3000);
+  const t0 = P(a.run('(() => { const t = tanks.find(t => t.remote); return [t.x, t.y]; })()'));
+  a.handlers.rt({ p: { k: 'I', id: 'u2', x: t0[0] + 3000, y: t0[1], vx: 0, vy: 0, mx: 0, my: 0, tx: 0, ty: 0, a: 0, f: 0 } });
+  const t1 = P(a.run('(() => { const t = tanks.find(t => t.remote); return [t.x, t.y]; })()'));
+  assert.ok(t1[0] - t0[0] < 400, 'teleport se zkrátil: ' + (t1[0] - t0[0]));
+  const before = C.world(a).tanks.length;
+  a.handlers.rt({ p: { k: 'C', id: 'cizi', c: 'buy', i: 1 } });
+  a.handlers.rt({ p: { k: 'I', id: 'cizi', x: 1, y: 1 } });
+  a.handlers.rt({ p: { k: 'C', id: 'u2', c: 'respawn' } });          // živý se znovu nerodí
+  a.handlers.rt({ p: 'text' }); a.handlers.rt({ p: null }); a.handlers.rt({ p: { k: 'S', id: 5 } });
+  assert.equal(C.world(a).tanks.length, before);
+  assert.equal(a.run('tanks.find(t => t.remote).alive'), true);
+  assert.ok(b.sentLog.every((p) => !('hp' in p) && !('sc' in p) && !('stats' in p)), 'host o zdraví, bodech ani vlastnostech vůbec nemluví');
+});
+
+test('aréna: kolo: vítěze oznámí hostitel všem a odměnu si vyžádá jen on; kdo nebyl na začátku kola v aréně, nesoutěží', async () => {
+  const C = cluster({ latency: 30 });
+  const a = C.add('u1', 'Anna');
+  C.run(2500);
+  const b = C.add('u2', 'Bořek');
+  C.run(3000);
+  const host = a.A.V.role === 'host' ? a : b, guest = host === a ? b : a;
+  assert.equal(host.A.V.role, 'host');
+  C.run(1500);
+  // posun do dalšího kola: hostitel zapíše začátek kola, host dostane body navíc
+  host.run('window.__arenaMp.V.round = window.__arenaMp.roundOf(window.jomaridMP.serverNow()); window.__arenaMp.V.snap = { scores: {}, mine: true, t: 0 }; tanks.forEach(t => { window.__arenaMp.V.snap.scores[t.id] = t.score; })');
+  host.run('(() => { const t = tanks.find(t => t.remote); addScore(t, 5000); })()');
+  const room = guest.A.ROUND_MS;
+  const toNext = room - (C.t % room) + 50;
+  C.run(toNext);
   await Promise.resolve(); await Promise.resolve();
-  assert.equal(g.claims.length, 1, 'výherce o odměnu požádal');
-  assert.deepEqual(g.claims[0].map((v) => Math.round(v)), [160, Math.round(g.game.run('player.score'))], 'za kolo dlouhé 160 vteřin a se skóre');
-  // další kolo: vyhrál někdo jiný, žádost se neposílá
-  g.peer(info('u2', { sc: 0 })); g.peer(state('u2', { q: 1, t: g.MP.serverNow() }));
-  g.step(5);
-  g.peer(info('u2', { sc: 9000 }));
-  g.advance(g.A.ROUND_MS);
-  g.step(70);
-  await Promise.resolve();
-  assert.equal(g.claims.length, 1, 'kolo vyhrál jiný hráč, žádná další žádost');
-  // pozdní příchod: hráč, který se v kole objevil až uprostřed, nárok nemá (snímek na začátku kola chybí)
-  g.game.run('window.__arenaMp.V.snap = { scores: {}, mine: false, t: 0 }; addScore(player, 99999)');
-  g.advance(g.A.ROUND_MS);
-  g.step(70);
-  await Promise.resolve();
-  assert.equal(g.claims.length, 1, 'bez účasti na začátku kola se o odměnu nežádá');
+  assert.equal(guest.claims.length, 1, 'vítězný host si o odměnu řekl');
+  assert.equal(host.claims.length, 0, 'hostitel ne');
+  assert.equal(guest.claims[0][0], 160);
+  const banners = (n) => String(n.run("document.getElementById('banner').textContent"));
+  void banners;
 });
 
-test('aréna: pauza a sólové menu jsou pryč (tlačítka Menu zavírají arénu), mapa má u všech stejné zóny, smrt neukončí hru', () => {
-  const g = arenaGame();
-  g.game.run('setPause(true)');
-  assert.equal(g.game.G('paused'), false, 'v aréně se nepauzuje, ostatní hráči běží dál');
-  const zones = (seed) => { const x = arenaGame({ seed }); return JSON.stringify(x.game.run('world.zones')); };
-  assert.equal(zones(1), zones(99), 'zóny (láva, led, oáza) jsou u všech hráčů stejné bez ohledu na náhodu');
-  assert.ok(JSON.parse(zones(1)).length > 3);
-  g.game.run('player.invuln = 0; player.shield = 0; hurt(player, 99999, null, false)');
-  g.step(5);
-  assert.equal(g.game.G('state'), 'dead');
-  assert.equal(g.game.run('world.over'), false, 'zničený hráč nekončí zápas, jen čeká na znovuzrození');
-  g.game.run('startGame(false)');
-  assert.equal(g.game.G('state'), 'play');
-  assert.equal(g.counts().all, 10, 'a svět zůstal (bot ani duch se nepřidal ani neubral)');
+test('aréna: pauza a sólové menu jsou pryč, mapa má u všech stejné zóny, smrt hostitele neukončí hru, aréně nechybí hrací prostor', () => {
+  const C = cluster();
+  const g = C.add('u1', 'Anna');
+  g.run('setPause(true)');
+  assert.equal(g.G('paused'), false, 'v aréně se nepauzuje, ostatní hráči běží dál');
+  const zones = () => { const x = cluster().add('u1', 'Anna'); return JSON.stringify(x.run('world.zones')); };
+  const z1 = zones(), z2 = (() => { const c2 = cluster(); const x = c2.add('u1', 'Anna'); x.run('Math.random()'); return JSON.stringify(x.run('world.zones')); })();
+  assert.equal(z1, z2, 'zóny (láva, led, oáza) jsou u všech hráčů stejné bez ohledu na náhodu');
+  assert.ok(JSON.parse(z1).length > 3);
+  g.run('player.invuln = 0; player.shield = 0; hurt(player, 99999, null, false)');
+  C.run(100);
+  assert.equal(g.G('state'), 'dead');
+  assert.equal(g.run('world.over'), false, 'zničený hráč nekončí zápas, jen čeká na znovuzrození');
+  g.run('startGame(false)');
+  assert.equal(g.G('state'), 'play');
 });
 
-test('aréna: mp.js se do dokumentu skládá jako poslední skript a v aréně nejsou bossové ani události (každý prohlížeč by je měl jiné)', () => {
+test('aréna: soubory se do dokumentu skládají ve správném pořadí (net před mp, mp poslední) a v aréně nejsou bossové ani události', () => {
   const asm = fs.readFileSync(new URL('../../polygonArena.js', import.meta.url), 'utf8');
   assert.match(asm, /import mp from '\.\/polygonArena\/mp\.js\?raw';/);
-  assert.match(asm, /\['main', main\],\s*\['mp', mp\],\s*\]/);
+  assert.match(asm, /import net from '\.\/shared\/net\.js\?raw';/);
+  assert.match(asm, /\['main', main\],\s*\['net', net\],\s*\['mp', mp\],\s*\]/);
   assert.doesNotMatch(ARENA_FILE, /67MILUJU|IMAGINEFLEXIT|CHEAT/);
-  const g = arenaGame();
-  assert.equal(g.game.run('MODES.arena.noBoss && MODES.arena.noEvents'), true);
-  g.step(60 * 100);
-  assert.equal(g.game.run('world.boss'), null, 'za sto vteřin se neobjevil žádný boss');
-  assert.equal(g.game.run("tanks.filter(t => t.boss).length"), 0);
+  const C = cluster();
+  const g = C.add('u1', 'Anna');
+  assert.equal(g.run('MODES.arena.noBoss && MODES.arena.noEvents'), true);
+  C.run(100000);
+  assert.equal(g.run('world.boss'), null, 'za sto vteřin se neobjevil žádný boss');
+  assert.equal(g.run('tanks.filter(t => t.boss).length'), 0);
 });

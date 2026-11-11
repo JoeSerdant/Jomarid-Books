@@ -15,6 +15,7 @@ import { stripCheatCodes, buildMpPrelude, withMultiplayer, initForGame, initForA
 import { attachMpBridge, attachArenaBridge } from '../mp/bridge.js';
 import { openRealtime, MAX_PAYLOAD_CHARS, MIN_SEND_GAP_MS } from '../mp/realtime.js';
 import { buildOnlineEntry, withOnlineEntry, onlineMessage } from '../mp/entry.js';
+import { EMOTES, emoteByCode, freshEmote } from '../mp/emotes.js';
 
 const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DB = path.join(SRC, '..', 'db');
@@ -82,6 +83,7 @@ test('chyby ze serveru: kód z databáze, výpadek spojení, chybějící funkce
   assert.equal(errorCode({ message: 'bad_seq' }), 'bad_seq');
   assert.equal(errorCode(null), '');
   assert.match(mpErrorText({ code: 'not_your_turn' }), /na tahu/);
+  assert.match(mpErrorText({ code: 'illegal_move' }), /neuznal/);
   assert.match(mpErrorText({ code: 'zcela_nova_chyba' }), /pokazilo/);
 });
 
@@ -91,7 +93,11 @@ test('volání serveru: názvy funkcí a parametry odpovídají databázi', asyn
   const api = createMpApi(client);
   await api.find('chess', 'duel', { tc: '3+2' }); await api.state('m1', 4); await api.move('m1', 5, { a: 1 }, false); await api.report('m1', 'win', 'x');
   await api.progress('m1', 12.5); await api.roomJoin('ABC234'); await api.arenaClaim(200.7, 3.2); await api.resign('m1'); await api.abort('m1'); await api.cancel(); await api.active();
-  assert.deepEqual(calls.map((c) => c[0]), ['mp_find', 'mp_state', 'mp_move', 'mp_report', 'mp_progress', 'mp_room_join', 'mp_arena_claim', 'mp_resign', 'mp_abort', 'mp_cancel', 'mp_active']);
+  await api.leaderboard('chess', 'duel', 5); await api.emote('m1', 3); await api.rematch('m1');
+  assert.deepEqual(calls.map((c) => c[0]), ['mp_find', 'mp_state', 'mp_move', 'mp_report', 'mp_progress', 'mp_room_join', 'mp_arena_claim', 'mp_resign', 'mp_abort', 'mp_cancel', 'mp_active', 'mp_leaderboard', 'mp_emote', 'mp_rematch']);
+  assert.deepEqual(calls[11][1], { p_game: 'chess', p_mode: 'duel', p_limit: 5 });
+  assert.deepEqual(calls[12][1], { p_match: 'm1', p_code: 3 });
+  assert.deepEqual(calls[13][1], { p_match: 'm1' });
   assert.deepEqual(calls[0][1], { p_game: 'chess', p_mode: 'duel', p_params: { tc: '3+2' } });
   assert.deepEqual(calls[2][1], { p_match: 'm1', p_seq: 5, p_payload: { a: 1 }, p_end_turn: false });
   assert.deepEqual(calls[6][1], { p_seconds: 200, p_score: 3 });
@@ -346,6 +352,44 @@ test('řadič: tah po vypršení času vrátí chybu timeout a zápas je uzavře
   assert.equal(err && err.code, 'timeout');
   assert.equal(session.ended, true);
   assert.equal(session.outcome(), 'loss');
+});
+
+test('řadič: tah, kterým server uzavře zápas (mat), rovnou ukončí zápas s plným pohledem (vítěz, Coiny)', async () => {
+  const { clock, server, session } = make();
+  const ends = [];
+  session.on('end', (m) => ends.push(m));
+  session.start();
+  await clock.advance(5);
+  const api = server.api();
+  session.api = Object.assign({}, api, { move: async (id, seq) => {
+    server.moves.push({ seq, p: server.slot, payload: { c: 'h5f7' }, end: true });
+    server.status = 'finished'; server.winner = server.slot; server.reason = 'checkmate';
+    return { data: { ok: true, seq, turn: 3 - server.slot, deadline: null, bank: [300, 300], status: 'finished', winner: server.slot, reason: 'checkmate', match: Object.assign(server.view(), { my_coins: 30 }) } };
+  } });
+  let ack = null;
+  session.sendMove({ c: 'h5f7' }).then((r) => { ack = r; });
+  await clock.advance(100);
+  assert.equal(ack && ack.ok, true);
+  assert.equal(session.ended, true, 'zápas skončil už odpovědí na tah');
+  assert.equal(ends.length, 1);
+  assert.equal(ends[0].reason, 'checkmate');
+  assert.equal(ends[0].my_coins, 30, 'konec nese i odměnu');
+  assert.equal(session.outcome(), 'win');
+  session.stop();
+});
+
+test('rychlé reakce: kódy 1 až 8 jako v databázi, nová reakce soupeře se pozná podle pořadí a stáří', () => {
+  assert.deepEqual(EMOTES.map((e) => e.code), [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.match(sql, /p_code < 1 or p_code > 8/);
+  assert.equal(emoteByCode(4).icon, '😂');
+  assert.equal(emoteByCode(9), null);
+  assert.equal(freshEmote({}, 0), null);
+  assert.equal(freshEmote({ opp_emote: null }, 0), null);
+  assert.deepEqual(freshEmote({ opp_emote: { c: 2, n: 1, age: 300 } }, 0), { code: 2, n: 1 });
+  assert.equal(freshEmote({ opp_emote: { c: 2, n: 1, age: 300 } }, 1), null, 'už ukázaná reakce se neukáže znovu');
+  assert.deepEqual(freshEmote({ opp_emote: { c: 5, n: 2, age: 100 } }, 1), { code: 5, n: 2 });
+  assert.equal(freshEmote({ opp_emote: { c: 2, n: 3, age: 60000 } }, 0), null, 'stará reakce (po návratu do zápasu) se neukáže');
+  assert.equal(freshEmote({ opp_emote: { c: 99, n: 3, age: 10 } }, 0), null, 'neznámý kód se ignoruje');
 });
 
 test('řadič: opakované chyby spojení zpomalují dotazování, po dvou se ohlásí výpadek, zotavení se ohlásí také', async () => {

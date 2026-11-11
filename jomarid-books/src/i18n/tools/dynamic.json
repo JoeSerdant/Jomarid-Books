@@ -94,6 +94,8 @@
     "game.title"
   ],
   "mp/MpGameScreen.jsx": [
+    "e.label",
+    "emoteByCode(bubble.code).label",
     "game.title"
   ],
   "mp/MpSection.jsx": [
