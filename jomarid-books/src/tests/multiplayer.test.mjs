@@ -879,6 +879,24 @@ test('vstup do online hry: klik na tlačítko pošle appce zprávu a hra ho dál
   assert.equal(r.parent.posted.filter((m) => m.type === 'online').length, 1);
 });
 
+test('vstup do hry z menu: tlačítko s data-jomarid-play pošle zprávu play vždy (i bez povolení online) a jen s platným klíčem', () => {
+  const r = runEntry('onlinegames');
+  const clickPlay = (key) => {
+    const ev = { target: { closest: (sel) => (sel === '[data-jomarid-play]' ? { getAttribute: () => key } : null) }, prevented: 0, stopped: 0, preventDefault() { this.prevented++; }, stopPropagation() { this.stopped++; } };
+    r.doc.handlers.click.f(ev);
+    return ev;
+  };
+  assert.equal(r.classes.has('jomarid-online'), false, 'online není povolené, sólo tlačítko přesto funguje');
+  const ev = clickPlay('katakomby');
+  assert.equal(ev.prevented, 1); assert.equal(ev.stopped, 1);
+  assert.deepEqual(r.parent.posted.filter((m) => m.type === 'play'), [{ source: 'jomarid-game', type: 'play', game: 'onlinegames', mode: 'katakomby' }]);
+  for (const bad of ['', null, 'Katakomby', 'a b', 'x'.repeat(25), '<script>']) {
+    const e2 = clickPlay(bad);
+    assert.equal(e2.prevented, 0, `neplatný klíč ${JSON.stringify(bad)} se ignoruje`);
+  }
+  assert.equal(r.parent.posted.filter((m) => m.type === 'play').length, 1);
+});
+
 test('vstup do online hry: skript je bez diakritiky, název hry se do něj vloží bezpečně a vloží se na začátek <head>', () => {
   const code = buildOnlineEntry('a"b</script>$&');
   assert.doesNotMatch(code, /[^\x00-\x7f]/, 'bez diakritiky (vkládá se do dokumentu hry)');
@@ -912,7 +930,7 @@ test('každá hra s online režimem má ve svém menu tlačítko s data-jomarid-
 
 test('Games.jsx: hra spuštěná z appky dostane skript vstupu, zprávy online se berou jen z jejího iframu a zápas nebo aréna sólovou hru zavře', () => {
   const g = read('pages', 'Games.jsx');
-  assert.match(g, /withOnlineEntry\(withStorageShim\(src, game\.id, sync \? sync\.snapshot\(\)\.map : \{\}\), game\.id\)/);
+  assert.match(g, /withOnlineEntry\(withStorageShim\(src, game\.id, sync\.snapshot\(\)\.map\), game\.id\)/);
   assert.match(g, /type === 'online-ask'\) \{\s*postOnline\(\);/);
   assert.match(g, /type === 'online'\) \{\s*if \(mpAvailRef\.current\.state === 'ready'\) \{ setMpMode\(typeof event\.data\.mode === 'string' \? event\.data\.mode : null\); setMpLobby\(true\); \}/);
   assert.match(g, /const handleMpMatch = useCallback\(\(m\) => \{ setMpAuto\(null\); setMpLobby\(false\); handleCloseGame\(\); setMpMatch\(m\); \}, \[handleCloseGame\]\);/);
@@ -920,6 +938,18 @@ test('Games.jsx: hra spuštěná z appky dostane skript vstupu, zprávy online s
   assert.match(g, /setMpMatch\(null\); setMpLobby\(true\); \}\}/, '„Hrát znovu“ otevře okno a rovnou hledá');
   assert.match(g, /<MpResume game=\{game\}/, 'na stránce hry zbyl jen pruh s rozehraným zápasem');
   assert.doesNotMatch(g, /<MpSection/, 'hledání soupeře není na stránce hry, ale v okně nad hrou');
+});
+
+test('Games.jsx: hra s víc dokumenty (loadPlay) přepíná dokument zprávami play a hub, jen s klíčem z loadPlay, a úložiště dostane aktuální postup', () => {
+  const g = read('pages', 'Games.jsx');
+  assert.match(g, /type === 'play' \|\| event\.data\?\.type === 'hub'\) \{/);
+  assert.match(g, /if \(!game\.loadPlay\) return;/, 'hra bez loadPlay zprávu ignoruje');
+  assert.match(g, /Object\.prototype\.hasOwnProperty\.call\(game\.loadPlay, mode\)/, 'jen klíč z loadPlay (ne třeba __proto__)');
+  assert.match(g, /if \(event\.data\.type === 'hub'\) \{ switchDoc\(game\.load, true\); return; \}/, 'návrat do menu = hlavní dokument se vstupem do online');
+  assert.match(g, /if \(loadDoc\) switchDoc\(loadDoc, false\);/, 'sólo dokument je bez vstupu do online');
+  assert.match(g, /withStorageShim\(src, game\.id, getSync\(\)\.snapshot\(\)\.map\)/, 'přepnutý dokument dostane postup i s neodeslanými změnami');
+  assert.match(g, /\.\.\.Object\.values\(game\.loadPlay \|\| \{\}\)/, 'sólo dokument se stahuje dopředu pro offline');
+  assert.match(g, /id: 'onlinegames',[\s\S]*?loadPlay: \{\s*katakomby: \(\) => import\('\.\.\/gameContent\/katakombySolo'\)/);
 });
 
 test('Jomarid Online Games: každý režim má tlačítko v menu hry a vlastní dokument, souboj hrdinů není týmový a nemá volby', () => {

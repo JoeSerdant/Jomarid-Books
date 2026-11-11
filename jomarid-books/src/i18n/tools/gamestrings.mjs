@@ -25,7 +25,16 @@ export const GAMES = {
   hannibal: 'hannibal',
   warroom: 'warroom',
   rocket: 'rocket',
-  onlinegames: ['onlineGames', 'katakomby', 'chaosArena'],
+  onlinegames: ['onlineGames', 'katakomby', 'katakombySolo', 'chaosArena'],
+};
+
+// Texty, které heuristika nepozná (česky, ale bez diakritiky a nezačínají velkým písmenem, třeba "+10 zlata za boj", "(1× za boj)", nebo věta složená z kousků, kde
+// jsou česká jen dosazená slova): hra je ukazuje, a proto musí mít překlad. Přidávají se mezi klíče hry. Klíč s {0}, {1} je šablona věty složené z kousků.
+export const EXTRA_KEYS = {
+  onlinegames: [
+    '+10 zlata za boj', '+20 zlata za boj', 'Po boji +6 ❤️', '+2 energie', '+15 zlata na startu', '500 zlata', '(1× za boj)', 'Padl jsi 💀',
+    '🧹 Odstranit kartu · 🪙40', 'Zahodit kartu (−6 ❤️)', '⚠️ BOSS · {0}', '👹 Elita · {0}',
+  ],
 };
 
 const CZECH = /[ěščřžýáíéůúďťňóĚŠČŘŽÝÁÍÉŮÚĎŤŇÓ]/;
@@ -155,6 +164,7 @@ export const extractGameKeys = (gameId) => {
       for (const b of scriptBlocks(code)) { const r = jsKeys(b.code, b.line); put(r.out, rel); if (r.error) errors.push(`${rel}: ${r.error}`); }
     } else { const r = jsKeys(code, 1); put(r.out, rel); if (r.error) errors.push(`${rel}: ${r.error}`); }
   }
+  for (const k of EXTRA_KEYS[gameId] || []) if (!keys.has(k)) keys.set(k, ['gamestrings.mjs:EXTRA_KEYS']);
   return { keys, errors };
 };
 

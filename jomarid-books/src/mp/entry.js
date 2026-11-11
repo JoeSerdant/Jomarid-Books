@@ -8,6 +8,9 @@
 // Appka -> hra: {source: 'jomarid-host', type: 'online', available: true|false}. Při true dostane <html> třídu jomarid-online; schovávání tlačítek
 // je ve stylech her (html:not(.jomarid-online) [data-jomarid-online] { display: none !important }), takže funguje i u menu, které si hra překresluje.
 //
+// Druhé tlačítko hry s víc dokumenty (Jomarid Online Games: sólo Katakomby): prvek s atributem data-jomarid-play="klíč" je vidět vždycky (i bez internetu)
+// a po kliknutí pošle appce {source: 'jomarid-game', type: 'play', game, mode: klíč}; appka podle klíče v loadPlay (Games.jsx) přepne dokument hry.
+//
 // Skript je schválně v ES5, v jedné funkci a bez diakritiky (vkládá se do dokumentu hry před její skripty).
 import { insertAtHead } from '../gameSave/shim.js';
 
@@ -28,6 +31,15 @@ const ENTRY_TEMPLATE = `(function () {
   });
   document.addEventListener('click', function (e) {
     var t = e.target && e.target.closest ? e.target.closest('[data-jomarid-online]') : null;
+    var pl = !t && e.target && e.target.closest ? e.target.closest('[data-jomarid-play]') : null;
+    if (pl) {
+      var pm = pl.getAttribute ? pl.getAttribute('data-jomarid-play') : null;
+      if (!pm || !/^[a-z0-9_-]{1,24}$/.test(pm)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      post('play', pm);
+      return;
+    }
     if (!t || !root.classList.contains('jomarid-online')) return;
     e.preventDefault();
     e.stopPropagation();

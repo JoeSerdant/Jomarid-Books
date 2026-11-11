@@ -80,6 +80,13 @@ test('pokrok: hra bez známých čítačů se porovná obecně (odemčené uzly,
   const many = han({ a: { unlocked: true, completed: true }, b: { unlocked: true, completed: true }, c: { unlocked: true, completed: false } }, 5);
   assert.equal(compareProgress('hannibal', many, few), 1, 'víc dokončených uzlů vyhrává, i když má méně zlata');
   assert.equal(compareProgress('warroom', { warroom_muted: '1', warroom_frontlines_save_v1: '{"unlockedScenarios":["a"]}' }, { warroom_muted: '0', warroom_frontlines_save_v1: '{"unlockedScenarios":["a"]}' }), 0, 'zvuk není pokrok');
+  // sólo Katakomby (id onlinegames): vyšší rekord pater vyhrává i s méně dušemi, při shodě rozhodnou trvalá vylepšení z kobky duší; rozbité hodnoty nespadnou
+  const kat = (best, souls, up = {}) => ({ katak_best: String(best), katak_meta: JSON.stringify({ s: souls, a: [], u: { hp: 0, gold: 0, up: 0, pot: 0, rel: 0, ...up } }) });
+  assert.equal(compareProgress('onlinegames', kat(12, 5), kat(7, 900)), 1, 'vyšší patro vyhrává, i když má méně duší');
+  assert.equal(compareProgress('onlinegames', kat(7, 900), kat(12, 5)), -1);
+  assert.equal(compareProgress('onlinegames', kat(7, 5, { hp: 2 }), kat(7, 900)), 1, 'při shodě rozhodnou vylepšení z kobky duší (duše se utrácejí, vylepšení nemizí)');
+  assert.doesNotThrow(() => progressTuple('onlinegames', { katak_best: 'x', katak_meta: '{rozbite' }));
+  assert.deepEqual(progressTuple('onlinegames', kat(9, 3, { hp: 1 })).slice(0, 6), [9, 1, 0, 0, 0, 0]);
   assert.doesNotThrow(() => progressTuple('rocket', { space_shooter_v2_9: '{rozbite' }));
   assert.equal(compareProgress('rocket', { space_shooter_v2_9: '{rozbite' }, rocket({ totalPlaytime: 1 })), -1);
   assert.equal(genericScore({ best: 8, mute: 1, deep: { level: 3 } }) > genericScore({ best: 8 }), true);

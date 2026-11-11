@@ -83,15 +83,20 @@ const GAMES = [
     icon: Smile,
     load: () => import('../gameContent/koulovi').then(m => m.KOULOVI_HTML),
   },
-  // Hra jen pro online (onlineOnly): žádný uložený postup, rekordy ani denní odměna za hraní, v menu jsou jen vstupy do online zápasů. Každý režim zápasu
-  // (loadMode) má vlastní dokument; hlavní dokument (load) je jen menu se dvěma hrami.
+  // Jomarid Online Games: menu (load) se vstupy do online zápasů a sólo Katakombami offline. Každý režim online zápasu (loadMode) má vlastní dokument, sólo hra
+  // (loadPlay, vybraná tlačítkem s data-jomarid-play) taky: menu ji otevře zprávou play a ona se vrací zprávou hub. Postup sólo hry (rekord pater, duše) se ukládá
+  // k účtu pod id hry a o Coiny hra žádá jako ostatní hry. Denní odměnu za hraní (noDailyBonus) a rekordy a odznaky (noRecords) hra nemá.
   {
     id: 'onlinegames',
     title: tk('Jomarid Online Games'),
-    tagline: tk('Dvě hry jen pro online, vždy ve dvou: Katakomby (karetní výprava proti příšerám, nebo souboj hrdinů proti sobě) a Chaos Aréna (akční aréna s třídami, bossy a vlnami).'),
+    tagline: tk('Karetní Katakomby (sólo výprava offline, online ve dvou co-op nebo souboj hrdinů) a akční Chaos Aréna (online ve dvou, s třídami, bossy a vlnami).'),
     icon: Users,
-    onlineOnly: true,
+    noDailyBonus: true,
+    noRecords: true,
     load: () => import('../gameContent/onlineGames').then(m => m.ONLINE_GAMES_HTML),
+    loadPlay: {
+      katakomby: () => import('../gameContent/katakombySolo').then(m => m.KATAKOMBY_SOLO_HTML),
+    },
     loadMode: {
       katakomby: () => import('../gameContent/katakomby').then(m => m.KATAKOMBY_HTML),
       katakombypvp: () => import('../gameContent/katakomby').then(m => m.KATAKOMBY_HTML),   // stejný dokument, hra pozná souboj podle režimu zápasu
@@ -107,7 +112,7 @@ export async function preloadGames(onProgress = () => {}) {
   const failed = [];
   let done = 0;
   for (const game of GAMES) {
-    try { await game.load(); for (const loadMode of Object.values(game.loadMode || {})) await loadMode(); } catch { failed.push(game.id); }
+    try { await game.load(); for (const loadDoc of [...Object.values(game.loadMode || {}), ...Object.values(game.loadPlay || {})]) await loadDoc(); } catch { failed.push(game.id); }
     done += 1;
     onProgress(done, GAMES.length);
   }
@@ -278,7 +283,7 @@ export const GameLauncher = ({ game }) => {
   // (žádná dvojitá odměna), ale tlačítko by do tý doby lhalo o stavu.
   useEffect(() => {
     if (!user || !game) return;
-    if (game.onlineOnly) { setCheckingStatus(false); return undefined; } // hra jen pro online denní odměnu za hraní nemá
+    if (game.noDailyBonus) { setCheckingStatus(false); return undefined; } // hra s vlastním způsobem odměn (Jomarid Online Games) denní odměnu za hraní nemá
     let cancelled = false;
     setCheckingStatus(true);
     supabase
@@ -322,22 +327,22 @@ export const GameLauncher = ({ game }) => {
     // Uložený postup ze serveru (a při prvním spuštění po přesunu jednorázový přenos starého z prohlížeče). Když se nenačte, hra se
     // nespustí: kdyby běžela naprázdno, mohla by uložený postup přepsat. Už načtený postup se znovu nenačítá (v paměti jsou i změny,
     // které se ještě neodeslaly); jen po konfliktu (hrálo se jinde) se načte znovu.
-    const sync = game.onlineOnly ? null : getSync();
+    const sync = getSync();
     try {
-      if (sync && (!sync.isLoaded() || sync.state().stopped)) await sync.load({ allowEmpty: allowEmpty === true });
+      if (!sync.isLoaded() || sync.state().stopped) await sync.load({ allowEmpty: allowEmpty === true });
     } catch (err) {
       console.error('Nepodařilo se načíst uložený postup hry:', err?.message || err);
       if (mountedRef.current) { setSaveLoadError(err instanceof NoLocalSaveError ? 'nocopy' : true); setLoadingGame(false); }
       return;
     }
     if (!mountedRef.current) return;
-    const status = sync ? sync.state().status : 'ok'; // znovu otevřená hra ukáže štítek i tehdy, když se postup pořád neukládá
+    const { status } = sync.state(); // znovu otevřená hra ukáže štítek i tehdy, když se postup pořád neukládá
     setSaveStatus(status === 'ok' ? null : status);
     // Jazyk hry: v angličtině se do dokumentu vloží slovník hry a překladová vrstva (src/i18n/gameLayer.js).
     const lang = getLang();
     const dict = lang === 'en' ? await loadGameDictionary(game.id) : null;
     if (!mountedRef.current) return;
-    setGameDoc(withGameLanguage(withOnlineEntry(withStorageShim(src, game.id, sync ? sync.snapshot().map : {}), game.id), lang, dict, { collect: typeof window !== 'undefined' && window.__JOMARID_I18N_COLLECT === true }));
+    setGameDoc(withGameLanguage(withOnlineEntry(withStorageShim(src, game.id, sync.snapshot().map), game.id), lang, dict, { collect: typeof window !== 'undefined' && window.__JOMARID_I18N_COLLECT === true }));
     setLoadingGame(false);
     gameOpenedAtRef.current = Date.now();
     limitShownRef.current = false;
@@ -347,6 +352,21 @@ export const GameLauncher = ({ game }) => {
 
   // Při najetí myší nebo zaostření se hra stáhne dopředu, takže se po kliknutí obvykle otevře hned.
   const warmUp = useCallback(() => { game.load().catch(() => {}); }, [game]);
+
+  // Přepnutí dokumentu v iframu uvnitř jedné hry: menu Jomarid Online Games -> sólo hra (zpráva play) a zpět (zpráva hub). Úložiště dostane aktuální postup
+  // (i s tím, co se ještě neodeslalo), takže sólo hra vidí rekord a duše a menu po návratu nic neztratí. Vstup do online zápasů má jen menu (online = true).
+  const switchDoc = useCallback(async (loadDoc, online) => {
+    try {
+      const src = await loadDoc();
+      const lang = getLang();
+      const dict = lang === 'en' ? await loadGameDictionary(game.id) : null;
+      if (!mountedRef.current) return;
+      const withStore = withStorageShim(src, game.id, getSync().snapshot().map);
+      setGameDoc(withGameLanguage(online ? withOnlineEntry(withStore, game.id) : withStore, lang, dict, { collect: typeof window !== 'undefined' && window.__JOMARID_I18N_COLLECT === true }));
+    } catch (err) {
+      console.error('Nepodařilo se přepnout hru:', err?.message || err);
+    }
+  }, [game, getSync]);
 
   const handleCloseGame = useCallback(() => {
     if (gameOpenedAtRef.current && Date.now() - gameOpenedAtRef.current >= MIN_PLAY_MS) {
@@ -381,6 +401,13 @@ export const GameLauncher = ({ game }) => {
 
       if (event.data?.type === 'close') {
         handleCloseGame();
+      } else if (event.data?.type === 'play' || event.data?.type === 'hub') {
+        // Hra s víc dokumenty (loadPlay): menu otevře sólo hru zprávou play (mode = klíč v loadPlay), sólo hra se vrací zprávou hub.
+        if (!game.loadPlay) return;
+        if (event.data.type === 'hub') { switchDoc(game.load, true); return; }
+        const mode = event.data.mode;
+        const loadDoc = typeof mode === 'string' && Object.prototype.hasOwnProperty.call(game.loadPlay, mode) ? game.loadPlay[mode] : null;
+        if (loadDoc) switchDoc(loadDoc, false);
       } else if (event.data?.type === 'online-ask') {
         postOnline();
       } else if (event.data?.type === 'online') {
@@ -417,7 +444,7 @@ export const GameLauncher = ({ game }) => {
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [handleCloseGame, postOnline, user, game.id, showFlash]);
+  }, [handleCloseGame, postOnline, switchDoc, user, game, showFlash]);
 
   const canClaim = hasPlayedEnough && !checkingStatus && !claimedToday && online;
 
@@ -599,9 +626,9 @@ export const GameLauncher = ({ game }) => {
         )}
 
         <div style={{ borderColor: 'var(--border-color)' }} className="w-full border-t pt-6 flex flex-col items-center gap-3">
-          {game.onlineOnly ? (
-            <p data-testid="online-only-note" style={{ color: 'var(--text-muted)' }} className="text-xs max-w-sm mx-auto opacity-80">
-              {t('Tahle hra se hraje jen online a vždy ve dvou: v menu hry vyber Hrát online. Jomarid Coins dostanete za výhru: v co-opu oba, v souboji jen vítěz (podle pravidel online her, s denním stropem).')}
+          {game.noDailyBonus ? (
+            <p data-testid="no-bonus-note" style={{ color: 'var(--text-muted)' }} className="text-xs max-w-sm mx-auto opacity-80">
+              {t('Tahle hra nemá denní odměnu za hraní. Jomarid Coins dostaneš za výhry v online zápasech (v co-opu oba, v souboji jen vítěz) a za postup v sólo výpravě; o částce a denním stropu rozhoduje server. Postup sólo výpravy se ukládá k tvému účtu.')}
             </p>
           ) : (<>
           <p style={{ color: 'var(--text-muted)' }} className="text-xs max-w-sm mx-auto opacity-80">

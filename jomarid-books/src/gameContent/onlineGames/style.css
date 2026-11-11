@@ -16,6 +16,8 @@ h1{font:700 38px Georgia,"Times New Roman",serif;margin:8px 0 4px;text-align:cen
 .btn{background:linear-gradient(var(--gold),#f0a93e);color:#20203a;border:none;border-radius:13px;padding:13px 20px;font:700 17px system-ui;box-shadow:0 4px 0 #a06a1c;margin-top:auto;cursor:pointer;flex:1 1 130px}
 .btn.alt{background:linear-gradient(#ff9aa6,#e0455a);box-shadow:0 4px 0 #8a2236;color:#fff}
 .btn.alt:active{box-shadow:0 1px 0 #8a2236}
+.btn.solo{background:linear-gradient(#9be7b4,#4cb86a);box-shadow:0 4px 0 #2b6e40;color:#10331c}
+.btn.solo:active{box-shadow:0 1px 0 #2b6e40}
 .btn:active{transform:translateY(3px);box-shadow:0 1px 0 #a06a1c}
 .btn:focus-visible{outline:3px solid #fff;outline-offset:2px}
 footer{margin-top:24px;color:var(--mut);font-size:12px;text-align:center;max-width:520px}

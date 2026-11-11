@@ -78,6 +78,7 @@ select tt.ok(tt.save(3, 'chess', '{"a": "1"}', 0)->>'rev' = '1', 'a s revizí 0 
 select tt.ok(tt.load(2, 'rocket') = '{"rev": 0, "data": {}}'::jsonb and tt.load(4, 'chess') = '{"rev": 0, "data": {}}'::jsonb, 'cizí postup nikdo nevidí (jiný čtenář má u téže hry prázdno)');
 
 -- ===== kontrola tvaru =====
+select tt.ok(tt.save(1, 'onlinegames', '{"katak_best": "7", "katak_meta": "{\"s\": 41}"}', 0)->>'ok' = 'true' and tt.load(1, 'onlinegames')->'data'->>'katak_best' = '7', 'Jomarid Online Games: sólo Katakomby uloží postup jako ostatní hry');
 select tt.vfails($$select tt.save(4, 'nope', '{}', 0)$$, 'unknown_game', 'neznámá hra se odmítne při ukládání');
 select tt.vfails($$select tt.load(4, 'nope')$$, 'unknown_game', 'neznámá hra se odmítne při načítání');
 select tt.vfails($$select tt.save(4, null, '{}', 0)$$, 'unknown_game', 'chybějící hra se odmítne');
