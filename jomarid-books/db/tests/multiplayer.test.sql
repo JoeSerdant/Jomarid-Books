@@ -950,6 +950,61 @@ create temp table t_rm4 as select tt.pair(58, 56, 'warroom') as id;
 select tt.fails(59, format($$select public.mp_rematch(%L)$$, (select id from t_rm3)), 'already_in_match', 'hráč, který už hraje jinde, odvetu nezačne');
 select tt.resign(58, (select id from t_rm4));
 
+-- ===== Jomarid Online Games: Katakomby (týmová tahová hra) a Chaos Aréna (týmová hra v reálném čase) =====
+select tt.mmk(n) from generate_series(60, 63) n;
+select tt.ok(public.mp_cfg('onlinegames', 'katakomby') ->> 'kind' = 'turn' and public.mp_cfg('onlinegames', 'chaos') ->> 'kind' = 'realtime'
+  and (public.mp_cfg('onlinegames', 'katakomby') ->> 'team')::boolean and (public.mp_cfg('onlinegames', 'chaos') ->> 'team')::boolean, 'Jomarid Online Games: dva týmové režimy, Katakomby tahové a Chaos Aréna v reálném čase');
+select tt.ok(public.mp_clean_params('onlinegames', 'chaos', '{}') = '{"diff": "normal"}' and public.mp_clean_params('onlinegames', 'katakomby', '{"diff":"hard","x":1}') = '{"diff": "hard"}', 'volba obtížnosti: výchozí normální, cizí klíče se zahodí');
+select tt.fails(60, $$select public.mp_clean_params('onlinegames', 'chaos', '{"diff":"peklo"}')$$, 'invalid_params', 'neznámá obtížnost se odmítne');
+select tt.ok(tt.find(60, 'onlinegames', 'katakomby', '{"diff":"easy"}') ->> 'status' = 'waiting' and tt.find(61, 'onlinegames', 'katakomby', '{"diff":"hard"}') ->> 'status' = 'waiting', 'různá obtížnost se nespáruje');
+select tt.cancel(60); select tt.cancel(61);
+select tt.ok(tt.find(60, 'onlinegames', 'chaos') ->> 'status' = 'waiting' and tt.find(61, 'onlinegames', 'katakomby') ->> 'status' = 'waiting', 'různé režimy se nespárují');
+select tt.cancel(60); select tt.cancel(61);
+
+create temp table t_og as select tt.pair_new(60, 61, 'onlinegames', 'katakomby', '{"diff":"easy"}') as id;
+select tt.ok(tt.row((select id from t_og)) -> 'rules' ->> 'team' = 'true' and tt.row((select id from t_og)) -> 'rules' ->> 'check' = 'shape' and tt.row((select id from t_og)) ->> 'turn' = '1', 'zápas Katakomb: tým, kontrola tvaru tahů, první táhne místo 1');
+-- tvar tahů Katakomb
+select tt.xfail((select id from t_og), '{"t":"p","k":0}'::jsonb, 'karta před výběrem hrdinů se odmítne', false);
+select tt.xfail((select id from t_og), '{"t":"hero","h":7}'::jsonb, 'neznámý hrdina se odmítne');
+select tt.xfail((select id from t_og), '{"t":"hero","h":1,"z":1}'::jsonb, 'pole navíc se odmítne');
+select tt.xfail((select id from t_og), '{"t":"x"}'::jsonb, 'neznámý druh tahu se odmítne');
+select tt.xfail((select id from t_og), '"hero"'::jsonb, 'tah, který není objekt, se odmítne');
+select tt.ok(tt.xmv((select id from t_og), '{"t":"hero","h":0}'::jsonb) ->> 'turn' = '2', 'výběr hrdiny prvního hráče předá tah druhému');
+select tt.ok(tt.xmv((select id from t_og), '{"t":"hero","h":4}'::jsonb) ->> 'turn' = '1', 'a po druhém hrdinovi je na tahu zase první');
+select tt.xfail((select id from t_og), '{"t":"hero","h":2}'::jsonb, 'třetí výběr hrdiny se odmítne');
+select tt.xfail((select id from t_og), '{"t":"p","k":10}'::jsonb, 'karta mimo ruku (číslo 10) se odmítne', false);
+select tt.xfail((select id from t_og), '{"t":"e","x":-1}'::jsonb, 'záporný otisk stavu se odmítne');
+select tt.xfail((select id from t_og), '{"t":"e","x":4294967296}'::jsonb, 'otisk nad 32 bitů se odmítne');
+select tt.xfail((select id from t_og), '{"t":"e","a":2}'::jsonb, 'příznak automatického konce jen 1');
+select tt.xfail((select id from t_og), '{"t":"r","j":3}'::jsonb, 'odměna číslo 3 neexistuje');
+select tt.ok(tt.xmv((select id from t_og), '{"t":"p","k":0}'::jsonb, false) ->> 'turn' = '1', 'zahraná karta tah nepředává');
+select tt.ok(tt.xmv((select id from t_og), '{"t":"p","k":3}'::jsonb, false) ->> 'turn' = '1', 'a další karta také ne');
+select tt.ok(tt.xmv((select id from t_og), '{"t":"e","x":123456}'::jsonb) ->> 'turn' = '2', 'konec tahu s otiskem tah předá');
+select tt.ok(tt.xmv((select id from t_og), '{"t":"e","a":1}'::jsonb) ->> 'turn' = '1', 'automatický konec tahu poraženého hrdiny také');
+-- Chaos Aréna běží v reálném čase: tahy přes mp_move nejdou
+create temp table t_oc as select tt.pair_new(62, 63, 'onlinegames', 'chaos') as id;
+select tt.fails(62, format($$select public.mp_move(%L, 1, '{"t":"e"}')$$, (select id from t_oc)), 'not_turn_based', 'Chaos Aréna tahy nemá');
+-- týmová hra: vypršení času nikomu výhru nedá
+update public.mp_matches set rules = rules || '{"turn_seconds":120}' where id = (select id from t_og);
+select tt.ff((select id from t_og), 400);
+select tt.ok(tt.st(60, (select id from t_og)) -> 'match' ->> 'status' = 'finished' and tt.row((select id from t_og)) ->> 'winner' = '0' and tt.row((select id from t_og)) ->> 'reason' = 'timeout', 'Katakomby: komu vypršel čas, nepřivodí soupeři výhru, zápas skončí bez vítěze');
+-- výhra týmu: oba hlásí win, oba dostanou odměnu
+create temp table t_og2 as select tt.pair_new(60, 61, 'onlinegames', 'katakomby') as id;
+create temp table t_ogc as select tt.coins(60) c60, tt.coins(61) c61;
+update public.mp_matches set move_count = 45 where id = (select id from t_og2);
+select tt.ff((select id from t_og2), 300);
+select tt.rep(60, (select id from t_og2), 'win', 'boss'); select tt.rep(61, (select id from t_og2), 'win', 'boss');
+select tt.ok(tt.row((select id from t_og2)) ->> 'winner' = '3' and tt.coins(60) - (select c60 from t_ogc) = 40 and tt.coins(61) - (select c61 from t_ogc) = 40, 'společná výhra: oba dostanou po 40 Coinech');
+select tt.ok((select wins from public.mp_record where user_id = tt.mu(60) and game_id = 'onlinegames' and mode = 'katakomby') = 1, 'a do týmového žebříčku se zapíše výhra');
+create temp table t_og3 as select tt.pair_new(60, 61, 'onlinegames', 'katakomby') as id;
+select tt.resign(60, (select id from t_og3));
+select tt.ok(tt.row((select id from t_og3)) ->> 'winner' = '0' and tt.row((select id from t_og3)) ->> 'reason' = 'resign', 'odchod z týmové hry skončí bez vítěze');
+create temp table t_og4 as select tt.pair_new(62, 63, 'onlinegames', 'chaos') as id;
+select tt.ff((select id from t_og4), 200);
+select tt.rep(62, (select id from t_og4), 'win', 'waves'); select tt.rep(63, (select id from t_og4), 'win', 'waves');
+select tt.ok(tt.row((select id from t_og4)) ->> 'winner' = '3' and tt.coins(62) = 35 and tt.coins(63) = 35, 'Chaos Aréna: společná výhra po devíti vlnách dá oběma 35 Coinů');
+
+
 -- ===== Realtime: kdo smí do kanálu =====
 create temp table t_rt as select tt.pair(20, 21, 'rocket', 'pvp') as id;
 select tt.as_mu(20);

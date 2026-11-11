@@ -1,0 +1,23 @@
+:root{color-scheme:dark;--a:#3d3972;--b:#14132b;--gold:#ffcf6b;--txt:#f1eefc;--mut:#b1addb;--card:#ffffff12;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{background:radial-gradient(120% 70% at 50% 0%,var(--a),var(--b) 70%) var(--b);color:var(--txt);font:15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
+#home{height:100%;overflow:auto;padding:22px 16px 28px;display:flex;flex-direction:column;align-items:center}
+h1{font:700 38px Georgia,"Times New Roman",serif;margin:8px 0 4px;text-align:center;text-shadow:0 3px 0 #0006,0 0 26px #ffcf6b66}
+.sub{color:var(--mut);margin:0 0 22px;text-align:center;max-width:560px}
+#list{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px;width:100%;max-width:860px}
+.g{background:var(--card);border:1px solid #ffffff26;border-radius:20px;padding:18px;display:flex;flex-direction:column;gap:10px;box-shadow:0 10px 30px #0005}
+.g .ic{font-size:60px;line-height:1;filter:drop-shadow(0 0 16px #ffcf6b88)}
+.g h2{font:700 24px Georgia,serif;margin:0}
+.g p{margin:0;color:var(--mut)}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tags span{background:#00000055;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700}
+.btn{background:linear-gradient(var(--gold),#f0a93e);color:#20203a;border:none;border-radius:13px;padding:13px 20px;font:700 17px system-ui;box-shadow:0 4px 0 #a06a1c;margin-top:auto;cursor:pointer}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 #a06a1c}
+.btn:focus-visible{outline:3px solid #fff;outline-offset:2px}
+footer{margin-top:24px;color:var(--mut);font-size:12px;text-align:center;max-width:520px}
+.off{display:none;margin:18px 0 0;padding:10px 14px;border-radius:12px;background:#ff6b8133;border:1px solid #ff6b81;max-width:520px;text-align:center}
+/* Tlačítko Hrát online je vidět jen s povolením appky (src/mp/entry.js); bez něj se místo něj ukáže poznámka. */
+html:not(.jomarid-online) [data-jomarid-online] { display: none !important; }
+html:not(.jomarid-online) .off { display: block; }
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}

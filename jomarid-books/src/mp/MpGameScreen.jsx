@@ -64,7 +64,8 @@ export const MpGameScreen = ({ game, match, coins, coinsLoaded, reader, gameFx, 
     let cancelled = false;
     (async () => {
       try {
-        const src = await game.load();
+        // Hra s víc režimy pod jednou kartou (Jomarid Online Games) má pro každý režim zápasu vlastní dokument
+        const src = await (game.loadMode && game.loadMode[match.mode] ? game.loadMode[match.mode]() : game.load());
         const lang = getLang();
         const dict = lang === 'en' ? await loadGameDictionary(game.id) : null;
         if (cancelled) return;

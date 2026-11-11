@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, supabaseUrl, supabaseKey } from '../lib/supabase';
 import { friendlyError } from '../lib/friendlyError';
-import { Coins, Loader2, Rocket, Swords, Building2, Target, Crown, Smile, Lock, Castle, Folder, FolderOpen } from 'lucide-react';
+import { Coins, Loader2, Rocket, Swords, Building2, Target, Crown, Smile, Lock, Castle, Folder, FolderOpen, Users } from 'lucide-react';
 import { GameBar } from '../components/GameBar';
 import { useReaderSnapshot } from '../gameBar/useReaderSnapshot';
 import { rewardLabel, REWARD_LIMIT_NOTE } from '../gameBar/rewardLabels';
@@ -83,6 +83,20 @@ const GAMES = [
     icon: Smile,
     load: () => import('../gameContent/koulovi').then(m => m.KOULOVI_HTML),
   },
+  // Hra jen pro online (onlineOnly): žádný uložený postup, rekordy ani denní odměna za hraní, v menu jsou jen vstupy do online zápasů. Každý režim zápasu
+  // (loadMode) má vlastní dokument; hlavní dokument (load) je jen menu se dvěma hrami.
+  {
+    id: 'onlinegames',
+    title: tk('Jomarid Online Games'),
+    tagline: tk('Dvě coop hry jen pro online, vždy ve dvou: Katakomby (karetní výprava proti vlnám příšer) a Chaos Aréna (akční aréna s třídami, bossy a vlnami).'),
+    icon: Users,
+    onlineOnly: true,
+    load: () => import('../gameContent/onlineGames').then(m => m.ONLINE_GAMES_HTML),
+    loadMode: {
+      katakomby: () => import('../gameContent/katakomby').then(m => m.KATAKOMBY_HTML),
+      chaos: () => import('../gameContent/chaosArena').then(m => m.CHAOS_ARENA_HTML),
+    },
+  },
   // Další hra se přidá jako další objekt v tomhle poli.
 ];
 
@@ -92,7 +106,7 @@ export async function preloadGames(onProgress = () => {}) {
   const failed = [];
   let done = 0;
   for (const game of GAMES) {
-    try { await game.load(); } catch { failed.push(game.id); }
+    try { await game.load(); for (const loadMode of Object.values(game.loadMode || {})) await loadMode(); } catch { failed.push(game.id); }
     done += 1;
     onProgress(done, GAMES.length);
   }
@@ -142,6 +156,7 @@ export const GameLauncher = ({ game }) => {
   const [mpAuto, setMpAuto] = useState(null); // volby posledního zápasu: po „Hrát znovu“ se hledá soupeř rovnou
   const [mpArena, setMpArena] = useState(false); // hráč je ve sdílené aréně (Polygon aréna)
   const [mpLobby, setMpLobby] = useState(false); // okno Hrát online je otevřené (z tlačítka v menu hry, nebo po „Hrát znovu“)
+  const [mpMode, setMpMode] = useState(null); // režim předvybraný tlačítkem v menu hry (hra s víc režimy pod jednou kartou), nebo null
   const mpAvail = useMpAvailability(game.id, online); // je na serveru multiplayer a má tahle hra online režim
   const mpAvailRef = useRef(mpAvail);
   mpAvailRef.current = mpAvail;
@@ -262,6 +277,7 @@ export const GameLauncher = ({ game }) => {
   // (žádná dvojitá odměna), ale tlačítko by do tý doby lhalo o stavu.
   useEffect(() => {
     if (!user || !game) return;
+    if (game.onlineOnly) { setCheckingStatus(false); return undefined; } // hra jen pro online denní odměnu za hraní nemá
     let cancelled = false;
     setCheckingStatus(true);
     supabase
@@ -305,22 +321,22 @@ export const GameLauncher = ({ game }) => {
     // Uložený postup ze serveru (a při prvním spuštění po přesunu jednorázový přenos starého z prohlížeče). Když se nenačte, hra se
     // nespustí: kdyby běžela naprázdno, mohla by uložený postup přepsat. Už načtený postup se znovu nenačítá (v paměti jsou i změny,
     // které se ještě neodeslaly); jen po konfliktu (hrálo se jinde) se načte znovu.
-    const sync = getSync();
+    const sync = game.onlineOnly ? null : getSync();
     try {
-      if (!sync.isLoaded() || sync.state().stopped) await sync.load({ allowEmpty: allowEmpty === true });
+      if (sync && (!sync.isLoaded() || sync.state().stopped)) await sync.load({ allowEmpty: allowEmpty === true });
     } catch (err) {
       console.error('Nepodařilo se načíst uložený postup hry:', err?.message || err);
       if (mountedRef.current) { setSaveLoadError(err instanceof NoLocalSaveError ? 'nocopy' : true); setLoadingGame(false); }
       return;
     }
     if (!mountedRef.current) return;
-    const { status } = sync.state(); // znovu otevřená hra ukáže štítek i tehdy, když se postup pořád neukládá
+    const status = sync ? sync.state().status : 'ok'; // znovu otevřená hra ukáže štítek i tehdy, když se postup pořád neukládá
     setSaveStatus(status === 'ok' ? null : status);
     // Jazyk hry: v angličtině se do dokumentu vloží slovník hry a překladová vrstva (src/i18n/gameLayer.js).
     const lang = getLang();
     const dict = lang === 'en' ? await loadGameDictionary(game.id) : null;
     if (!mountedRef.current) return;
-    setGameDoc(withGameLanguage(withOnlineEntry(withStorageShim(src, game.id, sync.snapshot().map), game.id), lang, dict, { collect: typeof window !== 'undefined' && window.__JOMARID_I18N_COLLECT === true }));
+    setGameDoc(withGameLanguage(withOnlineEntry(withStorageShim(src, game.id, sync ? sync.snapshot().map : {}), game.id), lang, dict, { collect: typeof window !== 'undefined' && window.__JOMARID_I18N_COLLECT === true }));
     setLoadingGame(false);
     gameOpenedAtRef.current = Date.now();
     limitShownRef.current = false;
@@ -367,7 +383,7 @@ export const GameLauncher = ({ game }) => {
       } else if (event.data?.type === 'online-ask') {
         postOnline();
       } else if (event.data?.type === 'online') {
-        if (mpAvailRef.current.state === 'ready') setMpLobby(true); // tlačítko Hrát online v menu hry
+        if (mpAvailRef.current.state === 'ready') { setMpMode(typeof event.data.mode === 'string' ? event.data.mode : null); setMpLobby(true); } // tlačítko Hrát online v menu hry
       } else if (event.data?.type === 'storage') {
         // Změna "localStorage" ve hře (viz gameSave/shim.js): drží se v paměti a posílá se na server s odkladem.
         syncRef.current?.apply(event.data);
@@ -431,10 +447,11 @@ export const GameLauncher = ({ game }) => {
   const closeLobby = useCallback(() => {
     setMpLobby(false);
     setMpAuto(null);
+    setMpMode(null);
     try { iframeRef.current?.contentWindow?.focus(); } catch { /* okno hry se zaměřit nedá: klávesy začnou platit po kliknutí do hry */ }
   }, []);
   const lobbyDialog = mpLobby ? (
-    <MpLobbyDialog game={game} online={online} avail={mpAvail} auto={mpAuto} onMatch={handleMpMatch} onArena={handleMpArena} onClose={closeLobby} />
+    <MpLobbyDialog game={game} online={online} avail={mpAvail} auto={mpAuto} mode={mpMode} onMatch={handleMpMatch} onArena={handleMpArena} onClose={closeLobby} />
   ) : null;
 
   // Sdílená aréna má obrazovku bez zápasu: hra v iframu napojená jen na společný kanál (src/mp)
@@ -581,6 +598,11 @@ export const GameLauncher = ({ game }) => {
         )}
 
         <div style={{ borderColor: 'var(--border-color)' }} className="w-full border-t pt-6 flex flex-col items-center gap-3">
+          {game.onlineOnly ? (
+            <p data-testid="online-only-note" style={{ color: 'var(--text-muted)' }} className="text-xs max-w-sm mx-auto opacity-80">
+              {t('Tahle hra se hraje jen online a vždy ve dvou: v menu hry vyber Hrát online. Jomarid Coins dostanete oba za společnou výhru (podle pravidel online her, s denním stropem).')}
+            </p>
+          ) : (<>
           <p style={{ color: 'var(--text-muted)' }} className="text-xs max-w-sm mx-auto opacity-80">
             {t('Postup ve hře (vylepšení, nastavení, rozehraná partie), rekordy i herní odznaky se ukládají k tvému účtu, takže je máš na všech zařízeních stejné (rekordy a odznaky najdeš na stránce Odznaky, záložka Odznaky her). Za to, že si dnes zahraješ, dostaneš i pár skutečných Jomarid Coinů - jednou denně.')}
           </p>
@@ -612,6 +634,7 @@ export const GameLauncher = ({ game }) => {
               {t('Odměna se odemkne po chvilce hraní - zkus to po zavření hry znovu.')}
             </span>
           )}
+          </>)}
           <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] opacity-60 flex items-center gap-1">
             <Coins size={11} /> {t('Aktuální zůstatek: {n} Jomarid Coins', { n: coins })}
           </span>

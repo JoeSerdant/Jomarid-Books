@@ -73,7 +73,7 @@ export const MpResume = ({ game, online, avail, onMatch }) => {
 
 // Okno „Hrát online“ (otevírá se z tlačítka v menu hry): hledání náhodného soupeře, hra s kamarádem přes kód, vstup do sdílené arény a návrat
 // do rozehraného zápasu. avail: výsledek useMpAvailability.
-export const MpSection = ({ game, online, avail, auto, onMatch, onArena }) => {
+export const MpSection = ({ game, online, avail, auto, initialMode, onMatch, onArena }) => {
   const def = MP_GAMES[game.id];
   const arena = hasArena(game.id);
   const enabled = hasOnline(game.id) || arena;
@@ -82,7 +82,8 @@ export const MpSection = ({ game, online, avail, auto, onMatch, onArena }) => {
   const [phase, setPhaseState] = useState('idle'); // idle | searching | room
   const phaseRef = useRef('idle');
   const setPhase = (p) => { phaseRef.current = p; setPhaseState(p); };
-  const [mode, setMode] = useState(auto?.mode && def?.modes.some((m) => m.id === auto.mode) ? auto.mode : def?.modes[0]?.id || '');
+  // Režim: z posledního zápasu („Hrát znovu“), jinak ten, který vybralo tlačítko v menu hry (hra s víc režimy pod jednou kartou), jinak první
+  const [mode, setMode] = useState(auto?.mode && def?.modes.some((m) => m.id === auto.mode) ? auto.mode : initialMode && def?.modes.some((m) => m.id === initialMode) ? initialMode : def?.modes[0]?.id || '');
   const [params, setParams] = useState(() => (auto ? cleanParams(game.id, auto.params) : defaultParams(game.id)));
   const [waited, setWaited] = useState(0);
   const [queued, setQueued] = useState(0);
@@ -202,7 +203,7 @@ export const MpSection = ({ game, online, avail, auto, onMatch, onArena }) => {
 
   if (!enabled || state !== 'ready') return null;
   const modeDef = def.modes.find((m) => m.id === mode) || def.modes[0];
-  const needsRealtime = (def.kind === 'realtime' || arena) && !realtime;
+  const needsRealtime = ((modeDef?.kind || def.kind) === 'realtime' || arena) && !realtime;   // druh hry může mít každý režim vlastní (Jomarid Online Games)
   const pill = pillStyle;
   const cardStyle = { backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-body)' };
 

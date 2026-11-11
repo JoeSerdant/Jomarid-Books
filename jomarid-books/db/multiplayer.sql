@@ -92,6 +92,8 @@ returns jsonb language sql immutable set search_path to 'public' as $$
     when 'warroom/duel'       then jsonb_build_object('kind', 'turn',     'turn_seconds', 120, 'bank', 0,   'inc', 0, 'first_move', 90, 'reward', 35, 'min_moves', 4,  'min_seconds', 40,  'max_payload', 16000, 'max_moves', 900,  'team', false)
     when 'hannibal/duel'      then jsonb_build_object('kind', 'turn',     'turn_seconds', 180, 'bank', 0,   'inc', 0, 'first_move', 90, 'reward', 40, 'min_moves', 4,  'min_seconds', 30,  'max_payload', 16000, 'max_moves', 1500, 'team', false)
     when 'cityclicker/race'   then jsonb_build_object('kind', 'race',     'turn_seconds', 0,   'bank', 0,   'inc', 0, 'first_move', 0,  'reward', 40, 'min_moves', 0,  'min_seconds', 38,  'max_payload', 600,   'max_moves', 0,    'team', false, 'target', 10000000000)
+    when 'onlinegames/katakomby' then jsonb_build_object('kind', 'turn',  'turn_seconds', 120, 'bank', 0,   'inc', 0, 'first_move', 120, 'reward', 40, 'min_moves', 40, 'min_seconds', 240, 'max_payload', 400,  'max_moves', 4000, 'team', true)
+    when 'onlinegames/chaos'  then jsonb_build_object('kind', 'realtime', 'turn_seconds', 0,   'bank', 0,   'inc', 0, 'first_move', 0,  'reward', 35, 'min_moves', 0,  'min_seconds', 150, 'max_payload', 600,   'max_moves', 0,    'team', true)
     when 'rocket/coop'        then jsonb_build_object('kind', 'realtime', 'turn_seconds', 0,   'bank', 0,   'inc', 0, 'first_move', 0,  'reward', 25, 'min_moves', 0,  'min_seconds', 60,  'max_payload', 600,   'max_moves', 0,    'team', true)
     when 'rocket/pvp'         then jsonb_build_object('kind', 'realtime', 'turn_seconds', 0,   'bank', 0,   'inc', 0, 'first_move', 0,  'reward', 35, 'min_moves', 0,  'min_seconds', 30,  'max_payload', 600,   'max_moves', 0,    'team', false)
     else null
@@ -109,6 +111,10 @@ begin
     v := coalesce(p_params ->> 'tc', '5+3');
     if v not in ('3+2', '5+3', '10+5') then raise exception 'invalid_params'; end if;
     return jsonb_build_object('tc', v);
+  elsif p_game = 'onlinegames' then
+    v := coalesce(p_params ->> 'diff', 'normal');
+    if v not in ('easy', 'normal', 'hard') then raise exception 'invalid_params'; end if;
+    return jsonb_build_object('diff', v);
   elsif p_game = 'cityclicker' then
     v := coalesce(p_params ->> 'goal', 'standard');
     if v not in ('quick', 'standard', 'long') then raise exception 'invalid_params'; end if;
@@ -131,7 +137,7 @@ begin
   if p_game = 'chess' then
     v := v || case p_params ->> 'tc' when '3+2' then '{"bank":180,"inc":2}'::jsonb when '10+5' then '{"bank":600,"inc":5}'::jsonb else '{"bank":300,"inc":3}'::jsonb end;
     v := v || '{"engine":"chess"}'::jsonb;   -- pravidla šachů hlídá server (mp_chess_*); zápasy založené dřív se hlásí po starém
-  elsif p_game in ('koulovikamosi', 'warroom', 'hannibal') then
+  elsif p_game in ('koulovikamosi', 'warroom', 'hannibal', 'onlinegames') then
     v := v || '{"check":"shape"}'::jsonb;    -- server kontroluje tvar a meze tahů (mp_check_payload)
   elsif p_game = 'cityclicker' then
     v := v || case p_params ->> 'goal' when 'quick' then '{"target":1000000000,"min_seconds":24}'::jsonb when 'long' then '{"target":100000000000,"min_seconds":75}'::jsonb else '{"target":10000000000,"min_seconds":38}'::jsonb end;
@@ -804,6 +810,8 @@ language plpgsql immutable set search_path to 'public' as $$
 begin
   winner := (3 - p_loser)::smallint;
   reason := 'timeout';
+  -- týmová hra (spolupráce): kdo nestihl tah, vítězství soupeři nedává, zápas skončí bez výhry
+  if coalesce((p_match.rules ->> 'team')::boolean, false) then winner := 0; return; end if;
   if (p_match.rules ->> 'engine') = 'chess' and p_match.gstate is not null
      and not public.mp_chess_can_mate(regexp_split_to_array(p_match.gstate ->> 'b', ''), winner = 1) then
     winner := 0;
@@ -918,6 +926,26 @@ begin
     if p_payload ? 'w' then
       select coalesce(sum((payload ->> 'adv')::numeric), 0) into v_sum from public.mp_moves where match_id = p_match.id and player = p_slot;
       if v_sum + (p_payload ->> 'adv')::numeric < 90 then raise exception 'illegal_move'; end if;
+    end if;
+
+  elsif v_game = 'onlinegames' then
+    -- Katakomby (jediný tahový režim Jomarid Online Games): hrdina {t:'hero', h: 0-4} (první dva tahy zápasu, po jednom od každého), zahrání karty {t:'p', k: číslo karty v ruce},
+    -- konec tahu {t:'e', x: otisk stavu, a: 1 když tah za poraženého hrdinu ukončila hra sama} a výběr odměny po vlně {t:'r', j: 0-2}
+    if not (v_keys <@ array['t', 'h', 'k', 'x', 'a', 'j']) or jsonb_typeof(p_payload -> 't') <> 'string' then raise exception 'illegal_move'; end if;
+    if p_match.mode <> 'katakomby' then raise exception 'illegal_move'; end if;
+    if (p_payload ->> 't') = 'hero' then
+      if p_match.move_count >= 2 or not (v_keys <@ array['t', 'h']) or not public.mp_int_in(p_payload -> 'h', 0, 4) then raise exception 'illegal_move'; end if;
+    else
+      if p_match.move_count < 2 then raise exception 'illegal_move'; end if;
+      if (p_payload ->> 't') = 'p' then
+        if not (v_keys <@ array['t', 'k']) or not public.mp_int_in(p_payload -> 'k', 0, 9) then raise exception 'illegal_move'; end if;
+      elsif (p_payload ->> 't') = 'e' then
+        if not (v_keys <@ array['t', 'x', 'a']) or (p_payload ? 'x' and not public.mp_int_in(p_payload -> 'x', 0, 4294967295)) or (p_payload ? 'a' and p_payload -> 'a' <> '1'::jsonb) then raise exception 'illegal_move'; end if;
+      elsif (p_payload ->> 't') = 'r' then
+        if not (v_keys <@ array['t', 'j']) or not public.mp_int_in(p_payload -> 'j', 0, 2) then raise exception 'illegal_move'; end if;
+      else
+        raise exception 'illegal_move';
+      end if;
     end if;
 
   elsif v_game = 'hannibal' then
@@ -1393,7 +1421,7 @@ begin
     v_gnew := v_step.g;
     v_gres := v_step.result;
   end if;
-  if (m.rules ->> 'check') = 'shape' and m.game_id in ('koulovikamosi', 'warroom', 'hannibal') then
+  if (m.rules ->> 'check') = 'shape' and m.game_id in ('koulovikamosi', 'warroom', 'hannibal', 'onlinegames') then
     perform public.mp_check_payload(m, v_slot, p_payload);   -- tvar a meze tahu, u Kouloví Kámošů i pořadí koulí; jinak chyba illegal_move
   end if;
   insert into public.mp_moves (match_id, seq, player, payload, end_turn) values (m.id, p_seq, v_slot, p_payload, v_end);

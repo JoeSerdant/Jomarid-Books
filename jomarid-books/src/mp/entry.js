@@ -3,7 +3,8 @@
 // aréna, hra otevřená mimo appku) tenhle skript není, tlačítko zůstane schované a nic nedělá.
 //
 // Hra -> appka: {source: 'jomarid-game', type: 'online-ask'} (po načtení: zeptá se, jestli má tlačítko ukázat) a
-//               {source: 'jomarid-game', type: 'online'} (hráč kliknul na tlačítko).
+//               {source: 'jomarid-game', type: 'online', mode} (hráč kliknul na tlačítko; mode je hodnota atributu data-jomarid-online, u her s víc režimy
+//               pod jednou kartou (Jomarid Online Games) říká, který režim se má v okně předvybrat; bez něj se zpráva posílá bez pole mode).
 // Appka -> hra: {source: 'jomarid-host', type: 'online', available: true|false}. Při true dostane <html> třídu jomarid-online; schovávání tlačítek
 // je ve stylech her (html:not(.jomarid-online) [data-jomarid-online] { display: none !important }), takže funguje i u menu, které si hra překresluje.
 //
@@ -15,8 +16,10 @@ export const ONLINE_ATTR = 'data-jomarid-online';
 const ENTRY_TEMPLATE = `(function () {
   var GAME = __GAME__;
   var root = document.documentElement;
-  function post(type) {
-    try { window.parent.postMessage({ source: 'jomarid-game', type: type, game: GAME }, '*'); } catch (e) {}
+  function post(type, mode) {
+    var msg = { source: 'jomarid-game', type: type, game: GAME };
+    if (mode) msg.mode = mode;
+    try { window.parent.postMessage(msg, '*'); } catch (e) {}
   }
   window.addEventListener('message', function (e) {
     var d = e.data;
@@ -28,7 +31,8 @@ const ENTRY_TEMPLATE = `(function () {
     if (!t || !root.classList.contains('jomarid-online')) return;
     e.preventDefault();
     e.stopPropagation();
-    post('online');
+    var m = t.getAttribute ? t.getAttribute('data-jomarid-online') : null;
+    post('online', m && /^[a-z0-9_-]{1,24}$/.test(m) ? m : null);
   }, true);
   post('online-ask');
   document.addEventListener('DOMContentLoaded', function () { post('online-ask'); });
