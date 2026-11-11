@@ -1005,6 +1005,67 @@ select tt.rep(62, (select id from t_og4), 'win', 'waves'); select tt.rep(63, (se
 select tt.ok(tt.row((select id from t_og4)) ->> 'winner' = '3' and tt.coins(62) = 35 and tt.coins(63) = 35, 'Chaos Aréna: společná výhra po devíti vlnách dá oběma 35 Coinů');
 
 
+-- ===== Jomarid Online Games: Katakomby PvP (souboj hrdinů, není týmová hra) =====
+select tt.mmk(n) from generate_series(64, 67) n;
+select tt.ok(public.mp_cfg('onlinegames', 'katakombypvp') ->> 'kind' = 'turn' and not (public.mp_cfg('onlinegames', 'katakombypvp') ->> 'team')::boolean
+  and (public.mp_cfg('onlinegames', 'katakombypvp') ->> 'reward') = '35' and (public.mp_cfg('onlinegames', 'katakombypvp') ->> 'turn_seconds') = '90', 'Katakomby PvP: tahový souboj, vyhrává jeden (35 Coinů), 90 vteřin na tah');
+select tt.ok(public.mp_clean_params('onlinegames', 'katakombypvp', '{"diff":"hard"}') = '{}'::jsonb and public.mp_clean_params('onlinegames', 'katakombypvp', '{"diff":"peklo"}') = '{}'::jsonb and public.mp_clean_params('onlinegames', 'katakombypvp', '{}') = '{}'::jsonb, 'souboj hrdinů žádné volby nemá: obtížnost se zahodí a nikdy neselže');
+select tt.ok(tt.find(64, 'onlinegames', 'katakombypvp', '{"diff":"easy"}') ->> 'status' = 'waiting', 'PvP: první hráč čeká');
+create temp table t_kp as select (tt.find(65, 'onlinegames', 'katakombypvp', '{"diff":"hard"}') -> 'match' ->> 'id')::uuid as id;
+select tt.ok((select id from t_kp) is not null, 'hráči s jinou obtížností se v souboji spárují (souboj ji nemá)');
+select tt.ok(tt.row((select id from t_kp)) -> 'rules' ->> 'team' = 'false' and tt.row((select id from t_kp)) -> 'rules' ->> 'check' = 'shape' and tt.row((select id from t_kp)) -> 'rules' ->> 'turn_seconds' = '90'
+  and tt.row((select id from t_kp)) ->> 'mode' = 'katakombypvp' and tt.row((select id from t_kp)) -> 'params' = '{}'::jsonb, 'zápas PvP: ne tým, kontrola tvaru tahů, 90 vteřin, bez voleb');
+select tt.ok(tt.find(66, 'onlinegames', 'katakomby', '{}') ->> 'status' = 'waiting' and tt.find(67, 'onlinegames', 'katakombypvp') ->> 'status' = 'waiting', 'co-op Katakomby se s PvP nespáruje (režimy jsou oddělené)');
+select tt.cancel(66); select tt.cancel(67);
+-- tvar tahů PvP: hrdinové, pak karty a konce tahů; žádná odměna po vlně a žádný automatický konec za poraženého
+select tt.xfail((select id from t_kp), '{"t":"p","k":0}'::jsonb, 'PvP: karta před výběrem hrdinů se odmítne', false);
+select tt.xfail((select id from t_kp), '{"t":"r","j":0}'::jsonb, 'PvP: výběr odměny se odmítne');
+select tt.ok(tt.xmv((select id from t_kp), '{"t":"hero","h":2}'::jsonb) ->> 'turn' = '2', 'PvP: první hráč vybral hrdinu a tah dostal druhý');
+select tt.ok(tt.xmv((select id from t_kp), '{"t":"hero","h":0}'::jsonb) ->> 'turn' = '1', 'PvP: druhý vybral hrdinu a začíná první hráč');
+select tt.xfail((select id from t_kp), '{"t":"r","j":0}'::jsonb, 'PvP: odměna po vlně neexistuje ani po výběru hrdinů');
+select tt.xfail((select id from t_kp), '{"t":"e","a":1}'::jsonb, 'PvP: automatický konec tahu poraženého hrdiny neexistuje (souboj končí K.O.)');
+select tt.xfail((select id from t_kp), '{"t":"hero","h":3}'::jsonb, 'PvP: třetí výběr hrdiny se odmítne');
+select tt.xfail((select id from t_kp), '{"t":"p","k":10}'::jsonb, 'PvP: karta mimo ruku se odmítne', false);
+select tt.xfail((select id from t_kp), '{"t":"p","k":1,"z":1}'::jsonb, 'PvP: pole navíc se odmítne', false);
+create temp table t_kpt as select turn from public.mp_matches where id = (select id from t_kp);
+select tt.ok(tt.xmv((select id from t_kp), '{"t":"p","k":0}'::jsonb, false) ->> 'turn' = (select turn::text from t_kpt), 'PvP: zahraná karta tah nepředává');
+select tt.ok(tt.xmv((select id from t_kp), '{"t":"e","x":4000000000}'::jsonb) ->> 'turn' = (3 - (select turn from t_kpt))::text, 'PvP: konec tahu předá tah soupeři');
+-- čas na tah: komu vyprší, prohrává soupeři (není to týmová hra); bez dost tahů se neplatí
+create temp table t_kpc as select tt.coins(64) c64, tt.coins(65) c65;
+select tt.ff((select id from t_kp), 400);
+select tt.ok(tt.st(tt.who((select id from t_kp), 1), (select id from t_kp)) -> 'match' ->> 'status' = 'finished', 'PvP: po vypršení času na tah zápas skončí');
+select tt.ok(tt.row((select id from t_kp)) ->> 'reason' = 'timeout' and tt.row((select id from t_kp)) ->> 'winner' = (select turn from t_kpt)::text, 'PvP: komu vyprší čas na tah, prohrává; vyhrává ten, kdo tah předal (a není to týmová hra)');
+select tt.ok(tt.coins(64) = (select c64 from t_kpc) and tt.coins(65) = (select c65 from t_kpc), 'PvP: příliš krátký zápas (málo tahů) žádnou odměnu nedá');
+-- řádná výhra: jeden hlásí výhru, druhý prohru, platí se jen vítězi a upraví se hodnocení
+create temp table t_kp2 as select tt.pair_new(66, 67, 'onlinegames', 'katakombypvp') as id;
+create temp table t_kpc2 as select tt.coins(66) c66, tt.coins(67) c67;
+update public.mp_matches set move_count = 30 where id = (select id from t_kp2);
+select tt.ff((select id from t_kp2), 200);
+create temp table t_kpw as select tt.who((select id from t_kp2), 1) as a, tt.who((select id from t_kp2), 2) as b;
+select tt.rep((select a from t_kpw), (select id from t_kp2), 'win', 'ko'); select tt.rep((select b from t_kpw), (select id from t_kp2), 'loss', 'ko');
+select tt.ok(tt.row((select id from t_kp2)) ->> 'winner' = '1' and tt.row((select id from t_kp2)) ->> 'status' = 'finished', 'PvP: shodná hlášení (výhra a prohra) uzavřou zápas, vítěz je hráč 1');
+select tt.ok(tt.coins((select a from t_kpw)) - (case (select a from t_kpw) when 66 then (select c66 from t_kpc2) else (select c67 from t_kpc2) end) = 35
+  and tt.coins((select b from t_kpw)) = (case (select b from t_kpw) when 66 then (select c66 from t_kpc2) else (select c67 from t_kpc2) end), 'PvP: vítěz dostane 35 Coinů, poražený nic');
+select tt.ok((select wins from public.mp_record where user_id = tt.mu((select a from t_kpw)) and game_id = 'onlinegames' and mode = 'katakombypvp') = 1
+  and (select losses from public.mp_record where user_id = tt.mu((select b from t_kpw)) and game_id = 'onlinegames' and mode = 'katakombypvp') = 1
+  and (select rating from public.mp_record where user_id = tt.mu((select a from t_kpw)) and game_id = 'onlinegames' and mode = 'katakombypvp') = 1016
+  and (select rating from public.mp_record where user_id = tt.mu((select b from t_kpw)) and game_id = 'onlinegames' and mode = 'katakombypvp') = 984, 'PvP: do žebříčku se zapíše výhra a prohra a upraví se Elo (1016 a 984)');
+select tt.ok(not exists (select 1 from public.mp_record where game_id = 'onlinegames' and mode = 'katakomby' and user_id in (tt.mu(66), tt.mu(67))), 'PvP se do žebříčku co-op Katakomb nezapisuje');
+select tt.ok((public.mp_leaderboard('onlinegames', 'katakombypvp', 10) ->> 'team')::boolean is not true and (public.mp_leaderboard('onlinegames', 'katakombypvp', 10) -> 'rows' -> 0 ->> 'rating') = '1016', 'PvP má vlastní žebříček s hodnocením (ne týmový)');
+-- oba tvrdí výhru: spor, nikdo nic nedostane
+create temp table t_kp3 as select tt.pair_new(66, 67, 'onlinegames', 'katakombypvp') as id;
+create temp table t_kpc3 as select tt.coins(66) c66, tt.coins(67) c67;
+update public.mp_matches set move_count = 30 where id = (select id from t_kp3);
+select tt.ff((select id from t_kp3), 200);
+select tt.rep(66, (select id from t_kp3), 'win', 'ko'); select tt.rep(67, (select id from t_kp3), 'win', 'ko');
+select tt.ok(tt.row((select id from t_kp3)) ->> 'reason' = 'dispute' and tt.row((select id from t_kp3)) ->> 'winner' is null and tt.coins(66) = (select c66 from t_kpc3) and tt.coins(67) = (select c67 from t_kpc3), 'PvP: oba tvrdí výhru: spor, žádné Coiny');
+-- vzdání: vyhrává soupeř
+create temp table t_kp4 as select tt.pair_new(66, 67, 'onlinegames', 'katakombypvp') as id;
+create temp table t_kpw4 as select tt.who((select id from t_kp4), 1) as a, tt.who((select id from t_kp4), 2) as b;
+select tt.resign((select a from t_kpw4), (select id from t_kp4));
+select tt.ok(tt.row((select id from t_kp4)) ->> 'winner' = '2' and tt.row((select id from t_kp4)) ->> 'reason' = 'resign', 'PvP: kdo se vzdá, prohrává a vítězí soupeř (na rozdíl od týmové hry)');
+
+
 -- ===== Realtime: kdo smí do kanálu =====
 create temp table t_rt as select tt.pair(20, 21, 'rocket', 'pvp') as id;
 select tt.as_mu(20);

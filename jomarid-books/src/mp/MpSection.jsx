@@ -263,7 +263,7 @@ export const MpSection = ({ game, online, avail, auto, initialMode, onMatch, onA
                 </div>
               )}
               {modeDef && <p style={{ color: 'var(--text-muted)' }} className="m-0 text-xs leading-relaxed">{t(modeDef.text)}</p>}
-              {def.options.map((o) => (
+              {(modeDef?.options ?? def.options).map((o) => (
                 <div key={o.key} role="group" aria-label={t(o.title)} className="flex flex-wrap items-center gap-1.5">
                   <span style={{ color: 'var(--text-muted)' }} className="text-[0.625rem] font-black uppercase tracking-wider mr-1">{t(o.title)}</span>
                   {o.choices.map((c) => (

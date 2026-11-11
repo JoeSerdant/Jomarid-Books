@@ -9,6 +9,7 @@ export const PRIORITY_PATHS = Object.freeze({
   cityclicker: { cityClickerSaveV1: ['totalPlaytimeSeconds', 'lifetimeEarnings', 'totalClicks', 'prestigeCount'] },
   chess: { 'chessLeague.save.v1': ['ratedGames', 'peak', 'unlockedIndex'] },
   koulovikamosi: { 'koulovi-kamosi-v1': ['games', 'merges', 'best'] },
+  onlinegames: { katak_best: [''], katak_meta: ['u.hp', 'u.gold', 'u.up', 'u.pot', 'u.rel'] },   // '' = hodnota je sama číslo (nejvyšší patro)
 });
 
 // Měny (mince, zlato, rozpočet) se do obecného součtu záměrně nepočítají: utrácením klesají, a kdo víc utratil, nemusí být míň daleko.
@@ -24,7 +25,7 @@ const log = (n) => Math.log2(1 + Math.max(0, Number(n) || 0));
 
 const parse = (text) => { try { return JSON.parse(text); } catch { return undefined; } };
 
-const getPath = (obj, path) => path.split('.').reduce((o, k) => (isObject(o) ? o[k] : undefined), obj);
+const getPath = (obj, path) => (path === '' ? obj : path.split('.').reduce((o, k) => (isObject(o) ? o[k] : undefined), obj));
 
 // Obecný součet toho, co v postupu roste. Čísla se berou logaritmem, ať jediný obrovský čítač nepřehluší všechno ostatní.
 export function genericScore(value, key = '', depth = 0) {

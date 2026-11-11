@@ -22,6 +22,9 @@
 --     (akční aréna v reálném čase, jeden hráč počítá svět jako u Rocketu). Je to týmová hra (v pravidlech zápasu team): oba hlásí výhru nebo prohru společně, výhra dá
 --     Coiny OBĚMA, prohra ani vypršení času nikomu. Katakomby: hráči na místě 1 a 2 se střídají podle pravidel hry, server drží jen pořadí, čas na tah a tvar tahu;
 --     celý průběh se dá přehrát ze semínka a tahů, takže se zápas po odpojení obnoví.
+--     Katakomby mají i druhý režim, PvP (katakombypvp): souboj dvou hrdinů proti sobě, který NENÍ týmový: vyhrává jeden, Coiny dostane vítěz a do žebříčku se zapíše výhra,
+--     prohra a Elo (samostatně od co-op Katakomb). Tahy jsou stejné jako v co-opu, jen bez odměny po vlně; hráči se párují bez ohledu na obtížnost (souboj ji nemá).
+--     Komu vyprší čas na tah (90 vteřin), prohrává. Souboj počítají obě hry stejně ze semínka, server hlídá pořadí, čas a tvar tahů; o výsledku rozhodují shodná hlášení.
 --   * Závod (City Clicker) posílá průběh přes mp_progress. Kdo první dosáhne cíle, vyhrává; rozhoduje pořadí na serveru. Průběh nejde přeskočit rychleji,
 --     než dovolí nejkratší možná doba závodu.
 --   * Výsledek ostatních her hlásí OBA hráči (mp_report). Souhlasí-li, zápas se uzavře a vítěz dostane Coiny. Nesouhlasí-li, zápas se zruší bez odměny (spor).
@@ -97,6 +100,7 @@ returns jsonb language sql immutable set search_path to 'public' as $$
     when 'hannibal/duel'      then jsonb_build_object('kind', 'turn',     'turn_seconds', 180, 'bank', 0,   'inc', 0, 'first_move', 90, 'reward', 40, 'min_moves', 4,  'min_seconds', 30,  'max_payload', 16000, 'max_moves', 1500, 'team', false)
     when 'cityclicker/race'   then jsonb_build_object('kind', 'race',     'turn_seconds', 0,   'bank', 0,   'inc', 0, 'first_move', 0,  'reward', 40, 'min_moves', 0,  'min_seconds', 38,  'max_payload', 600,   'max_moves', 0,    'team', false, 'target', 10000000000)
     when 'onlinegames/katakomby' then jsonb_build_object('kind', 'turn',  'turn_seconds', 120, 'bank', 0,   'inc', 0, 'first_move', 120, 'reward', 40, 'min_moves', 40, 'min_seconds', 240, 'max_payload', 400,  'max_moves', 4000, 'team', true)
+    when 'onlinegames/katakombypvp' then jsonb_build_object('kind', 'turn', 'turn_seconds', 90, 'bank', 0, 'inc', 0, 'first_move', 120, 'reward', 35, 'min_moves', 14, 'min_seconds', 60, 'max_payload', 400, 'max_moves', 1500, 'team', false)
     when 'onlinegames/chaos'  then jsonb_build_object('kind', 'realtime', 'turn_seconds', 0,   'bank', 0,   'inc', 0, 'first_move', 0,  'reward', 35, 'min_moves', 0,  'min_seconds', 150, 'max_payload', 600,   'max_moves', 0,    'team', true)
     when 'rocket/coop'        then jsonb_build_object('kind', 'realtime', 'turn_seconds', 0,   'bank', 0,   'inc', 0, 'first_move', 0,  'reward', 25, 'min_moves', 0,  'min_seconds', 60,  'max_payload', 600,   'max_moves', 0,    'team', true)
     when 'rocket/pvp'         then jsonb_build_object('kind', 'realtime', 'turn_seconds', 0,   'bank', 0,   'inc', 0, 'first_move', 0,  'reward', 35, 'min_moves', 0,  'min_seconds', 30,  'max_payload', 600,   'max_moves', 0,    'team', false)
@@ -116,6 +120,7 @@ begin
     if v not in ('3+2', '5+3', '10+5') then raise exception 'invalid_params'; end if;
     return jsonb_build_object('tc', v);
   elsif p_game = 'onlinegames' then
+    if p_mode = 'katakombypvp' then return '{}'::jsonb; end if;   -- souboj hrdinů žádné volby nemá (obtížnost se týká jen příšer), hráči se párují bez ohledu na ni
     v := coalesce(p_params ->> 'diff', 'normal');
     if v not in ('easy', 'normal', 'hard') then raise exception 'invalid_params'; end if;
     return jsonb_build_object('diff', v);
@@ -933,10 +938,12 @@ begin
     end if;
 
   elsif v_game = 'onlinegames' then
-    -- Katakomby (jediný tahový režim Jomarid Online Games): hrdina {t:'hero', h: 0-4} (první dva tahy zápasu, po jednom od každého), zahrání karty {t:'p', k: číslo karty v ruce},
-    -- konec tahu {t:'e', x: otisk stavu, a: 1 když tah za poraženého hrdinu ukončila hra sama} a výběr odměny po vlně {t:'r', j: 0-2}
+    -- Katakomby (tahové režimy Jomarid Online Games: výprava ve dvou a souboj hrdinů): hrdina {t:'hero', h: 0-4} (první dva tahy zápasu, po jednom od každého),
+    -- zahrání karty {t:'p', k: číslo karty v ruce}, konec tahu {t:'e', x: otisk stavu, a: 1 když tah za poraženého hrdinu ukončila hra sama} a výběr odměny po vlně
+    -- {t:'r', j: 0-2}. V souboji (katakombypvp) není odměna po vlně ani poražený hrdina, který by tah za sebe nechal ukončit hrou.
     if not (v_keys <@ array['t', 'h', 'k', 'x', 'a', 'j']) or jsonb_typeof(p_payload -> 't') <> 'string' then raise exception 'illegal_move'; end if;
-    if p_match.mode <> 'katakomby' then raise exception 'illegal_move'; end if;
+    if p_match.mode not in ('katakomby', 'katakombypvp') then raise exception 'illegal_move'; end if;
+    if p_match.mode = 'katakombypvp' and ((p_payload ->> 't') = 'r' or p_payload ? 'a') then raise exception 'illegal_move'; end if;
     if (p_payload ->> 't') = 'hero' then
       if p_match.move_count >= 2 or not (v_keys <@ array['t', 'h']) or not public.mp_int_in(p_payload -> 'h', 0, 4) then raise exception 'illegal_move'; end if;
     else

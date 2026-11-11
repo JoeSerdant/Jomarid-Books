@@ -35,8 +35,8 @@ test('katalog: unikátní id, každý odznak sedí na existující statistiku v 
 
 test('id her v katalogu jsou stejná jako v Games.jsx a v mostech her', () => {
   const games = read('pages', 'Games.jsx');
-  // online-only hry (Jomarid Online Games) nemají rekordy ani odznaky, jejich výhry řeší server při konci zápasu
-  const blocks = [...games.matchAll(/\n  \{\n    id: '(\w+)',[\s\S]*?\n  \},/g)].filter((m) => !/onlineOnly: true/.test(m[0]));
+  // Jomarid Online Games zatím rekordy ani odznaky nemají (noRecords): sólo Katakomby hlásí Coiny, ne statistiky
+  const blocks = [...games.matchAll(/\n  \{\n    id: '(\w+)',[\s\S]*?\n  \},/g)].filter((m) => !/noRecords: true/.test(m[0]));
   const hub = blocks.map((m) => m[1]);
   assert.deepEqual([...hub].sort(), GAME_CATALOG.map((g) => g.id).sort());
   assert.deepEqual(GAME_CATALOG.map((g) => g.title).sort(), blocks.map((m) => m[0].match(/^\s+title: tk\('([^']+)'\),$/m)[1]).sort(), 'názvy her sedí s hubem');

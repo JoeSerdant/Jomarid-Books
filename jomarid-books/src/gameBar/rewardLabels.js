@@ -12,6 +12,9 @@ const LABELS = {
   record: tk('Nový rekord'),
   victory: tk('Vítězství'),
   wave: tk('Poražená vlna'),
+  enemy: tk('Poražený nepřítel'),
+  elite: tk('Poražená elita'),
+  guardian: tk('Strážce katakomb poražen'),
 };
 
 export const DEFAULT_REWARD_LABEL = tk('Odměna ze hry');

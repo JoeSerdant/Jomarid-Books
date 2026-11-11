@@ -4,7 +4,12 @@
 
    Průběh: oba vyberou hrdinu (hrdina prvního hráče, potom druhého), pak se po vlnách střídají v tazích (kdo začíná kolo, určuje st.first), potom táhne nepřítel
    (hned v rámci tahu posledního hráče) a znovu. Po vlně si oba vyberou novou kartu. Vyhráváte porazením strážce v 10. vlně, prohráváte, když padnou oba hrdinové.
-   Akce: {t:'hero', h}, {t:'p', k} (zahrát kartu číslo k z ruky), {t:'e'} (konec tahu; u poraženého hrdiny ho posílá hra sama), {t:'r', j} (výběr odměny). */
+   Akce: {t:'hero', h}, {t:'p', k} (zahrát kartu číslo k z ruky), {t:'e'} (konec tahu; u poraženého hrdiny ho posílá hra sama), {t:'r', j} (výběr odměny).
+
+   Druhý režim je PvP (KatCore.create({mode:'pvp'})): souboj dvou hrdinů bez příšer podle pravidel původní hry. Oba mají 60 životů a svůj balíček, střídají se v tazích
+   (hrdina prvního hráče táhne první, druhý hráč má v prvním tahu o energii a kartu víc), útočí na sebe navzájem a vyhrává ten, kdo zbaví soupeře všech životů
+   (zásahem, nebo jedem na začátku jeho tahu). Aby souboj nešlo zdržovat donekonečna, od 41. tahu ztrácí hráč na začátku svého tahu rostoucí počet životů (vyčerpání).
+   Akce jsou stejné, jen bez výběru odměny: {t:'hero'}, {t:'p'}, {t:'e'}. */
 (function (root) {
   'use strict';
 
@@ -63,6 +68,8 @@
   var DIFFS = { easy: [0.8, 0.8], normal: [1, 1], hard: [1.35, 1.3] };
   var FINAL_WAVE = 10;
   var START_HP = 50;
+  var PVP_HP = 60;          // životy hrdiny v PvP
+  var PVP_FATIGUE_FROM = 40; // od kterého tahu (součet obou hráčů) začne vyčerpání
   var HAND_MAX = 10;
 
   // Karta v balíčku je { k: klíč, u?: vylepšená }; cd vrátí její hodnoty (vylepšená je silnější)
@@ -93,8 +100,8 @@
   // ---------- Stav ----------
   function create(opts) {
     var diff = DIFFS[opts && opts.diff] ? opts.diff : 'normal';
-    return { seed: (opts && opts.seed) | 0, rs: (opts && opts.seed) | 0, diff: diff, D: DIFFS[diff], phase: 'select', picks: [-1, -1], p: [null, null], w: 0, E: null,
-      t: 0, first: 0, tg: 0, rw: [[], []], pk: [0, 0], rwFirst: 0, over: null, n: 0, ev: [] };
+    return { seed: (opts && opts.seed) | 0, rs: (opts && opts.seed) | 0, mode: opts && opts.mode === 'pvp' ? 'pvp' : 'coop', diff: diff, D: DIFFS[diff], phase: 'select', picks: [-1, -1], p: [null, null], w: 0, E: null,
+      t: 0, first: 0, tg: 0, rw: [[], []], pk: [0, 0], rwFirst: 0, over: null, n: 0, pvn: 0, last: null, ev: [] };
   }
 
   // Kdo má podle pravidel provést další akci (0 nebo 1), -1 po konci. Server dává tah tomu samému hráči (viz db/multiplayer.sql, mp_move a end_turn).
@@ -108,11 +115,11 @@
   // Událost pro vykreslení (číslo, štít, léčení, otřes, nápis): stav na nich nezávisí, hra je jen ukáže. w: 0/1 hráč, 2 nepřítel
   function ev(st, w, t, c) { st.ev.push({ w: w, t: t, c: c }); }
 
-  function mkPlayer(st, hi) {
+  function mkPlayer(st, hi, hp) {
     var h = H[hi], cards = [], pool = Object.keys(C).filter(function (k) { return C[k].r; });
     h.dk.replace(/([a-z]+)(\d)/g, function (_, k, n) { for (var j = 0; j < +n; j++) cards.push({ k: k }); return ''; });
     for (var j = 0; j < 4; j++) cards.push({ k: pick(st, pool) });
-    return { hi: hi, hp: START_HP, max: START_HP, blk: 0, en: 3, str: 0, vu: 0, psn: 0, deck: shuffle(st, cards), disc: [], hand: [] };
+    return { hi: hi, hp: hp || START_HP, max: hp || START_HP, blk: 0, en: 3, str: 0, vu: 0, psn: 0, deck: shuffle(st, cards), disc: [], hand: [] };
   }
 
   function draw(st, p, n) {
@@ -238,6 +245,62 @@
     if (i === st.first) turn(st, 1 - st.first); else enemyTurn(st);
   }
 
+  // ---------- PvP: souboj dvou hrdinů ----------
+  function pvOver(st, winner, why) {
+    st.phase = 'over';
+    st.over = { winner: winner, why: why, turns: st.pvn };
+    st.ev.push({ banner: why === 'ko' ? '🏆 K.O.' : why === 'poison' ? '🏆 Jed zvítězil' : '🏆 Vyčerpání', big: true });
+  }
+
+  // Začátek tahu hráče i: štít zmizí, energie (druhý hráč má v prvním tahu o jednu víc), jed, vyčerpání a lízání (druhý hráč v prvním tahu o kartu víc)
+  function pvTurn(st, i) {
+    var p = st.p[i], f;
+    st.t = i; st.pvn++;
+    p.blk = 0; p.en = st.pvn === 2 ? 4 : 3;
+    if (p.psn > 0) {
+      p.hp = Math.max(0, p.hp - p.psn); ev(st, i, '-' + p.psn, 'p'); p.psn--;
+      if (p.hp <= 0) return pvOver(st, 1 - i, 'poison');
+    }
+    if (st.pvn > PVP_FATIGUE_FROM) {
+      f = st.pvn - PVP_FATIGUE_FROM;
+      p.hp = Math.max(0, p.hp - f); ev(st, i, '-' + f, 'p'); st.ev.push({ shake: i });
+      if (p.hp <= 0) return pvOver(st, 1 - i, 'fatigue');
+    }
+    draw(st, p, (H[p.hi].dr || 5) + (st.pvn === 2 ? 1 : 0));
+  }
+
+  function pvHit(st, t, d) {
+    var o = st.p[t], a;
+    d = Math.floor(d * (o.vu ? 1.5 : 1));
+    a = Math.min(o.blk, d); o.blk -= a; d -= a; o.hp = Math.max(0, o.hp - d);
+    ev(st, t, d ? '-' + d : '🛡️', d ? 'd' : 'b');
+    if (d) st.ev.push({ shake: t });
+  }
+
+  function pvPlay(st, i, k) {
+    var p = st.p[i], o = st.p[1 - i], obj = p.hand[k], c = cd(obj), d, j;
+    p.en -= c.c; p.hand.splice(k, 1); p.disc.push(obj);
+    st.last = { w: i, k: obj.k, u: obj.u ? 1 : 0, n: st.n + 1 };
+    d = c.bb ? p.blk : c.d || 0;
+    if (d) for (j = 0; j < (c.x || 1); j++) pvHit(st, 1 - i, d + (c.bb ? 0 : p.str));
+    if (c.b) { p.blk += c.b; ev(st, i, '+' + c.b, 'b'); }
+    if (c.h) { p.hp = Math.min(p.max, p.hp + c.h); ev(st, i, '+' + c.h, 'h'); }
+    if (c.p) o.psn += c.p;
+    if (c.v) o.vu += c.v;
+    if (c.cl) { p.psn = 0; p.vu = 0; ev(st, i, '💊', 'h'); }
+    if (c.s) p.str += c.s;
+    if (c.en) p.en += c.en;
+    if (c.w) draw(st, p, c.w);
+    if (o.hp <= 0) pvOver(st, i, 'ko');
+  }
+
+  function pvEnd(st, i) {
+    var p = st.p[i];
+    p.disc.push.apply(p.disc, p.hand); p.hand = [];
+    if (p.vu) p.vu--;
+    pvTurn(st, 1 - i);
+  }
+
   // Provede akci hráče slot (0 nebo 1). Vrací { ok: true } nebo { ok: false, err } (stav se pak nezměnil). Události pro vykreslení jsou v st.ev (hra je po použití vyprázdní).
   function apply(st, slot, a) {
     if (!a || typeof a !== 'object') return { ok: false, err: 'shape' };
@@ -249,20 +312,27 @@
       if (st.phase !== 'select' || !(a.h >= 0 && a.h < H.length) || a.h !== Math.floor(a.h)) return { ok: false, err: 'hero' };
       st.picks[slot] = a.h;
       if (st.picks[0] >= 0 && st.picks[1] >= 0) {
-        st.p = [mkPlayer(st, st.picks[0]), mkPlayer(st, st.picks[1])];
-        st.first = 0;
-        wave(st);
+        if (st.mode === 'pvp') {
+          st.p = [mkPlayer(st, st.picks[0], PVP_HP), mkPlayer(st, st.picks[1], PVP_HP)];
+          st.phase = 'play'; st.pvn = 0;
+          st.ev.push({ banner: '⚔️ Souboj začíná!', big: true });
+          pvTurn(st, 0);
+        } else {
+          st.p = [mkPlayer(st, st.picks[0]), mkPlayer(st, st.picks[1])];
+          st.first = 0;
+          wave(st);
+        }
       }
     } else if (a.t === 'p') {
       if (st.phase !== 'play') return { ok: false, err: 'phase' };
       p = st.p[slot];
       if (p.hp <= 0 || !(a.k >= 0) || a.k !== Math.floor(a.k) || !p.hand[a.k] || p.en < cd(p.hand[a.k]).c) return { ok: false, err: 'card' };
-      playCard(st, slot, a.k);
+      if (st.mode === 'pvp') pvPlay(st, slot, a.k); else playCard(st, slot, a.k);
     } else if (a.t === 'e') {
       if (st.phase !== 'play') return { ok: false, err: 'phase' };
-      endTurn(st, slot);
+      if (st.mode === 'pvp') pvEnd(st, slot); else endTurn(st, slot);
     } else if (a.t === 'r') {
-      if (st.phase !== 'reward' || !(a.j >= 0 && a.j < 3) || a.j !== Math.floor(a.j)) return { ok: false, err: 'reward' };
+      if (st.mode === 'pvp' || st.phase !== 'reward' || !(a.j >= 0 && a.j < 3) || a.j !== Math.floor(a.j)) return { ok: false, err: 'reward' };
       st.p[slot].deck.push(st.rw[slot][a.j]);
       st.pk[slot] = 1;
       if (st.pk[0] && st.pk[1]) { st.first = st.rwFirst; wave(st); }
@@ -278,9 +348,15 @@
     mixIn(st.rs); mixIn(st.w); mixIn(st.t); mixIn(st.first); mixIn(st.n);
     mixIn(st.phase === 'play' ? 1 : st.phase === 'reward' ? 2 : st.phase === 'over' ? 3 : 0);
     if (st.E) { mixIn(st.E.hp); mixIn(st.E.blk); mixIn(st.E.psn); mixIn(st.E.i); }
-    st.p.forEach(function (p) { if (p) { mixIn(p.hp); mixIn(p.blk); mixIn(p.psn); mixIn(p.deck.length); mixIn(p.disc.length); mixIn(p.hand.length); } });
+    if (st.mode === 'pvp') mixIn(st.pvn);
+    st.p.forEach(function (p) {
+      if (p) {
+        mixIn(p.hp); mixIn(p.blk); mixIn(p.psn); mixIn(p.deck.length); mixIn(p.disc.length); mixIn(p.hand.length);
+        if (st.mode === 'pvp') { mixIn(p.en); mixIn(p.str); mixIn(p.vu); }
+      }
+    });
     return h >>> 0;
   }
 
-  root.KatCore = { C: C, H: H, BOSSES: BOSSES, DIFFS: DIFFS, FINAL_WAVE: FINAL_WAVE, cd: cd, create: create, next: next, apply: apply, hash: hash };
+  root.KatCore = { C: C, H: H, BOSSES: BOSSES, DIFFS: DIFFS, FINAL_WAVE: FINAL_WAVE, PVP_HP: PVP_HP, PVP_FATIGUE_FROM: PVP_FATIGUE_FROM, cd: cd, create: create, next: next, apply: apply, hash: hash };
 })(typeof window !== 'undefined' ? window : globalThis);

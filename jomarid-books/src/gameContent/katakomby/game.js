@@ -1,18 +1,20 @@
 /* game.js - Katakomby online: obrazovky, vstupy a napojení na zápas (window.jomaridMP z appky, src/mp).
-   Dva hráči jdou spolu proti vlnám příšer. Pravidla jsou v core.js a běží u obou stejně ze semínka zápasu: po síti jdou jen akce (mp_move),
+   Dva hráči jdou spolu proti vlnám příšer (režim katakomby), nebo proti sobě v souboji hrdinů (režim katakombypvp, PVP níže). Pravidla jsou v core.js a běží u obou stejně ze semínka zápasu: po síti jdou jen akce (mp_move),
    stav si každý počítá sám a po konci tahu se porovná otisk (x), takže se případný rozchod pozná hned.
 
    Tah na serveru: akce hráče {t:'p'} (zahrát kartu) tah nepředává, {t:'hero'}, {t:'e'} (konec tahu) a {t:'r'} (odměna) ano. Výběr hrdiny a odměny si hráč může
    zvolit hned, odešle se, jakmile je řada na něm. Za poraženého hrdinu pošle konec tahu hra sama, aby tah šel dál. O výsledku rozhodují shodná hlášení obou hráčů
-   (výprava vyhrána / prohrána) a o Coinech server. */
+   (výprava vyhrána / prohrána; v souboji výhra / prohra) a o Coinech server. */
 (function () {
   'use strict';
   var MPI = window.jomaridMP && window.jomaridMP.enabled ? window.jomaridMP : null;
   var K = window.KatCore, C = K.C, H = K.H, cd = K.cd;
   var scr = document.getElementById('scr'), fx = document.getElementById('fx'), bg = document.getElementById('bg');
+  var PVP = !!(MPI && MPI.init.mode === 'katakombypvp');   // souboj hrdinů proti sobě (jinak výprava ve dvou proti příšerám)
   var ME = MPI ? (MPI.init.slot === 2 ? 1 : 0) : 0, PARTNER = 1 - ME;
-  var names = [MPI && MPI.init.slot === 2 ? (MPI.init.opponent && MPI.init.opponent.name) || 'Parťák' : (MPI && MPI.init.me && MPI.init.me.name) || 'Ty',
-    MPI && MPI.init.slot === 2 ? (MPI.init.me && MPI.init.me.name) || 'Ty' : (MPI && MPI.init.opponent && MPI.init.opponent.name) || 'Parťák'];
+  var OTHER = PVP ? 'Soupeř' : 'Parťák';
+  var names = [MPI && MPI.init.slot === 2 ? (MPI.init.opponent && MPI.init.opponent.name) || OTHER : (MPI && MPI.init.me && MPI.init.me.name) || 'Ty',
+    MPI && MPI.init.slot === 2 ? (MPI.init.me && MPI.init.me.name) || 'Ty' : (MPI && MPI.init.opponent && MPI.init.opponent.name) || OTHER];
   var st = null;
   var V = { view: null, synced: false, applied: 0, want: { hero: -1, pick: -1 }, desync: false, note: '', over: false, reported: false, fx: [], replay: false, banner: null };
   var MUTE = false;
@@ -67,7 +69,7 @@
   }
   function heroLine(i) {
     var p = st.p[i], h = H[p.hi], dead = p.hp <= 0, turnNow = st.phase === 'play' && st.t === i && !dead;
-    return '<div class="me ' + (i === ME ? 'mine' : '') + ' ' + (dead ? 'dead' : '') + '"><span style="font-size:26px">' + (dead ? '💀' : h.e) + '</span><span class=pill>' + esc(i === ME ? 'Ty' : names[i]) + ' · ' + h.n + '</span>' +
+    return '<div class="me ' + (i === ME ? 'mine' : '') + ' ' + (dead ? 'dead' : '') + '"><span style="font-size:26px">' + (dead ? '💀' : h.e) + '</span><span class=pill><span>' + esc(i === ME ? 'Já' : names[i]) + '</span> · <span>' + h.n + '</span></span>' +
       bar(p.hp, p.max, 'linear-gradient(#b4f59d,#4cb86a)') + pills(p) + (turnNow ? '<span class="pill turnpill">na tahu</span>' : '') + '</div>';
   }
   function intent() {
@@ -81,10 +83,50 @@
   }
   var myAction = function () { return !!(st && V.synced && !V.over && KatCore.next(st) === ME && V.view && V.view.status === 'active'); };
 
+  // ---------- Souboj hrdinů (PvP) ----------
+  function oppStatus(p) {
+    return (p.blk ? '🛡️' + p.blk + ' ' : '') + '⚡' + p.en + ' ' + (p.psn ? '🧪' + p.psn + ' ' : '') + (p.vu ? '🎯' + p.vu + ' ' : '') + (p.str ? '💪' + p.str + ' ' : '') + (p.hand.length ? '🃏' + p.hand.length : '');
+  }
+  function lastCard() {
+    var l = st.last;
+    if (!l) return 'Souboj začíná';
+    var c = cd({ k: l.k, u: l.u });
+    return l.w === ME ? 'Zahrál jsi: ' + c.e + ' ' + c.n : esc(names[PARTNER]) + ' zahrál: ' + c.e + ' ' + c.n;
+  }
+  function pvpSelect() {
+    var partner = esc(names[PARTNER]), mine = V.want.hero >= 0 ? V.want.hero : st.picks[ME];
+    return '<div class=center><h2>Vyber hrdinu</h2><p style="color:var(--mut);margin:0;max-width:320px">Souboj proti hráči ' + partner + '. Každý má 60 životů a svůj balíček, střídáte se v tazích a vyhrává ten, kdo soupeře zbaví životů. Hrdinu soupeře uvidíš, až vyberete oba.</p><div class=hs>' +
+      H.map(function (x, j) { return '<button class=node style="width:92px;padding:10px 4px;' + (mine === j ? 'border-color:var(--gold);background:#ffcf6b33' : '') + '" data-act="hero" data-h="' + j + '"><span style="font-size:34px">' + x.e + '</span><b style="font-size:13px">' + x.n + '</b><small style="font-size:10px">' + x.d + '</small></button>'; }).join('') +
+      '</div><div class=pending>' + (mine >= 0 ? 'Vybráno: ' + H[mine].e + ' ' + H[mine].n + ' ✓' + (st.picks[ME] < 0 ? ' (odešle se, až bude řada na tobě)' : '') : 'Klepni na hrdinu') + '</div>' +
+      '<div class=pending>' + (st.picks[PARTNER] >= 0 ? 'Soupeř ' + partner + ' už vybral ✓' : 'Soupeř ' + partner + ' ještě vybírá…') + '</div></div>';
+  }
+  function pvpPlay() {
+    var p = st.p[ME], o = st.p[PARTNER], mineTurn = myAction() && st.t === ME, sec = secondsLeft(), partner = esc(names[PARTNER]);
+    return '<div class=hud><span>Tah ' + st.pvn + (st.pvn > K.PVP_FATIGUE_FROM ? ' · 💀 vyčerpání' : '') + '</span><span>' + (st.t === ME ? 'Jsi na tahu' : 'Táhne ' + partner) + '</span>' + (sec !== null ? '<span>⏱ ' + sec + ' s</span>' : '') + '</div>' +
+      '<div class=enemy><div class=intent>' + lastCard() + '</div><div class="emo" id="emo">' + H[o.hi].e + '</div><div class=nm><span>' + partner + '</span> · <span>' + H[o.hi].n + '</span></div>' + bar(o.hp, o.max, 'linear-gradient(#ff8b97,#e0455a)') +
+      '<div class=st>' + oppStatus(o) + '</div></div>' +
+      '<div class=duo>' + heroLine(ME) + '</div>' +
+      (mineTurn ? handH(p.hand, p.en) : '<div class=hand><div class=hrow>' + (st.t === ME ? '' : '<div class="card back"></div>'.repeat(3)) + '</div></div>') +
+      '<div class=row>' + (mineTurn ? '<span>Lízací ' + p.deck.length + ' · Odhoz ' + p.disc.length + '</span><button class=btn data-act="end">Konec tahu</button>' :
+        '<span>' + (st.t === ME ? 'Chvilku…' : 'Čekáš na soupeře ' + partner + '…') + '</span>') + '</div>' +
+      (V.desync ? '<div class=warn>⚠️ Hra se u vás dvou rozešla. Zavři zápas a spusť ho znovu.</div>' : '') + (V.note ? '<div class=warn>' + esc(V.note) + '</div>' : '');
+  }
+  function pvpOver() {
+    var o = st.over, none = !o || o.winner < 0, win = !none && o.winner === ME, why = o && o.why;
+    var title = none ? 'Souboj skončil' : win ? '🏆 Vyhráváš!' : '💀 Prohráváš';
+    var line = none ? (V.note || 'Souboj skončil bez vítěze.') :
+      why === 'poison' ? (win ? 'Soupeř podlehl jedu.' : 'Podlehl jsi jedu.') : why === 'fatigue' ? (win ? 'Soupeř se vyčerpal dřív než ty.' : 'Vyčerpání tě dostalo dřív než soupeře.') :
+      why === 'timeout' ? (win ? 'Soupeři vypršel čas na tah.' : 'Vypršel ti čas na tah.') : why === 'resign' ? (win ? 'Soupeř se vzdal.' : 'Souboj skončil.') :
+      win ? 'Zbavil ses soupeřových životů.' : 'Soupeř tě připravil o všechny životy.';
+    return '<div class=center><h1>' + title + '</h1><p style="color:var(--mut);margin:0">' + line + (o && o.turns ? ' Počet tahů: ' + o.turns + '.' : '') + '</p>' +
+      '<p style="color:var(--mut);margin:0">' + (V.reported ? 'Výsledek je ohlášený, o odměně rozhodne server.' : 'Ohlašuju výsledek…') + '</p></div>';
+  }
+
   function screenHTML() {
     if (!MPI) return '<div class=center><h1>Katakomby</h1><p style="color:var(--mut);max-width:300px;margin:0">Tahle hra běží jen online ve dvou, v appce Jomarid Books (Jomarid Online Games).</p></div>';
     if (!V.synced || !st) return '<div class=center><h2>Načítám zápas…</h2></div>';
     var partner = esc(names[PARTNER]), h = '';
+    if (PVP) return st.phase === 'select' ? pvpSelect() : st.phase === 'play' ? pvpPlay() : pvpOver();
     if (st.phase === 'select') {
       var mine = V.want.hero >= 0 ? V.want.hero : st.picks[ME];
       h = '<div class=center><h2>Vyber hrdinu</h2><p style="color:var(--mut);margin:0;max-width:300px">Výpravu jdete spolu s hráčem ' + partner + '. Každý si vybere hrdinu a pak se střídáte v tazích.</p><div class=hs>' +
@@ -131,20 +173,22 @@
   function showFx(e) {
     if (e.banner) { var b = document.createElement('div'); b.className = 'bn'; b.textContent = e.banner; fx.appendChild(b); setTimeout(function () { b.remove(); }, 1600); return; }
     if (e.shake !== undefined) {
-      var el = e.shake === 2 ? document.getElementById('emo') : scr.querySelectorAll('.me')[e.shake === ME ? 1 : 0];
+      var foe = PVP ? e.shake !== ME : e.shake === 2;   // zásah protivníka (příšery, v souboji soupeře), ne mého hrdiny
+      var el = foe ? document.getElementById('emo') : scr.querySelectorAll('.me')[PVP ? 0 : e.shake === ME ? 1 : 0];
       if (el) { el.classList.add('shake'); setTimeout(function () { el.classList.remove('shake'); }, 300); }
-      snd(e.shake === 2 ? 180 : 110, 0.15, 'sawtooth', 0.08); vib(e.shake === 2 ? 15 : 60);
-      if (e.shake !== 2 && e.shake === ME) { document.body.classList.add('hurt'); setTimeout(function () { document.body.classList.remove('hurt'); }, 260); }
+      snd(foe ? 180 : 110, 0.15, 'sawtooth', 0.08); vib(foe ? 15 : 60);
+      if (!foe && e.shake === ME) { document.body.classList.add('hurt'); setTimeout(function () { document.body.classList.remove('hurt'); }, 260); }
       return;
     }
     if (e.lunge) { var em = document.getElementById('emo'); if (em) { em.classList.add('lunge'); setTimeout(function () { em.classList.remove('lunge'); }, 450); } return; }
     if (e.t === undefined) return;
     var s = document.createElement('b'); s.className = 'fl ' + e.c; s.textContent = e.t;
-    s.style.top = e.w === 2 ? '22%' : e.w === ME ? '62%' : '46%'; s.style.left = (36 + Math.random() * 22) + '%';
+    var onFoe = PVP ? e.w !== ME : e.w === 2;
+    s.style.top = onFoe ? '22%' : e.w === ME ? '62%' : '46%'; s.style.left = (36 + Math.random() * 22) + '%';
     fx.appendChild(s); setTimeout(function () { s.remove(); }, 900);
     for (var i = 0; i < 6; i++) {
       var q = document.createElement('i'); q.className = 'pt'; q.textContent = { d: '💥', b: '✨', h: '💚', p: '🧪' }[e.c] || '✨';
-      q.style.cssText = 'left:50%;top:' + (e.w === 2 ? '26%' : '60%') + ';--x:' + (Math.random() - 0.5) * 170 + 'px;--y:' + (Math.random() - 0.5) * 120 + 'px';
+      q.style.cssText = 'left:50%;top:' + (onFoe ? '26%' : '60%') + ';--x:' + (Math.random() - 0.5) * 170 + 'px;--y:' + (Math.random() - 0.5) * 120 + 'px';
       fx.appendChild(q); setTimeout(function (n) { n.remove(); }.bind(null, q), 700);
     }
     snd(e.c === 'b' ? 520 : e.c === 'h' ? 700 : e.c === 'd' ? 260 : 300, 0.1, 'triangle');
@@ -202,7 +246,7 @@
     var o = st.over;
     if (MPI && !V.reported) {
       V.reported = true;
-      MPI.report(o.win ? 'win' : 'loss', o.win ? 'boss' : 'wipe').catch(function () { /* výsledek se pošle znovu při dalším pokusu */ V.reported = false; });
+      MPI.report(PVP ? (o.winner === ME ? 'win' : 'loss') : (o.win ? 'win' : 'loss'), PVP ? o.why : (o.win ? 'boss' : 'wipe')).catch(function () { /* výsledek se pošle znovu při dalším pokusu */ V.reported = false; });
     }
   }
 
@@ -228,7 +272,7 @@
   }
 
   if (MPI) {
-    st = KatCore.create({ seed: MPI.init.seed, diff: (MPI.init.params && MPI.init.params.diff) || 'normal' });
+    st = KatCore.create({ seed: MPI.init.seed, diff: (MPI.init.params && MPI.init.params.diff) || 'normal', mode: PVP ? 'pvp' : 'coop' });
     MPI.on('sync', function (d) {
       if (V.synced) return;
       V.view = d.match;
@@ -246,9 +290,16 @@
       var v = d.match || {};
       if (st && st.phase !== 'over') {
         V.over = true;
-        V.note = v.reason === 'timeout' ? 'Vypršel čas na tah, výprava skončila.' : v.reason === 'resign' ? 'Parťák výpravu opustil.' : 'Výprava skončila.';
         V.reported = true;
-        st.phase = 'over'; st.over = st.over || { win: false, waves: Math.max(0, (st.w || 1) - 1) };
+        if (PVP) {
+          // souboj skončil mimo pravidla hry (čas na tah, vzdání, odchod): vítěze určil server
+          var won = v.winner === v.slot, none = !(v.winner === 1 || v.winner === 2);
+          V.note = v.reason === 'timeout' ? (none ? 'Vypršel čas na tah.' : won ? 'Soupeři vypršel čas na tah.' : 'Vypršel ti čas na tah.') : v.reason === 'resign' ? 'Souboj skončil: někdo se vzdal.' : 'Souboj skončil.';
+          st.phase = 'over'; st.over = st.over || { winner: none ? -1 : won ? ME : PARTNER, why: v.reason || 'end', turns: st.pvn };
+        } else {
+          V.note = v.reason === 'timeout' ? 'Vypršel čas na tah, výprava skončila.' : v.reason === 'resign' ? 'Parťák výpravu opustil.' : 'Výprava skončila.';
+          st.phase = 'over'; st.over = st.over || { win: false, waves: Math.max(0, (st.w || 1) - 1) };
+        }
         render();
       }
     });

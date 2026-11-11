@@ -44,13 +44,16 @@ export const MP_GAMES = {
     ],
     options: [],
   },
-  // Jomarid Online Games: dvě coop hry jen pro online pod jednou kartou. Každý režim je jedna hra (vlastní dokument, viz loadMode v Games.jsx) a má vlastní druh
-  // (Katakomby jsou tahové a běží přes mp_move, Chaos Aréna je v reálném čase). Oba režimy jsou týmové: vyhráváte nebo prohráváte společně.
+  // Jomarid Online Games: dvě hry jen pro online pod jednou kartou. Každý režim je jedna hra (vlastní dokument, viz loadMode v Games.jsx) a má vlastní druh
+  // (Katakomby jsou tahové a běží přes mp_move, Chaos Aréna je v reálném čase). Co-op režimy (katakomby, chaos) jsou týmové: vyhráváte nebo prohráváte společně.
+  // Souboj hrdinů (katakombypvp) je proti sobě: vyhrává jeden. Režim může mít vlastní volby (options); souboj žádné nemá (obtížnost se týká jen příšer).
+
   onlinegames: {
     ready: true,
     kind: 'turn',
     modes: [
       { id: 'katakomby', kind: 'turn', title: tk('Katakomby'), text: tk('Karetní výprava ve dvou proti vlnám příšer: střídáte se v tazích, každý máte svého hrdinu a balíček. Poražte strážce katakomb v desáté vlně. Vyhráváte i prohráváte společně.'), reward: 40 },
+      { id: 'katakombypvp', kind: 'turn', title: tk('Katakomby: souboj'), text: tk('Souboj dvou hrdinů proti sobě: každý má 60 životů a svůj balíček, střídáte se v tazích a vyhrává ten, kdo soupeře zbaví životů. Druhý hráč má v prvním tahu o energii a kartu víc. Vítěz dostane Coiny.'), reward: 35, options: [] },
       { id: 'chaos', kind: 'realtime', title: tk('Chaos Aréna'), text: tk('Akční aréna ve dvou: každý má svou třídu (střelec, EMP, léčitel, tank, raketomet), společně odrážíte vlny a bossy. Přežijte devět vln.'), reward: 35 },
     ],
     options: [{ key: 'diff', title: tk('Obtížnost'), choices: [{ value: 'easy', labelKey: tk('Lehká') }, { value: 'normal', labelKey: tk('Normální') }, { value: 'hard', labelKey: tk('Těžká') }], def: 'normal' }],

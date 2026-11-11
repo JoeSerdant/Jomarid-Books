@@ -112,6 +112,8 @@ select tt.ok(tt.earned(4, 'koulovikamosi') = 100 and tt.earned(4, 'chess') = 100
 select tt.cmk(10);
 with r as (select tt.aw(10, 'hannibal', 150) j) select tt.ok(r.j->>'granted' = '100' and tt.capped(r.j), 'Hannibal: Barca: žádost na 150 se ořízne na 100') from r;
 select tt.ok(tt.granted(10, 'hannibal', 1) = 0 and tt.granted(10, 'warroom', 100) = 100, 'Hannibal drží vlastní strop a ostatní hry vedle něj dál dávají');
+with r as (select tt.aw(10, 'onlinegames', 150) j) select tt.ok(r.j->>'granted' = '100' and tt.capped(r.j), 'Jomarid Online Games (sólo Katakomby): žádost na 150 se ořízne na 100') from r;
+select tt.ok(tt.granted(10, 'onlinegames', 1) = 0, 'a Online Games mají vlastní denní strop, jako ostatní hry');
 
 -- ===== hranice stropu =====
 with r as (select tt.aw(6, 'rocket', 100) j) select tt.ok(r.j->>'granted' = '100' and not tt.capped(r.j), 'přesně 100 najednou projde celé a není capped') from r;

@@ -1,4 +1,4 @@
-// Katakomby (co-op karetní výprava pro dva, režim Jomarid Online Games) - dokument zobrazený v iframe (srcDoc) při online zápase.
+// Katakomby (karetní výprava pro dva proti příšerám a souboj hrdinů proti sobě, režimy Jomarid Online Games) - dokument zobrazený v iframe (srcDoc) při online zápase.
 //
 // Hra je rozdělená do souborů ve složce katakomby/; tenhle soubor je poskládá do jednoho HTML dokumentu (Vite je načte jako text přes ?raw):
 //
