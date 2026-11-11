@@ -87,3 +87,5 @@ h1,h2{font-family:Georgia,"Times New Roman",serif;margin:0}
 .turnpill{background:#ffcf6b33;border:1px solid var(--gold);color:var(--gold)}
 .warn{color:#ff9aa7;font-weight:700;text-align:center}
 .pending{color:var(--mut);font-size:13px}
+
+.row>span:first-child{padding-left:38px}   /* místo pro tlačítko rychlých reakcí v rohu (src/mp) */

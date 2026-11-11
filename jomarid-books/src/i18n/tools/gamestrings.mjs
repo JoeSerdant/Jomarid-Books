@@ -16,7 +16,7 @@ export const NAMES_WITH_DIACRITICS = /Dušan|Eliška|Ondřej|Rybák|Kopecká|Kam
 export const withoutNames = (en) => String(en).replace(NAMES_WITH_DIACRITICS, '');
 export const GAME_DICT_DIR = path.join(SRC_DIR, 'i18n', 'games');
 
-// hra -> složka v gameContent (kromě testů a stylů se čtou všechny .js a .html)
+// hra -> složka v gameContent (kromě testů a stylů se čtou všechny .js a .html); hra z více dokumentů (Jomarid Online Games: menu a dvě hry) má pole složek
 export const GAMES = {
   koulovikamosi: 'koulovi',
   chess: 'chess',
@@ -25,6 +25,7 @@ export const GAMES = {
   hannibal: 'hannibal',
   warroom: 'warroom',
   rocket: 'rocket',
+  onlinegames: ['onlineGames', 'katakomby', 'chaosArena'],
 };
 
 const CZECH = /[ěščřžýáíéůúďťňóĚŠČŘŽÝÁÍÉŮÚĎŤŇÓ]/;
@@ -33,7 +34,7 @@ const TAG = /<\/?[a-zA-Z][^>]*>/g;
 const norm = (s) => String(s).replace(/\s+/g, ' ').trim();
 
 export const gameFiles = (gameId) => {
-  const dir = path.join(SRC_DIR, 'gameContent', GAMES[gameId]);
+  const dirs = [].concat(GAMES[gameId]).map((d) => path.join(SRC_DIR, 'gameContent', d));
   const out = [];
   const walk = (d) => {
     for (const e of fs.readdirSync(d, { withFileTypes: true })) {
@@ -43,7 +44,7 @@ export const gameFiles = (gameId) => {
       else if (/\.(js|html)$/.test(e.name)) out.push(p);
     }
   };
-  walk(dir);
+  dirs.forEach(walk);
   return out.sort();
 };
 

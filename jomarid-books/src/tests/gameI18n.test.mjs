@@ -18,7 +18,7 @@ const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (...p) => fs.readFileSync(path.join(SRC, ...p), 'utf8');
 
 // Hry, jejichž slovník je hotový (úplnost se u nich hlídá); ostatní se doplňují po jedné.
-const DONE = ['koulovikamosi', 'chess', 'cityclicker', 'hannibal', 'warroom', 'polygonarena', 'rocket'];
+const DONE = ['koulovikamosi', 'chess', 'cityclicker', 'hannibal', 'warroom', 'polygonarena', 'rocket', 'onlinegames'];
 
 // Spustí vrstvu v izolovaném kontextu s minimálním oknem a vrátí window.
 const runLayer = (lang, dict, extra = {}, intl = Intl) => {
@@ -179,7 +179,7 @@ test('zapojení: Games.jsx vkládá vrstvu a slovník hry jen v angličtině, n�
   assert.match(games, /import \{ withGameLanguage \} from '\.\.\/i18n\/gameLayer';/);
   assert.match(games, /import \{ loadGameDictionary \} from '\.\.\/i18n\/games';/);
   assert.match(games, /const dict = lang === 'en' \? await loadGameDictionary\(game\.id\) : null;/);
-  assert.match(games, /setGameDoc\(withGameLanguage\(withOnlineEntry\(withStorageShim\(src, game\.id, sync\.snapshot\(\)\.map\), game\.id\), lang, dict,/);
+  assert.match(games, /setGameDoc\(withGameLanguage\(withOnlineEntry\(withStorageShim\(src, game\.id, sync \? sync\.snapshot\(\)\.map : \{\}\), game\.id\), lang, dict,/);
   const pkg = JSON.parse(fs.readFileSync(path.join(SRC, '..', 'package.json'), 'utf8'));
   assert.equal(pkg.scripts['test:gamei18n'], 'node --test src/tests/gameI18n.test.mjs');
   assert.ok(pkg.scripts.test.includes('npm run test:gamei18n'));

@@ -35,9 +35,11 @@ test('katalog: unikátní id, každý odznak sedí na existující statistiku v 
 
 test('id her v katalogu jsou stejná jako v Games.jsx a v mostech her', () => {
   const games = read('pages', 'Games.jsx');
-  const hub = [...games.matchAll(/^\s+id: '(\w+)',$/gm)].map((m) => m[1]);
+  // online-only hry (Jomarid Online Games) nemají rekordy ani odznaky, jejich výhry řeší server při konci zápasu
+  const blocks = [...games.matchAll(/\n  \{\n    id: '(\w+)',[\s\S]*?\n  \},/g)].filter((m) => !/onlineOnly: true/.test(m[0]));
+  const hub = blocks.map((m) => m[1]);
   assert.deepEqual([...hub].sort(), GAME_CATALOG.map((g) => g.id).sort());
-  assert.deepEqual(GAME_CATALOG.map((g) => g.title).sort(), [...games.matchAll(/^\s+title: tk\('([^']+)'\),$/gm)].map((m) => m[1]).sort(), 'názvy her sedí s hubem');
+  assert.deepEqual(GAME_CATALOG.map((g) => g.title).sort(), blocks.map((m) => m[0].match(/^\s+title: tk\('([^']+)'\),$/m)[1]).sort(), 'názvy her sedí s hubem');
 });
 
 test('XP herních odznaků: ve stejné statistice těžší odznak vždy dává víc, každý dává aspoň 20 XP, hry samy dovedou čtenáře zhruba na úroveň 16', () => {

@@ -18,6 +18,10 @@
 --     společným semínkem (nejde si ho vybrat). O výsledku těchto her rozhodují hlášení obou hráčů jako dřív.
 --   * Kolem hry: žebříček (mp_record, mp_leaderboard: výhry, prohry, remízy a hodnocení Elo za řádně odehrané zápasy), rychlé reakce hráčů (mp_emote) a odveta
 --     po skončeném zápase (mp_rematch: nový zápas se stejnými volbami a prohozenými stranami, když ji chtějí oba).
+--   * Jomarid Online Games (hra jen pro online, vždy dva hráči, spolupráce): Katakomby (karetní výprava, tahová hra přes mp_move s kontrolou tvaru tahu) a Chaos Aréna
+--     (akční aréna v reálném čase, jeden hráč počítá svět jako u Rocketu). Je to týmová hra (v pravidlech zápasu team): oba hlásí výhru nebo prohru společně, výhra dá
+--     Coiny OBĚMA, prohra ani vypršení času nikomu. Katakomby: hráči na místě 1 a 2 se střídají podle pravidel hry, server drží jen pořadí, čas na tah a tvar tahu;
+--     celý průběh se dá přehrát ze semínka a tahů, takže se zápas po odpojení obnoví.
 --   * Závod (City Clicker) posílá průběh přes mp_progress. Kdo první dosáhne cíle, vyhrává; rozhoduje pořadí na serveru. Průběh nejde přeskočit rychleji,
 --     než dovolí nejkratší možná doba závodu.
 --   * Výsledek ostatních her hlásí OBA hráči (mp_report). Souhlasí-li, zápas se uzavře a vítěz dostane Coiny. Nesouhlasí-li, zápas se zruší bez odměny (spor).

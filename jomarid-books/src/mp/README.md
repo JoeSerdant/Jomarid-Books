@@ -56,6 +56,14 @@ Dvě omezení, která plynou z Realtime: každá zpráva se u Supabase počítá
 
 Spolupráce (dvě rakety) používá stejný základ: bojiště počítá **hostitel** (hráč na místě 1 v zápase) včetně druhé lodi, kterou řídí poloha od hosta; **host** (místo 2) dostává obraz (nepřátelé, bossové, střely, bonusy, paprsky a vlny) a posílá jen polohu své lodi a použití bomby. Nepřátelé míří na nejbližší živou loď, zásahy a bonusy druhé lodi počítá hostitel stejnými pravidly jako u jeho lodi (`rocket/mp.js`: `peerHits`). Zdraví lodí určuje hostitel. Boj dvou hráčů (souboj) zůstává u dvou samostatných polovin bojiště se stejnými vlnami podle společného času, protože tam se každý brání vlastním nepřátelům a jde o souboj lodí. Hostitel hry nemá zálohu: když jeho hra ztichne, host to uvidí a může hru ukončit, server pak zápas uzavře.
 
+## Jomarid Online Games (hra jen pro online, vždy dva hráči)
+
+Jedna karta v seznamu her (`id: 'onlinegames'`, příznak `onlineOnly`) se dvěma spolupracujícími hrami. Nemá sólový režim, uložený postup, rekordy ani denní odměnu (appka pro ni nesynchronizuje úložiště): menu hry (`gameContent/onlineGames`) jsou jen dvě karty s tlačítky `data-jomarid-online="katakomby"` a `="chaos"`, která otevřou okno Hrát online rovnou s vybraným režimem. Každý režim má vlastní dokument (`loadMode` v `Games.jsx`, `MpGameScreen` vybere podle `match.mode`). O odměně rozhoduje server: když oba hráči ohlásí výhru, dostanou Coiny oba (`team`), za prohru ani vypršení času nikdo; v žebříčku se počítají jen výhry.
+
+- **Katakomby** (`gameContent/katakomby`, tahová hra přes `mp_move`): karetní výprava proti deseti vlnám příšer, každý hráč má svého hrdinu a balíček. Pravidla jsou v `core.js` (`KatCore`) a jsou čistě deterministická ze semínka zápasu: oba klienti dostanou stejné tahy (`{t:'hero'}`, `{t:'p'}` zahrání karty, `{t:'e'}` konec tahu a tah nepřátel, `{t:'r'}` odměna) a stav přepočítají stejně; `KatCore.next(st)` říká, kdo smí táhnout, a vždy souhlasí s pořadím, které hlídá server. Součástí tahu konce kola je otisk stavu `x`, podle něj se pozná rozjetí obou her. Po odpojení se stav obnoví přehráním všech tahů ze serveru. Server kontroluje jen tvar a meze tahu (`mp_check_payload`), pravidla karet nezná.
+- **Chaos Aréna** (`gameContent/chaosArena`, rychlá hra přes Realtime kanál zápasu): stejný základ jako spolupráce v Rocketu. Hostitel (místo 1) počítá celý svět (`sim.js`, přepis sólové hry), host (místo 2) posílá vstupy každých 50 ms a svou postavu si předpovídá sám (hostitel jeho polohu jen omezí rychlostí), od hostitele dostává snímky (`net.js`: `Replicator`/`Mirror`) a efekty a kreslí je stejnými funkcemi (`render.js`). Třídu si volí každý ve hře, zápas se rozběhne, až oba vyberou (`go`). Cíl je přežít devět vln. Oba hlásí konec (`MPI.report`).
+- Pozor na limity Realtime: Chaos Aréna posílá z každé strany kolem 20 zpráv za vteřinu (dohromady kolem 40 z 100 povolených na projekt a vteřinu); hostitelovo okno musí zůstat otevřené a viditelné (prohlížeč jinak zpomalí časovače).
+
 ## Server hlídá pravidla tahových her (db/multiplayer.sql)
 - **Šachy** (`mp_chess_*`): server drží stav partie v `mp_matches.gstate` (šachovnice jako 64 znaků, strana na tahu, práva rošády, pole pro braní mimochodem,
   počítadlo půltahů, počty pozic od posledního nevratného tahu). `mp_move` tah `{c: "e2e4"}` přehraje (`mp_chess_step`): nelegální tah je chyba `illegal_move`,
@@ -79,7 +87,7 @@ Spolupráce (dvě rakety) používá stejný základ: bojiště počítá **host
 
 ## Jak se přidá další hra
 
-1. Pravidla hry do `mp_cfg` a `mp_clean_params` v `db/multiplayer.sql` (už jsou pro všech sedm her) a do `catalog.js` (`ready: true`). Do menu hry tlačítko s `data-jomarid-online` a styl, který ho schová (viz `entry.js`).
+1. Pravidla hry do `mp_cfg` a `mp_clean_params` v `db/multiplayer.sql` (už jsou pro všech sedm her a pro Jomarid Online Games) a do `catalog.js` (`ready: true`). Do menu hry tlačítko s `data-jomarid-online` a styl, který ho schová (viz `entry.js`).
 2. Ve hře: `if (window.jomaridMP && window.jomaridMP.enabled)` místo menu rovnou zápas; `jomaridMP.on(...)`, potom `jomaridMP.listen()`.
 3. Online zápas nemá uložený postup, cheaty, sólové rekordy ani odměny (appka je zahodí).
 4. Test s falešným `jomaridMP` v testech hry a pak dva hráči v prohlížeči proti skutečnému SQL.

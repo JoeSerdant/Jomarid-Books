@@ -7,6 +7,7 @@ const LOADERS = {
   hannibal: () => import('./hannibal.js'),
   warroom: () => import('./warroom.js'),
   rocket: () => import('./rocket.js'),
+  onlinegames: () => import('./onlinegames.js'),
 };
 
 export const GAME_IDS = Object.keys(LOADERS);

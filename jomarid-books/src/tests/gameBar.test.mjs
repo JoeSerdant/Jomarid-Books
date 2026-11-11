@@ -112,8 +112,10 @@ test('mosty ve všech hrách jsou až na id hry stejné (zůstatek ukazuje jen l
 });
 
 test('id her v Games.jsx a v mostech jsou stejná (server podle něj hlídá denní limit)', () => {
-  const ids = [...gamesPage.matchAll(/^\s+id: '(\w+)',$/gm)].map((m) => m[1]);
+  // Jomarid Online Games jsou jen online (onlineOnly): nemají uložený postup, denní Coiny ani rekordy, odměnu dává server při konci zápasu
+  const ids = [...gamesPage.matchAll(/\n  \{\n    id: '(\w+)',[\s\S]*?\n  \},/g)].filter((m) => !/onlineOnly: true/.test(m[0])).map((m) => m[1]);
   assert.deepEqual(ids.sort(), Object.keys(GAMES).sort());
+  assert.match(gamesPage, /id: 'onlinegames',[\s\S]*?onlineOnly: true/);
 });
 
 test('server (db/game-coins.sql) pustí k Coinům všechny hry z Games.jsx a žádnou navíc; strop je 100 na hru a žádný za všechny hry dohromady', () => {
@@ -121,7 +123,7 @@ test('server (db/game-coins.sql) pustí k Coinům všechny hry z Games.jsx a ž�
   const list = sql.match(/p_game_id not in \(([^)]*)\)/);
   assert.ok(list, 'funkce má seznam povolených her');
   const serverIds = [...list[1].matchAll(/'(\w+)'/g)].map((m) => m[1]).sort();
-  const ids = [...gamesPage.matchAll(/^\s+id: '(\w+)',$/gm)].map((m) => m[1]).sort();
+  const ids = [...gamesPage.matchAll(/\n  \{\n    id: '(\w+)',[\s\S]*?\n  \},/g)].filter((m) => !/onlineOnly: true/.test(m[0])).map((m) => m[1]).sort();
   assert.deepEqual(serverIds, ids, 'nová hra v appce bez zápisu v award_game_coins by o Coiny žádala marně (invalid_game_id)');
   assert.match(sql, /v_per_game_cap constant integer := 100;/);
   assert.doesNotMatch(sql, /v_global_cap|v_used_global/, 'strop ze všech her dohromady se zrušil: kdo hraje víc her, vydělá víc');
