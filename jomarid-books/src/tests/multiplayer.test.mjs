@@ -921,3 +921,19 @@ test('Games.jsx: hra spuštěná z appky dostane skript vstupu, zprávy online s
   assert.match(g, /<MpResume game=\{game\}/, 'na stránce hry zbyl jen pruh s rozehraným zápasem');
   assert.doesNotMatch(g, /<MpSection/, 'hledání soupeře není na stránce hry, ale v okně nad hrou');
 });
+
+test('Jomarid Online Games: každý režim má tlačítko v menu hry a vlastní dokument, souboj hrdinů není týmový a nemá volby', () => {
+  const hub = read('gameContent', 'onlineGames', 'index.html');
+  const buttons = [...hub.matchAll(/data-jomarid-online="([a-z0-9_-]+)"/g)].map((m) => m[1]).sort();
+  const modes = MP_GAMES.onlinegames.modes;
+  assert.deepEqual(buttons, modes.map((m) => m.id).sort(), 'jedno tlačítko na režim');
+  const games = read('pages', 'Games.jsx');
+  for (const m of modes) assert.match(games, new RegExp(`\\b${m.id}: \\(\\) => import\\(`), `dokument režimu ${m.id}`);
+  const pvp = modes.find((m) => m.id === 'katakombypvp');
+  assert.ok(pvp && pvp.kind === 'turn' && pvp.reward === 35 && Array.isArray(pvp.options) && pvp.options.length === 0, 'souboj: tahový, 35 Coinů, bez voleb');
+  assert.ok(modes.filter((m) => m.id !== 'katakombypvp').every((m) => !('options' in m)), 'ostatní režimy mají volby hry (obtížnost)');
+  assert.match(sql, /'onlinegames\/katakombypvp' then jsonb_build_object\([^\n]*'team', false\)/, 'na serveru souboj není týmový');
+  assert.match(sql, /'onlinegames\/katakomby' then jsonb_build_object\([^\n]*'team', true\)/, 'co-op je týmový');
+  assert.match(sql, /if p_mode = 'katakombypvp' then return '\{\}'::jsonb; end if;/, 'server souboji žádné volby nepřipouští');
+  assert.match(read('mp', 'MpSection.jsx'), /\(modeDef\?\.options \?\? def\.options\)\.map/, 'okno nabízí volby režimu, jinak hry');
+});

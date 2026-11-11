@@ -88,12 +88,13 @@ const GAMES = [
   {
     id: 'onlinegames',
     title: tk('Jomarid Online Games'),
-    tagline: tk('Dvě coop hry jen pro online, vždy ve dvou: Katakomby (karetní výprava proti vlnám příšer) a Chaos Aréna (akční aréna s třídami, bossy a vlnami).'),
+    tagline: tk('Dvě hry jen pro online, vždy ve dvou: Katakomby (karetní výprava proti příšerám, nebo souboj hrdinů proti sobě) a Chaos Aréna (akční aréna s třídami, bossy a vlnami).'),
     icon: Users,
     onlineOnly: true,
     load: () => import('../gameContent/onlineGames').then(m => m.ONLINE_GAMES_HTML),
     loadMode: {
       katakomby: () => import('../gameContent/katakomby').then(m => m.KATAKOMBY_HTML),
+      katakombypvp: () => import('../gameContent/katakomby').then(m => m.KATAKOMBY_HTML),   // stejný dokument, hra pozná souboj podle režimu zápasu
       chaos: () => import('../gameContent/chaosArena').then(m => m.CHAOS_ARENA_HTML),
     },
   },
@@ -600,7 +601,7 @@ export const GameLauncher = ({ game }) => {
         <div style={{ borderColor: 'var(--border-color)' }} className="w-full border-t pt-6 flex flex-col items-center gap-3">
           {game.onlineOnly ? (
             <p data-testid="online-only-note" style={{ color: 'var(--text-muted)' }} className="text-xs max-w-sm mx-auto opacity-80">
-              {t('Tahle hra se hraje jen online a vždy ve dvou: v menu hry vyber Hrát online. Jomarid Coins dostanete oba za společnou výhru (podle pravidel online her, s denním stropem).')}
+              {t('Tahle hra se hraje jen online a vždy ve dvou: v menu hry vyber Hrát online. Jomarid Coins dostanete za výhru: v co-opu oba, v souboji jen vítěz (podle pravidel online her, s denním stropem).')}
             </p>
           ) : (<>
           <p style={{ color: 'var(--text-muted)' }} className="text-xs max-w-sm mx-auto opacity-80">
