@@ -145,6 +145,7 @@ export default {
   'Oznámení nejsou povolená. Zapneš je kdykoli později.': 'Notifications aren\'t allowed. You can turn them on any time later.',
   'Oznámení se nepodařilo zapnout. Zkus to znovu.': 'Notifications couldn\'t be turned on. Try again.',
   'Oznámení v tomhle zařízení přestala fungovat. Zapni je prosím znovu.': 'Notifications on this device stopped working. Please turn them on again.',
+  'Oznámení zůstávají zapnutá i po obnovení aplikace a přepnutí účtu: zařízení si je samo přiřadí k účtu, který právě používáš. Vypneš je jen tady.': 'Notifications stay on after refreshing the app and switching accounts: the device assigns itself to the account you are using. You can turn them off only here.',
   'Ozubené kolo (Nastavení)': 'Gear icon (Settings)',
   'Píšu odpověď...': 'Writing a reply...',
   'platí {n} den|platí {n} dny|platí {n} dní': ['valid for {n} day', 'valid for {n} days'],

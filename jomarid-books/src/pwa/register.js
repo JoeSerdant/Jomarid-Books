@@ -1,6 +1,8 @@
 // Service worker (offline obal appky). Registruje se jen v produkční verzi a jen tam, kde to prohlížeč umí; selhání
 // registrace appku nijak neovlivní.
 
+import { rememberPush } from '../push/pushClient.js';
+
 const supported = () => typeof navigator !== 'undefined' && 'serviceWorker' in navigator;
 
 export const registerServiceWorker = () => {
@@ -20,6 +22,8 @@ export const whenOfflineReady = () => (supported() ? navigator.serviceWorker.rea
 export const resetApp = async () => {
   const reachable = await fetch('/', { cache: 'no-store' }).then((r) => r.ok, () => false);
   if (!reachable) return 'offline';
+  // Odregistrování service workeru zahodí i přihlášení k oznámením. Zařízení si proto nejdřív zapamatuje, že oznámení má, a po načtení si je samo obnoví (keepPushAlive).
+  try { await rememberPush({ nav: navigator, win: window }); } catch { /* nevadí */ }
   try {
     if (supported()) { const regs = await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map((r) => r.unregister())); }
     if (typeof caches !== 'undefined') { const names = await caches.keys(); await Promise.all(names.filter((n) => n.startsWith('jomarid-')).map((n) => caches.delete(n))); }
