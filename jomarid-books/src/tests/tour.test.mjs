@@ -49,7 +49,7 @@ describe('výchozí obsah', () => {
     const anchors = (key) => tour.sets[key].map((x) => x.anchor);
     const common = ['nav-library', 'library-search', 'nav-search', 'none', 'none', 'none', 'nav-shorts', 'shorts-feed', 'nav-stats', 'stats-streak', 'stats-goal', 'stats-leaderboard', 'nav-badges', 'badges-tabs', 'badges-shop',
       'nav-games', 'games-list', 'none', 'none', 'games-online', 'none', 'nav-coins', 'nav-language', 'help-bot'];
-    const settings = ['nav-settings', 'settings-tabs', 'settings-profile', 'settings-security', 'settings-notifications', 'settings-checks', 'settings-appearance', 'settings-reader', 'settings-app', 'settings-data', 'settings-tour'];
+    const settings = ['nav-settings', 'settings-tabs', 'settings-profile', 'settings-security', 'settings-notifications', 'settings-checks', 'settings-tour', 'settings-appearance', 'settings-reader', 'settings-app', 'settings-data'];   // stejné pořadí jako záložky v Nastavení
     assert.deepEqual(anchors('reader'), ['none', ...common, ...settings, 'none']);
     // nakladatel má navíc Studio (šest kroků na záložky panelu) hned za čtením a hledáním
     const beforeStudio = common.slice(0, 6);

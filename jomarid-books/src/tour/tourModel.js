@@ -114,7 +114,7 @@ const COMMON_BEFORE_SETTINGS = [
 ];
 const SETTINGS_STEPS = [
   STEP.settings, STEP.settingsTabs, STEP.settingsProfile, STEP.settingsSecurity, STEP.settingsNotifications, STEP.settingsChecks,
-  STEP.settingsAppearance, STEP.settingsReader, STEP.settingsApp, STEP.settingsData, STEP.settingsTour,
+  STEP.settingsTour, STEP.settingsAppearance, STEP.settingsReader, STEP.settingsApp, STEP.settingsData,
 ];
 
 const READER_STEPS = [STEP.welcome, ...COMMON_BEFORE_SETTINGS, ...SETTINGS_STEPS, STEP.done];
@@ -141,7 +141,7 @@ const PUBLISHER_STEPS = [
   STEP.language, STEP.help,
   STEP.settings, STEP.settingsTabs, STEP.settingsProfile, STEP.settingsSecurity, STEP.settingsNotifications,
   s('settings-checks', 'settings-checks', tk('Kontrola účtu a knih'), tk('V záložce Kontrola účtu uvidíš, co u tvých knih ještě chybí (text, popis, žánr) a jestli máš nastavené krycí jméno.')),
-  STEP.settingsAppearance, STEP.settingsReader, STEP.settingsApp, STEP.settingsData, STEP.settingsTour,
+  STEP.settingsTour, STEP.settingsAppearance, STEP.settingsReader, STEP.settingsApp, STEP.settingsData,
   s('done', 'none', tk('To je vše'), tk('Prohlídku najdeš kdykoli v Nastavení v záložce Prohlídka appky. Ať se daří!')),
 ];
 
