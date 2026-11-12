@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SQL testy na skutečném PostgreSQL: db/push-notifications.sql (oznámení), db/email-change.sql (změna e-mailu přes správce), db/game-records.sql (herní rekordy a odznaky)
-# db/shop.sql (obchůdek), db/game-saves.sql (uložený postup her), db/game-coins.sql (denní limity Coinů z her) a db/shorts.sql (shortB, krátké knihy ve feedu), db/help-bot.sql (denní limit pomocníka v appce), db/leaderboard-streaks.sql (série ostatních v žebříčku), db/login-code.sql (přihlašovací kód) a db/security-diagnostics.sql (bezpečnostní diagnostika)
+# db/shop.sql (obchůdek), db/game-saves.sql (uložený postup her), db/game-coins.sql (denní limity Coinů z her) a db/shorts.sql (shortB, krátké knihy ve feedu), db/help-bot.sql (denní limit pomocníka v appce), db/leaderboard-streaks.sql (série ostatních v žebříčku), db/login-code.sql (přihlašovací kód), db/tour-expand.sql (rozšíření prohlídky appky) a db/security-diagnostics.sql (bezpečnostní diagnostika)
 # db/multiplayer.sql (online hra ve dvou) proti zjednodušenému schématu Supabase (mock_schema.sql).
 #   bash db/tests/run.sh        (nebo: npm run test:sql)
 # Potřebuje PostgreSQL 14+ (initdb, pg_ctl, psql v PATH nebo v /usr/lib/postgresql/*/bin). Vytvoří dočasný cluster mimo síť (jen unix socket),
@@ -17,6 +17,7 @@ SHORTS_SQL="$HERE/../shorts.sql"
 HELP_SQL="$HERE/../help-bot.sql"
 STREAKS_SQL="$HERE/../leaderboard-streaks.sql"
 LOGINCODE_SQL="$HERE/../login-code.sql"
+TOUR_SQL="$HERE/../tour-expand.sql"
 SECDIAG_SQL="$HERE/../security-diagnostics.sql"
 HARDEN_SQL="$HERE/../security-hardening.sql"
 UNDO_SQL="$HERE/../security-hardening-undo.sql"
@@ -32,7 +33,7 @@ TMP="$(mktemp -d)"
 RUNAS=""
 if [ "$(id -u)" = "0" ]; then
   id postgres >/dev/null 2>&1 || { echo "Jako root je potřeba uživatel postgres." >&2; rm -rf "$TMP"; exit 77; }
-  chown postgres "$TMP"; chmod 755 "$HERE" "$HERE"/*.sql "$SQL" "$EMAIL_SQL" "$GAME_SQL" "$SHOP_SQL" "$SAVES_SQL" "$COINS_SQL" "$SHORTS_SQL" "$HELP_SQL" "$STREAKS_SQL" "$LOGINCODE_SQL" "$SECDIAG_SQL" "$HARDEN_SQL" "$UNDO_SQL" "$MP_SQL" 2>/dev/null || true
+  chown postgres "$TMP"; chmod 755 "$HERE" "$HERE"/*.sql "$SQL" "$EMAIL_SQL" "$GAME_SQL" "$SHOP_SQL" "$SAVES_SQL" "$COINS_SQL" "$SHORTS_SQL" "$HELP_SQL" "$STREAKS_SQL" "$LOGINCODE_SQL" "$TOUR_SQL" "$SECDIAG_SQL" "$HARDEN_SQL" "$UNDO_SQL" "$MP_SQL" 2>/dev/null || true
   RUNAS="runuser -u postgres --"
 fi
 run() { $RUNAS "$@"; }
@@ -83,6 +84,7 @@ OUT="$TMP/out.txt"
   PSQLQ -f "$HERE/help_bot.test.sql" &&
   PSQLQ -f "$HERE/leaderboard_streaks.test.sql" &&
   PSQLQ -f "$HERE/login_code.test.sql" &&
+  PSQLQ -v tour_sql="$TOUR_SQL" -f "$HERE/tour_expand.test.sql" &&   # velké rozšíření prohlídky (spouští ho samo víckrát)
   PSQLQ -f "$HERE/multiplayer.test.sql" &&
   PSQLQ -f "$HERE/security_diagnostics.test.sql"
 } >"$OUT" 2>&1

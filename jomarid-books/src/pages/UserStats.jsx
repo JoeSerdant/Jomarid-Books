@@ -221,7 +221,7 @@ export const UserStats = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         
         {/* Streak */}
-        <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+        <div data-tour="stats-streak" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 shadow-sm flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div className="space-y-1 text-left">
               <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider">{t('Aktuální Streak')}</h3>
@@ -237,7 +237,7 @@ export const UserStats = () => {
         </div>
 
         {/* Měsíční cíl */}
-        <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+        <div data-tour="stats-goal" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 shadow-sm flex flex-col justify-between">
           <div className="space-y-3">
             <div className="flex justify-between items-start">
               <div className="space-y-1 text-left">
@@ -373,7 +373,7 @@ export const UserStats = () => {
       </div>
 
       {/* SÍŇ SLÁVY */}
-      <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 shadow-sm mb-8">
+      <div data-tour="stats-leaderboard" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 shadow-sm mb-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
           <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider m-0 flex items-center gap-1.5"><Users size={16} style={{ color: 'var(--bg-primary)' }} /> {t('Globální Síň Slávy Jomarid Books')}</h3>
           {!stats.showInLeaderboard && <span className="text-[0.625rem] font-bold bg-red-500/10 text-red-400 px-2.5 py-1 rounded-md uppercase">{t('Režim inkognito 🔒')}</span>}

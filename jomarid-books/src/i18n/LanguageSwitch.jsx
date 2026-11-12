@@ -26,6 +26,7 @@ export const LanguageSwitch = ({ variant = 'navbar' }) => {
     <div
       role="group"
       aria-label={t('Jazyk')}
+      data-tour={compact ? 'nav-language' : undefined}
       style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}
       className={`shrink-0 inline-flex items-stretch border rounded-xl overflow-hidden ${compact ? 'p-0.5 gap-0.5' : 'p-1 gap-1'}`}
     >

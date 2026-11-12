@@ -1239,6 +1239,9 @@ const DataTab = ({ user, role }) => {
 
 // ---- Stránka Nastavení (/settings/:záložka) ----
 // Každá záložka má vlastní adresu, takže jde sdílet odkaz, obnovit stránku a funguje tlačítko Zpět.
+// Cíle prohlídky appky u záložek Nastavení (viz ANCHORS v tour/tourModel.js)
+const TAB_TOUR = { profile: 'settings-profile', security: 'settings-security', notifications: 'settings-notifications', checks: 'settings-checks', tour: 'settings-tour', appearance: 'settings-appearance', reader: 'settings-reader', app: 'settings-app', data: 'settings-data' };
+
 const TABS = [
   { id: 'profile', label: tk('Profil'), icon: User, needsUser: true },
   { id: 'security', label: tk('Zabezpečení'), icon: ShieldCheck, needsUser: true },
@@ -1534,7 +1537,7 @@ export const SettingsPage = () => {
                 key={id}
                 to={`/settings/${id}`}
                 replace
-                data-tour={id === 'checks' ? 'settings-checks' : undefined}
+                data-tour={TAB_TOUR[id]}
                 aria-current={isActive ? 'page' : undefined}
                 style={{
                   backgroundColor: isActive ? 'var(--bg-primary)' : 'var(--bg-card)',

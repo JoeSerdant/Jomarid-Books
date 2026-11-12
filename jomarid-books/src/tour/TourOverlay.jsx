@@ -41,6 +41,28 @@ const ensureInView = (el) => {
   if (r.top >= top - 1 && r.bottom <= document.documentElement.clientHeight - 12) return;
   window.scrollBy({ top: r.top - top, left: 0, behavior: 'auto' });
 };
+// Cíl uvnitř vodorovně posuvné lišty (záložky Nastavení na telefonu) může být mimo její viditelnou část: lišta se posune, aby cíl byl vidět.
+const outsideScroller = (el) => {
+  const r = el.getBoundingClientRect();
+  if (r.right <= 0 || r.left >= document.documentElement.clientWidth) return true;
+  for (let p = el.parentElement; p && p !== document.body && p !== document.documentElement; p = p.parentElement) {
+    const ox = window.getComputedStyle(p).overflowX;
+    if ((ox === 'auto' || ox === 'scroll') && p.scrollWidth > p.clientWidth + 1) {
+      const pr = p.getBoundingClientRect();
+      if (r.left < pr.left - 1 || r.right > pr.right + 1) return true;
+    }
+  }
+  return false;
+};
+const revealInScrollers = (el) => {
+  for (let p = el.parentElement; p && p !== document.body && p !== document.documentElement; p = p.parentElement) {
+    const ox = window.getComputedStyle(p).overflowX;
+    if (!((ox === 'auto' || ox === 'scroll') && p.scrollWidth > p.clientWidth + 1)) continue;
+    const pr = p.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    if (r.left < pr.left - 1 || r.right > pr.right + 1) p.scrollLeft += (r.left + r.width / 2) - (pr.left + pr.width / 2);
+  }
+};
 const sameRect = (a, b) => a && b && a.top === b.top && a.left === b.left && a.width === b.width && a.height === b.height;
 
 export const TourOverlay = ({ steps, index, onIndex, onClose }) => {
@@ -139,7 +161,8 @@ export const TourOverlay = ({ steps, index, onIndex, onClose }) => {
         if (performance.now() - startedAt > FIND_TIMEOUT_MS) setFinding(false);
         return;
       }
-      if (!scrolled) { scrolled = true; ensureInView(el); }
+      if (!scrolled) { scrolled = true; revealInScrollers(el); ensureInView(el); }
+      else if (outsideScroller(el)) revealInScrollers(el); // lišta se mezitím mohla sama posunout jinam (např. na aktivní záložku)
       const r = el.getBoundingClientRect();
       const next = { top: r.top, left: r.left, width: r.width, height: r.height };
       setRect((prev) => (sameRect(prev, next) ? prev : next));

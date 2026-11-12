@@ -261,7 +261,7 @@ export const ShortsPage = () => {
   }
 
   return (
-    <div ref={wrapRef} className="relative max-w-3xl mx-auto w-full" style={{ height: height || '70vh', color: 'var(--text-body)' }} data-testid="shorts-feed">
+    <div ref={wrapRef} className="relative max-w-3xl mx-auto w-full" style={{ height: height || '70vh', color: 'var(--text-body)' }} data-testid="shorts-feed" data-tour="shorts-feed">
       <div ref={feedRef} className="h-full overflow-y-auto snap-y snap-mandatory scrollbar-hide" style={{ overscrollBehaviorY: 'contain', overflowAnchor: 'none' }}>
         {cards.map((card, i) => <ShortCard key={card.short.id} index={i} card={card} active={i === active} onNext={() => goCard(1)} />)}
         {!hasMore && (

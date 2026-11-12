@@ -118,7 +118,7 @@ export const HelpBot = () => {
           </div>
         </section>
       )}
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label={open ? t('Zavřít pomocníka') : t('Otevřít pomocníka')} data-testid="helpbot-open" style={primaryBtn}
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label={open ? t('Zavřít pomocníka') : t('Otevřít pomocníka')} data-testid="helpbot-open" data-tour="help-bot" style={primaryBtn}
         className="border-none rounded-full w-12 h-12 shadow-xl cursor-pointer flex items-center justify-center">
         {open ? <X size={20} aria-hidden="true" /> : <MessageCircle size={20} aria-hidden="true" />}
       </button>
