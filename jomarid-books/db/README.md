@@ -10,6 +10,7 @@ Jak soubor spustit: na GitHubu ho otevři → **Copy raw file** → v Supabase o
 | `email-change.sql` | Změna e-mailu přes správce: žádost čtenáře, zrušení, provedení a zamítnutí správcem. |
 | `game-records.sql` | Herní rekordy a odznaky: hry hlásí nejlepší výsledky, server je pamatuje u účtu, odemyká herní odznaky (jen XP) a dává data pro sekci Hry ve Statistikách a pro žebříčky. |
 | `shop.sql` | Obchůdek: za Jomarid Coins se kupují tituly (u jména ve Statistikách a v žebříčku) a vzhledy her (barevný odstín hry). Nákup strhne mince a zapíše je do `coin_transactions`. |
+| `tour-inspect.sql` | Jen čtecí: ukáže, jak vypadá prohlídka appky (tutoriál) uložená v databázi: souhrn, všechny kroky po sadách a kolik lidí ji viděl. Nic nemění. |
 | `game-saves.sql` | Uložený postup her: místo localStorage prohlížeče se postup každé hry (vylepšení, nastavení, rozehraná partie) ukládá u účtu, na všech zařízeních je stejný. |
 | `game-coins.sql` | Jomarid Coins z her: denní strop 100 na jednu hru (dřív 75) a žádný strop za všechny hry dohromady (dřív 150), Kouloví Kámoši mezi hrami, které smějí o Coiny žádat, a zůstatek připsaný jednou (dřív dvakrát). Nahrazuje funkci `award_game_coins`. |
 | `shorts.sql` | shortB: krátké knihy (do 6 000 znaků) ve feedu přizpůsobeném čtenáři. Nakladatel nebo správce shortB píše, čtenář je prochází a server si pamatuje, co dočetl, olajkoval nebo přeskočil (podle toho appka skládá feed). Žádný denní limit. |
