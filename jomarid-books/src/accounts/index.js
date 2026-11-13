@@ -4,7 +4,6 @@ import { supabase, supabaseUrl, supabaseKey } from '../lib/supabase';
 import { loginWithCode } from '../offline/loginCode';
 import { purgeUserData } from '../offline/index.js';
 import { clearCachedProfile } from '../offline/session';
-import { cleanupOnLogout } from '../push/pushClient';
 import { clearPersonalBrowseState } from '../browse/browseStore';
 import { createAccountManager } from './accountManager.js';
 import { VAULT_KEY } from './vault.js';
@@ -22,8 +21,7 @@ export const accounts = createAccountManager({
   loginWithCode: (client, code) => loginWithCode(client, { url: supabaseUrl, key: supabaseKey }, code),
   storage: typeof localStorage !== 'undefined' ? localStorage : null,
   hooks: {
-    // Zařízení nemá dál dostávat oznámení účtu, který opouštíme (relace je ještě jeho, takže jde zařízení u serveru odhlásit).
-    beforeLeave: () => cleanupOnLogout({ client: supabase, nav: navigator, win: window }),
+    // Oznámení se při přepnutí účtu NEvypínají: zařízení si je po načtení nového účtu samo přiřadí (keepPushAlive v AuthContextu, server přepíše vlastníka zařízení).
     // Odebraný účet na zařízení nic nenechá; data ostatních účtů zůstanou.
     afterForget: async (userId) => { clearCachedProfile(userId); await purgeUserData(userId); },
     resetPersonalState: () => clearPersonalBrowseState(),

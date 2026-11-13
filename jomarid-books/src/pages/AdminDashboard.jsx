@@ -1930,7 +1930,7 @@ export const AdminDashboard = () => {
       </div>
 
       {/* TAB NAVIGACE */}
-      <div className="flex border-b font-black text-xs uppercase tracking-wider space-x-1 overflow-x-auto scrollbar-hide" style={{ borderColor: 'var(--border-color)' }}>
+      <div data-tour="admin-tabs" className="flex border-b font-black text-xs uppercase tracking-wider space-x-1 overflow-x-auto scrollbar-hide" style={{ borderColor: 'var(--border-color)' }}>
         {[
           { id: 'overview', label: t('Přehled'), icon: <LayoutDashboard size={14} /> },
           { id: 'notifications', label: t('Upozornění'), icon: <Bell size={14} />, badge: pendingCount },

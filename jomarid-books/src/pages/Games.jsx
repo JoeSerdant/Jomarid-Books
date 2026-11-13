@@ -680,6 +680,7 @@ const GameCard = ({ game }) => {
     <Link
       to={`/games/${game.id}`}
       data-testid={`game-link-${game.id}`}
+      data-tour={game.id === 'onlinegames' ? 'games-online' : undefined}
       style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}
       className="border rounded-2xl p-3 sm:p-6 flex flex-col items-center text-center gap-2 sm:gap-3 no-underline hover:shadow-lg transition-all"
     >
@@ -707,7 +708,7 @@ export const GamesHub = () => {
         <p style={{ color: 'var(--text-muted)' }} className="text-sm">{t('Krátká odbočka od čtení - a pár Jomarid Coinů navrch za to, že si dnes zahraješ.')}</p>
       </div>
       {/* Na telefonu dva sloupce s kompaktními kartami (pět her pod sebou zabíralo přes 1000 px). */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-6">
+      <div data-tour="games-list" className="grid grid-cols-2 gap-3 sm:gap-6">
         {loose.map(game => <GameCard key={game.id} game={game} />)}
         {FOLDERS.map(folder => {
           const inside = GAMES.filter(g => g.folder === folder.key);

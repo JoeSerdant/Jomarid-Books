@@ -138,7 +138,7 @@ export const Shop = ({ cosmetics, coins, unlocked, onCosmetics, onBalance }) => 
   const state = { owned: cosmetics.owned, equipped: cosmetics.equipped, unlocked, coins };
 
   return (
-    <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 shadow-sm mb-8" data-testid="shop">
+    <div style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }} className="border rounded-2xl p-6 shadow-sm mb-8" data-testid="shop" data-tour="badges-shop">
       <div className="mb-4">
         <h3 style={{ color: 'var(--text-muted)' }} className="text-xs font-black uppercase tracking-wider text-left flex items-center gap-1.5 m-0">
           <Store size={16} style={{ color: 'var(--bg-primary)' }} /> {t('Obchůdek')}

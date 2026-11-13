@@ -4,7 +4,7 @@ import { Bell, BellOff, Loader2, Send } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useInstallState } from '../pwa/install.js';
 import { enableMessage, pushSupport, TEST_PUSH_DELAY_SECONDS, TEST_PUSH_HELP } from './pushModel.js';
-import { deviceState, disablePush, enablePush, fetchVapidKey, getPushPrefs, sendTestPush, setPushPrefs } from './pushClient.js';
+import { deviceState, disablePush, enablePush, fetchVapidKey, getPushPrefs, isPushWanted, keepPushAlive, sendTestPush, setPushPrefs } from './pushClient.js';
 import { t, tx } from '../i18n';
 
 const btn = 'px-3 py-2 rounded-lg border-none cursor-pointer text-xs font-black inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed';
@@ -25,7 +25,12 @@ export default function PushSettings({ client = supabase }) {
     if (!support.supported) { setState({ support }); return; }
     const vapid = await fetchVapidKey(client);
     const vapidKey = !vapid.error && vapid.key ? vapid.key : null;
-    const [device, prefs] = await Promise.all([deviceState({ nav: navigator, win: window, client, vapidKey }), getPushPrefs(client)]);
+    let [device, prefs] = await Promise.all([deviceState({ nav: navigator, win: window, client, vapidKey }), getPushPrefs(client)]);
+    // Zařízení oznámení chce a povolení platí, jen se přihlášení ztratilo (Obnovit aplikaci, přepnutí účtu): obnoví se samo, bez klepnutí
+    if (vapidKey && !device.subscribed && device.permission === 'granted' && isPushWanted(window)) {
+      await keepPushAlive({ client, nav: navigator, win: window });
+      device = await deviceState({ nav: navigator, win: window, client, vapidKey });
+    }
     setState({ support, device, configured: !!vapidKey, vapidKey, engage: prefs.engage });
   }, [client, installed]);
   useEffect(() => { load(); }, [load]);
@@ -94,6 +99,7 @@ export default function PushSettings({ client = supabase }) {
             <button type="button" onClick={test} disabled={!!busy} style={solid} className={btn}>{busy === 'test' ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} {t('Poslat zkušební oznámení (za {n} s)', { n: TEST_PUSH_DELAY_SECONDS })}</button>
             <button type="button" onClick={turnOff} disabled={!!busy} style={soft} className={btn}>{busy === 'off' ? <Loader2 size={12} className="animate-spin" /> : <BellOff size={12} />} {t('Vypnout')}</button>
           </div>
+          <Note>{t('Oznámení zůstávají zapnutá i po obnovení aplikace a přepnutí účtu: zařízení si je samo přiřadí k účtu, který právě používáš. Vypneš je jen tady.')}</Note>
           <Note>{t(TEST_PUSH_HELP)}</Note>
         </div>
       ) : (

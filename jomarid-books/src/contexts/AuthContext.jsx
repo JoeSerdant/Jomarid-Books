@@ -8,7 +8,7 @@ import { clearCachedProfile, clearCachedProfiles, clearStoredSession, isNetworkP
 import { purgeUserData } from '../offline/index.js';
 import { accounts } from '../accounts/index.js';
 import { clearPersonalBrowseState } from '../browse/browseStore';
-import { cleanupOnLogout } from '../push/pushClient';
+import { cleanupOnLogout, keepPushAlive } from '../push/pushClient';
 import { ROLE_READER, ROLE_ADMIN } from '../constants/roles';
 import { sameEmail, normalizeEmail } from '../emailChange';
 
@@ -190,6 +190,19 @@ export function AuthProvider({ children }) {
    accounts.forgetActive(user?.id);
    await finishLogout();
  };
+
+ // Oznámení v zařízení zůstávají zapnutá, dokud je výslovně nevypneš v Nastavení: po spuštění appky, po přihlášení nebo přepnutí na jiný účet a při návratu do appky
+ // (nejvýš jednou za půl hodiny) se přihlášení k oznámením obnoví, pokud se ztratilo (Obnovit aplikaci, výměna klíčů), a zařízení se přiřadí k účtu, který právě používáš.
+ // Nikdy se nevyvolá dotaz na povolení: to zůstává na Nastavení.
+ useEffect(() => {
+   if (!user?.id || offline || typeof document === 'undefined') return undefined;
+   let last = Date.now();
+   const run = () => { if (navigator.onLine !== false) keepPushAlive({ client: supabase, nav: navigator, win: window, userId: user.id }).catch(() => {}); };
+   run();
+   const onVisible = () => { if (document.visibilityState === 'visible' && Date.now() - last > 30 * 60 * 1000) { last = Date.now(); run(); } };
+   document.addEventListener('visibilitychange', onVisible);
+   return () => document.removeEventListener('visibilitychange', onVisible);
+ }, [user?.id, offline]);
 
  // Knihovna si při odpojení ještě dopíše rozdělaný stav (poslední posun stránky), a to by přepsalo předchozí mazání.
  // Efekt rodiče se spouští až po úklidu potomků, takže tohle mazání je poslední a platí.

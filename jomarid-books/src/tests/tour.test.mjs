@@ -47,9 +47,15 @@ describe('výchozí obsah', () => {
   });
   test('pořadí a cíle výchozích kroků (změna je záměrná, ne náhodná)', () => {
     const anchors = (key) => tour.sets[key].map((x) => x.anchor);
-    assert.deepEqual(anchors('reader'), ['none', 'nav-library', 'library-search', 'nav-shorts', 'nav-stats', 'nav-badges', 'nav-games', 'nav-coins', 'nav-search', 'nav-settings', 'settings-tabs', 'none']);
-    assert.deepEqual(anchors('publisher'), ['none', 'nav-library', 'nav-studio', 'publisher-tabs', 'nav-shorts', 'nav-stats', 'nav-badges', 'nav-coins', 'nav-settings', 'settings-checks', 'none']);
-    assert.deepEqual(anchors('admin'), ['none', 'nav-library', 'library-search', 'nav-shorts', 'nav-stats', 'nav-badges', 'nav-games', 'nav-coins', 'nav-search', 'nav-admin', 'nav-settings', 'settings-tabs', 'none']);
+    const common = ['nav-library', 'library-search', 'nav-search', 'none', 'none', 'none', 'nav-shorts', 'shorts-feed', 'nav-stats', 'stats-streak', 'stats-goal', 'stats-leaderboard', 'nav-badges', 'badges-tabs', 'badges-shop',
+      'nav-games', 'games-list', 'none', 'none', 'games-online', 'none', 'nav-coins', 'nav-language', 'help-bot'];
+    const settings = ['nav-settings', 'settings-tabs', 'settings-profile', 'settings-security', 'settings-notifications', 'settings-checks', 'settings-tour', 'settings-appearance', 'settings-reader', 'settings-app', 'settings-data'];   // stejné pořadí jako záložky v Nastavení
+    assert.deepEqual(anchors('reader'), ['none', ...common, ...settings, 'none']);
+    // nakladatel má navíc Studio (šest kroků na záložky panelu) hned za čtením a hledáním
+    const beforeStudio = common.slice(0, 6);
+    assert.deepEqual(anchors('publisher'), ['none', ...beforeStudio, 'nav-studio', ...Array(6).fill('publisher-tabs'), ...common.slice(6), ...settings, 'none']);
+    // správce má navíc Administraci (menu a devět kroků na záložky) těsně před Nastavením
+    assert.deepEqual(anchors('admin'), ['none', ...common, 'nav-admin', ...Array(9).fill('admin-tabs'), ...settings, 'none']);
   });
   test('texty o mincích a knihovně odpovídají tomu, co appka opravdu dělá', () => {
     const text = (key, id) => tour.sets[key].find((x) => x.id === id).text;
@@ -68,8 +74,22 @@ describe('výchozí obsah', () => {
   });
   test('administrace je ve výchozích krocích správce hned před Nastavením, ostatní kroky jako u čtenáře', () => {
     const ids = tour.sets.admin.map((x) => x.id);
-    assert.equal(ids[ids.indexOf('admin') + 1], 'settings');
-    assert.deepEqual(ids.filter((id) => id !== 'admin'), tour.sets.reader.map((x) => x.id));
+    const adminIds = ids.filter((id) => id.startsWith('admin'));
+    assert.equal(adminIds[0], 'admin'); assert.equal(adminIds.length, 10);
+    assert.equal(ids[ids.indexOf(adminIds[adminIds.length - 1]) + 1], 'settings', 'Administrace končí těsně před Nastavením');
+    assert.deepEqual(ids.filter((id) => !id.startsWith('admin')), tour.sets.reader.map((x) => x.id));
+  });
+  test('prohlídka je opravdu velká: víc než padesát kroků dohromady, žádná sada nepřekročí limit a každý text se do limitu vejde', () => {
+    for (const key of ['reader', 'publisher', 'admin']) assert.ok(tour.sets[key].length > 30 && tour.sets[key].length <= M.TOUR_LIMITS.maxSteps, key);
+    assert.ok(tour.sets.reader.length + tour.sets.publisher.length + tour.sets.admin.length > 100);
+    assert.ok(M.TOUR_LIMITS.maxSteps >= 50 && M.TOUR_LIMITS.text >= 700);
+  });
+  test('prohlídka popisuje i novinky: hry online a offline, oznámení, offline čtení, jazyk, pomocník, obchůdek a přepínač účtů', () => {
+    const all = (key) => tour.sets[key].map((x) => `${x.title} ${x.text}`).join('\n');
+    for (const key of ['reader', 'publisher', 'admin']) {
+      const t = all(key);
+      for (const re of [/Jomarid Online Games/, /Katakomby/, /Chaos Aréna/, /Hrát online/, /oznámení/i, /bez internetu/, /pomocník/i, /Streak Freeze/, /Obchůdek/, /Účty na tomto zařízení/, /angličtin/i, /inkognito/, /Obnovit aplikaci/, /přihlašovací kód/]) assert.match(t, re, `${key}: ${re}`);
+    }
   });
   test('názvy sad odpovídají názvům rolí v rozhraní', () => {
     assert.deepEqual(M.SET_LABELS, { reader: 'Čtenář', publisher: 'Nakladatel', admin: 'Správce' });
@@ -80,10 +100,16 @@ describe('výchozí obsah', () => {
     const walk = (dir) => { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const f = path.join(dir, e.name); if (e.isDirectory()) { if (!['tests', 'gameContent'].includes(e.name)) walk(f); } else if (/\.jsx$/.test(e.name)) files.push(f); } };
     walk(SRC);
     const source = files.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+    // záložky Nastavení mají cíle v mapě TAB_TOUR (data-tour={TAB_TOUR[id]}), ostatní přímo v atributu
+    const tabMap = (source.match(/const TAB_TOUR = \{([^}]*)\}/) || [])[1] || '';
+    assert.ok(/data-tour=\{TAB_TOUR\[id\]\}/.test(source), 'záložky Nastavení používají TAB_TOUR');
+    const fromMap = [...tabMap.matchAll(/'([a-z-]+)'/g)].map((m) => m[1]);
+    assert.ok(fromMap.length >= 9);
     for (const key of M.ANCHOR_KEYS.filter((k) => k !== 'none')) {
       const re = new RegExp(`data-tour=(?:"${key}"|\\{[^}]*'${key}'[^}]*\\})`);
-      assert.ok(re.test(source), `${key}: v komponentách chybí data-tour`);
+      assert.ok(re.test(source) || fromMap.includes(key), `${key}: v komponentách chybí data-tour`);
     }
+    for (const k of fromMap) assert.ok(M.ANCHOR_KEYS.includes(k), `TAB_TOUR: ${k} není v ANCHORS`);
     const literal = [...source.matchAll(/data-tour="([a-z-]+)"/g)].map((m) => m[1]);
     assert.ok(literal.length >= 8);
     for (const k of literal) assert.ok(M.ANCHOR_KEYS.includes(k), `data-tour="${k}" není v ANCHORS`);
@@ -141,7 +167,7 @@ describe('normalizeTour', () => {
     assert.equal(st.text, '<img src=x onerror=alert(1)>');
   });
   test('nejvýš MAX kroků v sadě a jedinečná id', () => {
-    const many = Array.from({ length: 40 }, (_, i) => ({ id: 'stejne', title: 'K' + i }));
+    const many = Array.from({ length: M.TOUR_LIMITS.maxSteps + 25 }, (_, i) => ({ id: 'stejne', title: 'K' + i }));
     const steps = M.normalizeTour({ sets: { reader: many } }).sets.reader;
     assert.equal(steps.length, M.TOUR_LIMITS.maxSteps);
     assert.equal(new Set(steps.map((x) => x.id)).size, steps.length);
@@ -186,7 +212,7 @@ describe('normalizeTour', () => {
   });
   test('normalizeDraft: cokoli nesmyslného dá výchozí návrh a nepřekročí limity', () => {
     for (const v of [null, 5, 'x', [], undefined]) assert.deepEqual(M.normalizeDraft(v), M.defaultTour(), String(v));
-    const many = M.normalizeDraft({ sets: { reader: Array.from({ length: 40 }, (_, i) => ({ id: 'a', title: 't' + i })) } });
+    const many = M.normalizeDraft({ sets: { reader: Array.from({ length: M.TOUR_LIMITS.maxSteps + 25 }, (_, i) => ({ id: 'a', title: 't' + i })) } });
     assert.equal(many.sets.reader.length, M.TOUR_LIMITS.maxSteps);
     assert.equal(new Set(many.sets.reader.map((x) => x.id)).size, many.sets.reader.length);
   });
@@ -445,5 +471,32 @@ describe('zapamatování zhlédnutí', () => {
     await assert.doesNotReject(S.markTourSeen({ client: { auth: { updateUser: async () => { throw new Error('síť'); } } }, user: user({}), version: 1, storage: makeStorage() }));
     await assert.doesNotReject(S.markTourSeen({ client: null, user: user({}), version: 1, storage: makeStorage({}, true) }));
     await assert.doesNotReject(S.markTourSeen({ client: {}, user: null, version: 1 }));
+  });
+});
+
+describe('db/tour-expand.sql (rozšíření prohlídky v databázi)', () => {
+  const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const sqlPath = path.join(ROOT, 'db', 'tour-expand.sql');
+  test('soubor je přesně to, co vygeneruje db/tools/gen-tour-sql.mjs (po změně textů prohlídky ho spusť znovu)', async () => {
+    const { buildTourSql } = await import('../../db/tools/gen-tour-sql.mjs');
+    assert.equal(fs.readFileSync(sqlPath, 'utf8'), buildTourSql(), 'spusť: node db/tools/gen-tour-sql.mjs');
+  });
+  test('JSON v SQL je beze zbytku výchozí prohlídka z kódu a projde normalizeTour beze ztráty', () => {
+    const sql = fs.readFileSync(sqlPath, 'utf8');
+    const m = sql.match(/\$tour\$([\s\S]*?)\$tour\$/);
+    assert.ok(m, 'v SQL chybí blok $tour$...$tour$');
+    const sets = JSON.parse(m[1]);
+    assert.deepEqual(sets, M.defaultTour().sets);
+    const round = M.normalizeTour({ enabled: true, version: 2, autoDays: 1, sets });
+    assert.deepEqual(round.sets, sets, 'uložený obsah appka po načtení nic neořízne ani nezmění');
+    for (const key of M.SET_KEYS) assert.ok(sets[key].length > 30, key);
+  });
+  test('SQL zachovává zapnutí a počet dní, zálohuje a nezvyšuje verzi, když se obsah nemění', () => {
+    const sql = fs.readFileSync(sqlPath, 'utf8');
+    assert.match(sql, /onboarding_tour_before_expand/);
+    assert.match(sql, /on conflict \(key\) do nothing/);
+    assert.match(sql, /v -> 'enabled'/);
+    assert.match(sql, /v -> 'autoDays'/);
+    assert.ok(sql.includes(`least(coalesce((select ver from old), 1) + 1, ${M.TOUR_LIMITS.maxVersion})`), 'verze nesmí přesáhnout strop');
   });
 });

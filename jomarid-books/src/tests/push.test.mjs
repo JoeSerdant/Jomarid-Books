@@ -11,7 +11,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { pushSupport, permissionState, subscriptionRow, sameApplicationServerKey, enableMessage, VAPID_SETTINGS_KEY, PUSH_KINDS, TEST_PUSH_DELAY_SECONDS } from '../push/pushModel.js';
 import { generateVapidKeys, isVapidPublicKey, isVapidPrivateKey, urlBase64ToUint8Array } from '../push/vapid.js';
-import { fetchVapidKey, enablePush, disablePush, cleanupOnLogout, sendTestPush, deviceState, getPushPrefs, setPushPrefs } from '../push/pushClient.js';
+import { fetchVapidKey, enablePush, disablePush, cleanupOnLogout, detachPush, keepPushAlive, rememberPush, isPushWanted, PUSH_WANTED_KEY, sendTestPush, deviceState, getPushPrefs, setPushPrefs } from '../push/pushClient.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -96,6 +96,15 @@ const makeEnv = ({ vapid = KEY, permission = 'default', answer = 'granted', exis
   return { log, win, nav, client };
 };
 
+// localStorage zařízení a klient, který rozliší tabulky (nastavení serveru a zařízení v databázi)
+const fakeStore = (init = {}) => { const m = new Map(Object.entries(init)); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k), has: (k) => m.has(k) }; };
+const keepEnv = ({ wanted = true, row = null, rowError = null, ...opts } = {}) => {
+  const e = makeEnv({ permission: 'granted', ...opts });
+  e.win.localStorage = fakeStore(wanted ? { [PUSH_WANTED_KEY]: '1' } : {});
+  e.client.from = (table) => ({ select: () => ({ eq: () => ({ maybeSingle: async () => (table === 'push_subscriptions' ? { data: row, error: rowError } : { data: { value: { key: KEY } }, error: null }) }) }) });
+  return e;
+};
+
 describe('klient: zapnutí a vypnutí', () => {
   test('klíč serveru: platný, chybějící, poškozený i chyba čtení', async () => {
     assert.deepEqual(await fetchVapidKey(makeEnv().client), { key: KEY });
@@ -112,6 +121,18 @@ describe('klient: zapnutí a vypnutí', () => {
     assert.deepEqual(Array.from(log.subscribeArgs.applicationServerKey), Array.from(urlBase64ToUint8Array(KEY)));
     assert.equal(log.rpc[0][0], 'register_push_subscription');
     assert.deepEqual(log.rpc[0][1], { p_endpoint: 'https://push.example/ep1', p_p256dh: 'P'.repeat(30), p_auth: 'A'.repeat(12), p_user_agent: 'TestUA' });
+  });
+  test('zapnutí zapamatuje přání zařízení, výslovné vypnutí ho smaže (jen to ho smaže)', async () => {
+    const e = makeEnv({ permission: 'granted' });
+    e.win.localStorage = fakeStore();
+    assert.equal(isPushWanted(e.win), false);
+    assert.equal((await enablePush(e)).status, 'enabled');
+    assert.equal(isPushWanted(e.win), true);
+    await disablePush(e);
+    assert.equal(isPushWanted(e.win), false, 'Vypnout v Nastavení je jediná cesta, jak oznámení vypnout');
+    const failed = makeEnv({ permission: 'granted', rpcError: { message: 'boom' } }); failed.win.localStorage = fakeStore();
+    assert.equal((await enablePush(failed)).status, 'error'); assert.equal(isPushWanted(failed.win), false, 'neúspěšné zapnutí přání nezapíše');
+    assert.equal(isPushWanted({}), false, 'bez localStorage nic nespadne');
   });
   test('už povolené: na povolení se neptá', async () => {
     const { log, win, nav, client } = makeEnv({ permission: 'granted' });
@@ -185,12 +206,15 @@ describe('klient: zapnutí a vypnutí', () => {
     const out = makeEnv({ permission: 'granted', existing: { endpoint: 'https://push.example/ep5' } });
     out.client.rpc = () => new Promise(() => {});
     await cleanupOnLogout(out);
-    assert.equal(out.log.unsubscribed, 1);
+    assert.equal(out.log.unsubscribed, 0, 'odhlášení z účtu přihlášení v prohlížeči neruší, jen odpojí řádek v databázi');
   });
-  test('před odhlášením se zařízení odhlásí; chyba ani zaseknutá databáze odhlášení nezablokují', async () => {
+  test('před odhlášením se zařízení jen odpojí od účtu (řádek v databázi); přihlášení v prohlížeči i přání zůstávají; chyba ani zaseknutá databáze odhlášení nezablokují', async () => {
     const e = makeEnv({ permission: 'granted', existing: { endpoint: 'https://push.example/ep2' } });
+    e.win.localStorage = fakeStore({ [PUSH_WANTED_KEY]: '1' });
     await cleanupOnLogout(e);
-    assert.equal(e.log.rpc[0][0], 'unregister_push_subscription');
+    assert.deepEqual(e.log.rpc, [['unregister_push_subscription', { p_endpoint: 'https://push.example/ep2' }]]);
+    assert.equal(e.log.unsubscribed, 0); assert.equal(isPushWanted(e.win), true, 'přání zařízení zůstává');
+    assert.equal(await detachPush(makeEnv()), false, 'bez přihlášení nic');
     const hang = makeEnv({ permission: 'granted', existing: { endpoint: 'https://push.example/ep3' } });
     hang.client.rpc = () => new Promise(() => {});
     const t0 = Date.now();
@@ -682,5 +706,96 @@ describe('SQL na skutečném PostgreSQL (db/tests/run.sh)', { skip: sqlUnavailab
     assert.equal(sqlRun.status, 0, `${sqlRun.stdout}\n${sqlRun.stderr}`);
     const n = Number((sqlRun.stdout.match(/SQL testy: (\d+) kontrol prošlo/) || [])[1]);
     assert.ok(n >= 90, `kontrol: ${n}`);
+  });
+});
+
+
+describe('udržování oznámení (keepPushAlive): oznámení se nevypnou obnovením aplikace ani přepnutím účtu', () => {
+  const ME = 'user-me';
+  test('bez povolení nebo bez přání zařízení se nic neděje a nikdy se nevyvolá dotaz na povolení', async () => {
+    let e = keepEnv({ permission: 'default' });
+    assert.equal((await keepPushAlive(e)).status, 'off'); assert.equal(e.log.requested, 0); assert.equal(e.log.rpc.length, 0);
+    e = keepEnv({ permission: 'denied', existing: { endpoint: 'https://push.example/x' } });
+    assert.equal((await keepPushAlive(e)).status, 'off');
+    e = keepEnv({ wanted: false });
+    assert.equal((await keepPushAlive(e)).status, 'not-wanted', 'zařízení oznámení nikdy nezapnulo');
+    assert.equal(e.log.subscribeArgs, null); assert.equal(e.log.rpc.length, 0);
+    assert.equal((await keepPushAlive(keepEnv({ noSw: true }))).status, 'no-sw');
+  });
+  test('po Obnovit aplikaci (přihlášení v prohlížeči zmizelo): zařízení se samo přihlásí znovu a zapíše do databáze, bez dotazu na povolení', async () => {
+    const e = keepEnv({ wanted: true, existing: null });
+    assert.equal((await keepPushAlive({ ...e, userId: ME })).status, 'resubscribed');
+    assert.equal(e.log.requested, 0, 'okno s dotazem se neukáže');
+    assert.equal(e.log.subscribeArgs.userVisibleOnly, true);
+    assert.deepEqual(Array.from(e.log.subscribeArgs.applicationServerKey), Array.from(urlBase64ToUint8Array(KEY)));
+    assert.equal(e.log.rpc.length, 1); assert.equal(e.log.rpc[0][0], 'register_push_subscription');
+  });
+  test('po přepnutí účtu nebo odhlášení (zařízení v databázi chybí nebo patří jinému účtu): přiřadí se aktuálnímu účtu, přihlášení v prohlížeči zůstane', async () => {
+    let e = keepEnv({ existing: { endpoint: 'https://push.example/ep7' }, row: null });
+    assert.equal((await keepPushAlive({ ...e, userId: ME })).status, 'rebound');
+    assert.equal(e.log.rpc[0][0], 'register_push_subscription'); assert.equal(e.log.unsubscribed, 0); assert.equal(e.log.subscribeArgs, null, 'nové přihlášení se nevytváří');
+    e = keepEnv({ existing: { endpoint: 'https://push.example/ep8' }, row: { endpoint: 'https://push.example/ep8', user_id: 'user-other' } });
+    assert.equal((await keepPushAlive({ ...e, userId: ME })).status, 'rebound', 'patří předchozímu účtu');
+    assert.equal(e.log.rpc.length, 1);
+  });
+  test('už zapsané pod tímhle účtem: nic se neposílá', async () => {
+    const e = keepEnv({ existing: { endpoint: 'https://push.example/ep9' }, row: { endpoint: 'https://push.example/ep9', user_id: ME } });
+    assert.equal((await keepPushAlive({ ...e, userId: ME })).status, 'ok');
+    assert.equal(e.log.rpc.length, 0); assert.equal(e.log.subscribeArgs, null);
+    const noId = keepEnv({ existing: { endpoint: 'https://push.example/ep9' }, row: { endpoint: 'https://push.example/ep9', user_id: 'x' } });
+    assert.equal((await keepPushAlive(noId)).status, 'ok', 'bez znalosti účtu stačí, že řádek existuje');
+  });
+  test('starší zařízení bez zapamatovaného přání, ale s přihlášením: přání se doplní (aby přežilo Obnovit aplikaci)', async () => {
+    const e = keepEnv({ wanted: false, existing: { endpoint: 'https://push.example/old' }, row: { endpoint: 'https://push.example/old', user_id: ME } });
+    assert.equal((await keepPushAlive({ ...e, userId: ME })).status, 'ok');
+    assert.equal(isPushWanted(e.win), true);
+  });
+  test('správce vyměnil klíče: staré přihlášení se zahodí a vytvoří nové se zápisem do databáze', async () => {
+    const e = keepEnv({ existing: { endpoint: 'https://push.example/oldkey', options: { applicationServerKey: Uint8Array.of(9, 9, 9).buffer } } });
+    assert.equal((await keepPushAlive({ ...e, userId: ME })).status, 'resubscribed');
+    assert.equal(e.log.unsubscribed, 1); assert.ok(e.log.subscribeArgs); assert.equal(e.log.rpc[0][0], 'register_push_subscription');
+  });
+  test('chyba databáze nebo serveru: přihlášení ani přání se nemažou, příště se to zkusí znovu', async () => {
+    const e = keepEnv({ existing: { endpoint: 'https://push.example/ep10' }, rpcError: { message: 'boom' } });
+    const r = await keepPushAlive({ ...e, userId: ME });
+    assert.equal(r.status, 'error'); assert.equal(e.log.unsubscribed, 0); assert.equal(isPushWanted(e.win), true);
+    assert.equal((await keepPushAlive({ ...keepEnv({ rpcError: { code: 'PGRST202', message: 'x' } }), userId: ME })).status, 'not-configured');
+    const n = keepEnv({ vapid: null }); n.client.from = () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) });
+    assert.equal((await keepPushAlive(n)).status, 'not-configured');
+    const down = keepEnv(); down.client.from = () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: { message: 'síť' } }) }) }) });
+    assert.equal((await keepPushAlive(down)).status, 'error');
+    const sub = keepEnv({ existing: null }); sub.nav.serviceWorker.ready = Promise.resolve({ pushManager: { getSubscription: async () => null, subscribe: async () => { throw new Error('push služba nedostupná'); } } });
+    assert.equal((await keepPushAlive(sub)).status, 'error', 'chyba přihlášení appku nerozbije');
+  });
+  test('souběžná volání se slučují do jednoho běhu', async () => {
+    const e = keepEnv({ existing: null });
+    const [a, b] = await Promise.all([keepPushAlive({ ...e, userId: ME }), keepPushAlive({ ...e, userId: ME })]);
+    assert.equal(a, b); assert.equal(e.log.rpc.length, 1);
+  });
+  test('před Obnovit aplikaci si zařízení zapamatuje, že oznámení má', async () => {
+    const e = makeEnv({ permission: 'granted', existing: { endpoint: 'https://push.example/ep11' } }); e.win.localStorage = fakeStore();
+    assert.equal(await rememberPush(e), true); assert.equal(isPushWanted(e.win), true);
+    const none = makeEnv({ permission: 'granted' }); none.win.localStorage = fakeStore();
+    assert.equal(await rememberPush(none), false); assert.equal(isPushWanted(none.win), false);
+    assert.equal(await rememberPush({ nav: {}, win: {} }), false, 'bez service workeru nic nespadne');
+  });
+});
+
+describe('zapojení: nic z toho oznámení nevypíná, kromě výslovného Vypnout v Nastavení', () => {
+  test('přepínač účtů oznámení nevypíná; AuthContext je udržuje; Obnovit aplikaci si přání zapamatuje; Nastavení se samo vyléčí', () => {
+    const accounts = read('src/accounts/index.js');
+    assert.doesNotMatch(accounts, /cleanupOnLogout|disablePush|beforeLeave/, 'přepnutí účtu nesmí zařízení z oznámení odhlásit');
+    const auth = read('src/contexts/AuthContext.jsx');
+    assert.match(auth, /keepPushAlive\(\{ client: supabase, nav: navigator, win: window, userId: user\.id \}\)/);
+    assert.match(auth, /document\.addEventListener\('visibilitychange', onVisible\)/);
+    assert.match(auth, /\[user\?\.id, offline\]/, 'běží při změně účtu');
+    const reg = read('src/pwa/register.js');
+    assert.ok(reg.indexOf('rememberPush(') > -1 && reg.indexOf('rememberPush(') < reg.indexOf('r.unregister()'), 'přání se zapamatuje dřív, než se service worker odregistruje');
+    const ui = read('src/push/PushSettings.jsx');
+    assert.match(ui, /isPushWanted\(window\)/); assert.match(ui, /await keepPushAlive\(/);
+    assert.match(ui, /await disablePush\(\{ client, nav: navigator, win: window \}\)/, 'výslovné vypnutí předává okno, ať smaže přání');
+    // jediné místo, které přihlášení v prohlížeči odhlašuje, je výslovné vypnutí
+    const client = read('src/push/pushClient.js');
+    assert.equal((client.match(/\.unsubscribe\(\)/g) || []).length, 4, 'odhlášení v prohlížeči: výslovné vypnutí, výměna klíčů (zapnutí, udržování) a chyba zápisu při zapnutí');
   });
 });

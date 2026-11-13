@@ -81,7 +81,7 @@ export const BadgesPage = () => {
         </p>
       </div>
 
-      <nav aria-label={t('Sekce odznaků')} className="flex flex-wrap gap-2 mb-6">
+      <nav aria-label={t('Sekce odznaků')} data-tour="badges-tabs" className="flex flex-wrap gap-2 mb-6">
         {tabs.map((tb) => {
           const on = tb.id === active;
           const Icon = tb.icon;
