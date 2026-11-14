@@ -48,24 +48,24 @@ const rnd=m=>{const a=m==='chaos'?[0,1,1,2,2,3,4,5]:[0,0,0,1,1,2,3];return a[(m=
 const GOLD={p:.04,max:3,jc:4,coins:25};
 const goldRoll=()=>g.mode!=='zen'&&g.mode!=='daily'&&g.mode!=='mp'&&g.gn<GOLD.max&&!g.cG&&!g.nG&&!g.balls.some(b=>b.gold)&&Math.random()<GOLD.p?(g.gn++,1):0;
 function snd(f,d=.12,ty='sine',v=.08){try{if(S.mute)return;window.ac=window.ac||new(window.AudioContext||window.webkitAudioContext)();const a=window.ac,o=a.createOscillator(),gn=a.createGain();o.type=ty;o.frequency.value=f;gn.gain.setValueAtTime(v,a.currentTime);gn.gain.exponentialRampToValueAtTime(.001,a.currentTime+d);o.connect(gn);gn.connect(a.destination);o.start();o.stop(a.currentTime+d)}catch(e){}}
-const SUB=5,GR=.06,KR=1.6,KS=.9,KO=.5,CD=.07,KP=3.5,KM=.0015,CS=8/NP,COR=.5*CS,ch=g=>2*Math.sin(g*Math.PI/NP),SP=[],CH1=ch(1),CO=[],SN=[];
+const SUB=5,DT=.55,GR=.06,KR=1.6,KS=.9,KO=.5,CD=.07,KP=3.5,KM=.0015,CS=8/NP,DMP=.997**DT,COR=.5*CS,ch=g=>2*Math.sin(g*Math.PI/NP),SP=[],CH1=ch(1),CO=[],SN=[];
 for(let i=0;i<NP;i++){CO.push(Math.cos(i/NP*6.2832));SN.push(Math.sin(i/NP*6.2832))}
 for(let i=0;i<NP;i++){SP.push([i,(i+1)%NP,KR,ch(1)],[i,(i+2)%NP,KS,ch(2)]);if(i<NP/2)SP.push([i,i+NP/2,KO,2])}
 const mk=(x,y,t,k=1)=>{const r=RAD[t],R=r/1.8,b={x,y,vx:0,vy:0,t,r,R,pr:R*.8,m:(r/30)**2,rr:r,age:0,ph:Math.random()*6.3,A0:.5*NP*R*R*Math.sin(6.2832/NP),P:[]};for(let i=0;i<NP;i++){const a=i/NP*6.2832;b.P.push({x:x+Math.cos(a)*R*k,y:y+Math.sin(a)*R*k,vx:0,vy:0})}return b};
 const cl=b=>({...b,P:b.P.map(p=>({...p}))});
 const bowl={sq:0,vs:0,r:0,vr:0},kick=p=>{bowl.vs+=p*.004;bowl.vr+=(Math.random()-.5)*p*.003};
 function soft(b){const P=b.P,R=b.R;
- for(const[i,j,k,c]of SP){const p=P[i],q=P[j],dx=q.x-p.x,dy=q.y-p.y,d=Math.hypot(dx,dy)||.01,ux=dx/d,uy=dy/d,a=k*(d/(R*c)-1)+CD*((q.vx-p.vx)*ux+(q.vy-p.vy)*uy);p.vx+=ux*a;p.vy+=uy*a;q.vx-=ux*a;q.vy-=uy*a}
- let A=0;for(let i=0;i<NP;i++){const p=P[i],q=P[(i+1)%NP];A+=p.x*q.y-q.x*p.y}A=Math.max(A/2,b.A0*.25);const pf=KP*(b.A0/A-1)*.5;
+ for(const[i,j,k,c]of SP){const p=P[i],q=P[j],dx=q.x-p.x,dy=q.y-p.y,d=Math.hypot(dx,dy)||.01,ux=dx/d,uy=dy/d,a=(k*(d/(R*c)-1)+CD*((q.vx-p.vx)*ux+(q.vy-p.vy)*uy))*DT;p.vx+=ux*a;p.vy+=uy*a;q.vx-=ux*a;q.vy-=uy*a}
+ let A=0;for(let i=0;i<NP;i++){const p=P[i],q=P[(i+1)%NP];A+=p.x*q.y-q.x*p.y}A=Math.max(A/2,b.A0*.25);const pf=KP*(b.A0/A-1)*.5*DT;
  for(let i=0;i<NP;i++){const p=P[i],q=P[(i+1)%NP],ex=q.x-p.x,ey=q.y-p.y,l=Math.hypot(ex,ey)||.01,f=pf*l/(R*CH1),nx=ey/l*f,ny=-ex/l*f;p.vx+=nx;p.vy+=ny;q.vx+=nx;q.vy+=ny}
- for(let i=0;i<NP;i++){const p=P[i];p.vx+=(b.x+CO[i]*R-p.x)*KM;p.vy+=(b.y+SN[i]*R-p.y)*KM+GR;p.vx*=.997;p.vy*=.997;const s=Math.hypot(p.vx,p.vy);if(s>12){p.vx*=12/s;p.vy*=12/s}}
+ for(let i=0;i<NP;i++){const p=P[i];p.vx+=(b.x+CO[i]*R-p.x)*KM*DT;p.vy+=(b.y+SN[i]*R-p.y)*KM*DT+GR*DT;p.vx*=DMP;p.vy*=DMP;const s=Math.hypot(p.vx,p.vy);if(s>12){p.vx*=12/s;p.vy*=12/s}}
  if(Math.random()<.002){const p=P[Math.random()*NP|0];p.vx+=(Math.random()-.5)*2;p.vy+=(Math.random()-.5)*2}
- for(const p of P){p.x+=p.vx;p.y+=p.vy}}
+ for(const p of P){p.x+=p.vx*DT;p.y+=p.vy*DT}}
 function wall(p,rad,x0,y0,x1,y1,b){const dx=x1-x0,dy=y1-y0,t=clamp(((p.x-x0)*dx+(p.y-y0)*dy)/(dx*dx+dy*dy),0,1),ex=p.x-x0-dx*t,ey=p.y-y0-dy*t,d=Math.hypot(ex,ey)||.01,m=rad+16;
  if(d<m){const nx=ex/d,ny=ey/d,vn=p.vx*nx+p.vy*ny;p.x+=nx*(m-d);p.y+=ny*(m-d);if(vn<0){p.vx-=vn*nx*1.05;p.vy-=vn*ny*1.05;const vt=p.vx*-ny+p.vy*nx;p.vx-=-ny*vt*.1;p.vy-=nx*vt*.1;if(vn<-2.5)kick(-vn*b.r*.004)}}}
 function nearWall(b,[x0,y0,x1,y1]){const dx=x1-x0,dy=y1-y0,t=clamp(((b.x-x0)*dx+(b.y-y0)*dy)/(dx*dx+dy*dy),0,1),ex=b.x-x0-dx*t,ey=b.y-y0-dy*t,m=b.r*1.5+b.pr+24;return ex*ex+ey*ey<m*m}
 function coll(a,b){const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy),m=a.r+b.r;if(d>m*1.3)return;
- if(a.t===b.t&&a.t<11&&d>m*.95){const f=.012/d;for(const p of a.P){p.vx+=dx*f;p.vy+=dy*f}for(const p of b.P){p.vx-=dx*f;p.vy-=dy*f}}
+ if(a.t===b.t&&a.t<11&&d>m*.95){const f=.012/d*DT;for(const p of a.P){p.vx+=dx*f;p.vy+=dy*f}for(const p of b.P){p.vx-=dx*f;p.vy-=dy*f}}
  const ia=1/a.m,ib=1/b.m,wa=ia/(ia+ib),wb=1-wa,rr=a.pr+b.pr;
  const la=(b.r*1.4+rr)**2,lb=(a.r*1.4+rr)**2,qs=b.P.filter(q=>(q.x-a.x)**2+(q.y-a.y)**2<=la);
  for(const p of a.P){if((p.x-b.x)**2+(p.y-b.y)**2>lb)continue;for(const q of qs){const ex=q.x-p.x,ey=q.y-p.y,e2=ex*ex+ey*ey;if(e2<rr*rr){const e=Math.sqrt(e2)||.01,nx=ex/e,ny=ey/e,ov=(rr-e)*COR;p.x-=nx*ov*wa;p.y-=ny*ov*wa;q.x+=nx*ov*wb;q.y+=ny*ov*wb;const vn=(q.vx-p.vx)*nx+(q.vy-p.vy)*ny;if(vn<0){const j=-1.1*CS*vn/(ia+ib);p.vx-=j*ia*nx;p.vy-=j*ia*ny;q.vx+=j*ib*nx;q.vy+=j*ib*ny}}}}}
