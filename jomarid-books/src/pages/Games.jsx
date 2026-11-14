@@ -37,6 +37,7 @@ const GAMES = [
     title: tk('Jomarid Rocket Game'),
     tagline: tk('Vesmírná arkádová střílečka s vlastními vylepšeními a postupem.'),
     icon: Rocket,
+    folder: 'action',
     load: () => import('../gameContent/rocketGame').then(m => m.ROCKET_GAME_HTML),
   },
   {
@@ -60,6 +61,7 @@ const GAMES = [
     title: tk('City Clicker'),
     tagline: tk('Vybuduj si vlastní město klikáním - se čtyřmi zcela odlišnými vizuálními styly na výběr.'),
     icon: Building2,
+    folder: 'chill',
     load: () => import('../gameContent/cityClicker').then(m => m.CITY_CLICKER_HTML),
   },
   {
@@ -67,6 +69,7 @@ const GAMES = [
     title: tk('Polygon aréna'),
     tagline: tk('Rozstřílej tvary, poskládej si stavbu z více než 500 tanků a přežij mezi chytrými boty - osm režimů od vln nepřátel po zužující se bouři a obtížnost až do Pekla.'),
     icon: Target,
+    folder: 'action',
     load: () => import('../gameContent/polygonArena').then(m => m.POLYGON_ARENA_HTML),
   },
   {
@@ -74,6 +77,7 @@ const GAMES = [
     title: tk('Chess League'),
     tagline: tk('Šachy proti pěti botům s vlastní osobností - skutečný Elo rating, hodiny, nápověda, rozbor partie a šachové úlohy na hledání matu.'),
     icon: Crown,
+    folder: 'strategy',
     load: () => import('../gameContent/chess').then(m => m.CHESS_HTML),
   },
   {
@@ -81,6 +85,7 @@ const GAMES = [
     title: tk('Kouloví Kámoši'),
     tagline: tk('Pouštěj do misky měkké koule, spojuj stejné a vypěstuj tu největší - pět režimů od klasiky po chaos, obchod s vylepšeními a vlastní rekordy.'),
     icon: Smile,
+    folder: 'chill',
     load: () => import('../gameContent/koulovi').then(m => m.KOULOVI_HTML),
   },
   // Jomarid Online Games: menu (load) se vstupy do online zápasů a sólo Katakombami offline. Každý režim online zápasu (loadMode) má vlastní dokument, sólo hra
@@ -121,7 +126,9 @@ export async function preloadGames(onProgress = () => {}) {
 
 // Složky v seznamu her: hra s `folder: 'klíč'` se v seznamu neukazuje sama, ale uvnitř složky (karta složky otevře seznam her pod mřížkou).
 const FOLDERS = [
+  { key: 'action', title: tk('Akční hry'), tagline: tk('Střílečky a arény: rychlé reflexy a přežití.') },
   { key: 'strategy', title: tk('Strategie'), tagline: tk('Taktické hry: veď armády, frontu a zdroje.') },
+  { key: 'chill', title: tk('Pohodovky'), tagline: tk('Klikání a skládání: klidná hra na chvilku.') },
 ];
 
 // Kolik milisekund musí být hra otevřená, než se hráči vůbec odemkne
