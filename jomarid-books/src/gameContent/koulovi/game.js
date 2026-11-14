@@ -1,6 +1,6 @@
 const W=540,H=960,F=750,DANGER=430,DROP_Y=330,AL=70,AR=470,BL=130,BR=410,TOP=500,NP=26;
 const WS=[[AL,TOP,BL,F+16],[BL,F+16,BR,F+16],[BR,F+16,AR,TOP]];
-const RAD=[24,29,35,41,48,56,65,74,83,92,100,108],COL=['#6ec6ff','#7ddc5a','#c76be0','#e8383d','#f58a3c','#f7e35a','#ffffff','#4de3d0','#ff7eb6','#2b2f5e','#3a3a4a','#161616','#111'],CV=[1,2,5,10,20,40,80,150,300,600,1200,2500],GL=['🪐','🌙','🔱'];
+const RAD=[24,29,35,41,48,56,65,74,83,92,100,108].map(r=>Math.round(r*1.2)),COL=['#6ec6ff','#7ddc5a','#c76be0','#e8383d','#f58a3c','#f7e35a','#ffffff','#4de3d0','#ff7eb6','#2b2f5e','#3a3a4a','#161616','#111'],CV=[1,2,5,10,20,40,80,150,300,600,1200,2500],GL=['🪐','🌙','🔱'];
 const PTS=[10,20,40,80,160,320,640,1280,2560,5120,10240,20480];
 const $=id=>document.getElementById(id),cv=$('c'),ctx=cv.getContext('2d'),stage=$('stage');
 const KEY='koulovi-kamosi-v1';
