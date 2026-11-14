@@ -571,6 +571,7 @@ test('grafika: koule mají stínování a lesk, mísa vnitřek, částice konfet
     }
     run('fx(270, 600, 320, COL[3]); g.disc = { t: 7, l: 100 }; g.tgt = true; draw();');
     assert.ok(run('g.rg.length') > 0 && run('g.pt.length') > 0, 'fx přidá kruh i konfety');
+    run('g.balls.length = 0');   // bez koulí se během čekání nic nesloučí a nevznikne nový kruh
     for (let i = 0; i < 60; i += 1) run('step()');
     assert.equal(run('g.rg.length'), 0, 'kruh po čase zmizí');
   }
