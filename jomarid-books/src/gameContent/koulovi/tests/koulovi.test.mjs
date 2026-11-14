@@ -1017,7 +1017,7 @@ test('online: můj tah. Hod se pošle hned (bez konce tahu), po usazení misky s
   assert.equal(res.payload.r, 1);
   assert.equal(res.payload.k, 0);
   assert.equal(res.payload.b.length, 1);
-  assert.equal(res.payload.b[0].length, 2 + 16);
+  assert.equal(res.payload.b[0].length, 2 + 2 * run('NP'));
   assert.equal(run('g.mp.k'), 1, 'pořadí tahu se zvedne hned');
   assert.equal(run('g.cur'), run('mpType(1)'));
   await Promise.resolve();
@@ -1037,7 +1037,7 @@ test('online: tah soupeře. Jeho hod se přehraje a stav misky po tahu je závaz
   assert.equal(run('g.balls.length'), 1);
   for (let i = 0; i < 40; i++) run('step(); mpStep()');
   assert.equal(mp.sent.length, 0, 'při cizím tahu hra nic neposílá');
-  const snap = [[t, 0.5, ...Array.from({ length: 8 }, (_, i) => [300 + Math.cos(i * 0.785) * 10, 700 + Math.sin(i * 0.785) * 10]).flat().map((v) => +v.toFixed(1))]];
+  const snap = [[t, 0.5, ...Array.from({ length: run('NP') }, (_, i) => [300 + Math.cos(i * 6.2832 / run('NP')) * 10, 700 + Math.sin(i * 6.2832 / run('NP')) * 10]).flat().map((v) => +v.toFixed(1))]];
   mp.emit('moves', { moves: [{ seq: 2, p: 1, payload: { r: 1, k: 0, b: snap }, end: true, mine: false, replay: false }] });
   assert.equal(run('g.mp.phase'), 'wait');
   assert.equal(run('g.mp.k'), 1);
@@ -1062,9 +1062,9 @@ test('online: neplatné zprávy se nepřijmou (špatné pořadí tahu, nesmysln�
   const bad = [[0, 0.1, 1, 2, 3]];
   mp.emit('moves', m({ r: 1, k: 0, b: bad }));
   assert.equal(run('g.mp.k'), 0, 'stav s chybným počtem čísel se zahodí');
-  mp.emit('moves', m({ r: 1, k: 0, b: [[0, 0.1, ...Array(16).fill(NaN)]] }));
+  mp.emit('moves', m({ r: 1, k: 0, b: [[0, 0.1, ...Array(2 * run('NP')).fill(NaN)]] }));
   assert.equal(run('g.mp.k'), 0, 'NaN se zahodí');
-  mp.emit('moves', m({ r: 1, k: 0, b: Array.from({ length: 400 }, () => [0, 0.1, ...Array(16).fill(10)]) }));
+  mp.emit('moves', m({ r: 1, k: 0, b: Array.from({ length: 400 }, () => [0, 0.1, ...Array(2 * run('NP')).fill(10)]) }));
   assert.equal(run('g.mp.k'), 0, 'příliš mnoho koulí se zahodí');
   assert.match(run('g.mp.note'), /neplatn|neodpovídá/);
 });
@@ -1098,7 +1098,7 @@ test('online: soupeři vypadne koule (jeho zpráva s out): vyhrávám a hra to o
 test('online: po obnovení stránky se z historie postaví miska i pořadí tahu a rozehraný vlastní hod se dopočítá', () => {
   const { run, mp } = mpEnv({ slot: 1 });
   const t0 = run('mpType(0)'), t1 = run('mpType(1)'), t2 = run('mpType(2)');
-  const ball = (t, x, y) => [t, 0.3, ...Array.from({ length: 8 }, (_, i) => [x + Math.cos(i * 0.785) * 8, y + Math.sin(i * 0.785) * 8]).flat().map((v) => +v.toFixed(1))];
+  const ball = (t, x, y) => [t, 0.3, ...Array.from({ length: run('NP') }, (_, i) => [x + Math.cos(i * 6.2832 / run('NP')) * 8, y + Math.sin(i * 6.2832 / run('NP')) * 8]).flat().map((v) => +v.toFixed(1))];
   const moves = [
     { seq: 1, p: 1, payload: { d: 1, k: 0, x: 200, t: t0 }, end: false, mine: true, replay: true },
     { seq: 2, p: 1, payload: { r: 1, k: 0, b: [ball(t0, 250, 700)] }, end: true, mine: true, replay: true },
