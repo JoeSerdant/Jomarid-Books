@@ -54,10 +54,10 @@ test('Jomarid Coins: hra jen žádá (vítězství v kampani 10, v minihře 5, p
   for (const reason of new Set(rewards.map((m) => m[1]))) assert.match(labels, new RegExp(`\\b${reason}: tk\\('`), `${reason} má v liště český název`);
 });
 
-test('Hry: složka Strategie obsahuje Warroom a Hannibala, ostatní hry zůstávají mimo ni', () => {
+test('Hry: složka Strategie obsahuje Warroom, Hannibala a Chess League, ostatní hry jsou v jiných složkách nebo samostatně', () => {
   const games = [...gamesPage.matchAll(/\n  \{\n    id: '(\w+)',[\s\S]*?\n  \},/g)].map((m) => [m[1], (m[0].match(/folder: '(\w+)'/) || [])[1]]);
-  assert.deepEqual(games.filter(([, f]) => f === 'strategy').map(([id]) => id), ['warroom', 'hannibal']);
-  assert.deepEqual(games.filter(([, f]) => !f).map(([id]) => id).sort(), ['chess', 'cityclicker', 'koulovikamosi', 'onlinegames', 'polygonarena', 'rocket']);
+  assert.deepEqual(games.filter(([, f]) => f === 'strategy').map(([id]) => id), ['warroom', 'hannibal', 'chess']);
+  assert.deepEqual(games.filter(([, f]) => !f).map(([id]) => id), ['onlinegames']);
   assert.match(gamesPage, /\{ key: 'strategy', title: tk\('Strategie'\),/);
   // složka se otevírá v adrese, ať se po návratu ze hry ukáže otevřená, a hra vede zpět do své složky
   assert.match(gamesPage, /useSearchParams/);
