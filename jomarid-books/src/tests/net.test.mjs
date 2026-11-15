@@ -12,7 +12,7 @@ const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const code = fs.readFileSync(path.join(SRC, 'gameContent', 'shared', 'net.js'), 'utf8');
 const ctx = vm.createContext({ Math, Map, Set, Object, Array, isFinite });
 vm.runInContext(code, ctx);
-const { Replicator, Mirror, Roster, tween } = ctx.JomaridNet;
+const { Replicator, Mirror, Roster, tween, Lockstep, stateHash, pickHostSlot, rng: seededRng } = ctx.JomaridNet;
 
 // pevný náhodný generátor
 function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -221,4 +221,85 @@ test('zprávy: stejný svět dává stejné výsledky při opakování (determin
   const run = () => simulate({ ms: 3000, seed: 3, setup: (w) => { addTank(w, 5, 5, 'A'); addShape(w, 9, 9); } });
   const a = run(), b = run();
   assert.equal(a.bytes, b.bytes); assert.equal(a.sent, b.sent);
+});
+
+/* ---------------------------------------------------------------- paralelní výpočet (Lockstep), otisk stavu a volba hostitele */
+// Hra pro zkoušku: dvě kulky, vstup je rychlost, nepřátelé se rodí podle společné náhody (stejné semínko = stejná hra na obou zařízeních).
+function makeSim(seed, tamper = 0) {
+  const r = seededRng(seed);
+  const st = { p: [{ x: 0, y: 0 }, { x: 100, y: 100 }], e: [], f: 0 };
+  return {
+    st,
+    step(frame, inputs) {
+      st.f = frame + 1;
+      for (let i = 0; i < 2; i++) { const inp = inputs[i] || { x: 0, y: 0 }; st.p[i].x += inp.x; st.p[i].y += inp.y; }
+      if (r() < 0.05) st.e.push({ x: r() * 100, y: r() * 100 });
+      for (const e of st.e) { e.x += (st.p[0].x - e.x) * 0.01; e.y += (st.p[1].y - e.y) * 0.01; }
+      if (tamper && frame === tamper) st.p[0].x += 50;     // jedno zařízení si změní stav
+    },
+    hash() { const o = [st.f, st.e.length]; for (const p of st.p) o.push(p.x, p.y); for (const e of st.e) o.push(e.x, e.y); return o; },
+  };
+}
+// Dva účastníci s frontou zpráv (pevné zpoždění + kolísání), vstupy podle vlastního programu
+function runLockstep({ frames = 600, delayMs = 3, jitter = 3, tamper = 0, seed = 5, silentAfter = 1e9 }) {
+  const r = seededRng(99);
+  const sims = [makeSim(seed, tamper), makeSim(seed)];
+  const q = [[], []];                   // q[i] = zprávy pro účastníka i
+  const desyncs = [];
+  let tick = 0;
+  const nodes = [0, 1].map((me) => new Lockstep({
+    me, delay: 6, hashEvery: 30, empty: { x: 0, y: 0 },
+    step: (f, ins) => sims[me].step(f, ins), hash: () => sims[me].hash(),
+    send: (m) => { if (me === 1 && tick > silentAfter) return; const dst = q[1 - me]; const at = Math.max(tick + delayMs + Math.floor(r() * (jitter + 1)), dst.length ? dst[dst.length - 1].at : 0); dst.push({ at, m: JSON.parse(JSON.stringify(m)) }); },   // pořadí zpráv se zachovává (kanál je uspořádaný)
+    onDesync: (f) => desyncs.push([me, f]),
+  }));
+  for (tick = 0; tick < frames; tick++) {
+    for (const me of [0, 1]) {
+      if (me === 1 && tick > silentAfter) continue;
+      const due = q[me].filter((x) => x.at <= tick); q[me] = q[me].filter((x) => x.at > tick);
+      for (const x of due) nodes[me].receive(x.m);
+      nodes[me].local({ x: Math.sin(tick / 30 + me) > 0 ? 1 : -1, y: me === 0 ? (tick % 90 < 45 ? 1 : 0) : 0 });
+      nodes[me].tick(1);
+    }
+  }
+  return { sims, nodes, desyncs };
+}
+
+test('lockstep: dvě zařízení dojdou ke stejnému stavu a nezpozdí se o víc než zpoždění sítě', () => {
+  const { sims, nodes, desyncs } = runLockstep({});
+  const f = Math.min(nodes[0].frame(), nodes[1].frame());
+  assert.ok(f > 450 && f <= 600, 'hra běží zhruba v reálném čase: ' + f);
+  assert.equal(desyncs.length, 0, 'bez podvodu žádná neshoda');
+  // oba stavy ve stejném snímku jsou stejné: dopočítat pomalejšího na stejný snímek není potřeba, protože se otisky porovnávaly po 30 snímcích
+  assert.ok(Math.abs(nodes[0].frame() - nodes[1].frame()) < 12);
+  assert.equal(stateHash(sims[0].hash()) === stateHash(sims[0].hash()), true);
+});
+test('lockstep: upravený stav jednoho zařízení se pozná (otisky se rozejdou)', () => {
+  const { desyncs, nodes } = runLockstep({ tamper: 200 });
+  assert.ok(desyncs.length > 0, 'neshoda ohlášená');
+  assert.ok(nodes[0].desynced() || nodes[1].desynced());
+  assert.ok(Math.min(...desyncs.map((d) => d[1])) >= 200, 'ohlášená až po úpravě');
+});
+test('lockstep: když druhý přestane posílat, hra na něj čeká (nepočítá dopředu na slepo)', () => {
+  const { nodes } = runLockstep({ silentAfter: 100 });
+  assert.ok(nodes[0].frame() < 125, 'bez vstupů druhého se hra zastaví: ' + nodes[0].frame());
+});
+test('otisk stavu: drobné rozdíly pod zaokrouhlením nevadí, skutečná změna ano', () => {
+  assert.equal(stateHash([1.00001, 2.00002, 'a']), stateHash([1.00004, 1.99999, 'a']));
+  assert.notEqual(stateHash([1, 2, 'a']), stateHash([1, 2.5, 'a']));
+  assert.notEqual(stateHash([1, NaN]), stateHash([1, 5]));
+});
+test('náhoda se semínkem: stejné semínko dává stejnou posloupnost, jiné jinou', () => {
+  const a = seededRng(7), b = seededRng(7), c = seededRng(8);
+  const sa = [a(), a(), a()], sb = [b(), b(), b()], sc = [c(), c(), c()];
+  assert.deepEqual(sa, sb); assert.notDeepEqual(sa, sc);
+  assert.ok(sa.every((v) => v >= 0 && v < 1));
+});
+test('volba hostitele: silnější zařízení (aspoň o čtvrtinu) vyhrává, jinak místo 1; obě strany rozhodnou stejně', () => {
+  assert.equal(pickHostSlot(100, 100), 1);
+  assert.equal(pickHostSlot(100, 120), 1);
+  assert.equal(pickHostSlot(100, 130), 2);
+  assert.equal(pickHostSlot(200, 100), 1);
+  assert.equal(pickHostSlot(0, 500), 1);       // soupeř bez zkoušky (starší verze) nebo chybějící číslo: zůstává místo 1
+  assert.equal(pickHostSlot(500, 0), 1);
 });

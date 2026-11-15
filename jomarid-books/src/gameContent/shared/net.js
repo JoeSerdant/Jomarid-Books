@@ -185,6 +185,94 @@
     this.isHost = function (excludeId) { return this.hostId(excludeId) === me.id; };
   }
 
+  // ---------- Výkon zařízení a volba hostitele ----------
+  // Krátká zkouška rychlosti (asi 120 ms smyčky s počítáním): víc znamená silnější zařízení. Používá se jen pro volbu hostitele a varování, nic neodemyká.
+  function bench() {
+    var t0 = Date.now(), n = 0, x = 1;
+    while (Date.now() - t0 < 120) { for (var i = 0; i < 1500; i++) x = (x * 1.0000003 + Math.sin(i)) % 997; n++; }
+    return Math.max(1, Math.round(n + (x < -1e9 ? 1 : 0)));
+  }
+  // Kdo má být hostitel: obě zařízení mají k dispozici stejná dvě čísla (zkouška místa 1 a místa 2), takže rozhodnou stejně. Silnější zařízení (aspoň o čtvrtinu) vyhrává, jinak
+  // zůstává hostitelem místo 1. Vrací 1 nebo 2 (číslo místa hostitele).
+  function pickHostSlot(score1, score2) {
+    var a = +score1 || 0, b = +score2 || 0;
+    if (a > 0 && b > 0) { if (b >= a * 1.25) return 2; if (a >= b * 1.25) return 1; }
+    return 1;
+  }
+
+  // ---------- Paralelní výpočet (lockstep): obě zařízení počítají tutéž hru ----------
+  // Oba hráči počítají hru ze stejného semínka a posílají si jen vstupy. Hra se posune o jeden snímek, až když jsou známé vstupy obou hráčů pro ten snímek
+  // (každý hráč se zaváže: "do snímku hz se můj vstup nezmění"). Vstup, který hráč zadá teď, se projeví o `delay` snímků později, ať stihne dorazit.
+  // Čas od času si strany vymění otisk stavu (hash zaokrouhlených čísel): kdo si stav upraví, přestane se s druhým shodovat a obě hry to poznají (onDesync).
+  // Zaokrouhlení otisku a vlastní náhoda (rng) jsou proto, aby malé rozdíly v desetinných číslech na různých zařízeních nevyvolaly planý poplach.
+  function rng(seed) {                                  // mulberry32: stejná posloupnost na každém zařízení
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      var t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  // Otisk pole čísel a textů: každé číslo se zaokrouhlí na `prec` desetinných míst (výchozí 1), pak se spojí a zahashuje (FNV-1a, 32 bitů).
+  function stateHash(values, prec) {
+    var k = Math.pow(10, prec === undefined ? 1 : prec), h = 0x811C9DC5, str = '';
+    for (var i = 0; i < values.length; i++) {
+      var v = values[i];
+      str += (typeof v === 'number' ? (isFinite(v) ? Math.round(v * k) : 'x') : String(v)) + ',';
+    }
+    for (var j = 0; j < str.length; j++) { h ^= str.charCodeAt(j); h = Math.imul(h, 0x01000193) >>> 0; }
+    return h >>> 0;
+  }
+  // opt: { me: 0|1 (kdo jsem: číslo hráče ve hře), delay: zpoždění vstupu ve snímcích (výchozí 6), hashEvery: po kolika snímcích se porovná otisk (výchozí 60),
+  //        empty: vstup, který platí na začátku, step(frame, inputs): posune hru o jeden snímek (inputs[0], inputs[1]), hash(): pole čísel ze stavu hry,
+  //        send(msg): pošle zprávu druhému, onDesync(frame, mine, theirs): otisky se po snímku `frame` nerovnají, maxLead: kolik snímků smí jít hra před posledním známým (nepovinné) }
+  function Lockstep(opt) {
+    var me = opt.me | 0, other = 1 - me, delay = opt.delay === undefined ? 6 : opt.delay, hashEvery = opt.hashEvery || 60;
+    var frame = 0, tl = [[{ f: 0, i: opt.empty }], [{ f: 0, i: opt.empty }]];      // časová osa vstupů obou hráčů: od snímku f platí vstup i
+    var horizon = [delay, delay];                                // do jakého snímku (bez něj) je vstup hráče jistý: na začátku oba znají prázdný vstup pro prvních `delay` snímků
+    var hashes = {}, desync = false;
+    this.frame = function () { return frame; };
+    this.desynced = function () { return desync; };
+    function inputAt(p, f) { var a = tl[p], r = a[0].i; for (var i = 0; i < a.length && a[i].f <= f; i++) r = a[i].i; return r; }
+    function same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+    // Můj aktuální vstup (volá se každý vykreslený snímek). Projeví se ve snímku frame + delay.
+    this.local = function (input) {
+      var f = frame + delay, a = tl[me];
+      if (a.length === 0 || !same(a[a.length - 1].i, input)) a.push({ f: f, i: input });
+      horizon[me] = Math.max(horizon[me], f + 1);
+      this.heartbeat(a[a.length - 1].f === f ? input : null);
+    };
+    this.heartbeat = function (changed) {
+      opt.send({ k: 'ls', f: changed ? frame + delay : null, i: changed, hz: horizon[me] });
+    };
+    this.receive = function (m) {
+      if (!m || m.k !== 'ls') {
+        if (m && m.k === 'lh' && typeof m.f === 'number') { var mine = hashes[m.f]; if (mine !== undefined && mine !== m.h && !desync) { desync = true; if (opt.onDesync) opt.onDesync(m.f, mine, m.h); } else if (mine === undefined) hashes['p' + m.f] = m.h; }
+        return;
+      }
+      if (m.i !== null && m.i !== undefined && typeof m.f === 'number') { var a = tl[other]; if (a.length === 0 || a[a.length - 1].f < m.f) a.push({ f: m.f, i: m.i }); }
+      if (typeof m.hz === 'number' && m.hz > horizon[other]) horizon[other] = m.hz;
+    };
+    // Posune hru o všechny snímky, které jsou už jisté; vrací počet provedených kroků (max `limit`, ať se nezasekne vykreslování).
+    this.tick = function (limit) {
+      var n = 0, lim = limit || 8;
+      while (n < lim && frame < horizon[me] && frame < horizon[other]) {
+        var ins = [null, null]; ins[me] = inputAt(me, frame); ins[other] = inputAt(other, frame);
+        opt.step(frame, ins);
+        frame++; n++;
+        if (frame % hashEvery === 0) {
+          var h = stateHash(opt.hash()); hashes[frame] = h;
+          opt.send({ k: 'lh', f: frame, h: h });
+          var ph = hashes['p' + frame];
+          if (ph !== undefined && ph !== h && !desync) { desync = true; if (opt.onDesync) opt.onDesync(frame, h, ph); }
+        }
+      }
+      return n;
+    };
+  }
+
   // Plynulé přiblížení hodnoty k cíli (tau v sekundách): pro opravu vlastního tanku podle hostitele
   function tween(cur, target, dt, tau) { return cur + (target - cur) * (1 - Math.exp(-dt / tau)); }
 
@@ -192,5 +280,5 @@
   function q1(v) { return Math.round(v * 10) / 10; }
   function q2(v) { return Math.round(v * 100) / 100; }
 
-  root.JomaridNet = { Replicator: Replicator, Mirror: Mirror, Roster: Roster, tween: tween, q1: q1, q2: q2 };
+  root.JomaridNet = { Replicator: Replicator, Mirror: Mirror, Roster: Roster, tween: tween, q1: q1, q2: q2, bench: bench, pickHostSlot: pickHostSlot, rng: rng, stateHash: stateHash, Lockstep: Lockstep };
 })(typeof window !== 'undefined' ? window : typeof globalThis !== 'undefined' ? globalThis : this);
