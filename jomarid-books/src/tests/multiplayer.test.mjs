@@ -768,8 +768,14 @@ test('rozhraní hry: rt.open, rt.send, rt.track a rt.close posílají žádosti,
   assert.deepEqual(got, [], 'před listen() se události zdrží');
   MP.listen();
   assert.deepEqual(got, ['open']);
-  fire('rt', { p: { k: 's' }, offset: 6 });
-  assert.deepEqual(got, ['open', { k: 's' }]);
+  const sealed = posts.find((m) => m.op === 'rt-send').args.payload;
+  assert.ok(sealed && typeof sealed.q === 'string' && !sealed.q.includes('"a"'), 'zpráva se posílá zašifrovaná (obálka q)');
+  fire('rt', { p: JSON.parse(JSON.stringify(sealed)), offset: 6 });
+  assert.deepEqual(JSON.parse(JSON.stringify(got)), ['open', { a: 1 }], 'zpráva stejného zápasu se rozšifruje');
+  fire('rt', { p: { k: 'cheat', hp: 999 } });
+  fire('rt', { p: { q: sealed.q.slice(0, 20) + (sealed.q[20] === 'x' ? 'y' : 'x') + sealed.q.slice(21) } });
+  assert.equal(got.length, 2, 'nezašifrovaná a upravená zpráva se zahodí');
+  assert.equal(MP.integrity(), 2, 'počet zahozených zpráv je vidět');
   assert.equal(MP.serverNow() - Date.now() >= 5 && MP.serverNow() - Date.now() <= 8, true, 'posun času se bere z každé události');
 });
 
@@ -966,4 +972,27 @@ test('Jomarid Online Games: každý režim má tlačítko v menu hry a vlastní 
   assert.match(sql, /'onlinegames\/katakomby' then jsonb_build_object\([^\n]*'team', true\)/, 'co-op je týmový');
   assert.match(sql, /if p_mode = 'katakombypvp' then return '\{\}'::jsonb; end if;/, 'server souboji žádné volby nepřipouští');
   assert.match(read('mp', 'MpSection.jsx'), /\(modeDef\?\.options \?\? def\.options\)\.map/, 'okno nabízí volby režimu, jinak hry');
+});
+
+test('rozhraní hry: zpráva z jiného zápasu (jiný klíč) se nerozšifruje a zprávy jsou pokaždé jinak zašifrované', () => {
+  const mk = (init) => {
+    const posts = []; const listeners = [];
+    const sandbox = { setTimeout, clearTimeout, console, Date, JSON, Promise, Math };
+    sandbox.window = sandbox; sandbox.parent = { postMessage: (m) => posts.push(m) }; sandbox.window.parent = sandbox.parent;
+    sandbox.addEventListener = (t, f) => listeners.push(f);
+    vm.createContext(sandbox);
+    new vm.Script(buildMpPrelude(init)).runInContext(sandbox);
+    return { MP: sandbox.jomaridMP, posts, fire: (event, data) => listeners.forEach((f) => f({ source: sandbox.parent, data: { source: 'jomarid-host', type: 'mp-event', event, data } })) };
+  };
+  const A = mk({ match: 'm1', seed: 5, game: 'rocket', slot: 1 }), B = mk({ match: 'm2', seed: 5, game: 'rocket', slot: 1 });
+  const got = []; B.MP.on('rt', (d) => got.push(d.p)); B.MP.listen();
+  A.MP.rt.send({ k: 's', x: 1 }); A.MP.rt.send({ k: 's', x: 1 });
+  const [m1, m2] = A.posts.filter((m) => m.op === 'rt-send').map((m) => m.args.payload.q);
+  assert.notEqual(m1, m2, 'stejný obsah vypadá pokaždé jinak');
+  B.fire('rt', { p: { q: m1 } });
+  assert.equal(got.length, 0, 'jiný zápas zprávu nepřečte');
+  assert.equal(B.MP.integrity(), 1);
+  const C = mk({ match: 'm1', seed: 5, game: 'rocket', slot: 2 }); const gotC = []; C.MP.on('rt', (d) => gotC.push(d.p)); C.MP.listen();
+  C.fire('rt', { p: { q: m1 } }); C.fire('rt', { p: { q: m2 } });
+  assert.deepEqual(JSON.parse(JSON.stringify(gotC)), [{ k: 's', x: 1 }, { k: 's', x: 1 }]);
 });

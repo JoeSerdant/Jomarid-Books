@@ -29,6 +29,7 @@
   var KEY_EVERY = 4000;          // klíčová zpráva se stavem všeho
   var ZONE_SEED = 20240611;      // zóny (láva, led, oáza) jsou u všech hráčů stejné
   var ME = MP.init.me || { id: 'me', name: 'Ty' };
+  var MY_BENCH = (window.JomaridNet && window.JomaridNet.bench) ? window.JomaridNet.bench() : 0;   // zkouška výkonu: při převzetí hostitelství vyhrává silnější zařízení
 
   var V = {
     clock: function () { return Date.now(); },
@@ -493,7 +494,7 @@
   // ---------- Síť: kdo je hostitel, zprávy ----------
   function sendHello() {
     V.lastHello = V.clock();
-    send({ k: 'H', nm: String(ME.name || 'Hráč').slice(0, 14), co: player ? player.color : '#5fd6cc', ja: V.joinedAt }, true);
+    send({ k: 'H', nm: String(ME.name || 'Hráč').slice(0, 14), co: player ? player.color : '#5fd6cc', ja: V.joinedAt, b: MY_BENCH }, true);
   }
 
   // Hostitel posílá obraz světa
@@ -583,7 +584,7 @@
 
   function onHello(p, t) {
     if (!V.roster) return;
-    var isNew = V.roster.hello({ id: p.id, name: p.nm, joinedAt: p.ja }, t);
+    var isNew = V.roster.hello({ id: p.id, name: p.nm, joinedAt: p.ja, bench: p.b }, t);
     var peer = V.roster.get(p.id);
     if (peer && typeof p.co === 'string' && /^#[0-9a-fA-F]{6}$/.test(p.co)) peer.color = p.co;
     if (isNew && V.open && t - V.lastHello > 250) sendHello();            // nový hráč se tak dozví, kdo tu je
@@ -635,7 +636,7 @@
     // hostitel ztichl: převzetí
     if (V.role === 'guest' && V.hostSeen && t - V.hostSeen > SILENT_MS) {
       V.roster.remove(V.hostId);
-      var next = V.roster.hostId();
+      var next = V.roster.strongestId();
       if (next === ME.id) becomeHost(V.hostTerm + 1);
       else { V.hostId = next; V.hostSeen = t; V.hostTerm = V.hostTerm + 1; V.hostJoined = (V.roster.get(next) || {}).joinedAt || 0; }
     }
@@ -709,7 +710,7 @@
     elName.value = nm;
     V.started = true;
     V.joinedAt = now();
-    V.roster = new Net.Roster({ id: ME.id, name: nm, joinedAt: V.joinedAt }, { silentMs: SILENT_MS });
+    V.roster = new Net.Roster({ id: ME.id, name: nm, joinedAt: V.joinedAt, bench: MY_BENCH }, { silentMs: SILENT_MS });
     V.rep = new Net.Replicator(kindsHost(), { keyEvery: KEY_EVERY });
     V.mirror = newMirror();
     startGame(true);

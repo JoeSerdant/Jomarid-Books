@@ -147,7 +147,7 @@
   function Roster(me, opt) {
     opt = opt || {};
     var silentMs = opt.silentMs || 4000, peers = new Map();
-    me = { id: me.id, name: me.name, joinedAt: me.joinedAt, seen: 0, self: true };
+    me = { id: me.id, name: me.name, joinedAt: me.joinedAt, bench: +me.bench || 0, seen: 0, self: true };
     peers.set(me.id, me);
     this.me = me;
     this.get = function (id) { return peers.get(id) || null; };
@@ -161,6 +161,7 @@
       if (!cur) { cur = { id: p.id, seen: now }; peers.set(p.id, cur); }
       cur.name = typeof p.name === 'string' ? p.name.slice(0, 24) : cur.name || '';
       cur.joinedAt = typeof p.joinedAt === 'number' && isFinite(p.joinedAt) ? p.joinedAt : (cur.joinedAt || now);
+      if (typeof p.bench === 'number' && isFinite(p.bench) && p.bench > 0) cur.bench = Math.min(p.bench, 1e9);
       cur.seen = now;
       return isNew;
     };
@@ -183,6 +184,17 @@
       return best ? best.id : me.id;
     };
     this.isHost = function (excludeId) { return this.hostId(excludeId) === me.id; };
+    // Hostitel při převzetí: nejdřív příchozí, ale když je jiný hráč aspoň o čtvrtinu silnější (zkouška výkonu), tak ten nejsilnější. Všichni mají stejná čísla, takže rozhodnou stejně.
+    this.strongestId = function (excludeId) {
+      var first = null, best = null;
+      peers.forEach(function (p) {
+        if (p.id === excludeId) return;
+        if (!first || p.joinedAt < first.joinedAt || (p.joinedAt === first.joinedAt && p.id < first.id)) first = p;
+        if (!best || (p.bench || 0) > (best.bench || 0) || ((p.bench || 0) === (best.bench || 0) && p.id < best.id)) best = p;
+      });
+      if (!first) return me.id;
+      return (first.bench || 0) > 0 && (best.bench || 0) >= first.bench * 1.25 ? best.id : first.id;
+    };
   }
 
   // ---------- Výkon zařízení a volba hostitele ----------

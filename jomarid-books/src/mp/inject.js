@@ -42,7 +42,47 @@ const PRELUDE = `(function () {
       post({ op: op, id: id, args: args });
     });
   }
+  var KEYSTR = String(INIT.game) + ':' + String(INIT.match) + ':' + String(INIT.seed), bad = 0;
+  function fnv(str) { var h = 0x811C9DC5; for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; }
+  function stream(nonce) {
+    var a = fnv(KEYSTR + '|' + nonce);
+    return function () { a = (a + 0x6D2B79F5) >>> 0; var t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0); };
+  }
+  function pad(n, len) { var z = '0000000000'; var x = n.toString(36); return (z + x).slice(-len); }
+  function seal(obj) {
+    var s = JSON.stringify(obj), nonce = pad(Math.floor(Math.random() * 1679616), 4), ks = stream(nonce), out = '';
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i);
+      if (c >= 32 && c < 127) c = 32 + ((c - 32 + (ks() % 95)) % 95);
+      out += String.fromCharCode(c);
+    }
+    return nonce + pad(fnv(KEYSTR + '#' + nonce + out), 7) + out;
+  }
+  function unseal(str) {
+    try {
+      if (typeof str !== 'string' || str.length < 12) return null;
+      var nonce = str.slice(0, 4), mac = str.slice(4, 11), body = str.slice(11);
+      if (pad(fnv(KEYSTR + '#' + nonce + body), 7) !== mac) return null;
+      var ks = stream(nonce), out = '';
+      for (var i = 0; i < body.length; i++) {
+        var c = body.charCodeAt(i);
+        if (c >= 32 && c < 127) c = 32 + ((c - 32 + 95 - (ks() % 95)) % 95);
+        out += String.fromCharCode(c);
+      }
+      return JSON.parse(out);
+    } catch (e) { return null; }
+  }
   function dispatch(d) {
+    if (d.event === 'rt' && d.data && d.data.p !== undefined) {
+      var o = d.data.p && typeof d.data.p === 'object' && typeof d.data.p.q === 'string' ? unseal(d.data.p.q) : null;
+      if (o === null) {
+        bad++;
+        if (bad === 5) { var li = handlers.integrity || []; for (var k = 0; k < li.length; k++) { try { li[k]({ bad: bad }); } catch (e) {} } }
+        return;
+      }
+      var nd = {}; for (var key in d.data) nd[key] = d.data[key]; nd.p = o;
+      d = { event: d.event, data: nd };
+    }
     if (d.data && typeof d.data.offset === 'number') offset = d.data.offset;
     var list = handlers[d.event] || [];
     for (var i = 0; i < list.length; i++) { try { list[i](d.data); } catch (e) { try { console.error(e); } catch (x) {} } }
@@ -77,10 +117,11 @@ const PRELUDE = `(function () {
     close: function () { post({ op: 'close', id: 0 }); },
     rt: {
       open: function () { post({ op: 'rt-open', id: 0, args: {} }); },
-      send: function (payload, opts) { post({ op: 'rt-send', id: 0, args: { payload: payload, force: !!(opts && opts.force) } }); },
+      send: function (payload, opts) { post({ op: 'rt-send', id: 0, args: { payload: { q: seal(payload) }, force: !!(opts && opts.force) } }); },
       track: function (state) { post({ op: 'rt-track', id: 0, args: { state: state } }); },
       close: function () { post({ op: 'rt-close', id: 0 }); }
     },
+    integrity: function () { return bad; },
     serverNow: function () { return Date.now() + offset; }
   };
   Object.defineProperty(window, 'jomaridMP', { value: api, writable: false, configurable: false });
