@@ -190,6 +190,7 @@ export const MpGameScreen = ({ game, match, coins, coinsLoaded, reader, gameFx, 
   const oppOffline = active && seenAgo >= OFFLINE_AFTER_S;
   const oppGone = active && seenAgo >= GONE_AFTER_S;
   const notStarted = (view.move_count || 0) === 0;
+  const hostedLost = oppGone && !notStarted && view.kind === 'realtime';   // rychlé hry počítá jedno zařízení: když vypadne, hra skončí remízou, ne výhrou druhého
 
   const overlayCard = { backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', color: 'var(--text-body)' };
   const btn = (primary) => ({ backgroundColor: primary ? 'var(--bg-primary)' : 'var(--bg-secondary)', color: primary ? 'var(--text-primary)' : 'var(--text-body)', borderColor: 'var(--border-color)' });
@@ -205,12 +206,14 @@ export const MpGameScreen = ({ game, match, coins, coinsLoaded, reader, gameFx, 
             <WifiOff size={14} aria-hidden="true" className="shrink-0 text-amber-500" />
             {fatal ? <span>{t('Tenhle zápas se nedá dál sledovat.')}</span>
               : !connected ? <span>{t('Spojení se serverem se přerušilo, zkouším ho obnovit...')}</span>
-              : <span>{oppGone ? t('Soupeř {name} se odpojil.', { name: opp.name || '' }) : t('Soupeř {name} je offline ({n} s).', { name: opp.name || '', n: seenAgo })}</span>}
+              : <span>{oppGone ? (hostedLost ? t('Soupeř {name} měl problémy s připojením a hra běžela u něj. Zápas může skončit remízou.', { name: opp.name || '' }) : t('Soupeř {name} se odpojil.', { name: opp.name || '' })) : t('Soupeř {name} je offline ({n} s).', { name: opp.name || '', n: seenAgo })}</span>}
             {oppGone && connected && (
               <span className="flex gap-2">
                 {notStarted
                   ? <button type="button" disabled={busy} onClick={() => act(() => session.abort())} data-testid="mp-abort" style={btn(false)} className="px-2.5 py-1 rounded-lg border text-[0.625rem] font-black uppercase tracking-wider cursor-pointer disabled:opacity-60">{t('Zrušit zápas')}</button>
-                  : <button type="button" disabled={busy} onClick={() => act(() => session.report('win', 'left'))} data-testid="mp-claim" style={btn(false)} className="px-2.5 py-1 rounded-lg border text-[0.625rem] font-black uppercase tracking-wider cursor-pointer disabled:opacity-60">{t('Ukončit jako výhru')}</button>}
+                  : hostedLost
+                    ? <button type="button" disabled={busy} onClick={() => act(() => (view.team ? session.resign() : session.report('draw', 'hostlost')))} data-testid="mp-draw" style={btn(false)} className="px-2.5 py-1 rounded-lg border text-[0.625rem] font-black uppercase tracking-wider cursor-pointer disabled:opacity-60">{t('Ukončit remízou')}</button>
+                    : <button type="button" disabled={busy} onClick={() => act(() => session.report('win', 'left'))} data-testid="mp-claim" style={btn(false)} className="px-2.5 py-1 rounded-lg border text-[0.625rem] font-black uppercase tracking-wider cursor-pointer disabled:opacity-60">{t('Ukončit jako výhru')}</button>}
               </span>
             )}
             {note && <span role="alert" style={{ color: '#ef4444' }}>{note}</span>}

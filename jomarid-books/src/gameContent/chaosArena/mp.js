@@ -13,19 +13,24 @@
     pickEl.querySelector('.box').innerHTML = '<h1>Chaos Aréna</h1><p class="sub">Tahle hra běží jen online ve dvou, v appce Jomarid Books (Jomarid Online Games).</p>';
     return;
   }
-  var HOST = Number(MPI.init.slot) === 1, ME = HOST ? 0 : 1, PEER = 1 - ME;
+  var INIT_SLOT = Number(MPI.init.slot) === 1 ? 1 : 2;
+  var HOST = INIT_SLOT === 1, ME = HOST ? 0 : 1, PEER = 1 - ME;   // hostitele po výběru tříd určí výkon zařízení (negotiateRole), do té doby místo 1
   var SEED = Number(MPI.init.seed) || 0;
   var DIFFN = MPI.init.params && MPI.init.params.diff ? MPI.init.params.diff : 'normal';
   var SEND_EVERY = 50;                          // ms mezi obrazy světa od hostitele i vstupy od hosta (po 50 ms: 20 zpráv za vteřinu z každého)
   var SILENT_MS = 5000;                         // tak dlouho bez zpráv a ukáže se, že druhý neodpovídá
   var Q1 = Net.q1, Q2 = Net.q2;
 
-  var names = [HOST ? (MPI.init.me && MPI.init.me.name) || 'Ty' : (MPI.init.opponent && MPI.init.opponent.name) || 'Hostitel',
-    HOST ? (MPI.init.opponent && MPI.init.opponent.name) || 'Parťák' : (MPI.init.me && MPI.init.me.name) || 'Ty'];
-  NAMES = [String(names[0]).slice(0, 14), String(names[1]).slice(0, 14)];
+  var names = [];
+  function setNames() {
+    names = [HOST ? (MPI.init.me && MPI.init.me.name) || 'Ty' : (MPI.init.opponent && MPI.init.opponent.name) || 'Hostitel',
+      HOST ? (MPI.init.opponent && MPI.init.opponent.name) || 'Parťák' : (MPI.init.me && MPI.init.me.name) || 'Ty'];
+    NAMES = [String(names[0]).slice(0, 14), String(names[1]).slice(0, 14)];
+  }
+  setNames();
 
   var V = { phase: 'pick', myCls: -1, peerCls: -1, started: false, rep: null, mirror: null, last: 0, lastIn: 0, lastSnap: 0, seq: 0, rem: { f: 0, ax: 1, ay: 0, t: 0 }, ended: false, reported: false,
-    peerSeen: 0, open: false, error: '', note: '', lastCls: 0, endNote: '', asked: 0, ak: 1, lastGo: 0, guestIn: false };
+    myBench: 0, peerBench: 0, roleSet: false, peerSeen: 0, open: false, error: '', note: '', lastCls: 0, endNote: '', asked: 0, ak: 1, lastGo: 0, guestIn: false };
   var now = function () { return Date.now(); };
   var clamp = function (v, lo, hi) { return Math.max(lo, Math.min(hi, v)); };
 
@@ -54,13 +59,25 @@
     V.myCls = i;
     refreshPick();
     sendCls();
+    negotiateRole();
     if (HOST) maybeBegin();
   }
-  function sendCls() { if (V.myCls >= 0) send({ k: 'cls', c: V.myCls }, true); }
+  function sendCls() { if (V.myCls >= 0) send({ k: 'cls', c: V.myCls, b: V.myBench }, true); }
+  // Hostitel je silnější zařízení (zkouška výkonu se posílá s volbou třídy; obě strany mají obě čísla, takže rozhodnou stejně). Mění se jen před začátkem hry.
+  function negotiateRole() {
+    if (V.roleSet || V.started || V.myCls < 0 || V.peerCls < 0) return;
+    if (!(V.peerBench > 0)) V.peerBench = 0;       // soupeř starší verze bez zkoušky: zůstává hostitelem místo 1
+    var s1 = INIT_SLOT === 1 ? V.myBench : V.peerBench, s2 = INIT_SLOT === 1 ? V.peerBench : V.myBench;
+    HOST = Net.pickHostSlot(s1, s2) === INIT_SLOT;
+    ME = HOST ? 0 : 1; PEER = 1 - ME;
+    setNames();
+    V.roleSet = true;
+    V.hostInfo = HOST ? 'Hostitelem jsi ty (silnější zařízení nebo místo 1).' : 'Hostitelem je ' + names[PEER] + ' (silnější zařízení).';
+  }
   function refreshPick() {
     var btns = document.querySelectorAll('#classes button');
     for (var i = 0; i < btns.length; i++) btns[i].setAttribute('aria-pressed', String(i === V.myCls));
-    var note = V.error || (V.myCls < 0 ? 'Vyber si třídu.' : V.peerCls < 0 ? 'Vybráno. Čekám, až si vybere parťák ' + names[PEER] + '…' : 'Oba máte vybráno, začínáme…');
+    var note = V.error || (V.myCls < 0 ? 'Vyber si třídu.' : V.peerCls < 0 ? 'Vybráno. Čekám, až si vybere parťák ' + names[PEER] + '…' : 'Oba máte vybráno, začínáme…' + (V.hostInfo ? ' ' + V.hostInfo : ''));
     if (!V.open && !V.error) note = 'Připojuji se…';
     document.getElementById('pickNote').textContent = note;
   }
@@ -68,7 +85,8 @@
   // ---------- Začátek ----------
   // Hostitel začne, jakmile zná obě třídy. Posílá hostovi úvodní zprávu s rozložením arény; host ji opakovaně dostává, dokud hra nezačne.
   function maybeBegin() {
-    if (!HOST || V.started || V.myCls < 0 || V.peerCls < 0) return;
+    negotiateRole();
+    if (!HOST || !V.roleSet || V.started || V.myCls < 0 || V.peerCls < 0) return;
     var cl = HOST ? [V.myCls, V.peerCls] : [V.peerCls, V.myCls];
     V.ak = 1 + (Math.abs(SEED) % 3);
     simStart({ diff: DIFFN, classes: cl, arena: V.ak });
@@ -295,7 +313,8 @@
   // ---------- Smyčka ----------
   var last = performance.now();
   function loop(t) {
-    var dt = Math.min(0.05, (t - last) / 1000); last = t;
+    var raw = (t - last) / 1000; var dt = Math.min(0.05, raw); last = t;
+    if (V.started && HOST) { V.slowAvg = (V.slowAvg || 0.0167) * 0.97 + Math.min(raw, 0.5) * 0.03; V.slow = V.slowAvg > 0.045; }   // výpočet světa běží u tebe: pod zhruba 22 snímků za vteřinu to druhý hráč pozná
     if (V.started && !V.ended) {
       var inp = readInput();
       INP[ME].x = inp.x; INP[ME].y = inp.y; INP[ME].f = inp.f; INP[ME].aim = inp.aim;
@@ -304,7 +323,7 @@
         hostSend();
         if (!V.guestIn && now() - V.lastGo > 700) sendGo();   // úvodní zpráva se opakuje, dokud se host neozve vstupem (zpráva v reálném čase se může ztratit)
         if (state === 'won') finish(true, 'waves'); else if (state === 'over') finish(false, 'wipe');
-        if (V.peerSeen && now() - V.peerSeen > SILENT_MS) V.note = 'Parťák ' + names[PEER] + ' neodpovídá…'; else V.note = '';
+        if (V.peerSeen && now() - V.peerSeen > SILENT_MS) V.note = 'Parťák ' + names[PEER] + ' neodpovídá…'; else V.note = V.slow ? 'Tvoje zařízení je pod zátěží, parťák může mít zpoždění.' : '';
       } else {
         guestMove(dt); guestFx(dt); rebuild(); sendInput(false);
         if (now() - V.lastSnap > SILENT_MS) V.note = 'Hostitel ' + names[PEER] + ' neodpovídá. Jeho okno musí zůstat otevřené a viditelné.'; else V.note = '';
@@ -326,6 +345,8 @@
     V.peerSeen = now();
     if (p.k === 'cls') {
       V.peerCls = clamp(p.c | 0, 0, CLS.length - 1);
+      if (typeof p.b === 'number' && isFinite(p.b) && p.b > 0) V.peerBench = Math.min(p.b, 1e9);
+      negotiateRole();
       if (HOST) maybeBegin();
       else refreshPick();
       return;
@@ -337,6 +358,7 @@
     if (p.k === 'end' && !HOST) { if (!V.ended && V.started) finish(p.w === 1, p.w === 1 ? 'waves' : 'wipe'); return; }
   }
 
+  V.myBench = Net.bench();
   buildPick();
   MPI.on('rt', function (d) { onMessage(d && d.p); });
   MPI.on('rt-status', function (d) {

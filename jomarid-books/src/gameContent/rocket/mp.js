@@ -25,7 +25,8 @@
   var MODE = MP.init.mode === 'pvp' ? 'pvp' : 'coop';
   var SEED = Number(MP.init.seed) || 0;
   var Net = window.JomaridNet;
-  var HOST = Number(MP.init.slot) === 1;      // hostitel společného světa je hráč na místě 1
+  var INIT_SLOT = Number(MP.init.slot) === 1 ? 1 : 2;
+  var HOST = INIT_SLOT === 1;                 // hostitel společného světa: nejdřív hráč na místě 1, před začátkem hry ho určí výkon zařízení (negotiateHost)
   var SHARED = MODE === 'coop' && !!Net;      // spolupráce počítá bojiště na jednom místě
   var BOSS_TIMES = [60000, 150000, 255000];   // spolupráce: kdy přiletí bossové (společný čas od startu)
   var BOSS_TARGET = BOSS_TIMES.length;        // kolik bossů musí padnout
@@ -33,7 +34,7 @@
   var COUNTDOWN_MS = 8000;                    // od založení zápasu do nejdřívějšího startu
   var JOIN_TIMEOUT = 30000;                   // tak dlouho se čeká na druhého hráče
 
-  var V = { started: false, startAt: 0, lastHi: 0, mine: 0, theirs: 0, ready: false, open: false, sent: 0, lastSend: 0, seq: 0, fire: [], samples: [], ended: null, dead: false,
+  var V = { myBench: (Net && Net.bench) ? Net.bench() : 0, peerBench: 0, roleSet: false, started: false, startAt: 0, lastHi: 0, mine: 0, theirs: 0, ready: false, open: false, sent: 0, lastSend: 0, seq: 0, fire: [], samples: [], ended: null, dead: false,
     bosses: 0, bossIdx: 0, spawned: 0, schedule: null, created: 0, idSeq: 0, rep: null, mirror: null, ship: null, peerIn: null, peerInput: null, lastSnap: 0, lastIn: 0, lastAsk: 0, hostSeen: 0, peer: { seen: 0, hp: 100, maxHp: 100, dead: false, shield: 0, triple: 0, rapid: 0, seq: -1 }, error: '' };
 
   // ---------- Pomocné funkce (bez závislosti na hře, jdou zkoušet samostatně) ----------
@@ -191,7 +192,8 @@
     if (!p || typeof p !== 'object') return;
     if (p.k === 'hi') {
       V.peerHi = Number(p.p) || 0; V.peerLive = !!p.live;
-      if (V.started) send({ k: 'hi', p: V.startAt, live: 1 }, true);
+      if (typeof p.b === 'number' && isFinite(p.b) && p.b > 0) V.peerBench = Math.min(p.b, 1e9);
+      if (V.started) send({ k: 'hi', p: V.startAt, live: 1, b: V.myBench }, true);
       else maybeStart();
       return;
     }
@@ -227,8 +229,16 @@
   }
 
   // ---------- Začátek ----------
+  // Společný svět počítá silnější zařízení (zkouška výkonu se posílá se zprávou hi; obě strany mají obě čísla, takže rozhodnou stejně). Mění se jen před začátkem hry.
+  function negotiateHost() {
+    if (!SHARED || V.roleSet || V.started || !Net.pickHostSlot) return;
+    var s1 = INIT_SLOT === 1 ? V.myBench : V.peerBench, s2 = INIT_SLOT === 1 ? V.peerBench : V.myBench;
+    HOST = Net.pickHostSlot(s1, s2) === INIT_SLOT;
+    V.roleSet = true;
+  }
   function maybeStart() {
     if (V.started || V.ended || !V.open || !V.mine) return;
+    if (V.peerHi) negotiateHost();
     // už rozehraná hra druhého hráče: připojím se do jejího času
     if (V.peerLive && V.peerHi) { begin(V.peerHi); return; }
     if (!V.peerHi) return;
@@ -762,7 +772,7 @@
         if (Date.now() - V.joinStart > JOIN_TIMEOUT && !V.peerHi) { V.error = 'Soupeř se nepřipojil.'; }
       }
       // vzkaz „jsem tu a chci začít v tomhle čase“ se opakuje, dokud hra nezačne (zpráva v reálném čase se může ztratit)
-      if (V.open && V.mine && Date.now() - V.lastHi > 400) { V.lastHi = Date.now(); send({ k: 'hi', p: V.mine }, true); }
+      if (V.open && V.mine && Date.now() - V.lastHi > 400) { V.lastHi = Date.now(); send({ k: 'hi', p: V.mine, b: V.myBench }, true); }
       return;
     }
     sendState(false);
