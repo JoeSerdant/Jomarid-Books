@@ -51,7 +51,7 @@ function snd(f,d=.12,ty='sine',v=.08){try{if(S.mute)return;window.ac=window.ac||
 const SUB=5,DT=.3,GR=.035,KR=1.6,KS=.9,KO=.5,CD=.07,KP=3.5,KM=.0015,CS=8/NP,DMP=.999**DT,COR=.5*CS,ch=g=>2*Math.sin(g*Math.PI/NP),SP=[],CH1=ch(1),CO=[],SN=[];
 for(let i=0;i<NP;i++){CO.push(Math.cos(i/NP*6.2832));SN.push(Math.sin(i/NP*6.2832))}
 for(let i=0;i<NP;i++){SP.push([i,(i+1)%NP,KR,ch(1)],[i,(i+2)%NP,KS,ch(2)]);if(i<NP/2)SP.push([i,i+NP/2,KO,2])}
-const mk=(x,y,t,k=1)=>{const r=RAD[t],R=r*.88,b={x,y,vx:0,vy:0,t,r,R,pr:r*.12,m:(r/30)**2,rr:r,age:0,ph:Math.random()*6.3,A0:.5*NP*R*R*Math.sin(6.2832/NP),P:[]};for(let i=0;i<NP;i++){const a=i/NP*6.2832;b.P.push({x:x+Math.cos(a)*R*k,y:y+Math.sin(a)*R*k,vx:0,vy:0})}return b};
+const mk=(x,y,t,k=1)=>{const r=RAD[t],R=r*.7,b={x,y,vx:0,vy:0,t,r,R,pr:r*.3,m:(r/30)**2,rr:r,age:0,ph:Math.random()*6.3,A0:.5*NP*R*R*Math.sin(6.2832/NP),P:[]};for(let i=0;i<NP;i++){const a=i/NP*6.2832;b.P.push({x:x+Math.cos(a)*R*k,y:y+Math.sin(a)*R*k,vx:0,vy:0})}return b};
 const cl=b=>({...b,P:b.P.map(p=>({...p}))});
 const bowl={sq:0,vs:0,r:0,vr:0},kick=p=>{bowl.vs+=p*.004;bowl.vr+=(Math.random()-.5)*p*.003};
 function soft(b){const P=b.P,R=b.R;
