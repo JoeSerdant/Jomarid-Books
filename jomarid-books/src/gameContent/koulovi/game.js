@@ -64,11 +64,22 @@ function soft(b){const P=b.P,R=b.R;
 function wall(p,rad,x0,y0,x1,y1,b){const dx=x1-x0,dy=y1-y0,t=clamp(((p.x-x0)*dx+(p.y-y0)*dy)/(dx*dx+dy*dy),0,1),ex=p.x-x0-dx*t,ey=p.y-y0-dy*t,d=Math.hypot(ex,ey)||.01,m=rad+16;
  if(d<m){const nx=ex/d,ny=ey/d,vn=p.vx*nx+p.vy*ny;p.x+=nx*(m-d);p.y+=ny*(m-d);if(vn<0){p.vx-=vn*nx*1.5;p.vy-=vn*ny*1.5;const vt=p.vx*-ny+p.vy*nx;p.vx-=-ny*vt*.1;p.vy-=nx*vt*.1;if(vn<-2.5)kick(-vn*b.r*.004)}}}
 function nearWall(b,[x0,y0,x1,y1]){const dx=x1-x0,dy=y1-y0,t=clamp(((b.x-x0)*dx+(b.y-y0)*dy)/(dx*dx+dy*dy),0,1),ex=b.x-x0-dx*t,ey=b.y-y0-dy*t,m=b.r*1.5+b.pr+24;return ex*ex+ey*ey<m*m}
+// Povrch koule je neprůchodný: bod jedné koule, který by se dostal dovnitř obrysu druhé, se vytlačí zpátky k nejbližší hraně (hrana se přitom posune naproti) a ztratí rychlost směrem dovnitř.
+function pip(P,x,y){let c=false;for(let i=0,j=NP-1;i<NP;j=i++){const u=P[i],v=P[j];if((u.y>y)!==(v.y>y)&&x<(v.x-u.x)*(y-u.y)/(v.y-u.y)+u.x)c=!c}return c}
+function sink(a,b,wa,wb){const P=b.P;
+ for(const p of a.P){if(!pip(P,p.x,p.y))continue;
+  let bd=1e18,bi=0,bt=0,qx=0,qy=0;
+  for(let i=0;i<NP;i++){const u=P[i],v=P[(i+1)%NP],ex=v.x-u.x,ey=v.y-u.y,l2=ex*ex+ey*ey||.01,t=clamp(((p.x-u.x)*ex+(p.y-u.y)*ey)/l2,0,1),x=u.x+ex*t,y=u.y+ey*t,d=(x-p.x)**2+(y-p.y)**2;if(d<bd){bd=d;bi=i;bt=t;qx=x;qy=y}}
+  const dist=Math.sqrt(bd)||.01,nx=(qx-p.x)/dist,ny=(qy-p.y)/dist,ov=dist+.6,u=P[bi],v=P[(bi+1)%NP];
+  p.x+=nx*ov*wa;p.y+=ny*ov*wa;u.x-=nx*ov*wb*(1-bt);u.y-=ny*ov*wb*(1-bt);v.x-=nx*ov*wb*bt;v.y-=ny*ov*wb*bt;
+  const evx=u.vx*(1-bt)+v.vx*bt,evy=u.vy*(1-bt)+v.vy*bt,vn=(p.vx-evx)*nx+(p.vy-evy)*ny;
+  if(vn<0){const k=-vn*1.2;p.vx+=nx*k*wa;p.vy+=ny*k*wa;u.vx-=nx*k*wb*(1-bt);u.vy-=ny*k*wb*(1-bt);v.vx-=nx*k*wb*bt;v.vy-=ny*k*wb*bt}}}
 function coll(a,b){const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy),m=a.r+b.r;if(d>m*1.3)return;
  if(a.t===b.t&&a.t<11&&d>m*.95){const f=.012/d*DT;for(const p of a.P){p.vx+=dx*f;p.vy+=dy*f}for(const p of b.P){p.vx-=dx*f;p.vy-=dy*f}}
  const ia=1/a.m,ib=1/b.m,wa=ia/(ia+ib),wb=1-wa,rr=a.pr+b.pr;
  const la=(b.r*1.4+rr)**2,lb=(a.r*1.4+rr)**2,qs=b.P.filter(q=>(q.x-a.x)**2+(q.y-a.y)**2<=la);
- for(const p of a.P){if((p.x-b.x)**2+(p.y-b.y)**2>lb)continue;for(const q of qs){const ex=q.x-p.x,ey=q.y-p.y,e2=ex*ex+ey*ey;if(e2<rr*rr){const e=Math.sqrt(e2)||.01,nx=ex/e,ny=ey/e,ov=(rr-e)*COR;p.x-=nx*ov*wa;p.y-=ny*ov*wa;q.x+=nx*ov*wb;q.y+=ny*ov*wb;const vn=(q.vx-p.vx)*nx+(q.vy-p.vy)*ny;if(vn<0){const j=-1.5*CS*vn/(ia+ib);p.vx-=j*ia*nx;p.vy-=j*ia*ny;q.vx+=j*ib*nx;q.vy+=j*ib*ny}}}}}
+ for(const p of a.P){if((p.x-b.x)**2+(p.y-b.y)**2>lb)continue;for(const q of qs){const ex=q.x-p.x,ey=q.y-p.y,e2=ex*ex+ey*ey;if(e2<rr*rr){const e=Math.sqrt(e2)||.01,nx=ex/e,ny=ey/e,ov=(rr-e)*COR;p.x-=nx*ov*wa;p.y-=ny*ov*wa;q.x+=nx*ov*wb;q.y+=ny*ov*wb;const vn=(q.vx-p.vx)*nx+(q.vy-p.vy)*ny;if(vn<0){const j=-1.5*CS*vn/(ia+ib);p.vx-=j*ia*nx;p.vy-=j*ia*ny;q.vx+=j*ib*nx;q.vy+=j*ib*ny}}}}
+ if(d<m*1.05){sink(a,b,wa,wb);sink(b,a,wb,wa)}}
 function cm(b){let x=0,y=0,vx=0,vy=0;for(const p of b.P){x+=p.x;y+=p.y;vx+=p.vx;vy+=p.vy}b.x=x/NP;b.y=y/NP;b.vx=vx/NP;b.vy=vy/NP;let r=0;for(const p of b.P)r+=Math.hypot(p.x-b.x,p.y-b.y);b.rr=r/NP+b.pr*.92}
 function start(m='classic'){const day=new Date().toISOString().slice(0,10);if(!S.days.includes(day))S.days=[...S.days,day].slice(-400);if(m!=='daily')S.modes[m]=1;g={mode:m,f:0,cT:999,cb:0,t:5400,left:30,balls:[],score:0,cur:0,next:0,cG:0,nG:0,gn:0,gr:0,aimX:W/2,aiming:false,cool:0,overT:0,merges:0,snap:null,pp:[],pt:[],rg:[],disc:null,tgt:false,gain:null,rim:0,rimB:0};if(m==='daily'){g.rs=dseed(today());g.day=today()}g.cur=rnd(m);g.next=rnd(m);st='play';$('modes').classList.add('hide');$('menu').classList.add('hide');$('over').classList.add('hide')}
 function finish(nat){if(g.mode==='mp'){mpFinish();return}if(st==='over')return;S.run=null;const v=g.balls.reduce((s,b)=>s+CV[b.t],0);if(g.gain==null){g.gain=g.mode==='zen'?0:nat?v:v>>2;earn(g.gain)}st='over';snd(120,.5,'sawtooth',.07);$('oT').textContent=g.cashed?'Vybráno!':g.mode==='time'?'Čas vypršel!':g.mode==='drops'?'Hody došly!':'Koule vypadla!';if(g.score>0){S.log.push([Date.now(),g.score]);S.log=S.log.slice(-200)}if(g.mode==='daily'){if(S.dc.d!==today())S.dc={d:today(),best:0,n:0,paid:0};S.dc.n++}const nb=g.mode==='daily'?daily(g.score):bump(g.mode,g.score);S.best=Math.max(S.best,g.score);S.games++;S.merges+=g.merges;trk('games_played');if(nat&&g.mode==='time')trk('time_runs_completed');if(nat&&g.mode==='drops')trk('drops_runs_completed');trkMax('longest_game_min',Math.floor(g.f/3600));if(!g.used&&g.mode!=='zen')trkMax('no_item_score',g.score);save();
