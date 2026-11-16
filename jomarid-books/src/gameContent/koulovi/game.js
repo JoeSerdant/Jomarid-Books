@@ -48,10 +48,10 @@ const rnd=m=>{const a=m==='chaos'?[0,1,1,2,2,3,4,5]:[0,0,0,1,1,2,3];return a[(m=
 const GOLD={p:.04,max:3,jc:4,coins:25};
 const goldRoll=()=>g.mode!=='zen'&&g.mode!=='daily'&&g.mode!=='mp'&&g.gn<GOLD.max&&!g.cG&&!g.nG&&!g.balls.some(b=>b.gold)&&Math.random()<GOLD.p?(g.gn++,1):0;
 function snd(f,d=.12,ty='sine',v=.08){try{if(S.mute)return;window.ac=window.ac||new(window.AudioContext||window.webkitAudioContext)();const a=window.ac,o=a.createOscillator(),gn=a.createGain();o.type=ty;o.frequency.value=f;gn.gain.setValueAtTime(v,a.currentTime);gn.gain.exponentialRampToValueAtTime(.001,a.currentTime+d);o.connect(gn);gn.connect(a.destination);o.start();o.stop(a.currentTime+d)}catch(e){}}
-const SUB=5,DT=.3,GR=.035,KR=1.6,KS=.9,KO=.5,CD=.07,KP=3.5,KM=.0015,CS=8/NP,DMP=.999**DT,COR=.5*CS,ch=g=>2*Math.sin(g*Math.PI/NP),SP=[],CH1=ch(1),CO=[],SN=[];
+const SUB=5,DT=.3,GR=.035,KR=1.6,KS=.9,KO=.9,CD=.07,KP=2,KM=.0015,CS=8/NP,DMP=.999**DT,COR=.5*CS,ch=g=>2*Math.sin(g*Math.PI/NP),SP=[],CH1=ch(1),CO=[],SN=[];
 for(let i=0;i<NP;i++){CO.push(Math.cos(i/NP*6.2832));SN.push(Math.sin(i/NP*6.2832))}
 for(let i=0;i<NP;i++){SP.push([i,(i+1)%NP,KR,ch(1)],[i,(i+2)%NP,KS,ch(2)]);if(i<NP/2)SP.push([i,i+NP/2,KO,2])}
-const mk=(x,y,t,k=1)=>{const r=RAD[t],R=r*.88,b={x,y,vx:0,vy:0,t,r,R,pr:r*.12,m:(r/30)**2,rr:r,age:0,ph:Math.random()*6.3,A0:.5*NP*R*R*Math.sin(6.2832/NP),P:[]};for(let i=0;i<NP;i++){const a=i/NP*6.2832;b.P.push({x:x+Math.cos(a)*R*k,y:y+Math.sin(a)*R*k,vx:0,vy:0})}return b};
+const mk=(x,y,t,k=1)=>{const r=RAD[t],R=r*.6,b={x,y,vx:0,vy:0,t,r,R,pr:r*.4,m:(r/30)**2,rr:r,age:0,ph:Math.random()*6.3,A0:.5*NP*R*R*Math.sin(6.2832/NP),P:[]};for(let i=0;i<NP;i++){const a=i/NP*6.2832;b.P.push({x:x+Math.cos(a)*R*k,y:y+Math.sin(a)*R*k,vx:0,vy:0})}return b};
 const cl=b=>({...b,P:b.P.map(p=>({...p}))});
 const bowl={sq:0,vs:0,r:0,vr:0},kick=p=>{bowl.vs+=p*.004;bowl.vr+=(Math.random()-.5)*p*.003};
 function soft(b){const P=b.P,R=b.R;
