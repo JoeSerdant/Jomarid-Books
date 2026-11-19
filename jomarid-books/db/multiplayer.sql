@@ -95,7 +95,7 @@ create or replace function public.mp_cfg(p_game text, p_mode text)
 returns jsonb language sql immutable set search_path to 'public' as $$
   select case p_game || '/' || p_mode
     when 'chess/duel'         then jsonb_build_object('kind', 'turn',     'turn_seconds', 0,   'bank', 300, 'inc', 3, 'first_move', 60, 'reward', 30, 'min_moves', 10, 'min_seconds', 45,  'max_payload', 400,   'max_moves', 700,  'team', false)
-    when 'koulovikamosi/duel' then jsonb_build_object('kind', 'turn',     'turn_seconds', 60,  'bank', 0,   'inc', 0, 'first_move', 60, 'reward', 20, 'min_moves', 6,  'min_seconds', 30,  'max_payload', 16000, 'max_moves', 400,  'team', false)
+    when 'koulovikamosi/duel' then jsonb_build_object('kind', 'turn',     'turn_seconds', 60,  'bank', 0,   'inc', 0, 'first_move', 60, 'reward', 20, 'min_moves', 6,  'min_seconds', 30,  'max_payload', 60000, 'max_moves', 400,  'team', false)
     when 'warroom/duel'       then jsonb_build_object('kind', 'turn',     'turn_seconds', 120, 'bank', 0,   'inc', 0, 'first_move', 90, 'reward', 35, 'min_moves', 4,  'min_seconds', 40,  'max_payload', 16000, 'max_moves', 900,  'team', false)
     when 'hannibal/duel'      then jsonb_build_object('kind', 'turn',     'turn_seconds', 180, 'bank', 0,   'inc', 0, 'first_move', 90, 'reward', 40, 'min_moves', 4,  'min_seconds', 30,  'max_payload', 16000, 'max_moves', 1500, 'team', false)
     when 'cityclicker/race'   then jsonb_build_object('kind', 'race',     'turn_seconds', 0,   'bank', 0,   'inc', 0, 'first_move', 0,  'reward', 40, 'min_moves', 0,  'min_seconds', 38,  'max_payload', 600,   'max_moves', 0,    'team', false, 'target', 10000000000)
@@ -906,11 +906,11 @@ begin
         v_prev_len := coalesce(v_prev_len, 0);
         -- po hodu přibude nejvýš jedna koule (spojováním jich ubývá); víc než 160 se do misky nevejde
         if v_len < 1 or v_len > 160 or v_len > v_prev_len + 1 then raise exception 'illegal_move'; end if;
-        -- každá koule: [typ, fáze, 8 bodů těla x, y]
+        -- každá koule: [typ, fáze, body obalu x, y]: 8 bodů (stará hra, 18 čísel) nebo 26 bodů (současná hra, 54 čísel)
         for v_i in 0..(v_len - 1) loop
           v_ball := (p_payload -> 'b') -> v_i;
-          if jsonb_typeof(v_ball) <> 'array' or jsonb_array_length(v_ball) <> 18 or not public.mp_int_in(v_ball -> 0, 0, 11) or not public.mp_num_in(v_ball -> 1, -1000, 1000) then raise exception 'illegal_move'; end if;
-          for v_n in 2..17 loop
+          if jsonb_typeof(v_ball) <> 'array' or jsonb_array_length(v_ball) not in (18, 54) or not public.mp_int_in(v_ball -> 0, 0, 11) or not public.mp_num_in(v_ball -> 1, -1000, 1000) then raise exception 'illegal_move'; end if;
+          for v_n in 2..(jsonb_array_length(v_ball) - 1) loop
             if not public.mp_num_in(v_ball -> v_n, -100, case when v_n % 2 = 0 then 640 else 1060 end) then raise exception 'illegal_move'; end if;   -- x je na sudých místech, y na lichých
           end loop;
         end loop;
