@@ -203,7 +203,7 @@ select tt.fails(tt.who((select id from t_k), 1), format($$select public.mp_move(
 select tt.fails(tt.who((select id from t_k), 1), format($$select public.mp_move(%L, 0, '{"a":1}')$$, (select id from t_k)), 'bad_seq', 'tah s nulovým číslem se odmítne');
 select tt.fails(tt.who((select id from t_k), 1), format($$select public.mp_move(%L, 1, null)$$, (select id from t_k)), 'invalid_payload', 'prázdný obsah tahu se odmítne');
 select tt.fails(tt.who((select id from t_k), 1), format($$select public.mp_move(%L, 1, 'true'::jsonb)$$, (select id from t_k)), 'invalid_payload', 'ani pravda nepravda jako tah');
-select tt.fails(tt.who((select id from t_k), 1), format($$select public.mp_move(%L, 1, to_jsonb(repeat('x', 17000)))$$, (select id from t_k)), 'too_large', 'příliš velká zpráva se odmítne');
+select tt.fails(tt.who((select id from t_k), 1), format($$select public.mp_move(%L, 1, to_jsonb(repeat('x', 61000)))$$, (select id from t_k)), 'too_large', 'příliš velká zpráva se odmítne');
 select tt.fails(12, format($$select public.mp_move(%L, 1, '{"a":1}')$$, (select id from t_k)), 'not_in_match', 'cizí hráč do zápasu netáhne');
 select tt.fails(12, format($$select public.mp_state(%L)$$, (select id from t_k)), 'not_in_match', 'cizí hráč zápas nepřečte');
 select tt.fails(12, format($$select public.mp_report(%L, 'win')$$, (select id from t_k)), 'not_in_match', 'cizí hráč nehlásí výsledek');
@@ -770,8 +770,8 @@ begin
   perform tt.fails(n, format($q$select public.mp_move(%L, %s, %L::jsonb, %L)$q$, mid, s, p_payload::text, e), 'illegal_move', msg);
 end $$;
 -- Koule do misky: [typ, fáze, osm bodů x, y]
-create or replace function tt.ball(t int, x numeric default 200) returns jsonb language sql immutable as $$
-  select jsonb_build_array(t, 0.5) || (select jsonb_agg(v order by i, j) from (select i, j, case when j = 0 then x + i else 500 end as v from generate_series(0, 7) i, generate_series(0, 1) j) q)
+create or replace function tt.ball(t int, x numeric default 200, np int default 8) returns jsonb language sql immutable as $$
+  select jsonb_build_array(t, 0.5) || (select jsonb_agg(v order by i, j) from (select i, j, case when j = 0 then x + i else 500 end as v from generate_series(0, np - 1) i, generate_series(0, 1) j) q)
 $$;
 grant execute on all functions in schema tt to public;
 select tt.ok(jsonb_array_length(tt.ball(0)) = 18, 'zkušební koule má 18 čísel');
@@ -791,13 +791,15 @@ select tt.xfail((select id from t_k1), jsonb_build_object('r', 1, 'k', 0, 'b', j
 select tt.xfail((select id from t_k1), jsonb_build_object('r', 1, 'k', 0, 'b', jsonb_build_array(jsonb_build_array(0, 1, 2, 3))), 'koule se špatným počtem čísel se odmítne', true);
 select tt.xfail((select id from t_k1), jsonb_build_object('r', 1, 'k', 0, 'b', jsonb_build_array(tt.ball(99))), 'koule neznámého typu se odmítne', true);
 select tt.xfail((select id from t_k1), jsonb_build_object('r', 1, 'k', 0, 'b', jsonb_build_array(jsonb_set(tt.ball(0), '{4}', '99999'))), 'koule daleko mimo misku se odmítne', true);
+select tt.xfail((select id from t_k1), jsonb_build_object('r', 1, 'k', 0, 'b', jsonb_build_array(tt.ball(0, 200, 9))), 'koule s jiným počtem bodů obalu než 8 nebo 26 se odmítne', true);
+select tt.ok(jsonb_array_length(tt.ball(0, 200, 26)) = 54, 'zkušební koule s 26 body má 54 čísel');
 select tt.xfail((select id from t_k1), '{"r":1,"k":0,"b":"nic"}'::jsonb, 'stav misky, který není seznam, se odmítne', true);
 select tt.xfail((select id from t_k1), '{"r":1,"k":0,"b":[]}'::jsonb, 'prázdná miska po hodu je nemožná', true);
 select tt.xfail((select id from t_k1), '{"r":1,"k":0,"out":2}'::jsonb, 'vypadnutí koule se hlásí jen jako out: 1', true);
 create temp table t_k1t as select turn from public.mp_matches where id = (select id from t_k1);
 select tt.ok(tt.xmv((select id from t_k1), jsonb_build_object('r', 1, 'k', 0, 'b', jsonb_build_array(tt.ball(0))), true) ->> 'turn' = (3 - (select turn from t_k1t))::text, 'platný stav misky předá tah soupeři');
 select tt.ok(tt.xmv((select id from t_k1), jsonb_build_object('d', 1, 'k', 1, 'x', 250.5, 't', public.mp_koulovi_type((select seed from t_k1s), 1)), false) ->> 'ok' = 'true', 'soupeř hází druhou koulí v pořadí');
-select tt.ok(tt.xmv((select id from t_k1), jsonb_build_object('r', 1, 'k', 1, 'b', jsonb_build_array(tt.ball(0), tt.ball(1, 300))), true) ->> 'ok' = 'true', 'a po jeho hodu jsou v misce dvě koule');
+select tt.ok(tt.xmv((select id from t_k1), jsonb_build_object('r', 1, 'k', 1, 'b', jsonb_build_array(tt.ball(0, 200, 26), tt.ball(1, 300, 26))), true) ->> 'ok' = 'true', 'a po jeho hodu jsou v misce dvě koule (26 bodů obalu, jak je posílá současná hra)');
 select tt.ok(tt.xmv((select id from t_k1), jsonb_build_object('d', 1, 'k', 2, 'x', 250, 't', public.mp_koulovi_type((select seed from t_k1s), 2)), false) ->> 'ok' = 'true', 'pořadí koulí pokračuje (třetí hod)');
 select tt.xfail((select id from t_k1), jsonb_build_object('r', 1, 'k', 2, 'b', jsonb_build_array(tt.ball(0), tt.ball(1, 300), tt.ball(1, 100), tt.ball(2, 400))), 'ze dvou koulí po hodu nemůžou být čtyři', true);
 select tt.ok(tt.xmv((select id from t_k1), '{"r":1,"k":2,"out":1}'::jsonb, true) ->> 'ok' = 'true', 'vypadnutí koule se ohlásí jako out');
