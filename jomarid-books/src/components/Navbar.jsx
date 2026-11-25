@@ -148,7 +148,7 @@ export const Navbar = ({ onOpenSearch }) => {
             className="col-start-1 row-start-1 h-14 sm:h-16 no-underline flex items-center gap-2 group"
           >
             <div style={{ color: 'var(--text-primary)' }} className="app-logo w-8 h-8 rounded-lg bg-[var(--bg-primary)] flex items-center justify-center font-black shadow-sm group-hover:scale-105 transition-transform">
-              <LogoMark size={22} />
+              <LogoMark size={20} />
             </div>
             <span 
               translate="no"
