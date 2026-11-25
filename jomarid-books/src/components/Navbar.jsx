@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { LogoMark } from './LogoMark';
 import { supabase } from '../lib/supabase';
 import { ROLE_READER, ROLE_PUBLISHER, ROLE_ADMIN, ROLE_LABELS } from '../constants/roles';
 import { Award, BarChart3, Coins, Compass, Gamepad2, Layers, Library, LogOut, Search, Settings, Shield } from 'lucide-react';
@@ -147,7 +148,7 @@ export const Navbar = ({ onOpenSearch }) => {
             className="col-start-1 row-start-1 h-14 sm:h-16 no-underline flex items-center gap-2 group"
           >
             <div style={{ color: 'var(--text-primary)' }} className="app-logo w-8 h-8 rounded-lg bg-[var(--bg-primary)] flex items-center justify-center font-black shadow-sm group-hover:scale-105 transition-transform">
-              J
+              <LogoMark size={22} />
             </div>
             <span 
               translate="no"
