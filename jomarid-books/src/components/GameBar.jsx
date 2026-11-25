@@ -1,4 +1,4 @@
-import { X, Coins, BookOpen, CloudOff } from 'lucide-react';
+import { X, Coins, BookOpen, CloudOff, Music, VolumeX } from 'lucide-react';
 import { SAVE_CHIPS } from '../gameSave/messages';
 import { t, formatNumber } from '../i18n';
 
@@ -9,7 +9,7 @@ import { t, formatNumber } from '../i18n';
 //   flash: { id, text, label, warn } - krátké potvrzení (odměna nebo poznámka o limitu), nebo null
 //   saveStatus: 'failing' | 'offline' | 'conflict' | 'rejected' - postup se právě neukládá na server (štítek v liště, dokud to trvá), jinak null.
 //   „offline“ není chyba (postup je v zařízení a odešle se po připojení), proto má klidnější barvu.
-export const GameBar = ({ title, onClose, coins, coinsLoaded, level, levelName, flash, saveStatus }) => (
+export const GameBar = ({ title, onClose, coins, coinsLoaded, level, levelName, flash, saveStatus, music }) => (
   <div
     data-testid="game-bar"
     style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-body)', paddingTop: 'var(--sat)', paddingRight: 'var(--sar)', borderColor: 'var(--border-color)' }}
@@ -53,6 +53,20 @@ export const GameBar = ({ title, onClose, coins, coinsLoaded, level, levelName, 
           <Coins size={13} className="text-amber-500 fill-amber-500/20" aria-hidden="true" />
           <span>{formatNumber(coins)}</span>
         </span>
+      )}
+      {music && (
+        <button
+          type="button"
+          onClick={music.toggle}
+          data-testid="game-bar-music"
+          aria-pressed={music.on}
+          title={music.on ? t('Vypnout hudbu') : t('Zapnout hudbu')}
+          aria-label={music.on ? t('Vypnout hudbu') : t('Zapnout hudbu')}
+          style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-body)', borderColor: 'var(--border-color)' }}
+          className="w-9 h-9 shrink-0 rounded-xl cursor-pointer border flex items-center justify-center [@media(orientation:landscape)_and_(max-height:500px)]:order-1"
+        >
+          {music.on ? <Music size={16} /> : <VolumeX size={16} />}
+        </button>
       )}
       <button
         onClick={onClose}

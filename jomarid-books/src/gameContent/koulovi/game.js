@@ -8,7 +8,7 @@ let S;try{S=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){}
 S=S&&typeof S==='object'&&!Array.isArray(S)?S:{best:0,games:0,merges:0,log:[]};S.bm=S.bm||{};S.mute=S.mute||0;S.coins=S.coins||0;S.disc=S.disc||0;S.inv=S.inv||{undo:1,shake:1,pop:1,hit:1};
 S.st=S.st&&typeof S.st==='object'?S.st:{};S.days=Array.isArray(S.days)?S.days:[];S.modes=S.modes&&typeof S.modes==='object'?S.modes:{};S.ps=S.ps|0;S.tut=S.tut?1:0;S.dc=S.dc&&typeof S.dc==='object'&&typeof S.dc.d==='string'?{d:S.dc.d,best:S.dc.best|0,n:S.dc.n|0,paid:S.dc.paid?1:0}:{d:'',best:0,n:0,paid:0};
 // Vadné typy z poškozeného nebo ručně upraveného uložení (čísla, seznamy a mapy) se nahradí výchozími, ať hra nespadne ani neukáže [object Object]
-{const nn=v=>typeof v==='number'&&isFinite(v)&&v>=0?v:0,mp=v=>v&&typeof v==='object'&&!Array.isArray(v)?v:{};for(const k of['best','games','merges','coins','disc'])S[k]=nn(S[k]);S.mute=S.mute?1:0;S.nomusic=S.nomusic?1:0;S.log=Array.isArray(S.log)?S.log.filter(e=>Array.isArray(e)&&typeof e[0]==='number'&&isFinite(e[0])&&typeof e[1]==='number'&&isFinite(e[1])).slice(-200):[];S.bm=mp(S.bm);S.st=mp(S.st);S.modes=mp(S.modes);S.inv=mp(S.inv);for(const m of[S.bm,S.st])for(const k of Object.keys(m))if(typeof m[k]!=='number'||!isFinite(m[k])||m[k]<0)delete m[k];for(const k of['undo','shake','pop','hit'])S.inv[k]=Number.isInteger(S.inv[k])&&S.inv[k]>=0?S.inv[k]:0;S.days=S.days.filter(d=>typeof d==='string')}
+{const nn=v=>typeof v==='number'&&isFinite(v)&&v>=0?v:0,mp=v=>v&&typeof v==='object'&&!Array.isArray(v)?v:{};for(const k of['best','games','merges','coins','disc'])S[k]=nn(S[k]);S.mute=S.mute?1:0;S.log=Array.isArray(S.log)?S.log.filter(e=>Array.isArray(e)&&typeof e[0]==='number'&&isFinite(e[0])&&typeof e[1]==='number'&&isFinite(e[1])).slice(-200):[];S.bm=mp(S.bm);S.st=mp(S.st);S.modes=mp(S.modes);S.inv=mp(S.inv);for(const m of[S.bm,S.st])for(const k of Object.keys(m))if(typeof m[k]!=='number'||!isFinite(m[k])||m[k]<0)delete m[k];for(const k of['undo','shake','pop','hit'])S.inv[k]=Number.isInteger(S.inv[k])&&S.inv[k]>=0?S.inv[k]:0;S.days=S.days.filter(d=>typeof d==='string')}
 // Čítače za celou dobu hraní (trk) a nejlepší hodnoty (trkMax). Názvy jsou stejné jako statistiky v src/gameRecords/defs/koulovi.js a hlásí se appce v rec().
 const trk=(k,n=1)=>{S.st[k]=(S.st[k]||0)+n},trkMax=(k,v)=>{if(v>(S.st[k]||0))S.st[k]=v},earn=n=>{S.coins+=n;trk('coins_earned',n)};
 // Zapíše nový nejlepší výsledek režimu a při rekordu (od 100 bodů, mimo Zen) požádá o odměnu; stejně se volá při odchodu do menu i na konci hry,
@@ -20,7 +20,7 @@ const bump=(m,sc)=>{if(sc<=(S.bm[m]||0))return 0;S.bm[m]=sc;if(m!=='zen'&&sc>=10
 const rec=()=>{if(typeof jomaridRecord!=='function'||window.jomaridMP)return;for(const m of['classic','time','drops','chaos','zen'])jomaridRecord('score_'+m,S.bm[m]);jomaridRecord('balls_discovered',S.disc+1);for(const k in S.st)jomaridRecord(k,S.st[k]);jomaridRecord('play_min',S.ps/60);jomaridRecord('days_played',S.days.length);jomaridRecord('modes_played',Object.keys(S.modes).length)};
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}rec()};
 function stats(){const d=new Date();d.setHours(0,0,0,0);const mx=t=>S.log.reduce((m,[ts,sc])=>ts>=t?Math.max(m,sc):m,0);
- $('sT').textContent=mx(d.getTime());$('sW').textContent=mx(Date.now()-6048e5);$('sA').textContent=S.best;$('sG').textContent=S.games;$('sM').textContent=S.merges;$('cn').textContent=S.coins;$('snd').textContent=S.mute?'🔇':'🔊';$('musb').textContent=S.nomusic?'🎵✕':'🎵';$('musb').title=S.nomusic?'Zapnout hudbu':'Vypnout hudbu';$('snd').title=S.mute?'Zapnout zvuk':'Vypnout zvuk';$('cont').classList.toggle('hide',!S.run);if(S.run)$('cont').textContent='Pokračovat · '+MODES.find(m=>m[0]===S.run.mode)[1]+' · '+S.run.score}
+ $('sT').textContent=mx(d.getTime());$('sW').textContent=mx(Date.now()-6048e5);$('sA').textContent=S.best;$('sG').textContent=S.games;$('sM').textContent=S.merges;$('cn').textContent=S.coins;$('snd').textContent=S.mute?'🔇':'🔊';$('snd').title=S.mute?'Zapnout zvuk':'Vypnout zvuk';$('cont').classList.toggle('hide',!S.run);if(S.run)$('cont').textContent='Pokračovat · '+MODES.find(m=>m[0]===S.run.mode)[1]+' · '+S.run.score}
 $('mas').innerHTML=[3,4,5,6,2].map(t=>{const s=[50,60,70,80,55][t%5];return `<div class="b" style="width:${s/16}em;height:${s/16}em;background:${COL[t]};animation-delay:${t*.2}s"><span style="left:14%"></span><span style="right:14%"></span></div>`}).join('');
 function fit(){const w=document.body.clientWidth,h=document.body.clientHeight,k=Math.min(w/W,h/H);stage.style.width=W*k+'px';stage.style.height=H*k+'px';stage.style.fontSize=k*16+'px'}
 addEventListener('resize',fit);fit();
@@ -90,20 +90,7 @@ function modes(){$('ml').innerHTML=MODES.map(([k,n,d])=>`<button class='sec' dat
 $('ml').onclick=e=>{const k=(e.target.closest('button')||{dataset:{}}).dataset.m;if(k)start(k)};
 $('play').onclick=()=>{$('menu').classList.add('hide');$('modes').classList.remove('hide');modes()};
 $('mback').onclick=()=>{$('modes').classList.add('hide');$('menu').classList.remove('hide')};
-// Hudba na pozadí: soubor se stáhne jednou (z paměti appky i bez internetu) a hraje ve smyčce potichu; začne až po prvním klepnutí (prohlížeč jinak zvuk nepustí),
-// zastaví se při přepnutí karty, vypnutím zvuku nebo hudby a v online zápase hraje ještě tišeji.
-let musAudio=null,musUrl=null,musLoading=false,musTouched=false;
-function musicWant(){return !S.mute&&!S.nomusic&&!!window.KK_MUSIC&&musTouched&&!document.hidden}
-function musicSync(){try{
- if(!musicWant()){if(musAudio)musAudio.pause();return}
- if(!musUrl){if(!musLoading){musLoading=true;fetch(window.KK_MUSIC).then(r=>{if(!r.ok)throw new Error('x');return r.blob()}).then(b=>{musUrl=URL.createObjectURL(b);musLoading=false;musicSync()}).catch(()=>{musLoading=false})}return}
- if(!musAudio){musAudio=new Audio(musUrl);musAudio.loop=true}
- musAudio.volume=(typeof g==='object'&&g&&g.mode==='mp')?.1:.2;
- const p=musAudio.play();if(p&&p.catch)p.catch(()=>{})}catch(e){}}
-for(const ev of['pointerdown','keydown'])document.addEventListener(ev,()=>{if(!musTouched){musTouched=true;musicSync()}},{capture:true});
-document.addEventListener('visibilitychange',musicSync);
-$('snd').onclick=()=>{S.mute^=1;save();stats();musicSync()};
-$('musb').onclick=()=>{S.nomusic^=1;save();stats();musicSync()};
+$('snd').onclick=()=>{S.mute^=1;save();stats()};
 $('again').onclick=()=>start(g.mode);$('cont').onclick=resume;addEventListener('pagehide',saveRun);document.addEventListener('visibilitychange',()=>{if(document.hidden)saveRun()});$('tomenu').onclick=toMenu;
 const ITEMS=[['undo','↶ Zpět','Vrátí poslední tah',50],['shake','≋ Zatřes','Zatřese koulemi',40],['pop','✕ Smaž nejmenší','Odstraní nejmenší koule',80],['hit','◎ Zásah','Klepni na kouli a zmizí',100]];
 function shop(){$('cn2').textContent=$('cn').textContent=S.coins;$('items').innerHTML=ITEMS.map(([k,n,d,p])=>`<div style='display:flex;justify-content:space-between;align-items:center;margin:.5em 0;font-size:1.2em'><span style='text-align:left'>${n} ×${S.inv[k]}<br><i style='font-size:.6em;font-style:normal;opacity:.85'>${d}</i></span><button class='sec' style='font-size:.9em;padding:.2em .7em' data-k='${k}' data-p='${p}'>${p} 🪙</button></div>`).join('')}

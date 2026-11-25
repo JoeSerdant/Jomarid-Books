@@ -11,9 +11,8 @@ import shell from './koulovi/index.html?raw';
 import css from './koulovi/style.css?raw';
 import game from './koulovi/game.js?raw';
 import mp from './koulovi/mp.js?raw';
-import musicUrl from './koulovi/music.mp3?url';   // hudba na pozadí; soubor v /assets/ si service worker uloží, hra ho stáhne jednou a pustí z paměti
 
 // Funkce jako náhrada (ne řetězec), aby se v kódu nevykládaly speciální sekvence jako "$&".
 export const KOULOVI_HTML = shell
   .replace('/*__CSS__*/', () => css)
-  .replace('<!--__SCRIPTS__-->', () => `<script>window.KK_MUSIC=${JSON.stringify(musicUrl)};</script>\n<script id="src-game">\n${game}\n</script>\n<script id="src-mp">\n${mp}\n</script>`);
+  .replace('<!--__SCRIPTS__-->', () => `<script id="src-game">\n${game}\n</script>\n<script id="src-mp">\n${mp}\n</script>`);
