@@ -428,6 +428,8 @@ export default {
   'Uf': 'Phew',
   'Ukončit jako výhru': 'End as a win',
   'Ukončit remízou': 'End as a draw',
+  'Vypnout hudbu': 'Turn music off',
+  'Zapnout hudbu': 'Turn music on',
   'Soupeř {name} měl problémy s připojením a hra běžela u něj. Zápas může skončit remízou.': 'Opponent {name} had connection problems and the game was running on their device. The match can end in a draw.',
   'Ulož si víc míst v jedné knize, ne jen tam, kde čtení skončilo.': 'Save several places in one book, not just where you stopped reading.',
   'Uložit': 'Save',

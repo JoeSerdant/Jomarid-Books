@@ -5,6 +5,8 @@ import { supabase, supabaseUrl, supabaseKey } from '../lib/supabase';
 import { friendlyError } from '../lib/friendlyError';
 import { Coins, Loader2, Rocket, Swords, Building2, Target, Crown, Smile, Lock, Castle, Folder, FolderOpen, Users } from 'lucide-react';
 import { GameBar } from '../components/GameBar';
+import { useMusic } from '../music/useMusic';
+import { musicFor, musicUrls, withMusic } from '../music/tracks';
 import { useReaderSnapshot } from '../gameBar/useReaderSnapshot';
 import { rewardLabel, REWARD_LIMIT_NOTE } from '../gameBar/rewardLabels';
 import { normalizeRecord } from '../gameRecords/catalog';
@@ -117,7 +119,11 @@ export async function preloadGames(onProgress = () => {}) {
   const failed = [];
   let done = 0;
   for (const game of GAMES) {
-    try { await game.load(); for (const loadDoc of [...Object.values(game.loadMode || {}), ...Object.values(game.loadPlay || {})]) await loadDoc(); } catch { failed.push(game.id); }
+    try {
+      await game.load();
+      for (const loadDoc of [...Object.values(game.loadMode || {}), ...Object.values(game.loadPlay || {})]) await loadDoc();
+      for (const u of musicUrls(game.id)) { const r = await fetch(u); if (!r.ok) throw new Error('hudba'); await r.blob(); }   // hudba se stáhne dopředu, ať hraje i bez internetu
+    } catch { failed.push(game.id); }
     done += 1;
     onProgress(done, GAMES.length);
   }
@@ -176,6 +182,7 @@ export const GameLauncher = ({ game }) => {
   const gameOpenedAtRef = useRef(null);
   const [flash, setFlash] = useState(null); // krátké potvrzení odměny v liště nad hrou
   const iframeRef = useRef(null);
+  const music = useMusic(iframeRef);
   const mountedRef = useRef(true);
   const flashTimerRef = useRef(null);
   const syncRef = useRef(null); // synchronizace postupu této hry se serverem
@@ -349,7 +356,7 @@ export const GameLauncher = ({ game }) => {
     const lang = getLang();
     const dict = lang === 'en' ? await loadGameDictionary(game.id) : null;
     if (!mountedRef.current) return;
-    setGameDoc(withGameLanguage(withOnlineEntry(withStorageShim(src, game.id, sync.snapshot().map), game.id), lang, dict, { collect: typeof window !== 'undefined' && window.__JOMARID_I18N_COLLECT === true }));
+    setGameDoc(withGameLanguage(withMusic(withOnlineEntry(withStorageShim(src, game.id, sync.snapshot().map), game.id), musicFor(game.id)), lang, dict, { collect: typeof window !== 'undefined' && window.__JOMARID_I18N_COLLECT === true }));
     setLoadingGame(false);
     gameOpenedAtRef.current = Date.now();
     limitShownRef.current = false;
@@ -369,7 +376,7 @@ export const GameLauncher = ({ game }) => {
       const dict = lang === 'en' ? await loadGameDictionary(game.id) : null;
       if (!mountedRef.current) return;
       const withStore = withStorageShim(src, game.id, getSync().snapshot().map);
-      setGameDoc(withGameLanguage(online ? withOnlineEntry(withStore, game.id) : withStore, lang, dict, { collect: typeof window !== 'undefined' && window.__JOMARID_I18N_COLLECT === true }));
+      setGameDoc(withGameLanguage(withMusic(online ? withOnlineEntry(withStore, game.id) : withStore, musicFor(game.id)), lang, dict, { collect: typeof window !== 'undefined' && window.__JOMARID_I18N_COLLECT === true }));
     } catch (err) {
       console.error('Nepodařilo se přepnout hru:', err?.message || err);
     }
@@ -536,7 +543,7 @@ export const GameLauncher = ({ game }) => {
     return (
       // Výřez displeje (--sat nahoře, --sar vpravo) se přičítá k velikosti pruhu, ne odebírá z místa pro tlačítko.
       <div style={{ position: 'fixed', inset: 0, zIndex: 999, backgroundColor: '#000', '--sat': 'env(safe-area-inset-top,0px)', '--sar': 'env(safe-area-inset-right,0px)' }} className="flex flex-col [@media(orientation:landscape)_and_(max-height:500px)]:flex-row-reverse">
-        <GameBar title={t(game.title)} onClose={handleCloseGame} coins={coins} coinsLoaded={coinsLoaded} level={reader?.level} levelName={reader?.levelName} flash={flash} saveStatus={saveStatus} />
+        <GameBar title={t(game.title)} onClose={handleCloseGame} coins={coins} coinsLoaded={coinsLoaded} level={reader?.level} levelName={reader?.levelName} flash={flash} saveStatus={saveStatus} music={musicFor(game.id) ? music : null} />
         <iframe
           ref={iframeRef}
           title={t(game.title)}

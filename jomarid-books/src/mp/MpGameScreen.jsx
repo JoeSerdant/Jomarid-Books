@@ -10,6 +10,8 @@ import { attachMpBridge } from './bridge.js';
 import { openRealtime } from './realtime.js';
 import { supabase } from '../lib/supabase';
 import { withMultiplayer, initForGame } from './inject.js';
+import { useMusic } from '../music/useMusic';
+import { musicFor, withMusic } from '../music/tracks';
 import { reasonText } from './reasons.js';
 import { mpErrorText } from './errors.js';
 import { EMOTES, emoteByCode, freshEmote } from './emotes.js';
@@ -37,6 +39,7 @@ export const MpGameScreen = ({ game, match, coins, coinsLoaded, reader, gameFx, 
   const [rematch, setRematch] = useState('idle'); // idle | waiting
   const [, setTick] = useState(0);
   const iframeRef = useRef(null);
+  const music = useMusic(iframeRef);
   const emoteSeenRef = useRef(Number(match?.opp_emote?.n) || 0); // reakce, které už jsou ukázané (ať se po návratu do zápasu neukáže stará)
   const emoteLastSentRef = useRef(0);
   const bubbleTimerRef = useRef(null);
@@ -69,7 +72,7 @@ export const MpGameScreen = ({ game, match, coins, coinsLoaded, reader, gameFx, 
         const lang = getLang();
         const dict = lang === 'en' ? await loadGameDictionary(game.id) : null;
         if (cancelled) return;
-        setDoc(withGameLanguage(withMultiplayer(src, game.id, initForGame(match, session.offset)), lang, dict, { collect: typeof window !== 'undefined' && window.__JOMARID_I18N_COLLECT === true }));
+        setDoc(withGameLanguage(withMusic(withMultiplayer(src, game.id, initForGame(match, session.offset)), musicFor(game.id, match.mode)), lang, dict, { collect: typeof window !== 'undefined' && window.__JOMARID_I18N_COLLECT === true }));
       } catch (err) {
         console.error('Nepodařilo se načíst hru pro online zápas:', err?.message || err);
         if (!cancelled) setLoadError(true);
@@ -198,7 +201,7 @@ export const MpGameScreen = ({ game, match, coins, coinsLoaded, reader, gameFx, 
 
   return (
     <div data-testid="mp-screen" style={{ position: 'fixed', inset: 0, zIndex: 999, backgroundColor: '#000', '--sat': 'env(safe-area-inset-top,0px)', '--sar': 'env(safe-area-inset-right,0px)' }} className="flex flex-col [@media(orientation:landscape)_and_(max-height:500px)]:flex-row-reverse">
-      <GameBar title={`${t(game.title)} · ${t('Online')}`} onClose={askLeave} coins={coins} coinsLoaded={coinsLoaded} level={reader?.level} levelName={reader?.levelName} flash={flash} saveStatus={null} />
+      <GameBar title={`${t(game.title)} · ${t('Online')}`} onClose={askLeave} coins={coins} coinsLoaded={coinsLoaded} level={reader?.level} levelName={reader?.levelName} flash={flash} saveStatus={null} music={musicFor(game.id, match.mode) ? music : null} />
 
       <div className="relative flex-1 min-h-0 min-w-0 flex flex-col">
         {(oppOffline || !connected || fatal) && (

@@ -764,13 +764,6 @@ test('tlačítko zvuku: má popisek podle stavu a je stejně velké jako Obchod 
   assert.match(shell, /<button id="snd" class="sec" title="Vypnout zvuk">🔊<\/button>/, 'bez vlastní zmenšené velikosti písma');
   assert.match(game, /\$\('snd'\)\.textContent=S\.mute\?'🔇':'🔊';/);
   assert.match(game, /\$\('snd'\)\.title=S\.mute\?'Zapnout zvuk':'Vypnout zvuk';/);
-  // hudba na pozadí: vlastní přepínač, uložená volba, začíná po prvním klepnutí a v online zápase hraje tišeji
-  assert.match(shell, /<button id="musb" class="sec" title="Vypnout hudbu">🎵<\/button>/);
-  assert.match(game, /S\.nomusic=S\.nomusic\?1:0;/);
-  assert.match(game, /function musicWant\(\)\{return !S\.mute&&!S\.nomusic&&!!window\.KK_MUSIC&&musTouched&&!document\.hidden\}/);
-  assert.match(game, /g\.mode==='mp'\)\?\.1:\.2/);
-  assert.match(assembler, /import musicUrl from '\.\/koulovi\/music\.mp3\?url';/);
-  assert.match(assembler, /window\.KK_MUSIC=\$\{JSON\.stringify\(musicUrl\)\}/);
 });
 
 test('uložení: poškozený nebo upravený postup hru nerozbije a platný zůstane beze změny', () => {
