@@ -1,0 +1,92 @@
+/* Matný 3D povrch (Nastavení -> Vzhled -> Povrch). Zapíná se atributem data-surface="matte" na <html> (src/theme.js, applySurface; index.html ho nastaví
+   ještě před vykreslením). Je to jen vzhled NAD barvami motivu: karty, tlačítka, pole a štítky dostanou jemný přechod, zrno, světlý okraj a stín.
+   Nic se nemění v rozměrech ani v rozložení (jen background-image a box-shadow), a všechny barvy se odvozují z proměnných motivu, takže to sedí ke všem
+   motivům, akcentům i vlastním barvám. Vysoký kontrast je vždy ploché (applySurface). Kreslený styl („Experimentální vlastní“) dostane jen zrno, jeho vlastní
+   stíny a okraje zůstávají. Prvky se hledají podle vlastních inline stylů (background-color: var(--bg-card) atd.), protože appka barvy dává přes proměnné. */
+
+html[data-surface="matte"] {
+  /* zrno: šedý šum s malou průhledností; neutrální šedá se na světlém podkladu o kousek ztmaví a na tmavém o kousek zesvětlí */
+  --mt-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 .55  0 0 0 .13 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  --mt-hi: rgba(255, 255, 255, 0.6);
+  --mt-lo: rgba(15, 23, 42, 0.03);
+  --mt-edge-hi: rgba(255, 255, 255, 0.75);
+  --mt-edge-lo: rgba(15, 23, 42, 0.05);
+  --mt-sh1: rgba(15, 23, 42, 0.06);
+  --mt-sh2: rgba(15, 23, 42, 0.12);
+  --mt-ring: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000); /* zachová obrysy fokusu (focus:ring) */
+}
+html[data-surface="matte"][style*="color-scheme: dark"] {
+  --mt-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 .55  0 0 0 .07 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); /* na tmavém podkladu slabší zrno, ať se černá nezešedne */
+  --mt-hi: rgba(255, 255, 255, 0.055);
+  --mt-lo: rgba(0, 0, 0, 0.16);
+  --mt-edge-hi: rgba(255, 255, 255, 0.07);
+  --mt-edge-lo: rgba(0, 0, 0, 0.32);
+  --mt-sh1: rgba(0, 0, 0, 0.32);
+  --mt-sh2: rgba(0, 0, 0, 0.5);
+}
+
+/* --- pozadí stránky: zrno a lehké světlo nahoře (inline zkratka `background` přebíjí běžná pravidla, proto !important) --- */
+html[data-surface="matte"] [style*="background: var(--bg-body)"] {
+  background-image: var(--mt-grain), radial-gradient(900px 420px at 50% -140px, var(--mt-hi), transparent 72%) !important;
+}
+
+/* --- karty a plochy (včetně horní lišty a oken) --- */
+html[data-surface="matte"]:not([data-style="sketchy"]) [style*="background-color: var(--bg-card)"] {
+  background-image: var(--mt-grain), linear-gradient(180deg, var(--mt-hi), transparent 42%), linear-gradient(0deg, var(--mt-lo), transparent 46%);
+  box-shadow: var(--mt-ring), inset 0 1px 0 var(--mt-edge-hi), inset 0 -1px 0 var(--mt-edge-lo), 0 1px 2px var(--mt-sh1), 0 10px 24px -14px var(--mt-sh2);
+}
+html[data-surface="matte"][data-style="sketchy"] [style*="background-color: var(--bg-card)"] { background-image: var(--mt-grain); }
+
+/* třídy stínů z Tailwindu: stejný materiál, jen různě vysoko */
+html[data-surface="matte"]:not([data-style="sketchy"]) :is(.shadow-sm, .shadow, .shadow-md) {
+  box-shadow: var(--mt-ring), inset 0 1px 0 var(--mt-edge-hi), 0 1px 2px var(--mt-sh1), 0 8px 18px -12px var(--mt-sh2);
+}
+html[data-surface="matte"]:not([data-style="sketchy"]) :is(.shadow-lg, .shadow-xl, .shadow-2xl) {
+  box-shadow: var(--mt-ring), inset 0 1px 0 var(--mt-edge-hi), 0 2px 4px var(--mt-sh1), 0 18px 36px -16px var(--mt-sh2);
+}
+html[data-surface="matte"]:not([data-style="sketchy"]) :is(.hover\:shadow-md:hover, .hover\:shadow-lg:hover, .hover\:shadow-xl:hover) {
+  box-shadow: var(--mt-ring), inset 0 1px 0 var(--mt-edge-hi), 0 2px 4px var(--mt-sh1), 0 16px 30px -14px var(--mt-sh2);
+}
+
+/* --- hlavní (zvýrazněná) tlačítka, aktivní záložky, ukazatele, štítky v barvě zvýraznění --- */
+html[data-surface="matte"]:not([data-style="sketchy"]) :is([style*="background-color: var(--bg-primary)"], .bg-\[var\(--bg-primary\)\]) {
+  background-image: var(--mt-grain), linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0) 52%), linear-gradient(0deg, rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0) 42%);
+  box-shadow: var(--mt-ring), inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 -1px 0 rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.22), 0 6px 12px -7px color-mix(in srgb, var(--bg-primary) 55%, #000);
+}
+html[data-surface="matte"][data-style="sketchy"] :is([style*="background-color: var(--bg-primary)"], .bg-\[var\(--bg-primary\)\]) { background-image: var(--mt-grain); }
+html[data-surface="matte"]:not([data-style="sketchy"]) :is(button, a, [role="button"], [role="radio"], [role="tab"]):is([style*="background-color: var(--bg-primary)"], .bg-\[var\(--bg-primary\)\]):active:not(:disabled) {
+  box-shadow: var(--mt-ring), inset 0 2px 5px rgba(0, 0, 0, 0.28), 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* --- druhotné plochy: tlačítka vystouplá, pole zapuštěná --- */
+html[data-surface="matte"]:not([data-style="sketchy"]) [style*="background-color: var(--bg-secondary)"] {
+  background-image: var(--mt-grain), linear-gradient(180deg, var(--mt-hi), transparent 55%);
+  box-shadow: var(--mt-ring), inset 0 1px 0 var(--mt-edge-hi), 0 1px 1.5px var(--mt-sh1);
+}
+html[data-surface="matte"]:not([data-style="sketchy"]) :is(input, textarea, select)[style*="background-color: var(--bg-secondary)"] {
+  background-image: var(--mt-grain), linear-gradient(0deg, var(--mt-hi), transparent 30%);
+  box-shadow: var(--mt-ring), inset 0 1px 3px var(--mt-sh2), 0 1px 0 var(--mt-edge-hi);
+}
+html[data-surface="matte"]:not([data-style="sketchy"]) :is(button, [role="button"], [role="radio"], [role="tab"])[style*="background-color: var(--bg-secondary)"]:active:not(:disabled) {
+  box-shadow: var(--mt-ring), inset 0 2px 4px var(--mt-sh2);
+}
+html[data-surface="matte"][data-style="sketchy"] [style*="background-color: var(--bg-secondary)"] { background-image: var(--mt-grain); }
+
+/* --- štítky --- */
+html[data-surface="matte"]:not([data-style="sketchy"]) [style*="background-color: var(--bg-badge)"] {
+  background-image: var(--mt-grain), linear-gradient(180deg, var(--mt-hi), transparent 60%);
+  box-shadow: inset 0 1px 0 var(--mt-edge-hi);
+}
+html[data-surface="matte"][data-style="sketchy"] [style*="background-color: var(--bg-badge)"] { background-image: var(--mt-grain); }
+
+/* --- výjimky: čtený text, náhled barev motivu a obrázky se nikdy netexturují --- */
+html[data-surface="matte"] :is(.reader-font, .reader-font *, [data-no-matte], [data-no-matte] *) {
+  background-image: none !important;
+  box-shadow: none !important;
+}
+@media (forced-colors: active) {
+  html[data-surface="matte"] * { background-image: none !important; box-shadow: none !important; }
+}
+@media print {
+  html[data-surface="matte"] * { background-image: none !important; box-shadow: none !important; }
+}

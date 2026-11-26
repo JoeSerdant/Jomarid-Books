@@ -1,7 +1,7 @@
 import { Component, lazy, Suspense, useState, useEffect, useLayoutEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { resolveTheme, withAccent, loadAccent, saveAccent, applyUiPrefs, applyMotionPref, isDarkTheme, saveCustomColors, loadCustomColors, seedCustomColors, CUSTOM_THEME_KEY, EXPERIMENTAL_THEME_KEY, usesCustomColors, applyThemeStyle, THEME_KEY, initMotionPref, loadLively, saveLively, applyLively } from './theme';
+import { resolveTheme, withAccent, loadAccent, saveAccent, applyUiPrefs, applyMotionPref, isDarkTheme, saveCustomColors, loadCustomColors, seedCustomColors, CUSTOM_THEME_KEY, EXPERIMENTAL_THEME_KEY, usesCustomColors, applyThemeStyle, THEME_KEY, initMotionPref, loadLively, saveLively, applyLively, loadSurface, saveSurface, applySurface } from './theme';
 import { SettingsSyncRunner } from './settings/SettingsSyncRunner';
 import { LivelyScenery } from './lively/LivelyScenery';
 import { LivelyMotion } from './lively/LivelyMotion';
@@ -84,6 +84,7 @@ export default function App() {
   const [customColors, setCustomColors] = useState(loadCustomColors); // jen pro motiv „Vlastní“
   const [accent, setAccent] = useState(loadAccent); // akcentní barva hotových motivů
   const [lively, setLively] = useState(loadLively); // Živý režim (Nastavení -> Vzhled)
+  const [surface, setSurface] = useState(loadSurface); // Povrch: matný 3D nebo ploché (Nastavení -> Vzhled)
 
   useEffect(() => initMotionPref(), []); // omezení pohybu (Nastavení -> Vzhled, nebo nastavení zařízení)
   useEffect(() => { applyUiPrefs(); }, []); // velikost a hustota rozhraní (index.html je použije ještě před vykreslením)
@@ -99,6 +100,7 @@ export default function App() {
       applyMotionPref();
       setLively(loadLively());
       applyLively();
+      setSurface(loadSurface());
     };
     window.addEventListener(SETTINGS_APPLIED, reread);
     return () => window.removeEventListener(SETTINGS_APPLIED, reread);
@@ -115,12 +117,14 @@ export default function App() {
     root.style.colorScheme = isDarkTheme(currentTheme, vars) ? 'dark' : 'light';
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', vars['--bg-body']);
     applyThemeStyle(currentTheme, root); // „Experimentální vlastní“ zapíná kreslený styl
-  }, [currentTheme, customColors, accent]);
+    applySurface(currentTheme, root);    // matný 3D povrch (u Vysokého kontrastu vždy ploché)
+  }, [currentTheme, customColors, accent, surface]);
 
   return (
     <AuthProvider>
       <ThemeContext.Provider value={{
-        currentTheme, customColors, accent, lively,
+        currentTheme, customColors, accent, lively, surface,
+        changeSurface: (key) => { saveSurface(key); setSurface(loadSurface()); },
         changeLively: (on) => { saveLively(on); setLively(loadLively()); },
         // V Živém režimu se nový motiv „rozlije“ kruhem z místa kliknutí (jinak se přepne hned).
         changeAccent: (a) => withViewTransition(() => { saveAccent(a); setAccent(loadAccent()); }, { enabled: lively, flush: flushSync }),
