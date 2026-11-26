@@ -17,7 +17,7 @@ import {
   FONT_SIZE_RANGE, AUTO_ADVANCE_RANGE, WPM_RANGE, NIGHT_RANGE,
   loadReaderPrefs, saveReaderPref, resetReaderPrefs, readerTypography, loadMotionPref, saveMotionPref,
   CUSTOM_THEME_KEY, EXPERIMENTAL_THEME_KEY, usesCustomColors, CUSTOM_PRESETS, ACCENT_MIN_CONTRAST, resolveTheme, deriveTheme, completeHex, normalizeHex, readableAccent, customColorsPreview, contrast,
-  ACCENTS, THEME_LABELS, UI_SCALES, UI_DENSITIES, loadUiScale, loadUiDensity, saveUiScale, saveUiDensity, withAccent,
+  ACCENTS, THEME_LABELS, UI_SCALES, UI_DENSITIES, loadUiScale, loadUiDensity, saveUiScale, saveUiDensity, withAccent, SURFACES,
   READER_PREFS_EVENT,
 } from '../theme';
 import { readLibraryPrefs, writeLibraryPref } from '../browse/browseStore';
@@ -780,7 +780,7 @@ const VIEW_OPTIONS = { grid: { label: tk('Mřížka') }, list: { label: tk('Sezn
 const STATUS_OPTIONS = toOptions(STATUS_FILTERS);
 
 const AppearanceTab = () => {
-  const { currentTheme, changeTheme, customColors, changeCustomColors, accent, changeAccent, lively, changeLively } = useTheme();
+  const { currentTheme, changeTheme, customColors, changeCustomColors, accent, changeAccent, lively, changeLively, surface, changeSurface } = useTheme();
   const [motion, setMotion] = useState(loadMotionPref);
   const [scale, setScale] = useState(loadUiScale);
   const [density, setDensity] = useState(loadUiDensity);
@@ -886,6 +886,10 @@ const AppearanceTab = () => {
             })}
           </div>
         )}
+      </Section>
+
+      <Section title={t('Povrch')} description={t('Matný 3D vzhled dá kartám, tlačítkům a polím jemný přechod, zrno, stín a světlý okraj. Barvy se berou z motivu, takže sedí ke všem motivům, akcentům i vlastním barvám. Vysoký kontrast je vždy ploché.')}>
+        <Segmented ariaLabel={t('Povrch')} options={SURFACES} value={surface} onChange={changeSurface} />
       </Section>
 
       <Section title={t('Živý režim')} description={t('Experimentální. Appka je živější: stránky se přepínají odjezdem a příjezdem, karty a seznamy vyjíždějí postupně a z různých stran, čísla se dotáčejí a dosednou, ukazatele se plní, karty knih se naklánějí za myší a při filtrování plynule přeskakují na nová místa, okna naskakují, tlačítka a lišta pružně reagují a nový motiv se rozlije kruhem z místa kliknutí. Na pozadí a po stranách širokých obrazovek jsou jemné ozdoby.')}>

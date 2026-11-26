@@ -405,3 +405,16 @@ export const applyLively = () => {
   return on;
 };
 export const saveLively = (on) => { try { localStorage.setItem(LIVELY_KEY, on ? '1' : '0'); } catch { /* nevadí, platí aspoň do zavření stránky */ } applyLively(); notifySettingsChanged(); };
+
+// --- Povrch (Nastavení -> Vzhled): matný 3D vzhled karet, tlačítek a polí (jemný přechod, zrno, stíny a světlý okraj) nebo ploché ---
+// Je to jen vzhled nad barvami motivu (pravidla v src/matte.css, všechno se odvozuje z proměnných motivu), takže funguje u všech motivů, akcentů
+// i u vlastních barev. U „Vysokého kontrastu“ je vždy ploché (zrno a přechody by zhoršily čitelnost). Zapíná se atributem data-surface na <html>.
+export const SURFACE_KEY = 'jomarid-surface';
+export const SURFACES = { matte: { label: tk('Matný 3D') }, flat: { label: tk('Ploché') } };
+export const FLAT_ONLY_THEMES = ['contrast'];
+export const loadSurface = () => { try { const v = localStorage.getItem(SURFACE_KEY); return own(SURFACES, v) ? v : 'matte'; } catch { return 'matte'; } };
+export const surfaceFor = (themeKey, pref = loadSurface()) => (FLAT_ONLY_THEMES.includes(themeKey) ? 'flat' : pref);
+export const applySurface = (themeKey, root = (typeof document !== 'undefined' ? document.documentElement : null)) => {
+  if (root) root.setAttribute('data-surface', surfaceFor(themeKey));
+};
+export const saveSurface = (key) => { try { localStorage.setItem(SURFACE_KEY, own(SURFACES, key) ? key : 'matte'); } catch { /* nevadí */ } notifySettingsChanged(); };

@@ -326,3 +326,27 @@ describe('„Experimentální vlastní“ motiv', () => {
     assert.match(css, /size-adjust/);
   });
 });
+
+describe('Matný 3D povrch', () => {
+  beforeEach(() => setStorage(makeStorage()));
+  test('výchozí je matný, vysoký kontrast je vždy ploché, neznámá hodnota spadne na matný', () => {
+    assert.equal(T.loadSurface(), 'matte');
+    assert.equal(T.surfaceFor('saas'), 'matte');
+    assert.equal(T.surfaceFor('contrast', 'matte'), 'flat');
+    localStorage.setItem(T.SURFACE_KEY, 'flat');
+    assert.equal(T.surfaceFor('dark'), 'flat');
+    localStorage.setItem(T.SURFACE_KEY, '__proto__');
+    assert.equal(T.loadSurface(), 'matte');
+  });
+  test('applySurface nastaví atribut na kořeni', () => {
+    const root = { v: null, setAttribute(k, v) { this.v = [k, v]; } };
+    T.applySurface('ocean', root); assert.deepEqual(root.v, ['data-surface', 'matte']);
+    T.applySurface('contrast', root); assert.deepEqual(root.v, ['data-surface', 'flat']);
+  });
+  test('stylesheet nemění rozměry, nevypisuje barvy napevno do textu a vynechává čtečku', () => {
+    const css = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'matte.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    assert.ok(!/(^|[;{\s])(width|height|margin|padding|border|border-width|font-size|display|position|transform)\s*:/m.test(css), 'jen background-image a box-shadow');
+    assert.ok(!/(^|[;{\s])color\s*:/m.test(css), 'barvu textu neměnit');
+    assert.match(css, /\.reader-font/); assert.match(css, /forced-colors/); assert.match(css, /print/);
+  });
+});
